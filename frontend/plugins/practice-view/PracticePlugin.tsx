@@ -128,6 +128,10 @@ export function PracticePlugin({ context }: PracticePluginProps) {
     () => sessionStorage.getItem('practice-tips-v1-dismissed') !== 'yes',
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  // Controls whether the results overlay is visible on mobile landscape.
+  // Resets to true each time results phase is entered; can be dismissed by
+  // tapping the backdrop so the user can see the staff underneath.
+  const [resultsOverlayVisible, setResultsOverlayVisible] = useState(true);
 
   // Sound toggle — muting silences guide notes without affecting user MIDI feedback
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -577,6 +581,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
         };
         setResult(exerciseResult);
         setHighlightedSlotIndex(null);
+        setResultsOverlayVisible(true);
         setPhase('results');
         phaseRef.current = 'results';
       } else {
@@ -722,6 +727,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
           { includeTimingScore: inputSourceRef.current === 'midi' },
         );
         setResult(exerciseResult);
+        setResultsOverlayVisible(true);
         setPhase('results');
         phaseRef.current = 'results';
       }, finishMs);
@@ -774,6 +780,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
       { includeTimingScore: inputSourceRef.current === 'midi' },
     );
     setResult(exerciseResult);
+    setResultsOverlayVisible(true);
     setPhase('results');
     phaseRef.current = 'results';
   }, [context, resetOnsetDetection, clearStepTimeout]);
@@ -927,9 +934,12 @@ export function PracticePlugin({ context }: PracticePluginProps) {
   // ── Sidebar: only visible in Custom mode, hidden during exercise ──────────
   useEffect(() => {
     if (complexityLevel === null) {
-      // Custom mode: open when idle, collapse during exercise or results
-      if (phase !== 'playing' && phase !== 'countdown' && phase !== 'results') setSidebarCollapsed(false);
-      else setSidebarCollapsed(true);
+      // Custom: collapse while playing/countdown; open when ready; leave alone on results
+      // (results phase: the user may have explicitly opened it via the level selector,
+      //  so don't auto-close — Retry/New already advance to the next state)
+      if (phase === 'playing' || phase === 'countdown') setSidebarCollapsed(true);
+      else if (phase === 'ready') setSidebarCollapsed(false);
+      // phase === 'results': no change — preserve manual open/close state
     } else {
       // Preset level: always hidden
       setSidebarCollapsed(true);
@@ -1053,7 +1063,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="practice-plugin" data-testid="practice-view">
+    <div className={`practice-plugin${phase === 'results' && resultsOverlayVisible ? ' practice-plugin--results' : ''}`} data-testid="practice-view">
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <header className="practice-plugin__header">
         <button
@@ -1167,7 +1177,18 @@ export function PracticePlugin({ context }: PracticePluginProps) {
       <div className="practice-plugin__body">
 
         {/* ── Sidebar ────────────────────────────────────────────────────── */}
-        <aside className={`practice-sidebar${sidebarCollapsed ? ' practice-sidebar--collapsed' : ''}`}>
+        <aside className={`practice-sidebar${sidebarCollapsed ? ' practice-sidebar--collapsed' : ''}${complexityLevel !== null ? ' practice-sidebar--hidden' : ''}`}>
+          {complexityLevel === null && (
+            <button
+              className="practice-sidebar__toggle"
+              onClick={() => setSidebarCollapsed(prev => !prev)}
+              aria-label={sidebarCollapsed ? 'Open config panel' : 'Collapse config panel'}
+              aria-expanded={!sidebarCollapsed}
+              title={sidebarCollapsed ? 'Open config' : 'Collapse config'}
+            >
+              {sidebarCollapsed ? '⚙' : '‹'}
+            </button>
+          )}
           <div className="practice-sidebar__sections">
               {/* MODE */}
               <div className="practice-sidebar__section">
@@ -1388,7 +1409,30 @@ export function PracticePlugin({ context }: PracticePluginProps) {
 
           {/* Results panel */}
           {phase === 'results' && result && (
-            <div className="practice-results" role="region" aria-label="Exercise results">
+            <>
+              {/* Backdrop — only visible in mobile landscape overlay mode.
+                  Tap it to dismiss the overlay (returns to staff view). */}
+              <div
+                className="practice-results__backdrop"
+                role="button"
+                aria-label="Close results"
+                onClick={() => setResultsOverlayVisible(false)}
+                onTouchEnd={(e) => { e.preventDefault(); setResultsOverlayVisible(false); }}
+              />
+              <div
+                className="practice-results"
+                role="region"
+                aria-label="Exercise results"
+                onClick={(e) => e.stopPropagation()}
+              >
+              {/* Close button — only shown in mobile landscape overlay */}
+              <button
+                className="practice-results__close"
+                aria-label="Close results"
+                onClick={() => setResultsOverlayVisible(false)}
+              >
+                ×
+              </button>
               {/* Score headline */}
               <div className="practice-results__score-block">
                 <div className="practice-results__score-ring">
@@ -1495,6 +1539,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
 
               {/* Retry / New actions are in the toolbar — no redundant buttons here */}
             </div>
+          </>
           )}
         </main>
       </div>

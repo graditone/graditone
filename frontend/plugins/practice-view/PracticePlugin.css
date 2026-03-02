@@ -224,7 +224,8 @@
   box-sizing: border-box;
 }
 
-.practice-sidebar--collapsed {
+/* Completely hidden — used for preset levels where config is irrelevant */
+.practice-sidebar--hidden {
   width: 0;
   overflow: hidden;
   padding: 0;
@@ -232,12 +233,29 @@
   min-width: 0;
 }
 
+/* Collapsed — narrow strip showing only the toggle button */
+.practice-sidebar--collapsed {
+  width: 28px;
+  overflow: hidden;
+  padding: 0;
+  border-right: 1px solid var(--color-border, #e0e0e0);
+}
+
+/* Hide the content sections but keep the toggle button visible.
+ * Use height:0 + overflow:hidden rather than visibility:hidden so elements
+ * remain in the accessibility tree (tests use happy-dom with css:true). */
+.practice-sidebar--collapsed .practice-sidebar__sections {
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .practice-sidebar__toggle {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  min-height: 44px;
   flex-shrink: 0;
   background: none;
   border: none;
@@ -247,6 +265,11 @@
   cursor: pointer;
   transition: background 0.12s;
   user-select: none;
+  /* Always occupy its column width even when sidebar is collapsed */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-alt, #f9f9f9);
 }
 
 .practice-sidebar__toggle:focus {
@@ -580,6 +603,10 @@
 
 .practice-results__table-wrapper {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 40vh;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .practice-results__table {
@@ -701,7 +728,8 @@
     flex-shrink: 0;
   }
 
-  .practice-sidebar--collapsed {
+  .practice-sidebar--collapsed,
+  .practice-sidebar--hidden {
     display: none;
   }
 
@@ -894,4 +922,64 @@
   flex-shrink: 0;
   -webkit-overflow-scrolling: touch;
   background: var(--color-surface, #fff);
+}
+
+/* ── Results overlay on mobile landscape ────────────────────────────────────
+ * In landscape orientation on a phone the keyboard fills the lower half of the
+ * screen, leaving no room to scroll down to a results panel.  Display it as a
+ * centred modal overlay instead so the score is always immediately visible.    */
+/* Backdrop div (real element — pseudo-elements cannot receive touch events) */
+.practice-results__backdrop {
+  display: none;
+}
+
+/* Close button — hidden outside overlay context */
+.practice-results__close {
+  display: none;
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .practice-plugin--results .practice-results__backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 200;
+    cursor: pointer;
+  }
+
+  .practice-plugin--results .practice-results {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 201;
+    width: min(92vw, 420px);
+    max-height: calc(100dvh - 64px);
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    border-radius: 16px;
+    /* Ensure it sits above the virtual keyboard */
+    pointer-events: auto;
+  }
+
+  /* × button in top-right corner of the overlay card */
+  .practice-plugin--results .practice-results__close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 2rem;
+    height: 2rem;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.12);
+    color: inherit;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 1;
+  }
 }
