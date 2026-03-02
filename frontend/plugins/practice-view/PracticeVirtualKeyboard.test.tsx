@@ -13,12 +13,11 @@
  *   - Mic/MIDI badge shows suspended state while VK is active
  *
  * T012 (US2 PracticeVirtualKeyboard component tests):
- *   - Renders 14 white keys and 10 black keys at octaveShift=0
+ *   - Renders 52 white keys and 36 black keys (full 88-key piano A0–C8)
  *   - onKeyDown fires with correct midiNote on mouse press
  *   - onKeyUp fires with correct midiNote on mouse release
  *   - context.playNote called on both key down and key up
- *   - Octave shift Up increments range; Down decrements range
- *   - Shift Up disabled at +2; Shift Down disabled at −2
+ *   - Range label reads A0–C8
  *   - Touch guard: mouse events within 500 ms of touch are ignored
  *
  * ESLint boundary:
@@ -225,24 +224,54 @@ describe('T012 — PracticeVirtualKeyboard component', () => {
 
   // ── Key count ───────────────────────────────────────────────────────────
 
-  it('renders 14 white keys at octaveShift=0 (C3–B4)', () => {
+  it('renders 52 white keys (full 88-key piano A0–C8)', () => {
     const ctx = makeVkbContext();
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
     render(<PracticeVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
     const keyboard = screen.getByTestId('practice-vkb-keyboard');
     const whiteKeys = keyboard.querySelectorAll('.practice-vkb__key--white');
-    expect(whiteKeys.length).toBe(14); // 7 white keys × 2 octaves
+    expect(whiteKeys.length).toBe(52); // standard 88-key piano
   });
 
-  it('renders 10 black keys at octaveShift=0 (C3–B4)', () => {
+  it('renders 36 black keys (full 88-key piano A0–C8)', () => {
     const ctx = makeVkbContext();
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
     render(<PracticeVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
     const keyboard = screen.getByTestId('practice-vkb-keyboard');
     const blackKeys = keyboard.querySelectorAll('.practice-vkb__key--black');
-    expect(blackKeys.length).toBe(10); // 5 black keys × 2 octaves
+    expect(blackKeys.length).toBe(36); // standard 88-key piano
+  });
+
+  // ── Range label & scroll buttons
+
+  it('range label defaults to C3–C5 (centred on C4)', () => {
+    const ctx = makeVkbContext();
+    render(<PracticeVirtualKeyboard context={ctx} onKeyDown={vi.fn()} onKeyUp={vi.fn()} />);
+    const rangeLabel = screen.getByTestId('vkb-range-label');
+    expect(rangeLabel.textContent).toContain('C3');
+    expect(rangeLabel.textContent).toContain('C5');
+  });
+
+  it('scroll-right button increments the range label by one octave', async () => {
+    const ctx = makeVkbContext();
+    render(<PracticeVirtualKeyboard context={ctx} onKeyDown={vi.fn()} onKeyUp={vi.fn()} />);
+    const upBtn = screen.getByTestId('vkb-octave-up');
+    await act(async () => { fireEvent.click(upBtn); });
+    const rangeLabel = screen.getByTestId('vkb-range-label');
+    expect(rangeLabel.textContent).toContain('C4');
+    expect(rangeLabel.textContent).toContain('C6');
+  });
+
+  it('scroll-left button decrements the range label by one octave', async () => {
+    const ctx = makeVkbContext();
+    render(<PracticeVirtualKeyboard context={ctx} onKeyDown={vi.fn()} onKeyUp={vi.fn()} />);
+    const downBtn = screen.getByTestId('vkb-octave-down');
+    await act(async () => { fireEvent.click(downBtn); });
+    const rangeLabel = screen.getByTestId('vkb-range-label');
+    expect(rangeLabel.textContent).toContain('C2');
+    expect(rangeLabel.textContent).toContain('C4');
   });
 
   // ── onKeyDown callback ─────────────────────────────────────────────────
@@ -328,71 +357,7 @@ describe('T012 — PracticeVirtualKeyboard component', () => {
     expect(c3Key.className).not.toContain('practice-vkb__key--pressed');
   });
 
-  // ── Octave shift ──────────────────────────────────────────────────────
-
-  it('octave Up button increments the display range by one octave', async () => {
-    const ctx = makeVkbContext();
-    const onKeyDown = vi.fn();
-    const onKeyUp = vi.fn();
-    render(<PracticeVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
-    const rangeLabel = screen.getByTestId('vkb-range-label');
-    expect(rangeLabel.textContent).toContain('C3'); // default C3–B4
-    const upBtn = screen.getByTestId('vkb-octave-up');
-    await act(async () => { fireEvent.click(upBtn); });
-    expect(rangeLabel.textContent).toContain('C4'); // shifted up by one octave
-  });
-
-  it('octave Down button decrements the display range by one octave', async () => {
-    const ctx = makeVkbContext();
-    const onKeyDown = vi.fn();
-    const onKeyUp = vi.fn();
-    render(<PracticeVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
-    const downBtn = screen.getByTestId('vkb-octave-down');
-    await act(async () => { fireEvent.click(downBtn); });
-    const rangeLabel = screen.getByTestId('vkb-range-label');
-    expect(rangeLabel.textContent).toContain('C2'); // shifted down by one octave
-  });
-
-  it('Shift Up button is disabled at octaveShift=+2 (upper bound)', async () => {
-    const ctx = makeVkbContext();
-    const onKeyDown = vi.fn();
-    const onKeyUp = vi.fn();
-    render(<PracticeVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
-    const upBtn = screen.getByTestId('vkb-octave-up');
-    await act(async () => {
-      fireEvent.click(upBtn); // +1
-      fireEvent.click(upBtn); // +2
-    });
-    expect((upBtn as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it('Shift Down button is disabled at octaveShift=−2 (lower bound)', async () => {
-    const ctx = makeVkbContext();
-    const onKeyDown = vi.fn();
-    const onKeyUp = vi.fn();
-    render(<PracticeVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
-    const downBtn = screen.getByTestId('vkb-octave-down');
-    await act(async () => {
-      fireEvent.click(downBtn); // −1
-      fireEvent.click(downBtn); // −2
-    });
-    expect((downBtn as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it('after octave shift, first white key MIDI note reflects the new base octave', async () => {
-    const ctx = makeVkbContext();
-    const onKeyDown = vi.fn();
-    const onKeyUp = vi.fn();
-    render(<PracticeVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
-    const upBtn = screen.getByTestId('vkb-octave-up');
-    await act(async () => { fireEvent.click(upBtn); }); // now C4–B5
-    // C4 = MIDI 60
-    const c4Key = screen.getByTestId('vkb-key-60');
-    await act(async () => { fireEvent.mouseDown(c4Key); });
-    expect(onKeyDown).toHaveBeenCalledWith(60, expect.any(Number));
-  });
-
-  // ── Touch guard ───────────────────────────────────────────────────────
+  // ── Touch guard ──────────────────────────────────────────────────────
 
   it('ignores a mouse press that fires within 500 ms of a touch start', async () => {
     const ctx = makeVkbContext();

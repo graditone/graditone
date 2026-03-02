@@ -27,17 +27,12 @@ import './PracticeVirtualKeyboard.css';
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Width of each white key in px — matches VirtualKeyboard.tsx (44 px touch target). */
+/** Width of each white key in px — meets 44 px touch target requirement. */
 const WHITE_KEY_WIDTH = 44;
 
-/** Default lowest MIDI note at octaveShift=0: C3 = MIDI 48. */
-const KEYBOARD_BASE_NOTE = 48;
-
-/** Minimum allowed octave shift (shift=−2 → C1–B2, MIDI 24–47). */
-const OCTAVE_SHIFT_MIN = -2;
-
-/** Maximum allowed octave shift (shift=+2 → C5–B6, MIDI 72–95). */
-const OCTAVE_SHIFT_MAX = 2;
+/** Standard 88-key piano: A0 (MIDI 21) → C8 (MIDI 108). */
+const PIANO_FIRST_MIDI = 21;
+const PIANO_LAST_MIDI  = 108;
 
 /**
  * Milliseconds after a touch event during which synthesised mouse events are
@@ -45,17 +40,8 @@ const OCTAVE_SHIFT_MAX = 2;
  */
 const TOUCH_GUARD_MS = 500;
 
-// White-key pattern within an octave (semitone offsets of white keys):
-// C, D, E, F, G, A, B
-const WHITE_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
-// Black-key pattern: (semitone, white-key-index-before)
-const BLACK_SEMITONES: { semitone: number; whiteKeyBefore: number }[] = [
-  { semitone: 1,  whiteKeyBefore: 0 },
-  { semitone: 3,  whiteKeyBefore: 1 },
-  { semitone: 6,  whiteKeyBefore: 3 },
-  { semitone: 8,  whiteKeyBefore: 4 },
-  { semitone: 10, whiteKeyBefore: 5 },
-];
+/** Semitones that are black keys (within any octave). */
+const BLACK_SEMITONE_SET = new Set([1, 3, 6, 8, 10]);
 
 // ---------------------------------------------------------------------------
 // Key definition helpers
@@ -64,7 +50,7 @@ const BLACK_SEMITONES: { semitone: number; whiteKeyBefore: number }[] = [
 interface NoteDefinition {
   midi: number;
   isBlack: boolean;
-  /** 0-based global index of the white key it follows (black keys only) */
+  /** 0-based global index of the white key immediately left of this black key. */
   whiteKeyBeforeGlobal?: number;
   label: string;
 }
@@ -77,41 +63,50 @@ function midiLabel(midi: number): string {
 }
 
 /**
- * Generate the NoteDefinition array for `octaveCount` octaves starting at `baseMidi`.
- * White key indices are global, running from 0 to (7 × octaveCount − 1).
- * Defaults to 2 octaves so callers without a measured width work correctly.
+ * Build the standard 88-key piano: A0 (MIDI 21) → C8 (MIDI 108).
+ * 52 white keys, 36 black keys.
  */
-function buildNotes(baseMidi: number, octaveCount: number = 2): NoteDefinition[] {
+function buildPianoNotes(): NoteDefinition[] {
   const notes: NoteDefinition[] = [];
-
-  for (let octave = 0; octave < octaveCount; octave++) {
-    const octaveBase = baseMidi + octave * 12;
-    for (const semi of WHITE_SEMITONES) {
+  let whiteIndex = 0;
+  for (let midi = PIANO_FIRST_MIDI; midi <= PIANO_LAST_MIDI; midi++) {
+    const semitone = ((midi % 12) + 12) % 12;
+    if (BLACK_SEMITONE_SET.has(semitone)) {
       notes.push({
-        midi: octaveBase + semi,
-        isBlack: false,
-        label: midiLabel(octaveBase + semi),
-      });
-    }
-    for (const { semitone, whiteKeyBefore } of BLACK_SEMITONES) {
-      notes.push({
-        midi: octaveBase + semitone,
+        midi,
         isBlack: true,
-        whiteKeyBeforeGlobal: octave * 7 + whiteKeyBefore,
-        label: midiLabel(octaveBase + semitone),
+        whiteKeyBeforeGlobal: whiteIndex - 1,
+        label: midiLabel(midi),
       });
+    } else {
+      notes.push({ midi, isBlack: false, label: midiLabel(midi) });
+      whiteIndex++;
     }
   }
-
   return notes;
 }
 
+// Pre-computed once — the full 88-key layout never changes.
+const PIANO_NOTES       = buildPianoNotes();
+const PIANO_WHITE_NOTES = PIANO_NOTES.filter(n => !n.isBlack);
+const PIANO_BLACK_NOTES = PIANO_NOTES.filter(n =>  n.isBlack);
+
+// Left-edge pixel of C4 (MIDI 60) within the 88-key layout.
+// A0–B0 = 2 white keys, then 3 full octaves (C1–B3) = 21 white keys → C4 is white key index 23.
+const C4_LEFT_PX = 23 * WHITE_KEY_WIDTH; // 1012 px
+
+/** Pixel width of one octave (7 white keys). */
+const OCTAVE_PX = 7 * WHITE_KEY_WIDTH; // 308 px
+
+/** Total pixel width of the 88-key piano (52 white keys). */
+const PIANO_TOTAL_WIDTH = PIANO_WHITE_NOTES.length * WHITE_KEY_WIDTH; // 2288 px
+
 /**
  * Left position (px) of a black key.
- * Centres the key exactly at the boundary between white keys — the transform
- * translateX(-50%) in CSS shifts the rendered box left by half its own width,
- * so `left = (n+1) * WHITE_KEY_WIDTH` places the midpoint of the black key on
- * the gap between white key n and white key n+1.
+ * Centres the key exactly at the boundary between white keys — translateX(-50%)
+ * in CSS shifts the rendered box left by half its own width, so
+ * `left = (n+1) × WHITE_KEY_WIDTH` places the midpoint on the gap between
+ * white key n and white key n+1.
  */
 function blackKeyLeft(whiteKeyBeforeGlobal: number): number {
   return (whiteKeyBeforeGlobal + 1) * WHITE_KEY_WIDTH;
@@ -137,8 +132,15 @@ export interface PracticeVirtualKeyboardProps {
 // ---------------------------------------------------------------------------
 
 export function PracticeVirtualKeyboard({ context, onKeyDown, onKeyUp }: PracticeVirtualKeyboardProps) {
-  // Octave shift state: [-2, +2], default 0 (C3–B4)
+  // Fixed 88-key piano: A0–C8.
+  const whiteNotes = PIANO_WHITE_NOTES;   // 52 white keys
+  const blackNotes = PIANO_BLACK_NOTES;   // 36 black keys
+  const totalWidth = PIANO_TOTAL_WIDTH;   // 2288 px
+
+  // Octave scroll offset relative to C4 centre. 0 = centred on C4. ±1 = ±1 octave.
   const [octaveShift, setOctaveShift] = useState(0);
+  // Measured width of the scroll container (updated by ResizeObserver).
+  const [containerWidth, setContainerWidth] = useState(0);
 
   // Keys currently pressed (for visual highlight — FR-007)
   const [pressedKeys, setPressedKeys] = useState<Set<number>>(new Set());
@@ -155,39 +157,31 @@ export function PracticeVirtualKeyboard({ context, onKeyDown, onKeyUp }: Practic
   // isMouseHeldRef: tracks whether primary button is currently down (for slide-play)
   const isMouseHeldRef = useRef(false);
 
-  // Ref to the scrollable keyboard wrapper — used by ResizeObserver to measure
-  // the available pixel width so the keyboard can fill it with whole octaves.
+  // Ref to the scrollable wrapper — used by scroll effects and ResizeObserver.
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Measured width of the scroll container in px; 0 until first layout.
-  const [availableWidth, setAvailableWidth] = useState(0);
-
-  // Recompute when the panel is resized (e.g. orientation change, panel open).
+  // Track container width so scroll and button-disabled state stay in sync.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // Grab initial width synchronously after first render.
-    setAvailableWidth(el.clientWidth);
+    const update = () => setContainerWidth(el.clientWidth);
+    update();
     if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(entries => {
-      setAvailableWidth(entries[0]?.contentRect.width ?? 0);
-    });
+    const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  // Derived note arrays from the current octave shift
-  const baseMidi = KEYBOARD_BASE_NOTE + octaveShift * 12;
-  // How many whole octaves fit? Each octave = 7 white keys × 44 px.
-  // Fall back to 2 if width hasn't been measured yet (avoids a zero-key render
-  // on first paint and keeps jsdom-based unit tests stable).
-  const octaveCount = availableWidth > 0
-    ? Math.max(1, Math.floor(availableWidth / (7 * WHITE_KEY_WIDTH)))
-    : 2;
-  const notes = buildNotes(baseMidi, octaveCount);
-  const whiteNotes = notes.filter(n => !n.isBlack);
-  const blackNotes = notes.filter(n => n.isBlack);
-  const totalWidth = whiteNotes.length * WHITE_KEY_WIDTH;
+  // Scroll to the position that centres C4 + octaveShift whenever either changes.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || containerWidth === 0) return;
+    const target = Math.max(0, Math.min(
+      C4_LEFT_PX + octaveShift * OCTAVE_PX - containerWidth / 2,
+      PIANO_TOTAL_WIDTH - containerWidth,
+    ));
+    el.scrollTo({ left: target, behavior: octaveShift === 0 ? 'instant' : 'smooth' });
+  }, [octaveShift, containerWidth]);
 
   // Lock orientation to landscape on mobile so the keyboard has maximum width.
   // The Screen Orientation API is not universally supported; failures are silently
@@ -304,18 +298,26 @@ export function PracticeVirtualKeyboard({ context, onKeyDown, onKeyUp }: Practic
   }, [handleKeyDown]);
 
   // ---------------------------------------------------------------------------
-  // Octave shift controls (FR-008, R-005)
+  // Octave scroll controls
   // ---------------------------------------------------------------------------
 
-  const shiftUp = useCallback(() => {
-    setOctaveShift(prev => Math.min(prev + 1, OCTAVE_SHIFT_MAX));
-  }, []);
+  const shiftDown = useCallback(() => setOctaveShift(s => s - 1), []);
+  const shiftUp   = useCallback(() => setOctaveShift(s => s + 1), []);
 
-  const shiftDown = useCallback(() => {
-    setOctaveShift(prev => Math.max(prev - 1, OCTAVE_SHIFT_MIN));
-  }, []);
+  // Compute the clamped scrollLeft for the current shift so we can derive
+  // whether the buttons should be disabled without reading the DOM.
+  const targetScrollLeft = containerWidth > 0
+    ? Math.max(0, Math.min(
+        C4_LEFT_PX + octaveShift * OCTAVE_PX - containerWidth / 2,
+        PIANO_TOTAL_WIDTH - containerWidth,
+      ))
+    : C4_LEFT_PX;
+  const atLeftEdge  = targetScrollLeft <= 0;
+  const atRightEdge = containerWidth > 0 && targetScrollLeft + containerWidth >= PIANO_TOTAL_WIDTH;
 
-  const rangeLabel = `${midiLabel(baseMidi)}–${midiLabel(baseMidi + 23)}`;
+  // Range label: show the C note closest to the centre of the visible area.
+  const centreOctave = 4 + octaveShift;
+  const rangeLabel = `C${centreOctave - 1}–C${centreOctave + 1}`;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -323,7 +325,7 @@ export function PracticeVirtualKeyboard({ context, onKeyDown, onKeyUp }: Practic
 
   return (
     <div className="practice-vkb" data-testid="practice-vkb" role="group" aria-label="Virtual piano keyboard">
-      {/* Hidden live region — consumed by screen readers and unit tests */}
+      {/* Hidden label — consumed by screen readers and unit tests */}
       <span
         className="practice-vkb__range-label--sr"
         aria-live="polite"
@@ -336,14 +338,14 @@ export function PracticeVirtualKeyboard({ context, onKeyDown, onKeyUp }: Practic
       <button
         className="practice-vkb__octave-btn"
         onClick={shiftDown}
-        disabled={octaveShift <= OCTAVE_SHIFT_MIN}
-        aria-label="Shift octave down"
+        disabled={atLeftEdge}
+        aria-label="Scroll keyboard left one octave"
         data-testid="vkb-octave-down"
       >
         ◀
       </button>
 
-      {/* Keyboard (scrollable on narrow screens, centred when smaller than panel) */}
+      {/* Keyboard (scrollable, centred on C4+shift) */}
       <div className="practice-vkb__scroll" ref={scrollRef}>
         <div
           className="practice-vkb__keyboard"
@@ -400,8 +402,8 @@ export function PracticeVirtualKeyboard({ context, onKeyDown, onKeyUp }: Practic
       <button
         className="practice-vkb__octave-btn"
         onClick={shiftUp}
-        disabled={octaveShift >= OCTAVE_SHIFT_MAX}
-        aria-label="Shift octave up"
+        disabled={atRightEdge}
+        aria-label="Scroll keyboard right one octave"
         data-testid="vkb-octave-up"
       >
         ▶
