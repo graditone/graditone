@@ -29,6 +29,7 @@ const INACTIVE_STATE: MetronomeState = {
   beatIndex: -1,
   isDownbeat: false,
   bpm: 0,
+  subdivision: 1,
 };
 
 export interface UseMetronomeReturn {

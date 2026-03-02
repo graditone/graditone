@@ -126,7 +126,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
 
   // Feature 035: Metronome state
   const [metronomeState, setMetronomeState] = useState<MetronomeState>({
-    active: false, beatIndex: -1, isDownbeat: false, bpm: 0,
+    active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1,
   });
 
   // ── UI state ─────────────────────────────────────────────────────────────────

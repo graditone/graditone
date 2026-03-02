@@ -36,6 +36,7 @@ export type {
   // v5 additions (Feature 035)
   MetronomeState,
   PluginMetronomeContext,
+  MetronomeSubdivision,
 } from './types';
 
 export { PLUGIN_API_VERSION } from './types';

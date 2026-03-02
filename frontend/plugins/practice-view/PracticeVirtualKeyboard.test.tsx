@@ -107,7 +107,7 @@ function makeMockContext(): PluginContext & {
     metronome: {
       toggle: vi.fn().mockResolvedValue(undefined),
       subscribe: vi.fn((handler: (s: { active: boolean; beatIndex: number; isDownbeat: boolean; bpm: number }) => void) => {
-        handler({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0 });
+        handler({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1 });
         return () => {};
       }),
     },

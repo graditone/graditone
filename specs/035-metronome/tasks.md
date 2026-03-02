@@ -136,6 +136,15 @@ description: "Task list for 035-metronome: Metronome for Play and Practice Views
 
 ---
 
+## Phase 7: Post-PR Bug Fixes & Refinements
+
+**Purpose**: Fixes discovered during manual testing after initial PR merge.
+
+- [X] T026 [US1] Fix subdivision dropdown icon not updating immediately when engine is inactive — `PlayScorePlugin.tsx` tracked `metronomeSubdivision` from `metronomeState.subdivision` which only updates on engine beat emissions; fix: add separate local `metronomeSubdivision` state that is updated synchronously in `handleMetronomeSubdivisionChange` and kept in sync with the engine subscription as a secondary path; file: `frontend/plugins/play-score/PlayScorePlugin.tsx`
+- [X] T027 [US1] Fix metronome–playback phase sync: (a) subscriber passeed stale async `scheduleOffsetSeconds=0` when metronome was active and playback started — fix: use `computeBeatPhase(getCurrentTickLive(), getTransportSeconds())` in the subscriber (same as `toggle()` path); (b) remove over-eager `SNAP` guard in `computeBeatPhase` that set `scheduleOffsetSeconds = transportSeconds` when near a beat boundary, causing Tone.js to skip one full interval and shift the downbeat by one beat — fix: always schedule the next beat boundary with a strictly-future start time; files: `frontend/src/plugin-api/metronomeContext.ts`
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

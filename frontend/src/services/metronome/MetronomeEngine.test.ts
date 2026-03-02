@@ -122,6 +122,7 @@ vi.mock('../playback/ToneAdapter', () => ({
       clearTransportEvent: adapterState.clearTransportEvent,
       isInitialized: adapterState.isInitialized,
       updateTempo: vi.fn(),
+      onTransportRestart: vi.fn(() => vi.fn()),
     })),
   },
 }));

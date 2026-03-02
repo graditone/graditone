@@ -14,7 +14,9 @@
  *   seconds = ticks / ((bpm / 60) * PPQ)
  */
 
+import { useState, useRef, useEffect } from 'react';
 import type { PluginPlaybackStatus } from '../../src/plugin-api/index';
+import type { MetronomeSubdivision } from '../../src/plugin-api/index';
 
 // Mirror of PlaybackScheduler.PPQ — no host imports in plugin code
 const PPQ = 960;
@@ -55,6 +57,10 @@ export interface PlaybackToolbarProps {
   metronomeIsDownbeat: boolean;
   /** Called when the user toggles the metronome button */
   onMetronomeToggle: () => void;
+  /** Current beat subdivision (1=quarter, 2=eighth, 4=sixteenth) */
+  metronomeSubdivision: MetronomeSubdivision;
+  /** Called when the user picks a new subdivision */
+  onMetronomeSubdivisionChange: (s: MetronomeSubdivision) => void;
 }
 
 export function PlaybackToolbar({
@@ -74,6 +80,8 @@ export function PlaybackToolbar({
   metronomeBeatIndex,
   metronomeIsDownbeat,
   onMetronomeToggle,
+  metronomeSubdivision,
+  onMetronomeSubdivisionChange,
 }: PlaybackToolbarProps) {
   const isPlaying = status === 'playing';
   const isActive = status === 'playing' || status === 'paused' || status === 'ready';
@@ -95,6 +103,25 @@ export function PlaybackToolbar({
   // Using beatIndex as `key` forces React to remount the button on each beat,
   // which resets the CSS animation so it replays from 0% every beat.
   const metronomeAnimKey = metronomeActive ? `metro-${metronomeBeatIndex}` : 'metro-off';
+
+  // Subdivision dropdown state
+  const [menuOpen, setMenuOpen] = useState(false);
+  const metroGroupRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleOutside(e: MouseEvent) {
+      if (metroGroupRef.current && !metroGroupRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [menuOpen]);
+
+  const SUBDIV_LABELS: Record<MetronomeSubdivision, string> = { 1: '♩ 1/4', 2: '♪ 1/8', 4: '♬ 1/16' };
+  const SUBDIV_ICONS: Record<MetronomeSubdivision, string> = { 1: '♩', 2: '♪', 4: '♬' };
 
   return (
     <div className="play-score__toolbar" role="toolbar" aria-label="Playback controls">
@@ -177,16 +204,45 @@ export function PlaybackToolbar({
         )}
       </div>
 
-      {/* Metronome toggle — Feature 035 */}
-      <button
-        key={metronomeAnimKey}
-        className={metronomeBtnClass}
-        onClick={onMetronomeToggle}
-        aria-label="Toggle metronome"
-        aria-pressed={metronomeActive}
-      >
-        ♪
-      </button>
+      {/* Metronome toggle + subdivision dropdown — Feature 035 */}
+      <div className="play-score__metro-group" ref={metroGroupRef}>
+        <button
+          key={metronomeAnimKey}
+          className={metronomeBtnClass}
+          onClick={onMetronomeToggle}
+          aria-label="Toggle metronome"
+          aria-pressed={metronomeActive}
+        >
+          {SUBDIV_ICONS[metronomeSubdivision]}
+        </button>
+        <button
+          className="play-score__metro-chevron"
+          onClick={() => setMenuOpen(o => !o)}
+          aria-label="Metronome subdivision"
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+        >
+          ▾
+        </button>
+        {menuOpen && (
+          <div className="play-score__metro-menu" role="menu">
+            {([1, 2, 4] as MetronomeSubdivision[]).map(s => (
+              <button
+                key={s}
+                role="menuitem"
+                className={
+                  'play-score__metro-menu-item' +
+                  (metronomeSubdivision === s ? ' play-score__metro-menu-item--active' : '')
+                }
+                onClick={() => { onMetronomeSubdivisionChange(s); setMenuOpen(false); }}
+              >
+                {metronomeSubdivision === s && <span className="play-score__metro-menu-check">✓</span>}
+                {SUBDIV_LABELS[s]}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -36,6 +36,8 @@ function makeDefaultProps(
     metronomeBeatIndex: -1,
     metronomeIsDownbeat: false,
     onMetronomeToggle: vi.fn(),
+    metronomeSubdivision: 1 as const,
+    onMetronomeSubdivisionChange: vi.fn(),
     ...overrides,
   };
 }

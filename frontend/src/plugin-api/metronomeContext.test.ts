@@ -18,8 +18,8 @@ import type { PluginMetronomeContext, MetronomeState, ScorePlayerState } from '.
 
 type StateHandler = (s: MetronomeState) => void;
 
-const INACTIVE: MetronomeState = { active: false, beatIndex: -1, isDownbeat: false, bpm: 0 };
-const ACTIVE: MetronomeState = { active: true, beatIndex: 0, isDownbeat: true, bpm: 120 };
+const INACTIVE: MetronomeState = { active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1 };
+const ACTIVE: MetronomeState = { active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1 };
 
 let mockEngineStateHandlers: Set<StateHandler>;
 let mockEngine: {
@@ -244,7 +244,7 @@ describe('useMetronomeBridge (T008)', () => {
       await result.current.toggle();
     });
 
-    expect(mockEngine.start).toHaveBeenCalledWith(90, 4, 4);
+    expect(mockEngine.start).toHaveBeenCalledWith(90, 4, 4, 0, 0, 1);
   });
 
   it('toggle() defaults to 120 BPM when scorePlayer BPM is 0', async () => {
@@ -271,7 +271,7 @@ describe('useMetronomeBridge (T008)', () => {
       await result.current.toggle();
     });
 
-    expect(mockEngine.start).toHaveBeenCalledWith(120, 3, 4);
+    expect(mockEngine.start).toHaveBeenCalledWith(120, 3, 4, 0, 0, 1);
   });
 
   it('unsubscribe returned from subscribe() removes the handler', () => {
@@ -284,7 +284,7 @@ describe('useMetronomeBridge (T008)', () => {
     // Engine fire should NOT call removed handler
     act(() => {
       mockEngineStateHandlers.forEach(h =>
-        h({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120 })
+        h({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1 })
       );
     });
     expect(received.length).toBe(countAfter);

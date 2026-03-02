@@ -27,6 +27,8 @@ export class ToneAdapter {
   private scheduledEventIds: number[] = []; // Track scheduled Transport events
   /** Guards against concurrent init() calls creating duplicate Samplers. */
   private initPromise: Promise<void> | null = null;
+  /** Listeners called synchronously BEFORE Transport.start() inside startTransport(). */
+  private transportRestartListeners = new Set<() => void>();
 
   /**
    * Private constructor - use getInstance() instead
@@ -64,7 +66,7 @@ export class ToneAdapter {
    * ```
    */
   public async init(): Promise<void> {
-    // Always resume the AudioContext before playing — browsers auto-suspend it
+    // Always resume the AudioContext before playing -- browsers auto-suspend it
     // after a period of silence (e.g., after natural playback end). Tone.start()
     // is idempotent: it is a no-op when the context is already running.
     await Tone.start();
@@ -73,7 +75,7 @@ export class ToneAdapter {
       return; // Sampler/synth already created, nothing else to do
     }
 
-    // Deduplicate concurrent init() calls — only one Sampler/PolySynth ever created.
+    // Deduplicate concurrent init() calls -- only one Sampler/PolySynth ever created.
     if (this.initPromise) {
       return this.initPromise;
     }
@@ -85,7 +87,7 @@ export class ToneAdapter {
     }
   }
 
-  /** Internal init implementation — called exactly once via the initPromise guard. */
+  /** Internal init implementation -- called exactly once via the initPromise guard. */
   private async _doInit(): Promise<void> {
 
     try {
@@ -189,14 +191,34 @@ export class ToneAdapter {
    * This is the canonical Tone.js pattern for gapless first-note scheduling.
    */
   public startTransport(): void {
+    // Notify listeners synchronously BEFORE restarting.
+    // MetronomeEngine uses this to clear its scheduleRepeat event so that
+    // stale clicks don't fire at incorrect beat positions when Transport
+    // restarts at position 0.
+    this.transportRestartListeners.forEach(fn => fn());
+
     // Cancel only the playback note-events tracked in scheduledEventIds.
-    // Using Transport.cancel() here would wipe ALL Transport events — including
-    // the metronome's scheduleRepeat — so we clear IDs individually instead.
+    // Using Transport.cancel() here would wipe ALL Transport events -- including
+    // the metronome's scheduleRepeat -- so we clear IDs individually instead.
     this.scheduledEventIds.forEach(id => Tone.Transport.clear(id));
     this.scheduledEventIds = [];
     Tone.Transport.stop();
     // '+0.05' gives scheduleNotes() a 50 ms window before position-0 events fire.
     Tone.Transport.start('+0.05', 0);
+  }
+
+  /**
+   * Register a callback that fires synchronously inside startTransport(),
+   * BEFORE Transport.stop() / Transport.start().
+   *
+   * Use this to clear Transport-scheduled events that must not survive a
+   * Transport restart (e.g. the metronome's scheduleRepeat).
+   *
+   * @returns An unsubscribe function.
+   */
+  public onTransportRestart(listener: () => void): () => void {
+    this.transportRestartListeners.add(listener);
+    return () => { this.transportRestartListeners.delete(listener); };
   }
 
   /**

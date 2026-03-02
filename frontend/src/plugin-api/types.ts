@@ -493,6 +493,16 @@ export interface PluginScoreRendererProps {
 // ---------------------------------------------------------------------------
 
 /**
+ * Beat subdivision for the metronome.
+ * Controls how frequently the engine fires between score-beat boundaries.
+ *
+ * - 1: Quarter note (one click per beat) — default
+ * - 2: Eighth note  (two clicks per beat)
+ * - 4: Sixteenth note (four clicks per beat)
+ */
+export type MetronomeSubdivision = 1 | 2 | 4;
+
+/**
  * Immutable snapshot of metronome state pushed to plugin subscribers.
  * Delivered whenever active, beatIndex, or bpm changes.
  * See specs/035-metronome/contracts/plugin-api-v5.ts for the canonical contract.
@@ -515,6 +525,10 @@ export interface MetronomeState {
    * Current effective BPM (0 when inactive; clamped to 20–300 when active).
    */
   readonly bpm: number;
+  /**
+   * Current beat subdivision (1 = quarter, 2 = eighth, 4 = sixteenth).
+   */
+  readonly subdivision: MetronomeSubdivision;
 }
 
 /**
@@ -551,6 +565,14 @@ export interface PluginMetronomeContext {
    * immediately (FR-012).
    */
   toggle(): Promise<void>;
+  /**
+   * Change the beat subdivision while the engine is active or idle.
+   * If the engine is currently running, it restarts immediately at the new
+   * subdivision (from the downbeat to avoid phase ambiguity).
+   *
+   * @param subdivision - 1 (quarter), 2 (eighth), or 4 (sixteenth)
+   */
+  setSubdivision(subdivision: MetronomeSubdivision): Promise<void>;
   /**
    * Subscribe to MetronomeState snapshots.
    * Handler is called synchronously once with the current state, then on each

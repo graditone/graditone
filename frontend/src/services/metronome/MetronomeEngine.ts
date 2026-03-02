@@ -22,7 +22,7 @@
 
 import * as Tone from 'tone';
 import { ToneAdapter } from '../playback/ToneAdapter';
-import type { MetronomeState } from '../../plugin-api/types';
+import type { MetronomeState, MetronomeSubdivision } from '../../plugin-api/types';
 
 // Ticks per quarter note — mirrors PlaybackScheduler.PPQ (Principle IV)
 export const PPQ = 960;
@@ -35,6 +35,10 @@ export class MetronomeEngine {
   private _beatIndex = 0;
   private _numerator = 4;
   private _denominator = 4;
+  /** Beat subdivision: 1 = quarter-note clicks, 2 = eighth-note, 4 = sixteenth-note */
+  private _subdivision: MetronomeSubdivision = 1;
+  /** Position within the current beat [0, _subdivision). 0 = on-the-beat tick. */
+  private _subBeatIndex = 0;
   private _audioBlocked = false;
 
   /** Transport event ID returned by scheduleRepeat; null when stopped. */
@@ -46,6 +50,9 @@ export class MetronomeEngine {
 
   /** Subscribers set — push model (mirrors scorePlayerContext subscribe pattern). */
   private _subscribers = new Set<(state: MetronomeState) => void>();
+
+  /** Unsubscribe from ToneAdapter.onTransportRestart (set in start(), cleared in stop/dispose). */
+  private _unsubTransportRestart: (() => void) | null = null;
 
   // ─── Public API ──────────────────────────────────────────────────────────
 
@@ -84,6 +91,7 @@ export class MetronomeEngine {
     denominator = 4,
     startBeatIndex = 0,
     scheduleOffsetSeconds = 0,
+    subdivision: MetronomeSubdivision = 1,
   ): Promise<void> {
     const adapter = ToneAdapter.getInstance();
 
@@ -113,6 +121,8 @@ export class MetronomeEngine {
     // startBeatIndex lets callers phase-lock the click to the score's measure position.
     // Clamped into [0, numerator) so an out-of-range value never breaks the counter.
     this._beatIndex = ((startBeatIndex % this._numerator) + this._numerator) % this._numerator;
+    this._subdivision = subdivision;
+    this._subBeatIndex = 0;
     this._active = true;
 
     // Create synths once per engine instance
@@ -134,11 +144,21 @@ export class MetronomeEngine {
     // scheduleOffsetSeconds > 0 phase-locks the first click to a beat boundary
     // when the Transport is already running (playback mid-measure).
     const beatIntervalSeconds = this._computeBeatInterval(this._bpm, this._denominator);
+    const tickIntervalSeconds = beatIntervalSeconds / this._subdivision;
     this._eventId = adapter.scheduleRepeat(
       () => this._fireBeat(),
-      beatIntervalSeconds,
+      tickIntervalSeconds,
       scheduleOffsetSeconds > 0 ? scheduleOffsetSeconds : undefined,
     );
+
+    // Register a synchronous hook so that when startTransport() restarts the
+    // Transport at position 0, our scheduleRepeat is cleared immediately
+    // (before any stale clicks fire). The subscriber in metronomeContext.ts
+    // will then call start() again with the correct phase.
+    this._unsubTransportRestart?.();
+    this._unsubTransportRestart = adapter.onTransportRestart(() => {
+      this._clearEvent();
+    });
 
     // Start Transport in standalone mode — no-op if already running by playback.
     if ((Tone.Transport as unknown as { state: string }).state !== 'started') {
@@ -155,6 +175,8 @@ export class MetronomeEngine {
    */
   public stop(): void {
     this._clearEvent();
+    this._unsubTransportRestart?.();
+    this._unsubTransportRestart = null;
     this._active = false;
     this._beatIndex = 0;
     this._notifySubscribers();
@@ -179,9 +201,10 @@ export class MetronomeEngine {
 
     this._clearEvent();
     const beatIntervalSeconds = this._computeBeatInterval(this._bpm, this._denominator);
+    const tickIntervalSeconds = beatIntervalSeconds / this._subdivision;
     this._eventId = ToneAdapter.getInstance().scheduleRepeat(
       () => this._fireBeat(),
-      beatIntervalSeconds
+      tickIntervalSeconds,
     );
 
     this._notifySubscribers();
@@ -220,6 +243,8 @@ export class MetronomeEngine {
    */
   public dispose(): void {
     this.stop();
+    this._unsubTransportRestart?.();
+    this._unsubTransportRestart = null;
     if (this._downbeatSynth) {
       this._downbeatSynth.dispose();
       this._downbeatSynth = null;
@@ -237,31 +262,46 @@ export class MetronomeEngine {
    * Triggers the appropriate click sound and notifies subscribers.
    */
   private _fireBeat(): void {
-    const isDownbeat = this._beatIndex === 0;
+    const isOnBeat = this._subBeatIndex === 0;
+    const isDownbeat = isOnBeat && this._beatIndex === 0;
 
     try {
       if (isDownbeat) {
+        // Measure downbeat: low percussive “tock”
         this._downbeatSynth?.triggerAttackRelease('C2', '16n');
-      } else {
+      } else if (isOnBeat) {
+        // Regular beat within the measure
         this._upbeatSynth?.triggerAttackRelease('G4', '32n');
+      } else {
+        // Subdivision tick (8th or 16th): very brief, high-pitched click
+        this._upbeatSynth?.triggerAttackRelease('C6', '64n');
       }
     } catch {
       // Swallow audio errors — beat should still count even if synth fails
     }
 
-    // Advance beat index BEFORE notifying subscribers so they see the
-    // post-fire state (matching the visual "current beat just played")
+    // Capture indices before advancing for the subscriber snapshot
     const currentBeatIndex = this._beatIndex;
-    this._beatIndex = (this._beatIndex + 1) % this._numerator;
 
-    // Build state snapshot with the beat that just fired
-    const state: MetronomeState = {
-      active: this._active,
-      beatIndex: currentBeatIndex,
-      isDownbeat,
-      bpm: this._bpm,
-    };
-    this._subscribers.forEach(h => h(state));
+    // Advance sub-beat; roll over to next beat when subdivision is complete
+    this._subBeatIndex += 1;
+    if (this._subBeatIndex >= this._subdivision) {
+      this._subBeatIndex = 0;
+      this._beatIndex = (this._beatIndex + 1) % this._numerator;
+    }
+
+    // Notify subscribers only on real beat boundaries (not sub-ticks) to
+    // keep the visual pulse in sync with the score beat grid.
+    if (isOnBeat) {
+      const state: MetronomeState = {
+        active: this._active,
+        beatIndex: currentBeatIndex,
+        isDownbeat,
+        bpm: this._bpm,
+        subdivision: this._subdivision,
+      };
+      this._subscribers.forEach(h => h(state));
+    }
   }
 
   private _getState(): MetronomeState {
@@ -271,6 +311,7 @@ export class MetronomeEngine {
         beatIndex: -1,
         isDownbeat: false,
         bpm: 0,
+        subdivision: this._subdivision,
       };
     }
     return {
@@ -278,6 +319,7 @@ export class MetronomeEngine {
       beatIndex: this._beatIndex,
       isDownbeat: this._beatIndex === 0,
       bpm: this._bpm,
+      subdivision: this._subdivision,
     };
   }
 
