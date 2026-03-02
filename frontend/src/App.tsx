@@ -16,6 +16,7 @@ import { ScoreSelectorPlugin } from './components/plugins/ScoreSelectorPlugin'
 import type { PluginContext, PluginNoteEvent, MusicorePlugin } from './plugin-api/index'
 import { PluginStaffViewer } from './plugin-api/PluginStaffViewer'
 import { createNoOpScorePlayer, createScorePlayerProxy } from './plugin-api/scorePlayerContext'
+import { createNoOpMetronome, createMetronomeProxy } from './plugin-api/metronomeContext'
 import { ToneAdapter } from './services/playback/ToneAdapter'
 import { pluginMicBroadcaster } from './services/recording/PluginMicBroadcaster'
 import { useMidiInput } from './services/recording/useMidiInput'
@@ -186,7 +187,10 @@ function App() {
           current: createNoOpScorePlayer(),
         };
         const internalRef: V3ProxyRefs['internalRef'] = { current: null };
-        v3ProxyRefsMap.current.set(manifest.id, { scorePlayerRef, internalRef });
+        // Feature 035: metronomeRef starts as noOp; V3PluginWrapper replaces it
+        // with the real hook-backed useMetronomeBridge API on first render.
+        const metronomeRef: V3ProxyRefs['metronomeRef'] = { current: createNoOpMetronome() };
+        v3ProxyRefsMap.current.set(manifest.id, { scorePlayerRef, internalRef, metronomeRef });
         const BoundScoreRenderer = createBoundScoreRenderer(internalRef);
 
         const context: PluginContext = {
@@ -272,6 +276,9 @@ function App() {
           // once V3PluginWrapper sets scorePlayerRef.current = bridge.api.
           // v2 plugins: noOp stub is visible but never called (no play-score UI).
           scorePlayer: createScorePlayerProxy(scorePlayerRef),
+          // Feature 035: metronome — proxy delegates to hook-backed useMetronomeBridge
+          // once V3PluginWrapper sets metronomeRef.current = metronomeApi.
+          metronome: createMetronomeProxy(metronomeRef),
           midi: {
             subscribe: (handler) => {
               midiPluginSubscribersRef.current.add(handler)

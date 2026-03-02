@@ -189,13 +189,12 @@ export class ToneAdapter {
    * This is the canonical Tone.js pattern for gapless first-note scheduling.
    */
   public startTransport(): void {
-    // Stop then cancel any residual events (belt-and-suspenders; clearSchedule should
-    // have already done this, but calling again guarantees a clean slate when the
-    // previous session ended naturally without an explicit stop() call).
+    // Cancel only the playback note-events tracked in scheduledEventIds.
+    // Using Transport.cancel() here would wipe ALL Transport events — including
+    // the metronome's scheduleRepeat — so we clear IDs individually instead.
+    this.scheduledEventIds.forEach(id => Tone.Transport.clear(id));
+    this.scheduledEventIds = [];
     Tone.Transport.stop();
-    Tone.Transport.cancel();
-    // Explicitly pass 0 as the start-position offset so the Transport always begins
-    // at position 0 regardless of how it was left by the previous session.
     // '+0.05' gives scheduleNotes() a 50 ms window before position-0 events fire.
     Tone.Transport.start('+0.05', 0);
   }
@@ -205,7 +204,8 @@ export class ToneAdapter {
    */
   public stopTransport(): void {
     Tone.Transport.stop();
-    Tone.Transport.cancel();
+    // Clear only playback events; metronome scheduleRepeat must remain registered.
+    this.scheduledEventIds.forEach(id => Tone.Transport.clear(id));
     this.scheduledEventIds = [];
   }
 
@@ -349,12 +349,21 @@ export class ToneAdapter {
    * 
    * @param callback - Function to invoke on each repeat
    * @param intervalSeconds - Repeat interval in seconds
+   * @param startOffsetSeconds - Transport time (seconds) at which the first event
+   *   fires.  Defaults to 0 (fires at Transport position 0).  Pass the current
+   *   Transport.seconds + timeUntilNextBeat to phase-align with an already-running
+   *   Transport (e.g. metronome activated mid-song).
    * @returns Event ID that can be used with clearTransportEvent()
    */
-  public scheduleRepeat(callback: () => void, intervalSeconds: number): number {
+  public scheduleRepeat(
+    callback: () => void,
+    intervalSeconds: number,
+    startOffsetSeconds?: number,
+  ): number {
     return Tone.Transport.scheduleRepeat(
       () => callback(),
-      intervalSeconds
+      intervalSeconds,
+      startOffsetSeconds,
     );
   }
 

@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PluginContext, PluginPitchEvent, PluginNoteEvent, PluginScorePitches, ScorePlayerState } from '../../src/plugin-api/index';
+import type { PluginContext, PluginPitchEvent, PluginNoteEvent, PluginScorePitches, ScorePlayerState, MetronomeState } from '../../src/plugin-api/index';
 import type {
   PracticePhase,
   PracticeExercise,
@@ -120,8 +120,14 @@ export function PracticePlugin({ context }: PracticePluginProps) {
   const [scorePlayerState, setScorePlayerState] = useState<ScorePlayerState>({
     status: 'idle', currentTick: 0, totalDurationTicks: 0,
     highlightedNoteIds: new Set<string>(), bpm: 0, title: null, error: null,
+    timeSignature: { numerator: 4, denominator: 4 },
   });
   const scorePitchesRef = useRef<PluginScorePitches | null>(null);
+
+  // Feature 035: Metronome state
+  const [metronomeState, setMetronomeState] = useState<MetronomeState>({
+    active: false, beatIndex: -1, isDownbeat: false, bpm: 0,
+  });
 
   // ── UI state ─────────────────────────────────────────────────────────────────
   const [showTips, setShowTips] = useState(
@@ -261,6 +267,12 @@ export function PracticePlugin({ context }: PracticePluginProps) {
       setScorePlayerState(state);
     });
   }, [context.scorePlayer]);
+
+  // Feature 035: Subscribe to metronome state changes
+  useEffect(() => {
+    const unsubscribe = context.metronome.subscribe(setMetronomeState);
+    return unsubscribe;
+  }, [context.metronome]);
 
   // When scorePlayerState transitions to 'ready' while the Score preset is active,
   // extract the practice notes.  This effect runs AFTER the host has committed its
@@ -1001,6 +1013,25 @@ export function PracticePlugin({ context }: PracticePluginProps) {
     setVirtualKeyboardOpen(opening);
   }, [virtualKeyboardOpen]);
 
+  // Feature 035: Metronome toggle
+  const handleMetronomeToggle = useCallback(() => {
+    context.metronome.toggle().catch((e) => {
+      console.error('[PracticePlugin] metronome.toggle failed:', e);
+    });
+  }, [context.metronome]);
+
+  // Feature 035: Build metronome button CSS class (beat-pulse animation)
+  const metronomeBtnClass = [
+    'practice-plugin__header-btn',
+    'practice-plugin__metronome-btn',
+    ...(metronomeState.active ? ['metro-pulse'] : []),
+    ...(metronomeState.active && metronomeState.isDownbeat ? ['metro-downbeat'] : []),
+  ].join(' ');
+  // Change key each beat to restart the CSS animation (same pattern as PlaybackToolbar)
+  const metronomeAnimKey = metronomeState.active
+    ? `metro-${metronomeState.beatIndex}`
+    : 'metro-off';
+
   /**
    * Virtual keyboard key-down handler.
    *
@@ -1133,6 +1164,17 @@ export function PracticePlugin({ context }: PracticePluginProps) {
         <div className="practice-plugin__header-spacer" />
 
         <div className="practice-plugin__header-actions">
+          {/* Metronome toggle (Feature 035) */}
+          <button
+            key={metronomeAnimKey}
+            className={metronomeBtnClass}
+            onClick={handleMetronomeToggle}
+            aria-label="Toggle metronome"
+            aria-pressed={metronomeState.active}
+            title={metronomeState.active ? 'Stop metronome' : 'Start metronome'}
+          >
+            ♪
+          </button>
           {/* Virtual keyboard toggle (Feature 001 — FR-001, FR-011) */}
           <button
             className={`practice-plugin__vkb-toggle${virtualKeyboardOpen ? ' practice-plugin__vkb-toggle--active' : ''}`}

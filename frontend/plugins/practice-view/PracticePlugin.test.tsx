@@ -144,6 +144,13 @@ function makeMockContext(overrides?: { scorePlayer?: PluginScorePlayerContext & 
       }),
     },
     scorePlayer,
+    metronome: {
+      toggle: vi.fn().mockResolvedValue(undefined),
+      subscribe: vi.fn((handler: (s: { active: boolean; beatIndex: number; isDownbeat: boolean; bpm: number }) => void) => {
+        handler({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0 });
+        return () => {};
+      }),
+    },
     components: {
       // Minimal StaffViewer stub: renders a div with accessible role
       StaffViewer: ({ clef }: { clef?: string; notes?: PluginNoteEvent[]; highlightedNotes?: number[] }) => (
@@ -1028,5 +1035,39 @@ describe('PracticePlugin — visual differentiation and badge-clear (US3)', () =
     await act(async () => { fireEvent.change(bpmSlider, { target: { value: '120' } }); });
 
     expect(sel.value).toBe('custom');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T016 — Feature 035: Metronome button in Practice plugin header
+// ---------------------------------------------------------------------------
+
+describe('PracticePlugin — metronome button (Feature 035)', () => {
+  it('renders a metronome toggle button with aria-label "Toggle metronome"', () => {
+    const ctx = makeMockContext();
+    render(<PracticePlugin context={ctx} />);
+    expect(screen.getByRole('button', { name: /toggle metronome/i })).toBeTruthy();
+  });
+
+  it('has aria-pressed="false" on mount (metronome inactive)', () => {
+    const ctx = makeMockContext();
+    render(<PracticePlugin context={ctx} />);
+    const btn = screen.getByRole('button', { name: /toggle metronome/i });
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('calls context.metronome.toggle when the metronome button is clicked', async () => {
+    const ctx = makeMockContext();
+    render(<PracticePlugin context={ctx} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    });
+    expect(ctx.metronome.toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('subscribes to context.metronome on mount', () => {
+    const ctx = makeMockContext();
+    render(<PracticePlugin context={ctx} />);
+    expect(ctx.metronome.subscribe).toHaveBeenCalledTimes(1);
   });
 });

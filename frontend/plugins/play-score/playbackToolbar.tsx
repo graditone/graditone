@@ -46,6 +46,15 @@ export interface PlaybackToolbarProps {
   onPause: () => void;
   onStop: () => void;
   onTempoChange: (multiplier: number) => void;
+  // Feature 035: Metronome
+  /** Whether the metronome engine is currently active */
+  metronomeActive: boolean;
+  /** Current beat index from the metronome engine (−1 when inactive) */
+  metronomeBeatIndex: number;
+  /** Whether the current beat is a downbeat (beat 0 of the measure) */
+  metronomeIsDownbeat: boolean;
+  /** Called when the user toggles the metronome button */
+  onMetronomeToggle: () => void;
 }
 
 export function PlaybackToolbar({
@@ -61,6 +70,10 @@ export function PlaybackToolbar({
   onStop,
   tempoMultiplier,
   onTempoChange,
+  metronomeActive,
+  metronomeBeatIndex,
+  metronomeIsDownbeat,
+  onMetronomeToggle,
 }: PlaybackToolbarProps) {
   const isPlaying = status === 'playing';
   const isActive = status === 'playing' || status === 'paused' || status === 'ready';
@@ -68,6 +81,20 @@ export function PlaybackToolbar({
   const totalSeconds = ticksToElapsedSeconds(totalDurationTicks, bpm);
   const elapsedFormatted = formatElapsedTime(elapsedSeconds);
   const totalFormatted = totalDurationTicks > 0 ? formatElapsedTime(totalSeconds) : null;
+
+  // Feature 035: Build metronome button CSS class — pulse animates on every beat.
+  // metronomeBeatIndex changes each beat, which causes a re-render and restarts
+  // the CSS animation via the animation key (className changes each beat).
+  const metronomeBtnClass = [
+    'play-score__toolbar-btn',
+    'play-score__toolbar-btn--metronome',
+    ...(metronomeActive ? ['metro-pulse'] : []),
+    ...(metronomeActive && metronomeIsDownbeat ? ['metro-downbeat'] : []),
+  ].join(' ');
+
+  // Using beatIndex as `key` forces React to remount the button on each beat,
+  // which resets the CSS animation so it replays from 0% every beat.
+  const metronomeAnimKey = metronomeActive ? `metro-${metronomeBeatIndex}` : 'metro-off';
 
   return (
     <div className="play-score__toolbar" role="toolbar" aria-label="Playback controls">
@@ -149,6 +176,17 @@ export function PlaybackToolbar({
           <span className="play-score__toolbar-bpm">{bpm}</span>
         )}
       </div>
+
+      {/* Metronome toggle — Feature 035 */}
+      <button
+        key={metronomeAnimKey}
+        className={metronomeBtnClass}
+        onClick={onMetronomeToggle}
+        aria-label="Toggle metronome"
+        aria-pressed={metronomeActive}
+      >
+        ♪
+      </button>
     </div>
   );
 }

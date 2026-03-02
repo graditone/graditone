@@ -19,7 +19,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { PluginContext, ScorePlayerState, PluginPlaybackStatus } from '../../src/plugin-api/index';
+import type { PluginContext, ScorePlayerState, PluginPlaybackStatus, MetronomeState } from '../../src/plugin-api/index';
 import { ScoreSelectionScreen } from './scoreSelectionScreen';
 import { PlaybackToolbar } from './playbackToolbar';
 import './PlayScorePlugin.css';
@@ -40,6 +40,14 @@ const INITIAL_PLAYER_STATE: ScorePlayerState = {
   bpm: 120,
   title: null,
   error: null,
+  timeSignature: { numerator: 4, denominator: 4 },
+};
+
+const INITIAL_METRONOME_STATE: MetronomeState = {
+  active: false,
+  beatIndex: -1,
+  isDownbeat: false,
+  bpm: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -60,6 +68,14 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
     });
     return unsubscribe;
   }, [context.scorePlayer]);
+
+  // ─── Metronome state (Feature 035) ────────────────────────────────────────
+  const [metronomeState, setMetronomeState] = useState<MetronomeState>(INITIAL_METRONOME_STATE);
+
+  useEffect(() => {
+    const unsubscribe = context.metronome.subscribe(setMetronomeState);
+    return unsubscribe;
+  }, [context.metronome]);
 
   // T030: Audio teardown guarantee — stop all audio when plugin unmounts (SC-005)
   useEffect(() => {
@@ -127,6 +143,13 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
     setTempoMultiplier(m);
     context.scorePlayer.setTempoMultiplier(m);
   }, [context.scorePlayer]);
+
+  // Feature 035: Metronome toggle handler
+  const handleMetronomeToggle = useCallback(() => {
+    context.metronome.toggle().catch((e) => {
+      console.error('[PlayScorePlugin] metronome.toggle failed:', e);
+    });
+  }, [context.metronome]);
 
   // US3 (wired in T018): two-tap seek-then-play state machine.
   //   First tap while paused  → seek (highlight the note), arm pendingPlay.
@@ -232,6 +255,10 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
         onPause={handlePause}
         onStop={handleStop}
         onTempoChange={handleTempoChange}
+        metronomeActive={metronomeState.active}
+        metronomeBeatIndex={metronomeState.beatIndex}
+        metronomeIsDownbeat={metronomeState.isDownbeat}
+        onMetronomeToggle={handleMetronomeToggle}
       />
 
       {/* Loading indicator */}

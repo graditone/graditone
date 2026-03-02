@@ -24,8 +24,8 @@ import {
 
 describe('Plugin API contract', () => {
   describe('PLUGIN_API_VERSION', () => {
-    it('is the string "4" (v4 — adds PluginScorePitches, PluginScoreSelectorProps, extractPracticeNotes, ScoreSelector)', () => {
-      expect(PLUGIN_API_VERSION).toBe('4');
+    it('is the string "5" (v5 — adds MetronomeState, PluginMetronomeContext, context.metronome, ScorePlayerState.timeSignature)', () => {
+      expect(PLUGIN_API_VERSION).toBe('5');
     });
 
     it('is a string (not a number)', () => {

@@ -73,6 +73,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - `localStorage` key `practice-complexity-level-v1` (browser, cross-restart) (001-practice-complexity-levels)
 - TypeScript 5.x, React 18 + React, Plugin API v4 (`context.playNote`, `context.midi.subscribe`, `context.recording.subscribe`), Vitest (unit), Playwright (e2e) (001-practice-virtual-keyboard)
 - N/A — toggle state is session-only, no persistence (FR-009) (001-practice-virtual-keyboard)
+- TypeScript 5, React 18 + Tone.js v14.9.17 (`MembraneSynth` + `Synth`), Web Audio API (via Tone.js Transport), React rAF loop (`ITickSource`) (035-metronome)
+- N/A (no persistence; metronome state is transient per view) (035-metronome)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -93,9 +95,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 035-metronome: Added TypeScript 5, React 18 + Tone.js v14.9.17 (`MembraneSynth` + `Synth`), Web Audio API (via Tone.js Transport), React rAF loop (`ITickSource`)
 - 001-practice-virtual-keyboard: Added TypeScript 5.x, React 18 + React, Plugin API v4 (`context.playNote`, `context.midi.subscribe`, `context.recording.subscribe`), Vitest (unit), Playwright (e2e)
 - 001-practice-complexity-levels: Added TypeScript 5.9, React 19, Vite 7 + Vitest 4, Playwright 1.58 — no new npm packages required
-- 001-practice-complexity-levels: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 
 
 <!-- MANUAL ADDITIONS START -->
