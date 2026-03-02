@@ -188,6 +188,92 @@
   background: #ef4444;
 }
 
+/* Metronome toggle — purple, larger beat-note icon */
+.play-score__toolbar-btn--metronome {
+  background: #7c3aed;
+  min-width: 44px;
+  padding: 0 10px;
+  font-size: 1.4rem;
+  line-height: 1;
+  border-radius: 8px 0 0 8px; /* joins flush with the chevron */
+}
+
+/* Metronome group wrapper — positions the dropdown */
+.play-score__metro-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Small chevron button that opens the subdivision menu */
+.play-score__metro-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 6px;
+  border: none;
+  border-left: 1px solid rgba(255,255,255,0.25);
+  border-radius: 0 8px 8px 0;
+  background: #7c3aed;
+  color: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: filter 0.12s;
+}
+
+.play-score__metro-chevron:hover {
+  filter: brightness(1.15);
+}
+
+/* Floating dropdown menu — opens downward below the toolbar */
+.play-score__metro-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 120px;
+  background: #1e1b2e;
+  border: 1px solid #7c3aed;
+  border-radius: 8px;
+  padding: 4px 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  z-index: 100;
+}
+
+/* Menu row */
+.play-score__metro-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: #e2d9f3;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.play-score__metro-menu-item:hover {
+  background: rgba(124, 58, 237, 0.25);
+}
+
+.play-score__metro-menu-item--active {
+  color: #fff;
+  font-weight: 700;
+}
+
+.play-score__metro-menu-check {
+  color: #a78bfa;
+  font-size: 0.8rem;
+  width: 12px;
+  flex-shrink: 0;
+}
+
 /* Score title */
 .play-score__toolbar-title {
   flex: 1;

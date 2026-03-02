@@ -111,6 +111,23 @@ function extractTempo(score: Score): number {
 }
 
 /**
+ * Extract the initial time signature from a Score's global structural events.
+ * Defaults to 4/4 if no TimeSignature event is found at tick 0.
+ * Mirrors extractTempo pattern — reads global_structural_events.
+ */
+function extractTimeSignature(score: Score): { numerator: number; denominator: number } {
+  for (const event of score.global_structural_events) {
+    if ('TimeSignature' in event && event.TimeSignature.tick === 0) {
+      return {
+        numerator: event.TimeSignature.numerator,
+        denominator: event.TimeSignature.denominator,
+      };
+    }
+  }
+  return { numerator: 4, denominator: 4 };
+}
+
+/**
  * Extract pitched notes for the practice exercise from a Score.
  *
  * Rules (from spec clarifications + FR-004):
@@ -173,6 +190,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
   const [score, setScore] = useState<Score | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [scoreTempo, setScoreTempo] = useState<number>(120);
+  const [scoreTimeSignature, setScoreTimeSignature] = useState<{ numerator: number; denominator: number }>({ numerator: 4, denominator: 4 });
   const [title, setTitle] = useState<string | null>(null);
 
   /** Overlay status for transitions the playback engine doesn't model */
@@ -225,6 +243,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     bpm: 0,
     title: null,
     error: null,
+    timeSignature: { numerator: 4, denominator: 4 },
   });
 
   // Notify all subscribers when state changes
@@ -237,6 +256,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       bpm: effectiveBpm,
       title,
       error: errorMessage,
+      timeSignature: scoreTimeSignature,
     };
     currentStateRef.current = newState;
     subscribersRef.current.forEach(h => h(newState));
@@ -248,6 +268,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     effectiveBpm,
     title,
     errorMessage,
+    scoreTimeSignature,
   ]);
 
   // ─── getCatalogue ─────────────────────────────────────────────────────────
@@ -286,6 +307,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
 
       const parsedNotes = extractNotes(result.score);
       const parsedTempo = extractTempo(result.score);
+      const parsedTimeSignature = extractTimeSignature(result.score);
       const parsedTitle =
         result.metadata.work_title ??
         result.metadata.file_name?.replace(/\.[^.]+$/, '') ??
@@ -297,6 +319,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       setScore(result.score);
       setNotes(parsedNotes);
       setScoreTempo(parsedTempo);
+      setScoreTimeSignature(parsedTimeSignature);
       setTitle(parsedTitle);
       setOverlayStatus(null); // reverts to playback-engine status ('stopped' → 'ready')
     } catch (err) {
@@ -450,6 +473,7 @@ export function createNoOpScorePlayer(): PluginScorePlayerContext {
     bpm: 0,
     title: null,
     error: null,
+    timeSignature: { numerator: 4, denominator: 4 },
   };
 
   return {

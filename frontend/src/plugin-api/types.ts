@@ -1,15 +1,18 @@
 /**
- * Musicore Plugin API — Types (v4)
+ * Musicore Plugin API — Types (v5)
  * Feature 030: Plugin Architecture (v1 baseline)
  * Feature 031: Practice View Plugin — adds recording namespace and offsetMs (v2)
  * Feature 033: Play Score Plugin — adds scorePlayer namespace, ScoreRenderer component (v3)
  * Feature 034: Practice from Score — adds PluginScorePitches, extractPracticeNotes,
  *              PluginScoreSelectorProps, ScoreSelector component (v4)
+ * Feature 035: Metronome — adds MetronomeState, PluginMetronomeContext,
+ *              context.metronome namespace, ScorePlayerState.timeSignature (v5)
  *
  * Defines all public types for the Musicore Plugin API.
  * See specs/030-plugin-architecture/contracts/plugin-api.ts for the v1 canonical contract.
  * See specs/031-practice-view-plugin/contracts/plugin-api-v2.ts for the v2 contract.
  * See specs/034-practice-from-score/contracts/plugin-api-v4.ts for the v4 canonical contract.
+ * See specs/035-metronome/contracts/plugin-api-v5.ts for the v5 canonical contract.
  *
  * Constitution Principle VI: PluginNoteEvent carries ONLY musical data (midiNote,
  * timestamp, velocity). No coordinate or layout geometry is permitted here — the
@@ -356,6 +359,16 @@ export interface ScorePlayerState {
   readonly title: string | null;
   /** Error message; non-null when status === 'error'. */
   readonly error: string | null;
+  /**
+   * Time signature at tick 0 (v5 addition — Feature 035).
+   * Defaults to { numerator: 4, denominator: 4 } when no score is loaded
+   * or the score contains no TimeSignature event.
+   * The metronome reads this to compute beat intervals and distinguish downbeats.
+   */
+  readonly timeSignature: {
+    readonly numerator: number;
+    readonly denominator: number;
+  };
 }
 
 /**
@@ -473,6 +486,100 @@ export interface PluginScoreRendererProps {
   onCanvasTap: () => void;
   /** "Back to start" button at the bottom of the score — seek-to-start intent. */
   onReturnToStart: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// v5 types — Metronome namespace (Feature 035)
+// ---------------------------------------------------------------------------
+
+/**
+ * Beat subdivision for the metronome.
+ * Controls how frequently the engine fires between score-beat boundaries.
+ *
+ * - 1: Quarter note (one click per beat) — default
+ * - 2: Eighth note  (two clicks per beat)
+ * - 4: Sixteenth note (four clicks per beat)
+ */
+export type MetronomeSubdivision = 1 | 2 | 4;
+
+/**
+ * Immutable snapshot of metronome state pushed to plugin subscribers.
+ * Delivered whenever active, beatIndex, or bpm changes.
+ * See specs/035-metronome/contracts/plugin-api-v5.ts for the canonical contract.
+ */
+export interface MetronomeState {
+  /** Whether the metronome is currently ticking. */
+  readonly active: boolean;
+  /**
+   * 0-based index of the most recently fired beat within the measure.
+   * 0 = the downbeat (first beat of the bar).
+   * -1 when the metronome is inactive or no beat has fired since activation.
+   */
+  readonly beatIndex: number;
+  /**
+   * `true` when beatIndex === 0 (downbeat). Convenience flag for rendering
+   * a distinct visual style on beat 1 without arithmetic in plugin code.
+   */
+  readonly isDownbeat: boolean;
+  /**
+   * Current effective BPM (0 when inactive; clamped to 20–300 when active).
+   */
+  readonly bpm: number;
+  /**
+   * Current beat subdivision (1 = quarter, 2 = eighth, 4 = sixteenth).
+   */
+  readonly subdivision: MetronomeSubdivision;
+}
+
+/**
+ * Metronome control context injected into plugins via `context.metronome`.
+ *
+ * Usage example:
+ * ```tsx
+ * const [metroState, setMetroState] = useState<MetronomeState | null>(null);
+ *
+ * useEffect(() => {
+ *   return context.metronome.subscribe(setMetroState);
+ * }, [context]);
+ *
+ * <button
+ *   onClick={() => context.metronome.toggle()}
+ *   aria-label={metroState?.active ? 'Stop metronome' : 'Start metronome'}
+ *   aria-pressed={metroState?.active ?? false}
+ *   className={metroState?.active ? (metroState.isDownbeat ? 'metro-downbeat' : 'metro-pulse') : ''}
+ * />
+ * ```
+ */
+export interface PluginMetronomeContext {
+  /**
+   * Toggle the metronome on or off.
+   *
+   * - Off → On: initialises audio, reads BPM + time signature from the loaded
+   *   score (or the practice view's configured BPM), and starts Transport-scheduled
+   *   clicks. Beat counter resets to beat 1 (downbeat).
+   * - On → Off: stops the engine immediately. The Transport is NOT stopped
+   *   (it may still be used by playback).
+   *
+   * Promise resolves when audio is unlocked and the first beat is scheduled.
+   * If browser audio is blocked, shows an inline unblock prompt and resolves
+   * immediately (FR-012).
+   */
+  toggle(): Promise<void>;
+  /**
+   * Change the beat subdivision while the engine is active or idle.
+   * If the engine is currently running, it restarts immediately at the new
+   * subdivision (from the downbeat to avoid phase ambiguity).
+   *
+   * @param subdivision - 1 (quarter), 2 (eighth), or 4 (sixteenth)
+   */
+  setSubdivision(subdivision: MetronomeSubdivision): Promise<void>;
+  /**
+   * Subscribe to MetronomeState snapshots.
+   * Handler is called synchronously once with the current state, then on each
+   * change (beat fire, start, stop, BPM update).
+   * Returns an unsubscribe function — always call it in your cleanup.
+   */
+  subscribe(handler: (state: MetronomeState) => void): () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -601,6 +708,16 @@ export interface PluginContext {
    * For v2 plugins this namespace is injected as a no-op stub.
    */
   readonly scorePlayer: PluginScorePlayerContext;
+  /**
+   * Metronome control context (v5 — Feature 035).
+   * Provides toggle() and subscribe() for audible + visual beat guidance.
+   *
+   * The metronome is phase-locked to the playback clock when playback is running,
+   * and operates on a standalone timer when no playback is active.
+   *
+   * All v1–v4 plugins receive a no-op stub for backward compatibility.
+   */
+  readonly metronome: PluginMetronomeContext;
   /** Read-only manifest for this plugin instance. */
   readonly manifest: Readonly<PluginManifest>;
 }
@@ -637,4 +754,4 @@ export interface MusicorePlugin {
 // ---------------------------------------------------------------------------
 
 /** Major version of the currently running Musicore Plugin API. */
-export const PLUGIN_API_VERSION = '4' as const;
+export const PLUGIN_API_VERSION = '5' as const;

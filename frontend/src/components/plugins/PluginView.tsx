@@ -18,8 +18,9 @@
 
 import { Component, useRef, type ReactNode, type ReactElement } from 'react';
 import type { PluginManifest, PluginScoreRendererProps } from '../../plugin-api/index';
-import type { PluginScorePlayerContext } from '../../plugin-api/types';
+import type { PluginScorePlayerContext, PluginMetronomeContext } from '../../plugin-api/types';
 import { useScorePlayerBridge, type ScorePlayerInternal } from '../../plugin-api/scorePlayerContext';
+import { useMetronomeBridge } from '../../plugin-api/metronomeContext';
 import { ScoreRendererPlugin } from './ScoreRendererPlugin';
 
 export interface PluginViewProps {
@@ -124,10 +125,15 @@ const styles = {
  * - `internalRef`: V3PluginWrapper sets `.current = bridge.internal` during
  *   render. The BoundScoreRenderer (created by `createBoundScoreRenderer`)
  *   closes over this ref and reads it on every render.
+ *
+ * - `metronomeRef`: App.tsx injects `createMetronomeProxy(metronomeRef)` into
+ *   PluginContext. V3PluginWrapper sets `.current = useMetronomeBridge(api)`
+ *   so all plugin metronome calls reach the real hook-backed engine.
  */
 export type V3ProxyRefs = {
   scorePlayerRef: { current: PluginScorePlayerContext };
   internalRef: { current: ScorePlayerInternal | null };
+  metronomeRef: { current: PluginMetronomeContext };
 };
 
 /**
@@ -192,12 +198,18 @@ export interface V3PluginWrapperProps {
 export function V3PluginWrapper({ plugin, proxyRefs, children }: V3PluginWrapperProps) {
   const { api, internal } = useScorePlayerBridge();
 
+  // Build the real hook-backed metronome API, subscribed to the score player
+  // for BPM tracking (T020 — FR-007a: metronome follows tempo changes).
+  const metronomeApi = useMetronomeBridge(api);
+
   // Update proxy refs synchronously during render — runs before children render
   // so PlayScorePluginWithContext always reads the live bridge when it renders.
   // eslint-disable-next-line react-hooks/immutability
   proxyRefs.scorePlayerRef.current = api;
   // eslint-disable-next-line react-hooks/immutability
   proxyRefs.internalRef.current = internal;
+  // eslint-disable-next-line react-hooks/immutability
+  proxyRefs.metronomeRef.current = metronomeApi;
 
   // Keep internalRef stable across re-renders (for BoundScoreRenderer closure)
   const internalRefStable = useRef(internal);

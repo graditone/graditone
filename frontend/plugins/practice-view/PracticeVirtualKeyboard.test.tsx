@@ -104,6 +104,13 @@ function makeMockContext(): PluginContext & {
       }),
     },
     scorePlayer: makeMockScorePlayer(),
+    metronome: {
+      toggle: vi.fn().mockResolvedValue(undefined),
+      subscribe: vi.fn((handler: (s: { active: boolean; beatIndex: number; isDownbeat: boolean; bpm: number }) => void) => {
+        handler({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1 });
+        return () => {};
+      }),
+    },
     components: {
       StaffViewer: ({ clef }: { clef?: string }) => (
         <div data-testid="staff-viewer" data-clef={clef ?? 'Treble'} role="img" aria-label="staff" />

@@ -40,6 +40,7 @@ function makeIdleState(overrides: Partial<ScorePlayerState> = {}): ScorePlayerSt
     bpm: 120,
     title: null,
     error: null,
+    timeSignature: { numerator: 4, denominator: 4 },
     ...overrides,
   };
 }
@@ -73,6 +74,7 @@ function createMockContext(stateOverride: Partial<ScorePlayerState> = {}, ScoreR
     components: {
       StaffViewer: () => null,
       ScoreRenderer: ScoreRendererOverride ?? (() => null),
+      ScoreSelector: () => null,
     },
     scorePlayer: {
       getCatalogue: () => MOCK_CATALOGUE,
@@ -91,6 +93,14 @@ function createMockContext(stateOverride: Partial<ScorePlayerState> = {}, ScoreR
         return () => { subscribers.delete(handler); };
       },
       getCurrentTickLive: () => 0,
+    },
+    metronome: {
+      toggle: vi.fn().mockResolvedValue(undefined),
+      subscribe: vi.fn((handler) => {
+        // Immediate call with inactive metronome state
+        handler({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1 });
+        return () => {};
+      }),
     },
     manifest: {
       id: 'play-score',

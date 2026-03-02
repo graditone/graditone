@@ -19,7 +19,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { PluginContext, ScorePlayerState, PluginPlaybackStatus } from '../../src/plugin-api/index';
+import type { PluginContext, ScorePlayerState, PluginPlaybackStatus, MetronomeState, MetronomeSubdivision } from '../../src/plugin-api/index';
 import { ScoreSelectionScreen } from './scoreSelectionScreen';
 import { PlaybackToolbar } from './playbackToolbar';
 import './PlayScorePlugin.css';
@@ -40,6 +40,15 @@ const INITIAL_PLAYER_STATE: ScorePlayerState = {
   bpm: 120,
   title: null,
   error: null,
+  timeSignature: { numerator: 4, denominator: 4 },
+};
+
+const INITIAL_METRONOME_STATE: MetronomeState = {
+  active: false,
+  beatIndex: -1,
+  isDownbeat: false,
+  bpm: 0,
+  subdivision: 1,
 };
 
 // ---------------------------------------------------------------------------
@@ -60,6 +69,22 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
     });
     return unsubscribe;
   }, [context.scorePlayer]);
+
+  // ─── Metronome state (Feature 035) ────────────────────────────────────────
+  const [metronomeState, setMetronomeState] = useState<MetronomeState>(INITIAL_METRONOME_STATE);
+  // Subdivision is tracked separately so the toolbar icon updates immediately
+  // when the user picks from the dropdown — without waiting for the next engine
+  // beat emission (which only fires when the engine is active).
+  const [metronomeSubdivision, setMetronomeSubdivision] = useState<MetronomeSubdivision>(1);
+
+  useEffect(() => {
+    const unsubscribe = context.metronome.subscribe((state) => {
+      setMetronomeState(state);
+      // Keep local subdivision in sync with engine state (e.g. after restart).
+      if (state.subdivision !== undefined) setMetronomeSubdivision(state.subdivision);
+    });
+    return unsubscribe;
+  }, [context.metronome]);
 
   // T030: Audio teardown guarantee — stop all audio when plugin unmounts (SC-005)
   useEffect(() => {
@@ -127,6 +152,23 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
     setTempoMultiplier(m);
     context.scorePlayer.setTempoMultiplier(m);
   }, [context.scorePlayer]);
+
+  // Feature 035: Metronome toggle handler
+  const handleMetronomeToggle = useCallback(() => {
+    context.metronome.toggle().catch((e) => {
+      console.error('[PlayScorePlugin] metronome.toggle failed:', e);
+    });
+  }, [context.metronome]);
+
+  // Feature 035: Metronome subdivision change handler
+  const handleMetronomeSubdivisionChange = useCallback((s: MetronomeSubdivision) => {
+    // Update local state immediately so the toolbar icon reflects the selection
+    // without waiting for the next engine beat subscription call.
+    setMetronomeSubdivision(s);
+    context.metronome.setSubdivision(s).catch((e) => {
+      console.error('[PlayScorePlugin] metronome.setSubdivision failed:', e);
+    });
+  }, [context.metronome]);
 
   // US3 (wired in T018): two-tap seek-then-play state machine.
   //   First tap while paused  → seek (highlight the note), arm pendingPlay.
@@ -232,6 +274,12 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
         onPause={handlePause}
         onStop={handleStop}
         onTempoChange={handleTempoChange}
+        metronomeActive={metronomeState.active}
+        metronomeBeatIndex={metronomeState.beatIndex}
+        metronomeIsDownbeat={metronomeState.isDownbeat}
+        onMetronomeToggle={handleMetronomeToggle}
+        metronomeSubdivision={metronomeSubdivision}
+        onMetronomeSubdivisionChange={handleMetronomeSubdivisionChange}
       />
 
       {/* Loading indicator */}
