@@ -1,7 +1,7 @@
 /**
- * Feature 001: Practice Virtual Keyboard — E2E Tests
+ * Feature 036-rename-practice-train — Train Virtual Keyboard — E2E Tests
  *
- * SC-001: Open Practice → toggle virtual keyboard → start exercise (C4 Scale, step mode) →
+ * SC-001: Open Train → toggle virtual keyboard → start exercise (C4 Scale, step mode) →
  *         tap a key → scorer receives input without crashing (SC-003: 0 notes dropped)
  * SC-002: Virtual keyboard panel appears within 300 ms of toggle click
  * SC-004: Exercise config (preset, note count) fully preserved after toggle on → off
@@ -18,22 +18,22 @@ import { test, expect, type Page } from '@playwright/test';
 
 // ─ Selectors ────────────────────────────────────────────────────────────────
 
-const PRACTICE_BTN  = /practice/i;
+const TRAIN_BTN     = /train/i;
 const C4_RADIO      = /c4 scale/i;
-const PRACTICE_VIEW = '[data-testid="practice-view"]';
-const PLAY_BTN      = '[data-testid="practice-play-btn"]';
-const STOP_BTN      = '[data-testid="practice-stop-btn"]';
+const TRAIN_VIEW    = '[data-testid="train-view"]';
+const PLAY_BTN      = '[data-testid="train-play-btn"]';
+const STOP_BTN      = '[data-testid="train-stop-btn"]';
 const VKB_TOGGLE    = '[data-testid="vkb-toggle-btn"]';
 const VKB_PANEL     = '[data-testid="vkb-panel"]';
-const VKB_CONTAINER = '[data-testid="practice-vkb"]';
+const VKB_CONTAINER = '[data-testid="train-vkb"]';
 
 // ─ Helpers ───────────────────────────────────────────────────────────────────
 
-async function openPractice(page: Page) {
+async function openTrain(page: Page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: PRACTICE_BTN }).click();
-  await expect(page.locator(PRACTICE_VIEW)).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: TRAIN_BTN }).click();
+  await expect(page.locator(TRAIN_VIEW)).toBeVisible({ timeout: 15_000 });
 }
 
 async function openC4ScalePreset(page: Page) {
@@ -52,7 +52,7 @@ async function openVkb(page: Page) {
 
 test.describe('SC-002: Toggle response < 300ms', () => {
   test('virtual keyboard panel appears within 300ms of toggle click', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
 
     const t0 = Date.now();
     await page.locator(VKB_TOGGLE).click();
@@ -63,7 +63,7 @@ test.describe('SC-002: Toggle response < 300ms', () => {
   });
 
   test('virtual keyboard panel disappears within 300ms on second toggle click', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
     await openVkb(page);
 
     const t0 = Date.now();
@@ -79,7 +79,7 @@ test.describe('SC-002: Toggle response < 300ms', () => {
 
 test.describe('SC-005: Active input source visually unambiguous', () => {
   test('toggle button has aria-pressed=false initially and aria-pressed=true when open', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
 
     // Initially closed
     await expect(page.locator(VKB_TOGGLE)).toHaveAttribute('aria-pressed', 'false');
@@ -95,28 +95,28 @@ test.describe('SC-005: Active input source visually unambiguous', () => {
   });
 
   test('Mic/MIDI badge gains suspended class when virtual keyboard is open', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
 
     // Badge must not have suspended class before VK is opened
-    await expect(page.locator('.practice-mic-badge--suspended')).not.toBeAttached();
+    await expect(page.locator('.train-mic-badge--suspended')).not.toBeAttached();
 
     // Open VK — badge becomes suspended
     await openVkb(page);
-    await expect(page.locator('.practice-mic-badge--suspended')).toBeAttached();
+    await expect(page.locator('.train-mic-badge--suspended')).toBeAttached();
 
     // Close VK — badge returns to normal
     await page.locator(VKB_TOGGLE).click();
     await expect(page.locator(VKB_PANEL)).not.toBeVisible({ timeout: 2_000 });
-    await expect(page.locator('.practice-mic-badge--suspended')).not.toBeAttached();
+    await expect(page.locator('.train-mic-badge--suspended')).not.toBeAttached();
   });
 
   test('virtual keyboard panel renders at least one octave of white keys', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
     await openVkb(page);
 
     await expect(page.locator(VKB_CONTAINER)).toBeVisible({ timeout: 2_000 });
     // Octave count is dynamic (fills available width).  Minimum: 1 octave = 7 white keys.
-    const whiteKeys = page.locator('[data-testid^="vkb-key-"].practice-vkb__key--white');
+    const whiteKeys = page.locator('[data-testid^="vkb-key-"].train-vkb__key--white');
     expect(await whiteKeys.count()).toBeGreaterThanOrEqual(7);
   });
 });
@@ -125,7 +125,7 @@ test.describe('SC-005: Active input source visually unambiguous', () => {
 
 test.describe('SC-001 / SC-003: Exercise flows through virtual keyboard', () => {
   test('start exercise with VK active → tap a key → exercise receives input without crash', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
     await openC4ScalePreset(page);
 
     // Open virtual keyboard before starting exercise
@@ -152,7 +152,7 @@ test.describe('SC-001 / SC-003: Exercise flows through virtual keyboard', () => 
 
 test.describe('SC-004: Exercise config preserved after toggle on → off', () => {
   test('C4 Scale preset still selected after toggle on then off', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
     await openC4ScalePreset(page);
 
     // Record preset selection before toggling
@@ -172,7 +172,7 @@ test.describe('SC-004: Exercise config preserved after toggle on → off', () =>
 
 test.describe('US3-S4: Mid-exercise toggle does not restart or crash exercise', () => {
   test('toggle VK on and off mid-exercise — stop button remains visible throughout', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
     await openC4ScalePreset(page);
 
     // Start exercise
