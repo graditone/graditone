@@ -13,6 +13,7 @@ import { pluginRegistry } from './services/plugins/PluginRegistry'
 import { PluginView, V3PluginWrapper, createBoundScoreRenderer, type V3ProxyRefs } from './components/plugins/PluginView'
 import { PluginNavEntry } from './components/plugins/PluginNavEntry'
 import { PluginImporterDialog } from './components/plugins/PluginImporterDialog'
+import { PluginRemoverDialog } from './components/plugins/PluginRemoverDialog'
 import { ScoreSelectorPlugin } from './components/plugins/ScoreSelectorPlugin'
 import type { PluginContext, PluginNoteEvent, MusicorePlugin } from './plugin-api/index'
 import { PluginStaffViewer } from './plugin-api/PluginStaffViewer'
@@ -52,6 +53,7 @@ function App() {
   const [activePlugin, setActivePlugin] = useState<string | null>(null)
   // T025: Show/hide plugin importer dialog
   const [showImporter, setShowImporter] = useState(false)
+  const [showRemover, setShowRemover] = useState(false)
   // Feature 030: Increment to re-run loadPlugins (e.g. after a new plugin is imported)
   const [pluginsVersion, setPluginsVersion] = useState(0)
 
@@ -327,6 +329,11 @@ function App() {
     setPluginsVersion(v => v + 1)
   }, [])
 
+  const handleRemoveComplete = useCallback((removedId: string) => {
+    if (activePlugin === removedId) setActivePlugin(null)
+    setPluginsVersion(v => v + 1)
+  }, [activePlugin])
+
   // Show loading state while WASM initializes
   if (wasmLoading) {
     return (
@@ -549,6 +556,25 @@ function App() {
                 >
                   +
                 </button>
+                <button
+                  type="button"
+                  aria-label="Remove Plugin"
+                  title="Remove Plugin"
+                  onClick={() => setShowRemover(true)}
+                  style={{
+                    minWidth: '44px',
+                    minHeight: '44px',
+                    border: '1px dashed #666',
+                    borderRadius: '6px',
+                    background: 'transparent',
+                    color: '#999',
+                    fontSize: '1.2em',
+                    cursor: 'pointer',
+                    padding: '0 10px',
+                  }}
+                >
+                  −
+                </button>
               </nav>
             )}
           </header>
@@ -557,6 +583,15 @@ function App() {
             <PluginImporterDialog
               onImportComplete={handleImportComplete}
               onClose={() => setShowImporter(false)}
+            />
+          )}
+          {showRemover && (
+            <PluginRemoverDialog
+              importedPlugins={allPlugins
+                .map(e => e.manifest)
+                .filter(m => m.origin === 'imported')}
+              onRemoveComplete={(id) => { handleRemoveComplete(id); setShowRemover(false); }}
+              onClose={() => setShowRemover(false)}
             />
           )}
           <main>
