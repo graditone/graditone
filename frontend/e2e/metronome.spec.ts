@@ -78,21 +78,21 @@ test.describe('Feature 035 / T021: Metronome in Play Score toolbar', () => {
   });
 });
 
-// ─── T022 — Metronome in Practice View header ─────────────────────────────────
+// ─── T022 — Metronome in Train View header ──────────────────────────────────────
 
-test.describe('Feature 035 / T022: Metronome in Practice View header', () => {
+test.describe('Feature 035 / T022: Metronome in Train View header', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    // Navigate to Practice View plugin
-    const practiceBtn = page.getByTestId('plugin-launch-practice-view');
-    await expect(practiceBtn).toBeVisible({ timeout: 5000 });
-    await practiceBtn.click();
-    // Wait for practice view to render
-    await expect(page.getByTestId('practice-view')).toBeVisible({ timeout: 5000 });
+    // Navigate to Train View plugin
+    const trainBtn = page.getByTestId('plugin-launch-train-view');
+    await expect(trainBtn).toBeVisible({ timeout: 5000 });
+    await trainBtn.click();
+    // Wait for train view to render
+    await expect(page.getByTestId('train-view')).toBeVisible({ timeout: 5000 });
   });
 
-  test('metronome toggle button is visible in the practice header', async ({ page }) => {
+  test('metronome toggle button is visible in the train header', async ({ page }) => {
     const metronomeBtn = page.getByRole('button', { name: /toggle metronome/i });
     await expect(metronomeBtn).toBeVisible();
   });
@@ -123,7 +123,7 @@ test.describe('Feature 035 / T022: Metronome in Practice View header', () => {
 // ─── T023 — Metronome teardown on plugin close ────────────────────────────────
 
 test.describe('Feature 035 / T023: Metronome audio teardown on plugin exit', () => {
-  test('metronome stops when leaving Play Score plugin (Back button)', async ({ page }) => {
+  test('metronome stops when leaving Play Score plugin (Back button)', async ({ page }) => {  // eslint-disable-line
     await stubMxlFetch(page);
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
@@ -153,14 +153,14 @@ test.describe('Feature 035 / T023: Metronome audio teardown on plugin exit', () 
     await expect(metronomeBtn2).toHaveAttribute('aria-pressed', 'false');
   });
 
-  test('metronome stops when leaving Practice View plugin (Back button)', async ({ page }) => {
+  test('metronome stops when leaving Train View plugin (Back button)', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    const practiceBtn = page.getByTestId('plugin-launch-practice-view');
-    await expect(practiceBtn).toBeVisible({ timeout: 5000 });
-    await practiceBtn.click();
-    await expect(page.getByTestId('practice-view')).toBeVisible({ timeout: 5000 });
+    const trainBtn = page.getByTestId('plugin-launch-train-view');
+    await expect(trainBtn).toBeVisible({ timeout: 5000 });
+    await trainBtn.click();
+    await expect(page.getByTestId('train-view')).toBeVisible({ timeout: 5000 });
 
     const metronomeBtn = page.getByRole('button', { name: /toggle metronome/i });
     await metronomeBtn.click();
@@ -170,6 +170,6 @@ test.describe('Feature 035 / T023: Metronome audio teardown on plugin exit', () 
     await page.getByRole('button', { name: /← back/i }).click();
 
     // Plugin should be gone
-    await expect(page.getByTestId('practice-view')).not.toBeVisible();
+    await expect(page.getByTestId('train-view')).not.toBeVisible();
   });
 });

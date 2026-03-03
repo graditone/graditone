@@ -1,7 +1,7 @@
 /**
- * Feature 034: Practice from Score -- E2E Tests
+ * Feature 034 / Feature 036: Train from Score -- E2E Tests
  *
- * SC-001: Open Practice plugin -> select Score preset -> selector opens -> choose
+ * SC-001: Open Train plugin -> select Score preset -> selector opens -> choose
  *         Beethoven Fur Elise -> exercise staff has notes -> start exercise
  * SC-002: Switch to Random and back to Score -- no dialog opens (cache preserved)
  * SC-003: All existing Random and C4 Scale exercise flows still work (regression)
@@ -22,26 +22,26 @@ import { test, expect, type Page } from '@playwright/test';
 
 // \u2500 Selectors \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
-const PRACTICE_BTN  = /practice/i;
-const SCORE_RADIO   = /score/i;
+const TRAIN_BTN   = /train/i;
+const SCORE_RADIO = /score/i;
 const RANDOM_RADIO  = /random/i;
 const C4_RADIO      = /c4 scale/i;
 // Exact displayName from preloadedScores.ts (\u2014 is em-dash, \u00fc is u-umlaut)
 const BEETHOVEN_TXT = 'Beethoven \u2014 F\u00fcr Elise';
 const CHANGE_SCORE  = /change score/i;
 const SCORE_DIALOG  = '[data-testid="score-selector-dialog"]';
-const PLAY_BTN      = '[data-testid="practice-play-btn"]';
-const STOP_BTN      = '[data-testid="practice-stop-btn"]';
-const PRACTICE_VIEW = '[data-testid="practice-view"]';
+const PLAY_BTN    = '[data-testid="train-play-btn"]';
+const STOP_BTN    = '[data-testid="train-stop-btn"]';
+const TRAIN_VIEW  = '[data-testid="train-view"]';
 const STAFF_VIEWER  = '[data-testid="plugin-staff-viewer"]';
 
 // \u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
-async function openPractice(page: Page) {
+async function openTrain(page: Page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: PRACTICE_BTN }).click();
-  await expect(page.locator(PRACTICE_VIEW)).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: TRAIN_BTN }).click();
+  await expect(page.locator(TRAIN_VIEW)).toBeVisible({ timeout: 15_000 });
 }
 
 /**
@@ -64,7 +64,7 @@ async function loadBeethovenScore(page: Page) {
 
 test.describe('SC-001: Score preset basic flow', () => {
   test('select Score preset -> dialog -> pick score -> exercise staff populates', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
     await loadBeethovenScore(page);
 
     // Exercise staff should render with the loaded score notes
@@ -82,7 +82,7 @@ test.describe('SC-001: Score preset basic flow', () => {
 
 test.describe('SC-002: Cache preserved on preset switch', () => {
   test('switch to Random and back -- no dialog opens', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
     await loadBeethovenScore(page);
 
     // Switch away and back
@@ -99,7 +99,7 @@ test.describe('SC-002: Cache preserved on preset switch', () => {
 
 test.describe('SC-003: Existing preset regressions', () => {
   test('Random preset exercise starts normally', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
     // Select High complexity level -- uses random preset + flow mode (with countdown)
     const levelSel = page.getByLabel(/complexity level/i);
     await levelSel.selectOption('high');
@@ -109,13 +109,13 @@ test.describe('SC-003: Existing preset regressions', () => {
     // Play button disappears as soon as countdown starts
     await expect(page.locator(PLAY_BTN)).not.toBeVisible({ timeout: 10_000 });
     // Countdown overlay is visible during the 3.5 s countdown phase
-    await expect(page.locator('.practice-countdown')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('.train-countdown')).toBeVisible({ timeout: 5_000 });
     // Stop button appears once playing phase starts (after ~3.5 s countdown)
     await expect(page.locator(STOP_BTN)).toBeVisible({ timeout: 30_000 });
   });
 
   test('C4 Scale preset exercise starts normally', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
     // Open config panel via Custom to access preset selector
     await page.getByLabel(/complexity level/i).selectOption('custom');
     await page.getByRole('radio', { name: C4_RADIO }).click();
@@ -131,7 +131,7 @@ test.describe('SC-003: Existing preset regressions', () => {
 
 test.describe('SC-004: Notes slider max matches totalAvailable', () => {
   test('Notes slider max reflects score pitch count', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
     await loadBeethovenScore(page);
 
     // Use aria-label to target the Notes slider specifically (not the Tempo one)
@@ -146,7 +146,7 @@ test.describe('SC-004: Notes slider max matches totalAvailable', () => {
 
 test.describe('SC-005: Score selector file-upload UI', () => {
   test('score selector contains a file-upload control and cancel works', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
     // Open config panel via Custom to access preset selector
     await page.getByLabel(/complexity level/i).selectOption('custom');
     await page.getByRole('radio', { name: SCORE_RADIO }).click();
@@ -162,6 +162,6 @@ test.describe('SC-005: Score selector file-upload UI', () => {
     // Cancel closes the dialog and reverts to random preset
     await page.getByRole('button', { name: /cancel score selection/i }).click();
     await expect(page.locator(SCORE_DIALOG)).not.toBeVisible();
-    await expect(page.locator(PRACTICE_VIEW)).toBeVisible();
+    await expect(page.locator(TRAIN_VIEW)).toBeVisible();
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Feature 001: Practice Complexity Levels — E2E Tests
+ * Feature 001 / Feature 036: Train (formerly Practice) Complexity Levels — E2E Tests
  *
  * SC-001: Select Low → level selector shows Low active → clicking Play starts
  *         a c4scale exercise within 15 s (countdown + playing phase reached)
@@ -16,29 +16,29 @@ import { test, expect, type Page } from '@playwright/test';
 
 // ─ Selectors ─────────────────────────────────────────────────────────────────
 
-const PRACTICE_BTN  = /practice/i;
-const PRACTICE_VIEW = '[data-testid="practice-view"]';
-const PLAY_BTN      = '[data-testid="practice-play-btn"]';
-const STOP_BTN      = '[data-testid="practice-stop-btn"]';
+const TRAIN_BTN   = /train/i;
+const TRAIN_VIEW  = '[data-testid="train-view"]';
+const PLAY_BTN    = '[data-testid="train-play-btn"]';
+const STOP_BTN    = '[data-testid="train-stop-btn"]';
 
 // ─ Helpers ───────────────────────────────────────────────────────────────────
 
-async function openPractice(page: Page): Promise<void> {
+async function openTrain(page: Page): Promise<void> {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: PRACTICE_BTN }).click();
-  await expect(page.locator(PRACTICE_VIEW)).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: TRAIN_BTN }).click();
+  await expect(page.locator(TRAIN_VIEW)).toBeVisible({ timeout: 15_000 });
 }
 
 // ─ Tests ─────────────────────────────────────────────────────────────────────
 
-test.describe('Practice Complexity Levels', () => {
+test.describe('Train Complexity Levels', () => {
 
   /**
    * SC-001: Selecting Low → Play starts the exercise within 15 s
    */
   test('SC-001: Low level → Play starts exercise within 15 s', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
 
     // Low should already be selected as default
     const sel = page.getByLabel(/complexity level/i);
@@ -59,7 +59,7 @@ test.describe('Practice Complexity Levels', () => {
    *   High → 100 BPM
    */
   test('SC-002: Each level applies correct BPM parameter (FR-002/003/004)', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
 
     const sel       = page.getByLabel(/complexity level/i);
     const bpmSlider = page.getByLabel(/tempo bpm/i);
@@ -81,7 +81,7 @@ test.describe('Practice Complexity Levels', () => {
    * SC-003: 2 interactions: select level → click Play → exercise starts
    */
   test('SC-003: Exercise reachable in 2 interactions (select level + Play)', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
 
     const sel = page.getByLabel(/complexity level/i);
 
@@ -100,7 +100,7 @@ test.describe('Practice Complexity Levels', () => {
    * SC-004: Select High → reload → selector still shows High
    */
   test('SC-004: Selected level persists after page reload', async ({ page }) => {
-    await openPractice(page);
+    await openTrain(page);
 
     const sel = page.getByLabel(/complexity level/i);
 
@@ -112,9 +112,9 @@ test.describe('Practice Complexity Levels', () => {
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
 
-    // Open practice again
-    await page.getByRole('button', { name: PRACTICE_BTN }).click();
-    await expect(page.locator(PRACTICE_VIEW)).toBeVisible({ timeout: 15_000 });
+    // Open train again
+    await page.getByRole('button', { name: TRAIN_BTN }).click();
+    await expect(page.locator(TRAIN_VIEW)).toBeVisible({ timeout: 15_000 });
 
     // High should still be selected
     const sel2 = page.getByLabel(/complexity level/i);

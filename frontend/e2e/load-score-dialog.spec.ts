@@ -35,12 +35,12 @@ test.describe('Feature 028: Load Score Dialog', () => {
   });
 
   test('Load Score button is visible on landing screen', async ({ page }) => {
-    const btn = page.getByRole('button', { name: /play score/i });
+    const btn = page.getByRole('button', { name: /play/i });
     await expect(btn).toBeVisible();
   });
 
   test('clicking Load Score opens the dialog', async ({ page }) => {
-    await page.getByRole('button', { name: /play score/i }).click();
+    await page.getByRole('button', { name: /play/i }).click();
     for (const name of EXPECTED_SCORES) {
       await expect(page.getByText(name)).toBeVisible();
     }
@@ -53,7 +53,7 @@ test.describe('Feature 028: Load Score Dialog', () => {
       route.fulfill({ status: 200, body: '', contentType: 'application/octet-stream' }),
     );
 
-    await page.getByRole('button', { name: /play score/i }).click();
+    await page.getByRole('button', { name: /play/i }).click();
 
     // Arm the listener BEFORE clicking, then read the URL from the resolved
     // Request object. Using a closure variable set inside the async route
@@ -77,7 +77,7 @@ test.describe('Feature 028: Load Score Dialog', () => {
       if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
 
-    await page.getByRole('button', { name: /play score/i }).click();
+    await page.getByRole('button', { name: /play/i }).click();
     await page.getByText('Bach — Invention No. 1').click();
 
     // Wait up to 10 s for the score to load (WASM parse can take a few seconds)
