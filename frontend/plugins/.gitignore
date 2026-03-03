@@ -1,0 +1,8 @@
+# External plugins symlinked here for local development.
+# These live in plugins-external/ (separate private repos) and must not be
+# committed as part of this repository.
+#
+# To add a symlink for local dev:
+#   ln -s ../../plugins-external/practice-view-plugin practice-view-plugin
+practice-view-plugin
+virtual-keyboard-pro

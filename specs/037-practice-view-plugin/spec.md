@@ -7,6 +7,10 @@
 
 ## Clarifications
 
+### Session 2026-03-03 (Amendment)
+
+- Q: For chords, does the user need to press all notes simultaneously or is any single note sufficient? → A: All notes in the chord must be pressed together. An inaudible time window (≤ 80 ms) is allowed between individual key presses of the same chord — anything beyond that does not count. The chord detection logic is implemented as a `ChordDetector` class in `frontend/src/utils/chordDetector.ts` and **re-exported via the Plugin API** (`frontend/src/plugin-api/index.ts`) so any plugin can import it from the standard Plugin API surface without duplication.
+
 ### Session 2026-03-03
 
 - Q: Does Plugin API v3 expose `context.components.ScoreRenderer` (or equivalent) to external plugins, or must feature 037 extend the API? → A: Plugin API v3 already exposes this surface to external plugins — no new Plugin API work is required for feature 037.
@@ -93,7 +97,7 @@ A developer (or Musicore contributor) can find the Practice View plugin as a sta
 - What happens when the user reaches the last note of the score in Practice mode and presses it? → Practice mode ends automatically; the score is at the final position and the toolbar returns to its normal stopped state.
 - What happens when the user presses Stop during Practice mode? → Practice mode is deactivated, the highlight is cleared, and the playback position resets to tick 0 (or the pinned start tick).
 - What happens when Practice mode is active and there is a rest (non-note) in the score? → Rests are skipped automatically; the target highlight advances to the next playable note.
-- What happens when the score contains chords (multiple simultaneous notes)? → All notes in the chord are highlighted together; pressing any one of them on MIDI is sufficient to advance (any note in the chord counts as correct).
+- What happens when the score contains chords (multiple simultaneous notes)? → All notes in the chord are highlighted together as a single target. The user must press **all** chord notes on MIDI within a short simultaneous-press window (≤ 80 ms, inaudible as a delay) for the target to advance. Pressing only some of the chord notes — or pressing them too far apart — does not advance the target.
 
 ## Requirements *(mandatory)*
 
@@ -113,7 +117,7 @@ A developer (or Musicore contributor) can find the Practice View plugin as a sta
 - **FR-012**: When no MIDI device is connected and the user activates Practice mode, the plugin MUST display a notice informing the user that a MIDI device is required; the Practice button remains active (the mode is entered) but note advances do not occur until a MIDI device is available.
 - **FR-013**: Exiting the plugin via Back or `context.close()` MUST deactivate Practice mode (if active), release all event subscriptions (MIDI), stop any active playback, and release audio resources before control returns to the host — identical to the Play Score plugin exit behaviour.
 - **FR-014**: The plugin MUST NOT import directly from `frontend/plugins/play-score/` source files, `src/components/`, `src/services/`, or `src/wasm/`; all capabilities MUST be accessed via `context.*` or host-provided components.
-- **FR-015**: Score notes that are part of a chord (multiple simultaneous pitches) MUST all be highlighted together as a single target. Pressing any one of the chord's pitches on MIDI MUST count as correct and advance the target to the next position.
+- **FR-015**: Score notes that are part of a chord (multiple simultaneous pitches) MUST all be highlighted together as a single target. The user MUST press **all** pitches in the chord on MIDI within a simultaneous-press window of ≤ 80 ms for the target to advance. Pressing only a subset of the chord notes, or pressing them further apart than the window, MUST NOT advance the target. The chord detection logic MUST be implemented in a reusable, framework-agnostic `ChordDetector` utility class (canonical implementation in `frontend/src/utils/chordDetector.ts`, re-exported via the Plugin API in `frontend/src/plugin-api/index.ts`) that accepts individual MIDI attack events and reports a complete/incomplete state; single-note entries MUST continue to use a window of 1 (trivially complete on the first press).
 
 ### Key Entities
 
@@ -129,7 +133,7 @@ A developer (or Musicore contributor) can find the Practice View plugin as a sta
 
 - **SC-001**: A user can go from launching the plugin to their first MIDI-driven note advance in 4 steps or fewer: launch plugin → select score → press Practice → press correct MIDI note.
 - **SC-002**: Every correct MIDI note press advances the target highlight within 100 ms of the note being played, providing a responsive, real-time feel.
-- **SC-003**: The plugin correctly identifies the target note for all note types present in the test score catalogue (single notes, chords, notes across different octaves) with zero false advances on incorrect MIDI input.
+- **SC-003**: The plugin correctly identifies the target note for all note types present in the test score catalogue (single notes, chords, notes across different octaves) with zero false advances on incorrect MIDI input. For chords, the target advances only when all chord notes are pressed within the 80 ms simultaneous-press window.
 - **SC-004**: Activating and deactivating Practice mode is instantaneous from the user's perspective — no loading state or perceptible delay when the Practice button is pressed.
 - **SC-005**: The plugin builds and loads from `plugins-external/practice-view-plugin/` without requiring changes to the core app or the Play Score plugin source code.
 - **SC-006**: All MIDI subscriptions and audio resources are released when the plugin is closed, verified by an automated test asserting clean teardown on unmount.
@@ -139,8 +143,9 @@ A developer (or Musicore contributor) can find the Practice View plugin as a sta
 - Plugin API v3 (as delivered in feature 033) exposes `context.components.ScoreRenderer` (or equivalent score-rendering surface) to external plugins in `plugins-external/`. No new Plugin API additions are required for feature 037 — the existing v3 surface is sufficient for both score rendering and MIDI pitch matching.
 - "Next note" in Practice mode is defined as the next note (or chord) in tick order on the user-selected staff only. Notes on other staves are ignored for highlighting and MIDI matching purposes.
 - In this first step, there is no scoring, timing measurement, or visual feedback beyond the target highlight advancing on correct input. These may be added in future iterations.
-- Chords are treated as a single target; pressing any pitch in the chord advances the position. The definition of "chord" is notes with the same tick position in a single voice/staff.
+- Chords are treated as a single target; **all** pitches in the chord must be pressed within a 80 ms simultaneous-press window to advance the position. Pressing only a subset does not advance. The definition of "chord" is notes with the same tick position in a single voice/staff.
 - The plugin follows the same `plugin.json` manifest conventions as `virtual-keyboard-pro` for registration with the host app.
 - The MIDI subscription in Practice mode listens for note-on events only; note-off events are not used for pitch matching. Matching is exact: the played MIDI note number must equal the target's MIDI pitch (0–127); the same pitch name in a different octave does not count as correct.
+- Chord detection is handled by a `ChordDetector` class that accumulates individual note presses within a configurable time window (default 80 ms). The detector is reset each time the target advances to a new entry. The canonical implementation lives in `frontend/src/utils/chordDetector.ts` and is **re-exported via the Plugin API barrel** (`frontend/src/plugin-api/index.ts`), so any plugin imports it from the standard Plugin API surface — no mirror or duplication required.
 - The Practice View plugin owns its complete toolbar UI. Playback controls (play, pause, stop, timer, tempo) are implemented using Plugin API v3 primitives. The Play Score plugin's toolbar component is not imported, extended, or modified. No changes to the Play Score plugin source are required.
 

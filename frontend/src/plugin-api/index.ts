@@ -6,8 +6,8 @@
  * Feature 034: Practice from Score — adds PluginScorePitches, PluginScoreSelectorProps,
  *   extractPracticeNotes(), ScoreSelector component (v4)
  * Feature 035: Metronome — adds MetronomeState, PluginMetronomeContext,
- *   context.metronome namespace, ScorePlayerState.timeSignature (v5)
- *
+ *   context.metronome namespace, ScorePlayerState.timeSignature (v5) * Feature 037 (amendment): adds ChordDetector, ChordDetectorOptions, ChordResult —
+ *   reusable simultaneous chord detection utility; no version bump (additive only). *
  * THIS IS THE ONLY MODULE plugin code is permitted to import from the host.
  * ESLint enforces this boundary via `no-restricted-imports` scoped to plugins/**.
  *
@@ -40,3 +40,7 @@ export type {
 } from './types';
 
 export { PLUGIN_API_VERSION } from './types';
+
+// Utility classes exposed to plugins (no API version bump — additive)
+export { ChordDetector } from '../utils/chordDetector';
+export type { ChordDetectorOptions, ChordResult } from '../utils/chordDetector';

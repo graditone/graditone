@@ -137,6 +137,50 @@
 
 ---
 
+## Phase 8: Chord Detection — All-Notes-Required (Amendment 2026-03-03)
+
+**Context**: The initial spec allowed any single note in a chord to advance the target (FR-015). The user clarified that **all** chord notes must be pressed simultaneously (within a ≤ 80 ms inaudible window). This phase adds a reusable `ChordDetector` class to the host platform and wires it into the practice plugin.
+
+**Scope**:
+- Platform utility `frontend/src/utils/chordDetector.ts` — canonical, framework-agnostic implementation.
+- Plugin copy `plugins-external/practice-view-plugin/chordDetector.ts` — self-contained mirror (external plugins cannot import host internals).
+- Both copies are kept in sync; any future change to chord detection logic must land in both files.
+
+- [X] T045 [P] Create `frontend/src/utils/chordDetector.ts` — `ChordDetector` class with `reset(requiredPitches)`, `press(midiNote, timestamp): ChordResult`, and `ChordResult` interface (`complete`, `collected`, `missing`); configurable `windowMs` option (default 80); evicts presses older than `windowMs` on each call; accepts only pitches in the required set; reports `complete: true` only when all required pitches have been pressed within the window; single-note entries trivially complete on the first press.
+
+- [X] T046 [P] Write `frontend/src/utils/chordDetector.test.ts` unit tests (Vitest):
+  - single-note: `press(60, 0).complete === true` immediately.
+  - chord (C-E-G, [60,64,67]): pressing all three within window → `complete: true`.
+  - chord: pressing only two → `complete: false`, `missing` contains the third.
+  - chord: pressing all three but first press expired (> windowMs ago) → `complete: false`.
+  - chord: pressing a pitch not in the required set → ignored (no effect on `collected`/`missing`).
+  - `reset()`: clears prior presses and sets new required pitches.
+  - `reset([])`: empty set never reports `complete`.
+
+- [X] T047 [P] ~~Create `plugins-external/practice-view-plugin/chordDetector.ts` mirror~~ **SUPERSEDED**: `ChordDetector` is now re-exported via the Plugin API barrel (`frontend/src/plugin-api/index.ts`). External plugins import it from `../../frontend/src/plugin-api/index` — no mirror copy needed.
+
+- [X] T048 [P] ~~Write `plugins-external/practice-view-plugin/chordDetector.test.ts`~~ **SUPERSEDED**: mirror copy and its tests deleted; canonical tests in `frontend/src/utils/chordDetector.test.ts` provide full coverage.
+
+- [X] T049 Update MIDI handler in `plugins-external/practice-view-plugin/PracticeViewPlugin.tsx`:
+  - `import { ChordDetector } from './chordDetector'`.
+  - Create `const chordDetectorRef = useRef<ChordDetector>(new ChordDetector())`.
+  - Add `useEffect` that calls `chordDetectorRef.current.reset(currentEntry.midiPitches)` each time `practiceState.currentIndex` or `practiceState.mode` changes (reset detector when target advances or mode exits active).
+  - In the MIDI attack handler: replace the `isCorrect(event.midiNote, currentEntry)` call with `chordDetectorRef.current.press(event.midiNote, event.timestamp).complete`; dispatch `CORRECT_MIDI` (or loop-wrap `SEEK`) only when the result is `complete`.
+  - Wrong-note detection: any attack that is not in `currentEntry.midiPitches` is still dispatched as `WRONG_MIDI` (no state change, but keeps the wrong-note path alive).
+  - `isCorrect` from `practiceEngine` is no longer called from the MIDI handler (it remains for use by tests).
+  - Depends on T047.
+
+- [ ] T050 [P] Update `plugins-external/practice-view-plugin/practiceEngine.test.ts` chord section:
+  - Add test: pressing only one note of a chord does NOT dispatch `CORRECT_MIDI` — the engine state stays at the same `currentIndex`.
+  - Add test: pressing all chord notes within window → `CORRECT_MIDI` → `currentIndex` advances.
+  - (Both tests validate the integration contract between `ChordDetector` and the engine reducer, using the new wiring from T049.)
+
+- [X] T051 Run `vitest run` in both `frontend/` and `plugins-external/practice-view-plugin/`, confirm all tests pass; run production build in `plugins-external/practice-view-plugin/` and verify bundle size ≤ 50 KB.
+
+- [X] T052 Add "Both Clefs" staff option: add `value={-1}` option to `practiceToolbar.tsx` staff `<select>` (shown when `staffCount >= 2`); add `mergePracticeNotesByTick` helper to `PracticeViewPlugin.tsx` that merges entries from all staves by tick (union of pitches at the same tick); update `handlePracticeToggle` to extract from all staves and merge when `staffIndex === -1`; update toolbar tests (options count: `staffCount + 1`; new tests for Both Clefs presence and `-1` dispatch).
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
