@@ -23,7 +23,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import type { PluginScorePlayerContext, PluginPreloadedScore, ScoreLoadSource, ScorePlayerState, PluginScorePitches } from './types';
+import type { PluginScorePlayerContext, PluginPreloadedScore, ScoreLoadSource, ScorePlayerState, PluginScorePitches, PluginPracticeNoteEntry } from './types';
 import { usePlayback } from '../services/playback/MusicTimeline';
 import type { PlaybackStatus, ITickSource } from '../types/playback';
 import { useTempoState } from '../services/state/TempoStateContext';
@@ -128,44 +128,52 @@ function extractTimeSignature(score: Score): { numerator: number; denominator: n
 }
 
 /**
- * Extract pitched notes for the practice exercise from a Score.
+ * Extract pitched notes for practice from a Score, returning all chord pitches and note IDs (v6).
  *
- * Rules (from spec clarifications + FR-004):
- *   1. Source: instruments[0].staves[0].voices[0] (first instrument, topmost staff, first voice)
- *   2. Group by start_tick; keep max pitch per tick (chord reduction — top note of chord)
- *   3. Sort ascending by tick → ordered pitch sequence
- *   4. Clef: read from instruments[0].staves[0].active_clef; normalise to 'Treble' | 'Bass'
- *      (Alto/Tenor → 'Treble' fallback, per R-003)
- *   5. Cap to maxCount; report totalAvailable before cap
+ * Rules (v6 update from Feature 037):
+ *   1. Source: instruments[0].staves[staffIndex].voices[0] (target staff by index)
+ *   2. Group by start_tick; collect ALL pitches at each tick (full chord, not just max)
+ *   3. Sort ascending by tick → ordered note-entry sequence
+ *   4. Clef: read from the target staff's active_clef; normalise to 'Treble' | 'Bass'
+ *   5. Cap to maxCount if provided; report totalAvailable before cap
  */
 function extractPracticeNotesFromScore(
   score: Score,
-  maxCount: number,
+  staffIndex: number,
+  maxCount?: number,
 ): PluginScorePitches {
   const instrument = score.instruments[0];
-  const staff = instrument?.staves[0];
+  const staff = instrument?.staves[staffIndex] ?? instrument?.staves[0];
   const voice = staff?.voices[0];
   const events = voice?.interval_events ?? [];
 
-  // Group by start_tick; retain max pitch per tick (chord dedup)
-  const tickMap = new Map<number, number>();
+  // Group by start_tick; collect ALL pitches + note IDs at each tick (full chord)
+  const tickMap = new Map<number, PluginPracticeNoteEntry>();
   for (const note of events) {
-    // Note.pitch is always a number (no rests in interval_events type)
     const existing = tickMap.get(note.start_tick);
-    if (existing === undefined || note.pitch > existing) {
-      tickMap.set(note.start_tick, note.pitch);
+    if (existing) {
+      // Append this note to the chord at this tick
+      tickMap.set(note.start_tick, {
+        midiPitches: [...existing.midiPitches, note.pitch],
+        noteIds: [...existing.noteIds, note.id],
+        tick: note.start_tick,
+      });
+    } else {
+      tickMap.set(note.start_tick, {
+        midiPitches: [note.pitch],
+        noteIds: [note.id],
+        tick: note.start_tick,
+      });
     }
   }
 
-  // Sort by tick → ordered pitch sequence
-  const allPitches = [...tickMap.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([, midiPitch]) => ({ midiPitch }));
+  // Sort by tick → ordered sequence
+  const allEntries = [...tickMap.values()].sort((a, b) => a.tick - b.tick);
 
-  const totalAvailable = allPitches.length;
-  const notes = allPitches.slice(0, maxCount);
+  const totalAvailable = allEntries.length;
+  const notes = maxCount !== undefined ? allEntries.slice(0, maxCount) : allEntries;
 
-  // Clef normalisation: Treble (G) and Bass (F) pass through; Alto/Tenor → Treble fallback
+  // Clef normalisation: Bass passes through; everything else → Treble
   const rawClef = staff?.active_clef ?? 'Treble';
   const clef: 'Treble' | 'Bass' = rawClef === 'Bass' ? 'Bass' : 'Treble';
 
@@ -243,11 +251,13 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     bpm: 0,
     title: null,
     error: null,
+    staffCount: 0,
     timeSignature: { numerator: 4, denominator: 4 },
   });
 
   // Notify all subscribers when state changes
   useEffect(() => {
+    const staffCount = score ? (score.instruments[0]?.staves.length ?? 0) : 0;
     const newState: ScorePlayerState = {
       status: pluginStatus,
       currentTick: playbackState.currentTick,
@@ -256,6 +266,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       bpm: effectiveBpm,
       title,
       error: errorMessage,
+      staffCount,
       timeSignature: scoreTimeSignature,
     };
     currentStateRef.current = newState;
@@ -268,6 +279,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     effectiveBpm,
     title,
     errorMessage,
+    score,
     scoreTimeSignature,
   ]);
 
@@ -384,13 +396,13 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     return playbackState.tickSourceRef.current.currentTick;
   }, [playbackState.tickSourceRef]);
 
-  // ─── extractPracticeNotes (v4) ──────────────────────────────────────────────────────
+  // ─── extractPracticeNotes (v6) ──────────────────────────────────────────────────────────────────────────
 
   const extractPracticeNotes = useCallback(
-    (maxCount: number): PluginScorePitches | null => {
+    (staffIndex: number, maxCount?: number): PluginScorePitches | null => {
       // Only available when a score is fully loaded
       if (pluginStatus !== 'ready' || !score) return null;
-      const result = extractPracticeNotesFromScore(score, maxCount);
+      const result = extractPracticeNotesFromScore(score, staffIndex, maxCount);
       // Include the display title from the loaded score metadata
       return { ...result, title };
     },
@@ -473,6 +485,7 @@ export function createNoOpScorePlayer(): PluginScorePlayerContext {
     bpm: 0,
     title: null,
     error: null,
+    staffCount: 0,
     timeSignature: { numerator: 4, denominator: 4 },
   };
 
@@ -491,7 +504,7 @@ export function createNoOpScorePlayer(): PluginScorePlayerContext {
       return () => {};
     },
     getCurrentTickLive: () => 0,
-    extractPracticeNotes: (_maxCount: number) => null,
+    extractPracticeNotes: (_staffIndex: number, _maxCount?: number) => null,
   };
 }
 

@@ -37,7 +37,7 @@ import { TrainPlugin } from './TrainPlugin';
 
 // ─── Mock ScorePlayer factory ──────────────────────────────────────────────
 
-type MockScorePlayerState = { status: 'idle' | 'loading' | 'ready' | 'error'; currentTick: number; totalDurationTicks: number; highlightedNoteIds: ReadonlySet<string>; bpm: number; title: string | null; error: string | null };
+type MockScorePlayerState = { status: 'idle' | 'loading' | 'ready' | 'error'; currentTick: number; totalDurationTicks: number; highlightedNoteIds: ReadonlySet<string>; bpm: number; title: string | null; error: string | null; staffCount: number };
 
 const MOCK_CATALOGUE: ReadonlyArray<{ id: string; displayName: string }> = [
   { id: 'beethoven', displayName: 'Beethoven Für Elise' },
@@ -45,7 +45,11 @@ const MOCK_CATALOGUE: ReadonlyArray<{ id: string; displayName: string }> = [
 ];
 
 const MOCK_PITCHES = {
-  notes: [{ midiPitch: 60 }, { midiPitch: 62 }, { midiPitch: 64 }] as ReadonlyArray<{ midiPitch: number }>,
+  notes: [
+    { midiPitches: [60], noteIds: ['n1'], tick: 0 },
+    { midiPitches: [62], noteIds: ['n2'], tick: 480 },
+    { midiPitches: [64], noteIds: ['n3'], tick: 960 },
+  ],
   totalAvailable: 3,
   clef: 'Treble' as const,
   title: 'Beethoven Für Elise',
@@ -53,7 +57,7 @@ const MOCK_PITCHES = {
 
 function makeMockScorePlayer(): PluginScorePlayerContext & { _notify: (state: MockScorePlayerState) => void } {
   const subscribers = new Set<(state: MockScorePlayerState) => void>();
-  let currentState: MockScorePlayerState = { status: 'idle', currentTick: 0, totalDurationTicks: 0, highlightedNoteIds: new Set<string>(), bpm: 0, title: null, error: null };
+  let currentState: MockScorePlayerState = { status: 'idle', currentTick: 0, totalDurationTicks: 0, highlightedNoteIds: new Set<string>(), bpm: 0, title: null, error: null, staffCount: 0 };
 
   const notify = (state: MockScorePlayerState) => {
     currentState = state;
@@ -76,7 +80,7 @@ function makeMockScorePlayer(): PluginScorePlayerContext & { _notify: (state: Mo
     stop: vi.fn(),
     seek: vi.fn(),
     setTempo: vi.fn(),
-    extractPracticeNotes: vi.fn((_maxCount: number) => MOCK_PITCHES),
+    extractPracticeNotes: vi.fn((_staffIndex: number, _maxCount?: number) => MOCK_PITCHES),
     _notify: notify,
   };
 }

@@ -80,7 +80,7 @@ export function generateExercise(
   bpm: number = DEFAULT_BPM,
   config: ExerciseConfig = DEFAULT_EXERCISE_CONFIG,
   seed?: number,
-  scorePitches?: ReadonlyArray<{ midiPitch: number }>,
+  scorePitches?: ReadonlyArray<{ midiPitches: ReadonlyArray<number> }>,
 ): TrainExercise {
   if (config.preset === 'c4scale') {
     return generateC4ScaleExercise(bpm, config.noteCount, config.clef);
@@ -141,7 +141,7 @@ export function generateC4ScaleExercise(
  */
 export function generateScoreExercise(
   bpm: number,
-  pitches: ReadonlyArray<{ midiPitch: number }>,
+  pitches: ReadonlyArray<{ midiPitches: ReadonlyArray<number> }>,
   noteCount: number,
 ): TrainExercise {
   const msPerBeat = 60_000 / bpm;
@@ -149,7 +149,7 @@ export function generateScoreExercise(
   const notes: ExerciseNote[] = pitches.slice(0, num).map((p, i) => ({
     id: `ex-${i}`,
     slotIndex: i,
-    midiPitch: p.midiPitch,
+    midiPitch: p.midiPitches[0],
     expectedOnsetMs: i * msPerBeat,
   }));
   return { notes, bpm };

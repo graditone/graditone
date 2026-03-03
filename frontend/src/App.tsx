@@ -577,7 +577,9 @@ function App() {
             const entry = allPlugins.find(p => p.manifest.id === activePlugin)
             if (!entry) return null
             const PluginComponent = entry.plugin.Component
-            return (
+            const isV3Common = Number(entry.manifest.pluginApiVersion) >= 3
+            const proxyRefsCommon = v3ProxyRefsMap.current.get(entry.manifest.id)
+            const innerPluginContent = (
               <div style={{
                 position: 'fixed',
                 inset: 0,
@@ -586,47 +588,59 @@ function App() {
                 zIndex: 100,
                 backgroundColor: '#fff',
               }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '6px 12px',
-                    background: '#f5f5f5',
-                    borderBottom: '1px solid #ddd',
-                    flexShrink: 0,
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setActivePlugin(null)}
-                    aria-label="Return to score viewer"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      background: '#fff',
-                      border: '1px solid #bbb',
-                      borderRadius: '6px',
-                      color: '#333',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      padding: '5px 12px',
-                      minHeight: '32px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    ← Back
-                  </button>
-                  <span style={{ color: '#666', fontSize: '0.8rem' }}>
-                    {entry.manifest.name}
-                  </span>
-                </div>
-                <PluginView plugin={entry.manifest}>
-                  <PluginComponent />
-                </PluginView>
+                {isV3Common && proxyRefsCommon ? (
+                  // v3+ common plugins: wire up the score player proxy via V3PluginWrapper.
+                  // Without this, getCatalogue() returns [] and loadScore() is a no-op
+                  // because scorePlayerRef stays on the createNoOpScorePlayer() stub.
+                  <V3PluginWrapper plugin={entry.manifest} proxyRefs={proxyRefsCommon}>
+                    <PluginComponent />
+                  </V3PluginWrapper>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '6px 12px',
+                        background: '#f5f5f5',
+                        borderBottom: '1px solid #ddd',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setActivePlugin(null)}
+                        aria-label="Return to score viewer"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          background: '#fff',
+                          border: '1px solid #bbb',
+                          borderRadius: '6px',
+                          color: '#333',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          padding: '5px 12px',
+                          minHeight: '32px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ← Back
+                      </button>
+                      <span style={{ color: '#666', fontSize: '0.8rem' }}>
+                        {entry.manifest.name}
+                      </span>
+                    </div>
+                    <PluginView plugin={entry.manifest}>
+                      <PluginComponent />
+                    </PluginView>
+                  </>
+                )}
               </div>
             )
+            return innerPluginContent
           })()}
           <IOSInstallModal />
         </div>

@@ -18,11 +18,11 @@ import { COMPLEXITY_PRESETS, COMPLEXITY_LEVEL_STORAGE_KEY } from './trainTypes';
 
 describe('generateScoreExercise()', () => {
   const samplePitches = [
-    { midiPitch: 60 },
-    { midiPitch: 62 },
-    { midiPitch: 64 },
-    { midiPitch: 65 },
-    { midiPitch: 67 },
+    { midiPitches: [60] },
+    { midiPitches: [62] },
+    { midiPitches: [64] },
+    { midiPitches: [65] },
+    { midiPitches: [67] },
   ];
 
   it('returns a TrainExercise with notes.length === min(noteCount, pitches.length)', () => {
@@ -38,7 +38,7 @@ describe('generateScoreExercise()', () => {
   it('each exercise note carries the corresponding midiPitch from the input array', () => {
     const exercise = generateScoreExercise(80, samplePitches, 5);
     exercise.notes.forEach((n, i) => {
-      expect(n.midiPitch).toBe(samplePitches[i].midiPitch);
+      expect(n.midiPitch).toBe(samplePitches[i].midiPitches[0]);
     });
   });
 
@@ -76,7 +76,7 @@ describe('generateScoreExercise()', () => {
   it('noteCount of 1 returns a single-note exercise', () => {
     const exercise = generateScoreExercise(80, samplePitches, 1);
     expect(exercise.notes).toHaveLength(1);
-    expect(exercise.notes[0].midiPitch).toBe(samplePitches[0].midiPitch);
+    expect(exercise.notes[0].midiPitch).toBe(samplePitches[0].midiPitches[0]);
   });
 });
 

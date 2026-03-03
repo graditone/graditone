@@ -537,14 +537,14 @@ describe('useScorePlayerContext', () => {
       });
     });
   });
-  // ─── extractPracticeNotes (v4 — Feature 034) ────────────────────────────────────────────
+  // ─── extractPracticeNotes (v6 — Feature 037) ──────────────────────────────────────────────────
 
   describe('extractPracticeNotes() — T002', () => {
     it('returns null when status is idle (no score loaded)', () => {
       const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
 
       // No score loaded — status is 'idle'
-      expect(result.current.extractPracticeNotes(8)).toBeNull();
+      expect(result.current.extractPracticeNotes(0, 8)).toBeNull();
     });
 
     it('returns a PluginScorePitches object after score is loaded (status ready)', async () => {
@@ -554,7 +554,7 @@ describe('useScorePlayerContext', () => {
         await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
       });
 
-      const pitches = result.current.extractPracticeNotes(8);
+      const pitches = result.current.extractPracticeNotes(0, 8);
       expect(pitches).not.toBeNull();
     });
 
@@ -597,7 +597,7 @@ describe('useScorePlayerContext', () => {
         await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
       });
 
-      const pitches = result.current.extractPracticeNotes(5);
+      const pitches = result.current.extractPracticeNotes(0, 5);
       expect(pitches).not.toBeNull();
       expect(pitches!.notes).toHaveLength(5);
     });
@@ -639,8 +639,8 @@ describe('useScorePlayerContext', () => {
         await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
       });
 
-      const small = result.current.extractPracticeNotes(2);
-      const large = result.current.extractPracticeNotes(100);
+      const small = result.current.extractPracticeNotes(0, 2);
+      const large = result.current.extractPracticeNotes(0, 100);
 
       expect(small).not.toBeNull();
       expect(large).not.toBeNull();
@@ -656,37 +656,43 @@ describe('useScorePlayerContext', () => {
         await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
       });
 
-      const pitches = result.current.extractPracticeNotes(8);
+      const pitches = result.current.extractPracticeNotes(0, 8);
       expect(pitches).not.toBeNull();
       expect(['Treble', 'Bass']).toContain(pitches!.clef);
     });
 
-    it('each note in notes array has a numeric midiPitch property', async () => {
+    it('each note in notes array has midiPitches (non-empty array of numbers) and noteIds', async () => {
       const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
 
       await act(async () => {
         await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
       });
 
-      const pitches = result.current.extractPracticeNotes(8);
+      const pitches = result.current.extractPracticeNotes(0, 8);
       expect(pitches).not.toBeNull();
       pitches!.notes.forEach((n) => {
-        expect(typeof n.midiPitch).toBe('number');
-        expect(n.midiPitch).toBeGreaterThanOrEqual(0);
-        expect(n.midiPitch).toBeLessThanOrEqual(127);
+        expect(Array.isArray(n.midiPitches)).toBe(true);
+        expect(n.midiPitches.length).toBeGreaterThan(0);
+        n.midiPitches.forEach(p => {
+          expect(typeof p).toBe('number');
+          expect(p).toBeGreaterThanOrEqual(0);
+          expect(p).toBeLessThanOrEqual(127);
+        });
+        expect(Array.isArray(n.noteIds)).toBe(true);
+        expect(n.noteIds.length).toBeGreaterThan(0);
       });
     });
   });
 });
 
 // ---------------------------------------------------------------------------
-// createNoOpScorePlayer — v4 stub (T002)
+// createNoOpScorePlayer — v6 stub
 // ---------------------------------------------------------------------------
 
-describe('createNoOpScorePlayer() — v4', () => {
+describe('createNoOpScorePlayer() — v6', () => {
   it('extractPracticeNotes returns null', () => {
     const stub = createNoOpScorePlayer();
-    expect(stub.extractPracticeNotes(8)).toBeNull();
+    expect(stub.extractPracticeNotes(0, 8)).toBeNull();
   });
 });
 

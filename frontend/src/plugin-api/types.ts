@@ -239,29 +239,65 @@ export interface PluginManifest {
 }
 
 // ---------------------------------------------------------------------------
-// v4 types — Practice from Score (Feature 034)
+// v4/v6 types — Practice from Score (Feature 034) / Practice View Plugin (Feature 037)
 // ---------------------------------------------------------------------------
 
 /**
- * Flat ordered list of MIDI pitches extracted by the host from the currently-loaded score.
+ * A single note-position entry in the practice note sequence (v6).
+ *
+ * Replaces the v5 `{ midiPitch: number }` item shape in PluginScorePitches.
+ *
+ * For single notes: `midiPitches` has one element and `noteIds` has one element.
+ * For chords: `midiPitches` carries ALL pitches at the tick (parallel to `noteIds`).
+ *
+ * Usage:
+ *   - MIDI matching: check if `event.midiNote` is in `midiPitches`
+ *   - Highlighting:  pass `new Set(noteIds)` to ScoreRenderer.highlightedNoteIds
+ *   - Seeking:       seek to `tick` for score navigation
+ *
+ * GEOMETRY CONSTRAINT (Principle VI): carries only MIDI integers, opaque IDs, and integer ticks.
+ */
+export interface PluginPracticeNoteEntry {
+  /**
+   * Ordered MIDI pitch(es) at this score position.
+   * For single notes: exactly one element.
+   * For chords: all pitches present at this tick on the target staff.
+   * Any match in this array (exact integer equality) counts as a correct press.
+   */
+  readonly midiPitches: ReadonlyArray<number>;
+  /**
+   * Opaque note ID string(s) parallel to `midiPitches`.
+   * Pass as `new Set(noteIds)` to ScoreRenderer.highlightedNoteIds to highlight target notes.
+   * IDs carry no spatial data — they are identifiers only.
+   */
+  readonly noteIds: ReadonlyArray<string>;
+  /**
+   * Absolute tick position of this note/chord (960-PPQ integer).
+   * Use with context.scorePlayer.seekToTick(tick) to reposition the score.
+   */
+  readonly tick: number;
+}
+
+/**
+ * Flat ordered list of note/chord entries extracted by the host from the currently-loaded score.
  * Returned by context.scorePlayer.extractPracticeNotes().
  *
- * GEOMETRY CONSTRAINT (Principle VI): Contains ONLY MIDI integers, a clef string,
- * a count, and a title. No coordinates or spatial data cross the plugin API boundary.
+ * GEOMETRY CONSTRAINT (Principle VI): Contains ONLY MIDI integers, opaque note ID strings,
+ * integer ticks, a clef string, a count, and a title. No coordinates cross the API boundary.
  *
  * Extraction rules applied by the host (plugin receives results only):
- *   - Source: instruments[0].staves[0].voices[0] (first instrument, topmost staff, first voice)
- *   - Rests (notes without pitch) are skipped
- *   - Chords: maximum pitch across simultaneous notes at the same start_tick is kept
- *   - Note durations are discarded; all exercise notes are treated as quarter notes
- *   - Result is capped to maxCount; totalAvailable reflects the pre-cap count
+ *   - Source: instruments[0].staves[staffIndex].voices[0] (first instrument, target staff, first voice)
+ *   - Rests are skipped
+ *   - Chords: ALL pitches at the same start_tick are collected (not just max)
+ *   - Note durations are discarded
+ *   - Result is capped to maxCount if provided; totalAvailable reflects the pre-cap count
  */
 export interface PluginScorePitches {
   /**
-   * Ordered MIDI pitches extracted from the source score.
-   * Length: min(maxCount, totalAvailable).
+   * Ordered note/chord entries extracted from the selected staff.
+   * Length: min(maxCount ?? Infinity, totalAvailable).
    */
-  readonly notes: ReadonlyArray<{ readonly midiPitch: number }>;
+  readonly notes: ReadonlyArray<PluginPracticeNoteEntry>;
   /**
    * Total pitched notes available in the source voice, before the maxCount cap.
    * Use this to cap the exercise Notes slider maximum (FR-006).
@@ -376,6 +412,12 @@ export interface ScorePlayerState {
   /** Error message; non-null when status === 'error'. */
   readonly error: string | null;
   /**
+   * Number of staves in the loaded score (v6 addition — Feature 037).
+   * 0 when status is 'idle', 'loading', or 'error'.
+   * Populated with the actual staff count once status === 'ready'.
+   */
+  readonly staffCount: number;
+  /**
    * Time signature at tick 0 (v5 addition — Feature 035).
    * Defaults to { numerator: 4, denominator: 4 } when no score is loaded
    * or the score contains no TimeSignature event.
@@ -457,22 +499,23 @@ export interface PluginScorePlayerContext {
   // ─── v4 addition ─────────────────────────────────────────────────────────
 
   /**
-   * Extract a flat ordered list of MIDI pitches from the currently-loaded score.
+   * Extract an ordered list of note/chord entries from the currently-loaded score (v6).
    *
    * MUST only be called when scorePlayerState.status === 'ready'.
    * Returns null if status is not 'ready' (no score loaded, loading, or error).
    *
    * Extraction rules (applied by host — plugin receives results only):
-   *   - Source: instruments[0].staves[0].voices[0]
-   *   - Rests skipped (events without a valid pitch)
-   *   - Chords: only the highest pitch (max midiNote) retained per start_tick
-   *   - Note durations discarded (all notes treated as quarter notes)
-   *   - Result capped to maxCount; totalAvailable reflects pre-cap count
-   *   - Clef derived from instruments[0].staves[0].active_clef
+   *   - Source: instruments[0].staves[staffIndex].voices[0]
+   *   - Rests skipped
+   *   - Chords: ALL pitches at the same start_tick collected (not just max) → one PluginPracticeNoteEntry per tick
+   *   - Note durations discarded
+   *   - Result capped to maxCount if provided; totalAvailable reflects pre-cap count
+   *   - Clef derived from the selected staff's active_clef
    *
-   * @param maxCount Maximum number of pitches to include in `notes`.
+   * @param staffIndex 0-based index of the target staff (0 = top/treble staff).
+   * @param maxCount   Optional cap on returned notes; omit to return all notes.
    */
-  extractPracticeNotes(maxCount: number): PluginScorePitches | null;
+  extractPracticeNotes(staffIndex: number, maxCount?: number): PluginScorePitches | null;
 }
 
 /**
@@ -770,4 +813,4 @@ export interface MusicorePlugin {
 // ---------------------------------------------------------------------------
 
 /** Major version of the currently running Musicore Plugin API. */
-export const PLUGIN_API_VERSION = '5' as const;
+export const PLUGIN_API_VERSION = '6' as const;

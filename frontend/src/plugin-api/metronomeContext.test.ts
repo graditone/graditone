@@ -63,6 +63,7 @@ function makeMockScorePlayer(initialBpm = 120) {
     bpm: initialBpm,
     title: null,
     error: null,
+    staffCount: 0,
     timeSignature: { numerator: 4, denominator: 4 },
   };
 

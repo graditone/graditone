@@ -25,7 +25,7 @@ import {
 describe('Plugin API contract', () => {
   describe('PLUGIN_API_VERSION', () => {
     it('is the string "5" (v5 — adds MetronomeState, PluginMetronomeContext, context.metronome, ScorePlayerState.timeSignature)', () => {
-      expect(PLUGIN_API_VERSION).toBe('5');
+      expect(PLUGIN_API_VERSION).toBe('6');
     });
 
     it('is a string (not a number)', () => {

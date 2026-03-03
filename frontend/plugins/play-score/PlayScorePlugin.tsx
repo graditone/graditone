@@ -40,6 +40,7 @@ const INITIAL_PLAYER_STATE: ScorePlayerState = {
   bpm: 120,
   title: null,
   error: null,
+  staffCount: 0,
   timeSignature: { numerator: 4, denominator: 4 },
 };
 

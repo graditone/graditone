@@ -120,7 +120,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
   const [scorePlayerState, setScorePlayerState] = useState<ScorePlayerState>({
     status: 'idle', currentTick: 0, totalDurationTicks: 0,
     highlightedNoteIds: new Set<string>(), bpm: 0, title: null, error: null,
-    timeSignature: { numerator: 4, denominator: 4 },
+    timeSignature: { numerator: 4, denominator: 4 }, staffCount: 0,
   });
   const scorePitchesRef = useRef<PluginScorePitches | null>(null);
 
@@ -279,7 +279,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
   // own state (pluginStatus, score), so extractPracticeNotes returns valid data.
   useEffect(() => {
     if (scorePlayerState.status === 'ready' && configRef.current.preset === 'score') {
-      const pitches = context.scorePlayer.extractPracticeNotes(configRef.current.noteCount);
+      const pitches = context.scorePlayer.extractPracticeNotes(0, configRef.current.noteCount);
       if (pitches) {
         scorePitchesRef.current = pitches;
         setScorePitches(pitches);
