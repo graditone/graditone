@@ -1,17 +1,17 @@
 /**
  * exerciseGenerator.ts — Plugin-internal exercise factory
- * Feature 031: Practice View Plugin
+ * Feature 036: Rename Practice Plugin to Train
  *
  * Adapted from src/services/practice/exerciseGenerator.ts.
- * Imports ONLY from ./practiceTypes — no src/ imports permitted (ESLint boundary).
+ * Imports ONLY from ./trainTypes — no src/ imports permitted (ESLint boundary).
  *
  * Exports:
- * - generateExercise(bpm?, config?, seed?) → PracticeExercise
- * - generateC4ScaleExercise(bpm?, noteCount?, clef?) → PracticeExercise
+ * - generateExercise(bpm?, config?, seed?) → TrainExercise
+ * - generateC4ScaleExercise(bpm?, noteCount?, clef?) → TrainExercise
  * - DEFAULT_EXERCISE_CONFIG
  */
 
-import type { ExerciseConfig, ExerciseNote, PracticeExercise } from './practiceTypes';
+import type { ExerciseConfig, ExerciseNote, TrainExercise } from './trainTypes';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -81,7 +81,7 @@ export function generateExercise(
   config: ExerciseConfig = DEFAULT_EXERCISE_CONFIG,
   seed?: number,
   scorePitches?: ReadonlyArray<{ midiPitch: number }>,
-): PracticeExercise {
+): TrainExercise {
   if (config.preset === 'c4scale') {
     return generateC4ScaleExercise(bpm, config.noteCount, config.clef);
   }
@@ -117,7 +117,7 @@ export function generateC4ScaleExercise(
   bpm: number = DEFAULT_BPM,
   noteCount = 8,
   clef: 'Treble' | 'Bass' = 'Treble',
-): PracticeExercise {
+): TrainExercise {
   const pitches = clef === 'Bass' ? C3_TO_C4_PITCHES : C4_TO_C5_PITCHES;
   const msPerBeat = 60_000 / bpm;
   const num = Math.min(noteCount, pitches.length);
@@ -131,7 +131,7 @@ export function generateC4ScaleExercise(
 }
 
 /**
- * Build a practice exercise from pitches extracted from a loaded score.
+ * Build a training exercise from pitches extracted from a loaded score.
  * Selects up to `noteCount` pitches from the beginning of the `pitches` array.
  * If `pitches.length < noteCount` the exercise is clamped to `pitches.length`.
  *
@@ -143,7 +143,7 @@ export function generateScoreExercise(
   bpm: number,
   pitches: ReadonlyArray<{ midiPitch: number }>,
   noteCount: number,
-): PracticeExercise {
+): TrainExercise {
   const msPerBeat = 60_000 / bpm;
   const num = Math.min(noteCount, pitches.length);
   const notes: ExerciseNote[] = pitches.slice(0, num).map((p, i) => ({

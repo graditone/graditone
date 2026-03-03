@@ -1,0 +1,12 @@
+{
+  "id": "train-view",
+  "name": "Train",
+  "version": "1.0.0",
+  "pluginApiVersion": "4",
+  "entryPoint": "index.tsx",
+  "description": "Piano training exercise — play along and see your score.",
+  "type": "core",
+  "view": "full-screen",
+  "icon": "🎹",
+  "order": 2
+}

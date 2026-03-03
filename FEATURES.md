@@ -54,7 +54,7 @@ A tablet-native app for interactive scores, designed for practice and performanc
 ### 🎹 Plugin Architecture
 - **Extensible plugin system** - Add new interactive views via the Plugin API v4
 - **Virtual Keyboard** built-in plugin - Play notes directly in the browser
-- **Practice View** built-in plugin (v2) - Piano practice exercise with scoring
+- **Train** built-in plugin (v2) - Piano training exercise with scoring
   - **Pitch detection** - Microphone input via Web Audio API (shared stream)
   - **MIDI input** - Hardware MIDI keyboard support
   - **Scheduled playback** - `offsetMs` scheduling for exercise note sequences

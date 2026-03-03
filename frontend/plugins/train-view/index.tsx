@@ -1,11 +1,11 @@
 /**
- * Practice View plugin — entry point (T019)
- * Feature 031: Practice View Plugin
+ * Train plugin — entry point
+ * Feature 036: Rename Practice Plugin to Train (was Practice View plugin, Feature 031)
  *
  * Default export satisfies the MusicorePlugin interface.
  * Only imports from ../../src/plugin-api are permitted (enforced by ESLint).
  *
- * This plugin is registered as a built-in in builtinPlugins.ts (T020).
+ * This plugin is registered as a built-in in builtinPlugins.ts.
  *
  * Note: react-refresh/only-export-components is silenced here because plugin
  * entry points export a MusicorePlugin object (not a React component) by design.
@@ -14,33 +14,35 @@
 /* eslint-disable react-refresh/only-export-components */
 
 import type { MusicorePlugin, PluginContext } from '../../src/plugin-api/index';
-import { PracticePlugin } from './PracticePlugin';
+import { TrainPlugin } from './TrainPlugin';
+import { migrateStorageKeys } from './migrateStorageKeys';
 
 let _context: PluginContext | null = null;
 
 /**
- * Wrapper component that provides the stored PluginContext to PracticePlugin.
+ * Wrapper component that provides the stored PluginContext to TrainPlugin.
  * Context is injected via init() before the component is first rendered.
  */
-function PracticePluginWithContext() {
+function TrainPluginWithContext() {
   if (!_context) {
     // Should never happen in practice — init() is called before Component renders.
-    return <div className="practice-plugin">Practice: context not initialised</div>;
+    return <div className="train-plugin">Train: context not initialised</div>;
   }
-  return <PracticePlugin context={_context} />;
+  return <TrainPlugin context={_context} />;
 }
 
-const practiceViewPlugin: MusicorePlugin = {
+const trainViewPlugin: MusicorePlugin = {
   init(context: PluginContext) {
+    migrateStorageKeys();
     _context = context;
-    console.log('[PracticeView] init', context.manifest.version);
+    console.log('[TrainView] init', context.manifest.version);
   },
 
   dispose() {
     _context = null;
   },
 
-  Component: PracticePluginWithContext,
+  Component: TrainPluginWithContext,
 };
 
-export default practiceViewPlugin;
+export default trainViewPlugin;

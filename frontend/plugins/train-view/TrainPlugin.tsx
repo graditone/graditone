@@ -1,7 +1,7 @@
 /**
- * PracticePlugin.tsx — Feature 031: Practice View Plugin
+ * TrainPlugin.tsx — Feature 036: Rename Practice Plugin to Train
  *
- * Main component for the Practice plugin. Uses ONLY context.* API — no imports
+ * Main component for the Train plugin. Uses ONLY context.* API — no imports
  * from src/services/, src/components/, or src/wasm/ are permitted (ESLint boundary).
  *
  * Layout: header + tips banner + collapsible sidebar config + main (staves, controls, results)
@@ -13,8 +13,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PluginContext, PluginPitchEvent, PluginNoteEvent, PluginScorePitches, ScorePlayerState, MetronomeState } from '../../src/plugin-api/index';
 import type {
-  PracticePhase,
-  PracticeExercise,
+  TrainPhase,
+  TrainExercise,
   ExerciseConfig,
   ExerciseResult,
   ExerciseNote,
@@ -22,12 +22,12 @@ import type {
   NoteComparisonStatus,
   ActiveComplexityLevel,
   ComplexityLevel,
-} from './practiceTypes';
-import { COMPLEXITY_PRESETS, COMPLEXITY_LEVEL_STORAGE_KEY } from './practiceTypes';
+} from './trainTypes';
+import { COMPLEXITY_PRESETS, COMPLEXITY_LEVEL_STORAGE_KEY } from './trainTypes';
 import { generateExercise, generateScoreExercise, DEFAULT_EXERCISE_CONFIG } from './exerciseGenerator';
 import { scoreCapture } from './exerciseScorer';
-import './PracticePlugin.css';
-import { PracticeVirtualKeyboard } from './PracticeVirtualKeyboard';
+import './TrainPlugin.css';
+import { TrainVirtualKeyboard } from './TrainVirtualKeyboard';
 
 // ─── Hz/MIDI helpers ──────────────────────────────────────────────────────────
 
@@ -70,11 +70,11 @@ const COUNTDOWN_STEPS = ['3', '2', '1', 'Go!'];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export interface PracticePluginProps {
+export interface TrainPluginProps {
   context: PluginContext;
 }
 
-export function PracticePlugin({ context }: PracticePluginProps) {
+export function TrainPlugin({ context }: TrainPluginProps) {
   // ── Complexity level state ──────────────────────────────────────────────────
   const [complexityLevel, setComplexityLevel] = useState<ActiveComplexityLevel>('low');
 
@@ -83,12 +83,12 @@ export function PracticePlugin({ context }: PracticePluginProps) {
   const [bpmValue, setBpmValue] = useState(80);
 
   // ── Exercise state ──────────────────────────────────────────────────────────
-  const [exercise, setExercise] = useState<PracticeExercise>(
+  const [exercise, setExercise] = useState<TrainExercise>(
     () => generateExercise(80, DEFAULT_EXERCISE_CONFIG),
   );
 
   // ── Phase state ─────────────────────────────────────────────────────────────
-  const [phase, setPhase] = useState<PracticePhase>('ready');
+  const [phase, setPhase] = useState<TrainPhase>('ready');
   const [countdownStep, setCountdownStep] = useState<string>('');
   const [result, setResult] = useState<ExerciseResult | null>(null);
   // Current exercise slot being highlighted on the exercise staff (null = none)
@@ -131,7 +131,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
 
   // ── UI state ─────────────────────────────────────────────────────────────────
   const [showTips, setShowTips] = useState(
-    () => sessionStorage.getItem('practice-tips-v1-dismissed') !== 'yes',
+    () => sessionStorage.getItem('train-tips-v1-dismissed') !== 'yes',
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   // Controls whether the results overlay is visible on mobile landscape.
@@ -164,9 +164,9 @@ export function PracticePlugin({ context }: PracticePluginProps) {
   const exerciseStaffRef = useRef<HTMLDivElement>(null);
   const captureRef = useRef<ResponseNote[]>([]);
   const playStartMsRef = useRef<number>(0);
-  const phaseRef = useRef<PracticePhase>('ready');
+  const phaseRef = useRef<TrainPhase>('ready');
   const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const exerciseRef = useRef<PracticeExercise>(exercise);
+  const exerciseRef = useRef<TrainExercise>(exercise);
 
   // ── Onset detection state (mirrors usePracticeRecorder) ──────────────────────
   // These refs track the debounced pitch stream so we emit one ResponseNote per
@@ -503,6 +503,9 @@ export function PracticePlugin({ context }: PracticePluginProps) {
         clearTimeout(finishTimerRef.current);
       }
       context.stopPlayback();
+      // Force-close the microphone stream so the browser releases the device
+      // indicator immediately when leaving the Train view.
+      context.recording.stop();
     };
   }, [context]);
 
@@ -968,7 +971,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
 
   // ── Tips dismiss ─────────────────────────────────────────────────────────────
   const handleDismissTips = useCallback(() => {
-    sessionStorage.setItem('practice-tips-v1-dismissed', 'yes');
+    sessionStorage.setItem('train-tips-v1-dismissed', 'yes');
     setShowTips(false);
   }, []);
 
@@ -1016,14 +1019,14 @@ export function PracticePlugin({ context }: PracticePluginProps) {
   // Feature 035: Metronome toggle
   const handleMetronomeToggle = useCallback(() => {
     context.metronome.toggle().catch((e) => {
-      console.error('[PracticePlugin] metronome.toggle failed:', e);
+      console.error('[TrainPlugin] metronome.toggle failed:', e);
     });
   }, [context.metronome]);
 
   // Feature 035: Build metronome button CSS class (beat-pulse animation)
   const metronomeBtnClass = [
-    'practice-plugin__header-btn',
-    'practice-plugin__metronome-btn',
+    'train-plugin__header-btn',
+    'train-plugin__metronome-btn',
     ...(metronomeState.active ? ['metro-pulse'] : []),
     ...(metronomeState.active && metronomeState.isDownbeat ? ['metro-downbeat'] : []),
   ].join(' ');
@@ -1035,7 +1038,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
   /**
    * Virtual keyboard key-down handler.
    *
-   * Audio is handled unconditionally by PracticeVirtualKeyboard (FR-006 — always audible).
+   * Audio is handled unconditionally by TrainVirtualKeyboard (FR-006 — always audible).
    * This parent handler routes to the shared scoring pipeline (handleMidiAttackRef).
    *
    * Intentional invariant: captureRef and handleStepInputRef are NOT cleared here —
@@ -1048,13 +1051,13 @@ export function PracticePlugin({ context }: PracticePluginProps) {
   /**
    * Virtual keyboard key-up handler.
    *
-   * Release audio is handled by PracticeVirtualKeyboard. The parent only needs
+   * Release audio is handled by TrainVirtualKeyboard. The parent only needs
    * to relay the release event so flow-mode exercises receive a release event
    * consistent with physical MIDI behaviour.
    */
   const handleVirtualKeyUp = useCallback((_midi: number, _attackedAt: number) => {
     // Flow-mode capture uses onset-only; release data is not needed for scoring.
-    // Audio release is already handled inside PracticeVirtualKeyboard.
+    // Audio release is already handled inside TrainVirtualKeyboard.
   }, []);
 
   // ── Highlighted notes ─────────────────────────────────────────────────────────
@@ -1071,14 +1074,14 @@ export function PracticePlugin({ context }: PracticePluginProps) {
   // ── Input source badge ────────────────────────────────────────────────────────
   const isVirtualKeyboardActive = inputSource === 'virtual-keyboard';
   const inputBadgeClass = [
-    'practice-mic-badge',
+    'train-mic-badge',
     isVirtualKeyboardActive
-      ? 'practice-mic-badge--suspended'
+      ? 'train-mic-badge--suspended'
       : inputSource === 'midi'
-        ? 'practice-mic-badge--active practice-mic-badge--midi'
+        ? 'train-mic-badge--active train-mic-badge--midi'
         : micError
-          ? 'practice-mic-badge--error'
-          : micActive === true ? 'practice-mic-badge--active' : '',
+          ? 'train-mic-badge--error'
+          : micActive === true ? 'train-mic-badge--active' : '',
   ].filter(Boolean).join(' ');
   const inputBadgeLabel = isVirtualKeyboardActive
     ? '🎹 Mic/MIDI suspended'
@@ -1094,23 +1097,23 @@ export function PracticePlugin({ context }: PracticePluginProps) {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className={`practice-plugin${phase === 'results' && resultsOverlayVisible ? ' practice-plugin--results' : ''}`} data-testid="practice-view">
+    <div className={`train-plugin${phase === 'results' && resultsOverlayVisible ? ' train-plugin--results' : ''}`} data-testid="train-view">
       {/* ── Header ───────────────────────────────────────────────────────── */}
-      <header className="practice-plugin__header">
+      <header className="train-plugin__header">
         <button
-          className="practice-plugin__header-btn practice-plugin__back-btn"
+          className="train-plugin__header-btn train-plugin__back-btn"
           onClick={() => context.close()}
         >
           ← Back
         </button>
-        <h1 className="practice-plugin__title">Practice</h1>
+        <h1 className="train-plugin__title">Train</h1>
 
         {/* COMPLEXITY LEVEL — next to title */}
-        <label className="practice-plugin__level-label" htmlFor="practice-level-select">Level</label>
+        <label className="train-plugin__level-label" htmlFor="train-level-select">Level</label>
         <select
-          id="practice-level-select"
+          id="train-level-select"
           aria-label="Complexity level"
-          className="practice-plugin__level-select"
+          className="train-plugin__level-select"
           value={complexityLevel ?? 'custom'}
           disabled={isDisabled}
           onChange={(e) => {
@@ -1131,10 +1134,10 @@ export function PracticePlugin({ context }: PracticePluginProps) {
 
         {phase === 'playing' && (
           <button
-            className="practice-plugin__header-btn practice-plugin__header-btn--stop"
+            className="train-plugin__header-btn train-plugin__header-btn--stop"
             onClick={handleStop}
             aria-label="Stop exercise"
-            data-testid="practice-stop-btn"
+            data-testid="train-stop-btn"
           >
             ■ Stop
           </button>
@@ -1143,15 +1146,15 @@ export function PracticePlugin({ context }: PracticePluginProps) {
         {phase === 'results' && (
           <>
             <button
-              className="practice-plugin__header-btn practice-plugin__header-btn--retry"
+              className="train-plugin__header-btn train-plugin__header-btn--retry"
               onClick={handleTryAgain}
               aria-label="Retry exercise"
-              data-testid="practice-retry-btn"
+              data-testid="train-retry-btn"
             >
               🔁 Retry
             </button>
             <button
-              className="practice-plugin__header-btn practice-plugin__header-btn--new"
+              className="train-plugin__header-btn train-plugin__header-btn--new"
               onClick={handleNewExercise}
               aria-label="New exercise"
             >
@@ -1161,9 +1164,9 @@ export function PracticePlugin({ context }: PracticePluginProps) {
         )}
 
         {/* Spacer pushes badge to the right */}
-        <div className="practice-plugin__header-spacer" />
+        <div className="train-plugin__header-spacer" />
 
-        <div className="practice-plugin__header-actions">
+        <div className="train-plugin__header-actions">
           {/* Metronome toggle (Feature 035) */}
           <button
             key={metronomeAnimKey}
@@ -1177,7 +1180,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
           </button>
           {/* Virtual keyboard toggle (Feature 001 — FR-001, FR-011) */}
           <button
-            className={`practice-plugin__vkb-toggle${virtualKeyboardOpen ? ' practice-plugin__vkb-toggle--active' : ''}`}
+            className={`train-plugin__vkb-toggle${virtualKeyboardOpen ? ' train-plugin__vkb-toggle--active' : ''}`}
             onClick={handleVirtualKeyboardToggle}
             aria-label={virtualKeyboardOpen ? 'Hide virtual keyboard' : 'Show virtual keyboard'}
             aria-pressed={virtualKeyboardOpen}
@@ -1198,15 +1201,15 @@ export function PracticePlugin({ context }: PracticePluginProps) {
 
       {/* ── Tips banner ──────────────────────────────────────────────────── */}
       {showTips && (
-        <div className="practice-plugin__tips" role="note">
-          <ul className="practice-plugin__tips-list">
+        <div className="train-plugin__tips" role="note">
+          <ul className="train-plugin__tips-list">
             <li>🎹 Use a <strong>MIDI interface</strong> for accurate note detection.</li>
             <li>🎤 Place the <strong>microphone as close as possible</strong> to the keyboard's speakers.</li>
             <li>🤫 Practice in a <strong>quiet space</strong> — background noise reduces accuracy.</li>
             <li>⭐ An <strong>external microphone</strong> significantly improves pitch detection.</li>
           </ul>
           <button
-            className="practice-plugin__tips-dismiss"
+            className="train-plugin__tips-dismiss"
             onClick={handleDismissTips}
             aria-label="Dismiss tips"
           >
@@ -1216,13 +1219,13 @@ export function PracticePlugin({ context }: PracticePluginProps) {
       )}
 
       {/* ── Body: sidebar + main ─────────────────────────────────────────── */}
-      <div className="practice-plugin__body">
+      <div className="train-plugin__body">
 
         {/* ── Sidebar ────────────────────────────────────────────────────── */}
-        <aside className={`practice-sidebar${sidebarCollapsed ? ' practice-sidebar--collapsed' : ''}${complexityLevel !== null ? ' practice-sidebar--hidden' : ''}`}>
+        <aside className={`train-sidebar${sidebarCollapsed ? ' train-sidebar--collapsed' : ''}${complexityLevel !== null ? ' train-sidebar--hidden' : ''}`}>
           {complexityLevel === null && (
             <button
-              className="practice-sidebar__toggle"
+              className="train-sidebar__toggle"
               onClick={() => setSidebarCollapsed(prev => !prev)}
               aria-label={sidebarCollapsed ? 'Open config panel' : 'Collapse config panel'}
               aria-expanded={!sidebarCollapsed}
@@ -1231,13 +1234,13 @@ export function PracticePlugin({ context }: PracticePluginProps) {
               {sidebarCollapsed ? '⚙' : '‹'}
             </button>
           )}
-          <div className="practice-sidebar__sections">
+          <div className="train-sidebar__sections">
               {/* MODE */}
-              <div className="practice-sidebar__section">
-                <p className="practice-sidebar__section-title">Mode</p>
+              <div className="train-sidebar__section">
+                <p className="train-sidebar__section-title">Mode</p>
                 <select
                   aria-label="Mode"
-                  className="practice-sidebar__select"
+                  className="train-sidebar__select"
                   value={config.mode}
                   disabled={isDisabled}
                   onChange={(e) => { setComplexityLevel(null); updateConfig({ mode: e.target.value as 'flow' | 'step' }); }}
@@ -1248,16 +1251,16 @@ export function PracticePlugin({ context }: PracticePluginProps) {
               </div>
 
               {/* SCORE */}
-              <div className="practice-sidebar__section">
-                <p className="practice-sidebar__section-title">Score</p>
+              <div className="train-sidebar__section">
+                <p className="train-sidebar__section-title">Score</p>
                 {([['random', 'Random'], ['c4scale', 'C4 Scale (debug)'], ['score', 'Score']] as [ExerciseConfig['preset'], string][]).map(([v, label]) => (
                   <label
                     key={v}
-                    className={`practice-sidebar__radio-label${isDisabled ? ' practice-sidebar__radio-label--disabled' : ''}`}
+                    className={`train-sidebar__radio-label${isDisabled ? ' train-sidebar__radio-label--disabled' : ''}`}
                   >
                     <input
                       type="radio"
-                      name="practice-preset"
+                      name="train-preset"
                       value={v}
                       checked={config.preset === v}
                       disabled={isDisabled}
@@ -1268,7 +1271,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
                 ))}
                 {config.preset === 'score' && scorePitches !== null && (
                   <button
-                    className="practice-sidebar__change-score-btn"
+                    className="train-sidebar__change-score-btn"
                     disabled={isDisabled}
                     aria-label="Change score"
                     onClick={() => setShowScoreSelector(true)}
@@ -1279,9 +1282,9 @@ export function PracticePlugin({ context }: PracticePluginProps) {
               </div>
 
               {/* NOTES */}
-              <div className="practice-sidebar__section">
-                <p className="practice-sidebar__section-title">Notes</p>
-                <div className="practice-sidebar__slider-row">
+              <div className="train-sidebar__section">
+                <p className="train-sidebar__section-title">Notes</p>
+                <div className="train-sidebar__slider-row">
                   <input
                     type="range"
                     min={2}
@@ -1292,21 +1295,21 @@ export function PracticePlugin({ context }: PracticePluginProps) {
                     aria-label="Note count"
                     onChange={(e) => { setComplexityLevel(null); updateConfig({ noteCount: Number(e.target.value) }); }}
                   />
-                  <span className="practice-sidebar__slider-value">{config.noteCount}</span>
+                  <span className="train-sidebar__slider-value">{config.noteCount}</span>
                 </div>
               </div>
 
               {/* CLEF */}
-              <div className="practice-sidebar__section">
-                <p className="practice-sidebar__section-title">Clef</p>
+              <div className="train-sidebar__section">
+                <p className="train-sidebar__section-title">Clef</p>
                 {(['Treble', 'Bass'] as const).map((c) => (
                   <label
                     key={c}
-                    className={`practice-sidebar__radio-label${(isDisabled || config.preset === 'score') ? ' practice-sidebar__radio-label--disabled' : ''}`}
+                    className={`train-sidebar__radio-label${(isDisabled || config.preset === 'score') ? ' train-sidebar__radio-label--disabled' : ''}`}
                   >
                     <input
                       type="radio"
-                      name="practice-clef"
+                      name="train-clef"
                       value={c}
                       checked={config.clef === c}
                       disabled={isDisabled || config.preset === 'score'}
@@ -1317,21 +1320,21 @@ export function PracticePlugin({ context }: PracticePluginProps) {
                   </label>
                 ))}
                 {config.preset === 'score' && (
-                  <span className="practice-score-disabled-label">Set by score</span>
+                  <span className="train-score-disabled-label">Set by score</span>
                 )}
               </div>
 
               {/* OCTAVES */}
-              <div className="practice-sidebar__section">
-                <p className="practice-sidebar__section-title">Octaves</p>
+              <div className="train-sidebar__section">
+                <p className="train-sidebar__section-title">Octaves</p>
                 {([1, 2] as const).map((o) => (
                   <label
                     key={o}
-                    className={`practice-sidebar__radio-label${(isDisabled || config.preset === 'score') ? ' practice-sidebar__radio-label--disabled' : ''}`}
+                    className={`train-sidebar__radio-label${(isDisabled || config.preset === 'score') ? ' train-sidebar__radio-label--disabled' : ''}`}
                   >
                     <input
                       type="radio"
-                      name="practice-octaves"
+                      name="train-octaves"
                       value={o}
                       checked={config.octaveRange === o}
                       disabled={isDisabled || config.preset === 'score'}
@@ -1342,14 +1345,14 @@ export function PracticePlugin({ context }: PracticePluginProps) {
                   </label>
                 ))}
                 {config.preset === 'score' && (
-                  <span className="practice-score-disabled-label">Set by score</span>
+                  <span className="train-score-disabled-label">Set by score</span>
                 )}
               </div>
 
               {/* TEMPO */}
-              <div className="practice-sidebar__section">
-                <p className="practice-sidebar__section-title">Tempo</p>
-                <div className="practice-sidebar__slider-row">
+              <div className="train-sidebar__section">
+                <p className="train-sidebar__section-title">Tempo</p>
+                <div className="train-sidebar__slider-row">
                   <input
                     type="range"
                     min={40}
@@ -1360,19 +1363,19 @@ export function PracticePlugin({ context }: PracticePluginProps) {
                     aria-label="Tempo BPM"
                     onChange={(e) => { setComplexityLevel(null); handleBpmChange(Number(e.target.value)); }}
                   />
-                  <span className="practice-sidebar__slider-value">{bpmValue}</span>
+                  <span className="train-sidebar__slider-value">{bpmValue}</span>
                 </div>
-                <p className="practice-sidebar__slider-sublabel">BPM</p>
+                <p className="train-sidebar__slider-sublabel">BPM</p>
               </div>
             </div>
         </aside>
 
         {/* ── Main ─────────────────────────────────────────────────────────── */}
-        <main className={`practice-plugin__main${phase === 'countdown' ? ' practice-plugin__main--countdown' : ''}`}>
+        <main className={`train-plugin__main${phase === 'countdown' ? ' train-plugin__main--countdown' : ''}`}>
 
           {/* Mic error banner */}
           {micError && (
-            <div className="practice-plugin__mic-error" role="alert">
+            <div className="train-plugin__mic-error" role="alert">
               🎤 {micError}
             </div>
           )}
@@ -1380,7 +1383,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
           {/* Countdown overlay */}
           {phase === 'countdown' && countdownStep && (
             <div
-              className={`practice-countdown${countdownStep === 'Go!' ? ' practice-countdown--go' : ''}`}
+              className={`train-countdown${countdownStep === 'Go!' ? ' train-countdown--go' : ''}`}
               role="status"
               aria-live="assertive"
             >
@@ -1389,11 +1392,11 @@ export function PracticePlugin({ context }: PracticePluginProps) {
           )}
 
           {/* Exercise staff */}
-          <div className="practice-staff-block">
-            <div className="practice-staff-label">
+          <div className="train-staff-block">
+            <div className="train-staff-label">
               <span aria-hidden="true">Exercise</span>
               <button
-                className={`practice-staff-sound-btn${soundEnabled ? '' : ' practice-staff-sound-btn--muted'}`}
+                className={`train-staff-sound-btn${soundEnabled ? '' : ' train-staff-sound-btn--muted'}`}
                 onClick={toggleSound}
                 aria-label={soundEnabled ? 'Mute exercise notes' : 'Unmute exercise notes'}
                 aria-pressed={!soundEnabled}
@@ -1402,7 +1405,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
                 {soundEnabled ? '🔊' : '🔇'}
               </button>
             </div>
-            <div ref={exerciseStaffRef} className={`practice-staff-wrapper${phase === 'playing' ? ' practice-staff-wrapper--playing' : ''}`}>
+            <div ref={exerciseStaffRef} className={`train-staff-wrapper${phase === 'playing' ? ' train-staff-wrapper--playing' : ''}`}>
               <StaffViewer
                 notes={exerciseNoteEvents}
                 clef={config.clef}
@@ -1414,17 +1417,17 @@ export function PracticePlugin({ context }: PracticePluginProps) {
 
           {/* Step mode hint */}
           {phase === 'playing' && config.mode === 'step' && stepHint && (
-            <div className="practice-step-hint" role="status" style={{ color: stepHint.color }}>
+            <div className="train-step-hint" role="status" style={{ color: stepHint.color }}>
               {stepHint.text}
             </div>
           )}
 
           {/* Controls: ready phase */}
           {phase === 'ready' && (
-            <div className="practice-controls">
+            <div className="train-controls">
               <button
-                className="practice-start-prompt"
-                data-testid="practice-play-btn"
+                className="train-start-prompt"
+                data-testid="train-play-btn"
                 aria-label="Start exercise"
                 onClick={() => config.mode === 'step' ? handleStartStep() : handlePlay()}
               >
@@ -1435,9 +1438,9 @@ export function PracticePlugin({ context }: PracticePluginProps) {
 
           {/* Response staff — flow mode playing/results; step mode playing only */}
           {(phase === 'playing' || (phase === 'results' && config.mode !== 'step')) && (
-            <div className="practice-staff-block">
-              <div className="practice-staff-label" aria-hidden="true">Your Response</div>
-              <div className="practice-staff-wrapper">
+            <div className="train-staff-block">
+              <div className="train-staff-label" aria-hidden="true">Your Response</div>
+              <div className="train-staff-wrapper">
                 <StaffViewer
                   notes={responseNoteEvents}
                   clef={config.clef}
@@ -1455,31 +1458,31 @@ export function PracticePlugin({ context }: PracticePluginProps) {
               {/* Backdrop — only visible in mobile landscape overlay mode.
                   Tap it to dismiss the overlay (returns to staff view). */}
               <div
-                className="practice-results__backdrop"
+                className="train-results__backdrop"
                 role="button"
                 aria-label="Close results"
                 onClick={() => setResultsOverlayVisible(false)}
                 onTouchEnd={(e) => { e.preventDefault(); setResultsOverlayVisible(false); }}
               />
               <div
-                className="practice-results"
+                className="train-results"
                 role="region"
                 aria-label="Exercise results"
                 onClick={(e) => e.stopPropagation()}
               >
               {/* Close button — only shown in mobile landscape overlay */}
               <button
-                className="practice-results__close"
+                className="train-results__close"
                 aria-label="Close results"
                 onClick={() => setResultsOverlayVisible(false)}
               >
                 ×
               </button>
               {/* Score headline */}
-              <div className="practice-results__score-block">
-                <div className="practice-results__score-ring">
+              <div className="train-results__score-block">
+                <div className="train-results__score-ring">
                   <span
-                    className="practice-results__score-number"
+                    className="train-results__score-number"
                     style={{
                       color:
                         result.score >= 90 ? '#2e7d32'
@@ -1489,10 +1492,10 @@ export function PracticePlugin({ context }: PracticePluginProps) {
                   >
                     {result.score}
                   </span>
-                  <span className="practice-results__score-label">/ 100</span>
+                  <span className="train-results__score-label">/ 100</span>
                 </div>
                 <div
-                  className="practice-results__score-grade"
+                  className="train-results__score-grade"
                   style={{
                     color:
                       result.score >= 90 ? '#2e7d32'
@@ -1509,13 +1512,13 @@ export function PracticePlugin({ context }: PracticePluginProps) {
               </div>
 
               {/* Collapsible note-by-note table */}
-              <details className="practice-results__details">
-                <summary className="practice-results__details-summary">
+              <details className="train-results__details">
+                <summary className="train-results__details-summary">
                   Note-by-note details
                 </summary>
-                <div className="practice-results__table-wrapper">
+                <div className="train-results__table-wrapper">
                   <table
-                    className="practice-results__table"
+                    className="train-results__table"
                     aria-label="Per-note comparison"
                   >
                     <thead>
@@ -1532,7 +1535,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
                       {result.comparisons.map((c, i) => (
                         <tr
                           key={i}
-                          className={`practice-results__row practice-results__row--${c.status}`}
+                          className={`train-results__row train-results__row--${c.status}`}
                         >
                           <td>{i + 1}</td>
                           <td>{midiToLabel(c.target.midiPitch)}</td>
@@ -1542,7 +1545,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
                               : '—'}
                           </td>
                           <td aria-label={c.status}>
-                            <span className="practice-results__status-icon">
+                            <span className="train-results__status-icon">
                               {c.status === 'correct' ? '✅'
                                 : c.status === 'wrong-pitch' ? '⚠️'
                                 : c.status === 'wrong-timing' ? '⏱️'
@@ -1571,7 +1574,7 @@ export function PracticePlugin({ context }: PracticePluginProps) {
                   </table>
                 </div>
                 {result.extraneousNotes.length > 0 && (
-                  <div className="practice-results__extraneous">
+                  <div className="train-results__extraneous">
                     <strong>Extraneous notes:</strong>{' '}
                     {result.extraneousNotes.length} extra note
                     {result.extraneousNotes.length !== 1 ? 's' : ''} played outside the beat windows.
@@ -1588,8 +1591,8 @@ export function PracticePlugin({ context }: PracticePluginProps) {
 
       {/* ── Virtual keyboard panel (Feature 001 — FR-002, FR-007, FR-008) ─── */}
       {virtualKeyboardOpen && (
-        <div className="practice-plugin__vkb-panel" data-testid="vkb-panel">
-          <PracticeVirtualKeyboard
+        <div className="train-plugin__vkb-panel" data-testid="vkb-panel">
+          <TrainVirtualKeyboard
             context={context}
             onKeyDown={handleVirtualKeyDown}
             onKeyUp={handleVirtualKeyUp}

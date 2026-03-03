@@ -96,6 +96,18 @@ class PluginMicBroadcaster {
   }
 
   /**
+   * Force-stop the microphone stream immediately and clear all handlers.
+   * Called during view teardown as a safety net beyond the automatic
+   * subscriber-counting teardown (which relies on every individual
+   * unsubscribe running before the browser releases the stream).
+   */
+  stop(): void {
+    this.pitchHandlers.clear();
+    this.errorHandlers.clear();
+    this.stopMic();
+  }
+
+  /**
    * Returns `true` while the mic stream is open (at least one subscriber and
    * no teardown in progress).
    */

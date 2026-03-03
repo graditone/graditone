@@ -7,7 +7,7 @@
 
 /* ── Root container ───────────────────────────────────────────────────────── */
 
-.practice-plugin {
+.train-plugin {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -18,7 +18,7 @@
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
 
-.practice-plugin__header {
+.train-plugin__header {
   display: flex;
   align-items: center;
   padding: 0.6rem 1rem;
@@ -28,7 +28,7 @@
   flex-shrink: 0;
 }
 
-.practice-plugin__title {
+.train-plugin__title {
   font-size: 1.05rem;
   font-weight: 700;
   margin: 0;
@@ -36,17 +36,17 @@
 }
 
 /* Spacer that pushes the badge to the right end of the header */
-.practice-plugin__header-spacer {
+.train-plugin__header-spacer {
   flex: 1;
 }
 
-.practice-plugin__header-actions {
+.train-plugin__header-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.practice-plugin__header-btn {
+.train-plugin__header-btn {
   display: inline-flex;
   align-items: center;
   min-height: 32px;
@@ -61,56 +61,56 @@
   transition: background 0.12s;
 }
 
-.practice-plugin__header-btn:hover {
+.train-plugin__header-btn:hover {
   background: var(--color-border, #e8e8e8);
 }
 
 /* Back/close navigation button — visually distinct from action buttons */
-.practice-plugin__back-btn {
+.train-plugin__back-btn {
   margin-right: 0.25rem;
   color: var(--color-text-secondary, #555);
 }
-.practice-plugin__back-btn:hover {
+.train-plugin__back-btn:hover {
   background: var(--color-border, #e0e0e0);
 }
 
-.practice-plugin__header-btn--stop {
+.train-plugin__header-btn--stop {
   background: var(--color-danger, #e53935);
   color: #fff;
   border-color: transparent;
 }
 
-.practice-plugin__header-btn--stop:hover {
+.train-plugin__header-btn--stop:hover {
   background: var(--color-danger-dark, #b71c1c);
 }
 
 
 
-.practice-plugin__header-btn--retry {
+.train-plugin__header-btn--retry {
   background: var(--color-warning, #f57f17);
   color: #fff;
   border-color: transparent;
 }
 
-.practice-plugin__header-btn--retry:hover {
+.train-plugin__header-btn--retry:hover {
   background: var(--color-warning-dark, #e65100);
 }
 
-.practice-plugin__header-btn--new {
+.train-plugin__header-btn--new {
   background: var(--color-accent, #4f8ef7);
   color: #fff;
   border-color: transparent;
 }
 
 /* Level label + selector in the toolbar */
-.practice-plugin__level-label {
+.train-plugin__level-label {
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--color-text-muted, #666);
   white-space: nowrap;
 }
 
-.practice-plugin__level-select {
+.train-plugin__level-select {
   min-height: 32px;
   padding: 0.2rem 0.5rem;
   border: 1px solid var(--color-border, #d0d0d0);
@@ -121,18 +121,18 @@
   color: var(--color-text, #333);
   cursor: pointer;
 }
-.practice-plugin__level-select:disabled {
+.train-plugin__level-select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.practice-plugin__header-btn--new:hover {
+.train-plugin__header-btn--new:hover {
   background: var(--color-accent-dark, #3a7bd5);
 }
 
 /* ── Mic badge ───────────────────────────────────────────────────────────── */
 
-.practice-mic-badge {
+.train-mic-badge {
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.625rem;
@@ -145,13 +145,13 @@
   user-select: none;
 }
 
-.practice-mic-badge--active {
+.train-mic-badge--active {
   background: #e8f5e9;
   color: #2e7d32;
   border-color: #a5d6a7;
 }
 
-.practice-mic-badge--error {
+.train-mic-badge--error {
   background: #fde8e8;
   color: #c62828;
   border-color: #ef9a9a;
@@ -159,7 +159,7 @@
 
 /* ── Tips banner ─────────────────────────────────────────────────────────── */
 
-.practice-plugin__tips {
+.train-plugin__tips {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
@@ -169,7 +169,7 @@
   flex-shrink: 0;
 }
 
-.practice-plugin__tips-list {
+.train-plugin__tips-list {
   flex: 1;
   margin: 0;
   padding: 0 0 0 1.25rem;
@@ -179,11 +179,11 @@
   line-height: 1.6;
 }
 
-.practice-plugin__tips-list li {
+.train-plugin__tips-list li {
   margin-bottom: 0.1rem;
 }
 
-.practice-plugin__tips-dismiss {
+.train-plugin__tips-dismiss {
   flex-shrink: 0;
   align-self: center;
   padding: 0.3rem 0.75rem;
@@ -197,13 +197,13 @@
   transition: background 0.12s;
 }
 
-.practice-plugin__tips-dismiss:hover {
+.train-plugin__tips-dismiss:hover {
   background: #d6eaf8;
 }
 
 /* ── Body: sidebar + main ────────────────────────────────────────────────── */
 
-.practice-plugin__body {
+.train-plugin__body {
   display: flex;
   flex-direction: row;
   flex: 1;
@@ -213,7 +213,7 @@
 
 /* ── Sidebar ─────────────────────────────────────────────────────────────── */
 
-.practice-sidebar {
+.train-sidebar {
   width: 200px;
   flex-shrink: 0;
   border-right: 1px solid var(--color-border, #e0e0e0);
@@ -225,7 +225,7 @@
 }
 
 /* Completely hidden — used for preset levels where config is irrelevant */
-.practice-sidebar--hidden {
+.train-sidebar--hidden {
   width: 0;
   overflow: hidden;
   padding: 0;
@@ -234,7 +234,7 @@
 }
 
 /* Collapsed — narrow strip showing only the toggle button */
-.practice-sidebar--collapsed {
+.train-sidebar--collapsed {
   width: 28px;
   overflow: hidden;
   padding: 0;
@@ -244,13 +244,13 @@
 /* Hide the content sections but keep the toggle button visible.
  * Use height:0 + overflow:hidden rather than visibility:hidden so elements
  * remain in the accessibility tree (tests use happy-dom with css:true). */
-.practice-sidebar--collapsed .practice-sidebar__sections {
+.train-sidebar--collapsed .train-sidebar__sections {
   height: 0;
   overflow: hidden;
   pointer-events: none;
 }
 
-.practice-sidebar__toggle {
+.train-sidebar__toggle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -272,25 +272,25 @@
   background: var(--color-surface-alt, #f9f9f9);
 }
 
-.practice-sidebar__toggle:focus {
+.train-sidebar__toggle:focus {
   outline: none;
 }
 
-.practice-sidebar__toggle:focus-visible {
+.train-sidebar__toggle:focus-visible {
   outline: 2px solid var(--color-primary, #646cff);
   outline-offset: -2px;
 }
 
-.practice-sidebar__toggle:hover {
+.train-sidebar__toggle:hover {
   background: var(--color-border, #efefef);
 }
 
-.practice-sidebar__section {
+.train-sidebar__section {
   padding: 0.6rem 0.875rem;
   border-bottom: 1px solid #efefef;
 }
 
-.practice-sidebar__section-title {
+.train-sidebar__section-title {
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -299,7 +299,7 @@
   margin: 0 0 0.35rem 0;
 }
 
-.practice-sidebar__radio-label {
+.train-sidebar__radio-label {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -310,34 +310,34 @@
   user-select: none;
 }
 
-.practice-sidebar__radio-label--disabled {
+.train-sidebar__radio-label--disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-.practice-sidebar__radio-label input[type='radio'] {
+.train-sidebar__radio-label input[type='radio'] {
   accent-color: var(--color-accent, #4f8ef7);
   cursor: inherit;
 }
 
-.practice-sidebar__slider-row {
+.train-sidebar__slider-row {
   display: flex;
   align-items: center;
   gap: 0.4rem;
 }
 
-.practice-sidebar__slider-row input[type='range'] {
+.train-sidebar__slider-row input[type='range'] {
   flex: 1;
   accent-color: var(--color-accent, #4f8ef7);
   cursor: pointer;
 }
 
-.practice-sidebar__slider-row input[type='range']:disabled {
+.train-sidebar__slider-row input[type='range']:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-.practice-sidebar__slider-value {
+.train-sidebar__slider-value {
   font-size: 0.82rem;
   font-weight: 600;
   min-width: 28px;
@@ -345,13 +345,13 @@
   color: var(--color-text, #333);
 }
 
-.practice-sidebar__slider-sublabel {
+.train-sidebar__slider-sublabel {
   font-size: 0.7rem;
   color: var(--color-muted, #999);
   margin: 0.1rem 0 0 0;
 }
 
-.practice-sidebar__select {
+.train-sidebar__select {
   width: 100%;
   padding: 0.3rem 0.4rem;
   border: 1px solid var(--color-border, #d0d0d0);
@@ -362,14 +362,14 @@
   color: var(--color-text, #333);
 }
 
-.practice-sidebar__select:disabled {
+.train-sidebar__select:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
 /* ── Main area ───────────────────────────────────────────────────────────── */
 
-.practice-plugin__main {
+.train-plugin__main {
   flex: 1;
   overflow-y: auto;
   padding: 1rem 1.25rem;
@@ -381,14 +381,14 @@
   position: relative;
 }
 
-.practice-plugin__main--countdown {
+.train-plugin__main--countdown {
   overflow-y: hidden;
   overflow-x: hidden;
 }
 
 /* ── Mic error banner ────────────────────────────────────────────────────── */
 
-.practice-plugin__mic-error {
+.train-plugin__mic-error {
   padding: 0.6rem 0.875rem;
   border-radius: 8px;
   background: var(--color-danger-bg, #fde8e8);
@@ -401,7 +401,7 @@
 
 /* ── Phase: countdown overlay ────────────────────────────────────────────── */
 
-.practice-countdown {
+.train-countdown {
   position: absolute;
   inset: 0;
   display: flex;
@@ -413,29 +413,29 @@
   background: rgba(255, 255, 255, 0.88);
   z-index: 10;
   letter-spacing: -0.05em;
-  animation: practice-countdown-pulse 0.6s ease-in-out;
+  animation: train-countdown-pulse 0.6s ease-in-out;
   border-radius: 8px;
 }
 
-@keyframes practice-countdown-pulse {
+@keyframes train-countdown-pulse {
   0%   { transform: scale(1.3); opacity: 0.5; }
   100% { transform: scale(1);   opacity: 1;   }
 }
 
-.practice-countdown--go {
+.train-countdown--go {
   font-size: 5rem;
   color: var(--color-success, #4caf50);
 }
 
 /* ── Staff blocks ────────────────────────────────────────────────────────── */
 
-.practice-staff-block {
+.train-staff-block {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.practice-staff-label {
+.train-staff-label {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -448,7 +448,7 @@
 }
 
 /* Inline sound toggle next to the Exercise staff label */
-.practice-staff-sound-btn {
+.train-staff-sound-btn {
   background: none;
   border: none;
   cursor: pointer;
@@ -460,32 +460,32 @@
   align-items: center;
 }
 
-.practice-staff-sound-btn--muted {
+.train-staff-sound-btn--muted {
   opacity: 0.35;
 }
 
-.practice-staff-wrapper {
+.train-staff-wrapper {
   border: 1px solid var(--color-border, #e0e0e0);
   border-radius: 8px;
   overflow: hidden;
   min-height: 80px;
 }
 
-.practice-staff-wrapper--playing {
+.train-staff-wrapper--playing {
   border-color: var(--color-accent, #4f8ef7);
   box-shadow: 0 0 0 2px rgba(79, 142, 247, 0.18);
 }
 
 /* ── Start prompt / controls ─────────────────────────────────────────────── */
 
-.practice-controls {
+.train-controls {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
 }
 
-.practice-start-prompt {
+.train-start-prompt {
   font-size: 1rem;
   color: var(--color-muted, #666);
   text-align: center;
@@ -496,7 +496,7 @@
   margin: 0;
 }
 
-.practice-plugin__play-btn {
+.train-plugin__play-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -514,27 +514,27 @@
   user-select: none;
 }
 
-.practice-plugin__play-btn:hover {
+.train-plugin__play-btn:hover {
   background: var(--color-accent-dark, #3a7bd5);
 }
 
-.practice-plugin__play-btn:active {
+.train-plugin__play-btn:active {
   transform: scale(0.97);
 }
 
-.practice-plugin__play-btn--new {
+.train-plugin__play-btn--new {
   background: var(--color-surface-alt, #f0f0f0);
   color: var(--color-text, #333);
   border: 1px solid var(--color-border, #d0d0d0);
 }
 
-.practice-plugin__play-btn--new:hover {
+.train-plugin__play-btn--new:hover {
   background: var(--color-border, #e0e0e0);
 }
 
 /* ── Results panel ───────────────────────────────────────────────────────── */
 
-.practice-results {
+.train-results {
   display: flex;
   flex-direction: column;
   gap: 0.875rem;
@@ -544,44 +544,44 @@
   background: var(--color-surface, #fff);
 }
 
-.practice-results__score-block {
+.train-results__score-block {
   display: flex;
   align-items: center;
   gap: 1.25rem;
 }
 
-.practice-results__score-ring {
+.train-results__score-ring {
   display: flex;
   align-items: baseline;
   gap: 0.2rem;
   flex-shrink: 0;
 }
 
-.practice-results__score-number {
+.train-results__score-number {
   font-size: 3rem;
   font-weight: 800;
   line-height: 1;
 }
 
-.practice-results__score-label {
+.train-results__score-label {
   font-size: 0.85rem;
   color: var(--color-muted, #888);
 }
 
-.practice-results__score-grade {
+.train-results__score-grade {
   font-size: 1.05rem;
   font-weight: 600;
 }
 
 /* ── Collapsible details ─────────────────────────────────────────────────── */
 
-.practice-results__details {
+.train-results__details {
   border: 1px solid var(--color-border, #e0e0e0);
   border-radius: 8px;
   overflow: hidden;
 }
 
-.practice-results__details-summary {
+.train-results__details-summary {
   padding: 0.6rem 0.875rem;
   font-size: 0.875rem;
   font-weight: 600;
@@ -595,13 +595,13 @@
   justify-content: space-between;
 }
 
-.practice-results__details-summary::-webkit-details-marker { display: none; }
-.practice-results__details[open] .practice-results__details-summary::after { content: '∧'; }
-.practice-results__details:not([open]) .practice-results__details-summary::after { content: '∨'; }
+.train-results__details-summary::-webkit-details-marker { display: none; }
+.train-results__details[open] .train-results__details-summary::after { content: '∧'; }
+.train-results__details:not([open]) .train-results__details-summary::after { content: '∨'; }
 
 /* ── Per-note table ──────────────────────────────────────────────────────── */
 
-.practice-results__table-wrapper {
+.train-results__table-wrapper {
   overflow-x: auto;
   overflow-y: auto;
   max-height: 40vh;
@@ -609,13 +609,13 @@
   touch-action: pan-y;
 }
 
-.practice-results__table {
+.train-results__table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
 }
 
-.practice-results__table th {
+.train-results__table th {
   text-align: left;
   padding: 0.45rem 0.75rem;
   border-bottom: 2px solid var(--color-border, #e0e0e0);
@@ -624,24 +624,24 @@
   white-space: nowrap;
 }
 
-.practice-results__table td {
+.train-results__table td {
   padding: 0.4rem 0.75rem;
   border-bottom: 1px solid var(--color-border, #f0f0f0);
   white-space: nowrap;
   color: #222;
 }
 
-.practice-results__row--correct      { background: #f1f8e9; }
-.practice-results__row--wrong-timing { background: #f1f8e9; }
-.practice-results__row--wrong-pitch  { background: #fff8e1; }
-.practice-results__row--missed       { background: #ffebee; }
+.train-results__row--correct      { background: #f1f8e9; }
+.train-results__row--wrong-timing { background: #f1f8e9; }
+.train-results__row--wrong-pitch  { background: #fff8e1; }
+.train-results__row--missed       { background: #ffebee; }
 
-.practice-results__status-icon {
+.train-results__status-icon {
   font-size: 0.85em;
   vertical-align: middle;
 }
 
-.practice-results__extraneous {
+.train-results__extraneous {
   padding: 0.5rem 0.875rem;
   font-size: 0.82rem;
   color: var(--color-muted, #888);
@@ -649,14 +649,14 @@
   border-top: 1px solid var(--color-border, #e0e0e0);
 }
 
-.practice-results__actions {
+.train-results__actions {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
 }
 
 /* ── Step mode hint ──────────────────────────────────────────────────────── */
-.practice-step-hint {
+.train-step-hint {
   padding: 0.5rem 1rem;
   border-radius: 8px;
   background: #fff8e1;
@@ -669,7 +669,7 @@
 
 /* ── Legacy button class (kept for backwards compat with tests) ───────────── */
 
-.practice-btn {
+.train-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -685,19 +685,19 @@
   user-select: none;
 }
 
-.practice-btn:active { transform: scale(0.97); }
+.train-btn:active { transform: scale(0.97); }
 
-.practice-btn--primary  { background: var(--color-accent, #4f8ef7); color: #fff; }
-.practice-btn--primary:hover { background: var(--color-accent-dark, #3a7bd5); }
-.practice-btn--danger   { background: var(--color-danger, #e53935); color: #fff; }
-.practice-btn--danger:hover { background: var(--color-danger-dark, #b71c1c); }
-.practice-btn--secondary { background: var(--color-surface-alt, #f0f0f0); color: var(--color-text, #333); border: 1px solid var(--color-border, #d0d0d0); }
-.practice-btn--secondary:hover { background: var(--color-border, #e0e0e0); }
-.practice-btn:disabled  { opacity: 0.45; cursor: not-allowed; }
+.train-btn--primary  { background: var(--color-accent, #4f8ef7); color: #fff; }
+.train-btn--primary:hover { background: var(--color-accent-dark, #3a7bd5); }
+.train-btn--danger   { background: var(--color-danger, #e53935); color: #fff; }
+.train-btn--danger:hover { background: var(--color-danger-dark, #b71c1c); }
+.train-btn--secondary { background: var(--color-surface-alt, #f0f0f0); color: var(--color-text, #333); border: 1px solid var(--color-border, #d0d0d0); }
+.train-btn--secondary:hover { background: var(--color-border, #e0e0e0); }
+.train-btn:disabled  { opacity: 0.45; cursor: not-allowed; }
 
 /* ── MIDI badge variant ──────────────────────────────────────────────────── */
 
-.practice-mic-badge--midi {
+.train-mic-badge--midi {
   background: #e8f0fe;
   color: #1a53c0;
   border-color: #a8c0f8;
@@ -705,7 +705,7 @@
 
 /* ── Sidebar sections wrapper (flex-row on mobile) ───────────────────────── */
 
-.practice-sidebar__sections {
+.train-sidebar__sections {
   display: flex;
   flex-direction: column;
 }
@@ -713,12 +713,12 @@
 /* ── Responsive: mobile top-panel config ────────────────────────────────── */
 
 @media (max-width: 768px) {
-  .practice-plugin__body {
+  .train-plugin__body {
     flex-direction: column;
   }
 
   /* Sidebar becomes a horizontal scrollable panel at the top */
-  .practice-sidebar {
+  .train-sidebar {
     width: 100%;
     height: auto;
     border-right: none;
@@ -728,20 +728,20 @@
     flex-shrink: 0;
   }
 
-  .practice-sidebar--collapsed,
-  .practice-sidebar--hidden {
+  .train-sidebar--collapsed,
+  .train-sidebar--hidden {
     display: none;
   }
 
   /* Sections scroll horizontally */
-  .practice-sidebar__sections {
+  .train-sidebar__sections {
     flex-direction: row;
     align-items: flex-start;
     padding: 0.25rem 0;
     min-width: max-content;
   }
 
-  .practice-sidebar__section {
+  .train-sidebar__section {
     flex-shrink: 0;
     min-width: 110px;
     border-bottom: none;
@@ -749,38 +749,38 @@
     padding: 0.4rem 0.75rem;
   }
 
-  .practice-sidebar__section:last-of-type {
+  .train-sidebar__section:last-of-type {
     border-right: none;
   }
 
   /* Slider rows are compact on mobile */
-  .practice-sidebar__slider-row input[type='range'] {
+  .train-sidebar__slider-row input[type='range'] {
     width: 80px;
     flex: none;
   }
 
-  .practice-plugin__main {
+  .train-plugin__main {
     padding: 0.75rem;
   }
 
-  .practice-countdown {
+  .train-countdown {
     font-size: 5rem;
   }
 
-  .practice-results__score-number {
+  .train-results__score-number {
     font-size: 2.25rem;
   }
 }
 
 @media (max-width: 480px) {
-  .practice-sidebar__section {
+  .train-sidebar__section {
     min-width: 95px;
   }
 }
 
 /* ── Feature 034: Score preset controls ── */
 
-.practice-score-disabled-label {
+.train-score-disabled-label {
   display: block;
   font-size: 0.7rem;
   color: var(--color-text-muted, #888);
@@ -788,12 +788,12 @@
   margin-top: 0.2rem;
 }
 
-.practice-control--disabled {
+.train-control--disabled {
   opacity: 0.45;
   pointer-events: none;
 }
 
-.practice-sidebar__change-score-btn {
+.train-sidebar__change-score-btn {
   display: block;
   width: 100%;
   margin-top: 0.6rem;
@@ -808,24 +808,24 @@
   transition: opacity 0.15s;
 }
 
-.practice-sidebar__change-score-btn:disabled {
+.train-sidebar__change-score-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.practice-sidebar__change-score-btn:not(:disabled):hover {
+.train-sidebar__change-score-btn:not(:disabled):hover {
   opacity: 0.75;
 }
 
 /* ─── Complexity Level Selector (Feature 001) ──────────────────────────────── */
 
-.practice-level-selector {
+.train-level-selector {
   display: flex;
   gap: 0.4rem;
   flex-wrap: wrap;
 }
 
-.practice-level-btn {
+.train-level-btn {
   flex: 1;
   min-width: 3.5rem;
   padding: 0.45rem 0.3rem 0.4rem;
@@ -841,27 +841,27 @@
   line-height: 1.2;
 }
 
-.practice-level-btn:not(:disabled):hover {
+.train-level-btn:not(:disabled):hover {
   opacity: 0.8;
 }
 
-.practice-level-btn--active {
+.train-level-btn--active {
   background: rgba(255, 255, 255, 0.15);
   opacity: 1;
   font-weight: 600;
   border-color: currentColor;
 }
 
-.practice-level-btn:disabled {
+.train-level-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
 
-.practice-level-btn__name {
+.train-level-btn__name {
   display: block;
 }
 
-.practice-level-btn__description {
+.train-level-btn__description {
   display: block;
   font-size: 0.68rem;
   opacity: 0.75;
@@ -871,7 +871,7 @@
 
 /* ── Virtual keyboard toggle button (Feature 001 — T011) ──────────────────── */
 
-.practice-plugin__vkb-toggle {
+.train-plugin__vkb-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -889,24 +889,24 @@
   touch-action: manipulation;
 }
 
-.practice-plugin__vkb-toggle:hover {
+.train-plugin__vkb-toggle:hover {
   background: var(--color-surface-hover, #e4e4e4);
 }
 
 /* Active state — indicates virtual keyboard is open (FR-011) */
-.practice-plugin__vkb-toggle--active {
+.train-plugin__vkb-toggle--active {
   background: var(--color-accent, #4a90d9);
   color: #fff;
   border-color: var(--color-accent, #4a90d9);
 }
 
-.practice-plugin__vkb-toggle--active:hover {
+.train-plugin__vkb-toggle--active:hover {
   background: var(--color-accent-dark, #3a7bd5);
   border-color: var(--color-accent-dark, #3a7bd5);
 }
 
 /* Suspended Mic/MIDI badge state — shown when virtual keyboard is active (FR-004, T023) */
-.practice-mic-badge--suspended {
+.train-mic-badge--suspended {
   opacity: 0.45;
   background: var(--color-surface-alt, #f0f0f0);
   color: var(--color-muted, #888);
@@ -914,7 +914,7 @@
 }
 
 /* Virtual keyboard slide-up panel at the bottom of the Practice view (FR-002, T011) */
-.practice-plugin__vkb-panel {
+.train-plugin__vkb-panel {
   border-top: 1px solid var(--color-border, #ddd);
   padding: 8px 0 0 0;
   overflow-x: auto;
@@ -929,17 +929,17 @@
  * screen, leaving no room to scroll down to a results panel.  Display it as a
  * centred modal overlay instead so the score is always immediately visible.    */
 /* Backdrop div (real element — pseudo-elements cannot receive touch events) */
-.practice-results__backdrop {
+.train-results__backdrop {
   display: none;
 }
 
 /* Close button — hidden outside overlay context */
-.practice-results__close {
+.train-results__close {
   display: none;
 }
 
 @media (orientation: landscape) and (max-height: 520px) {
-  .practice-plugin--results .practice-results__backdrop {
+  .train-plugin--results .train-results__backdrop {
     display: block;
     position: fixed;
     inset: 0;
@@ -948,7 +948,7 @@
     cursor: pointer;
   }
 
-  .practice-plugin--results .practice-results {
+  .train-plugin--results .train-results {
     position: fixed;
     top: 50%;
     left: 50%;
@@ -964,7 +964,7 @@
   }
 
   /* × button in top-right corner of the overlay card */
-  .practice-plugin--results .practice-results__close {
+  .train-plugin--results .train-results__close {
     display: flex;
     align-items: center;
     justify-content: center;

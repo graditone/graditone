@@ -1,11 +1,12 @@
 {
   "id": "play-score",
-  "name": "Play Score",
+  "name": "Play",
   "version": "1.0.0",
   "pluginApiVersion": "3",
   "entryPoint": "index.tsx",
   "description": "Load and play scores from the library or a file.",
   "type": "core",
   "view": "full-screen",
-  "icon": "🎼"
+  "icon": "🎼",
+  "order": 1
 }

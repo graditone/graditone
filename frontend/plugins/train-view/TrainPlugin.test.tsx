@@ -1,8 +1,8 @@
 /**
- * PracticePlugin.test.tsx — T011
+ * TrainPlugin.test.tsx — T011
  * Feature 031: Practice View Plugin & Plugin API Recording Extension
  *
- * TDD: These tests must fail before PracticePlugin.tsx is implemented.
+ * TDD: These tests must fail before TrainPlugin.tsx is implemented.
  * Constitution Principle V: Tests exist and green before consuming code merges.
  *
  * Tests cover:
@@ -19,7 +19,7 @@
  * (k) Unmount during 'playing' releases subscriptions and calls stopPlayback
  *
  * ESLint boundary:
- * This file and PracticePlugin.tsx MUST NOT import from src/services/,
+ * This file and TrainPlugin.tsx MUST NOT import from src/services/,
  * src/components/, or src/wasm/. Enforced by no-restricted-imports in
  * frontend/eslint.config.js targeting plugins/**.
  */
@@ -33,7 +33,7 @@ import type {
   PluginScorePlayerContext,
   PluginScoreSelectorProps,
 } from '../../src/plugin-api/index';
-import { PracticePlugin } from './PracticePlugin';
+import { TrainPlugin } from './TrainPlugin';
 
 // ─── Mock ScorePlayer factory ──────────────────────────────────────────────
 
@@ -136,6 +136,7 @@ function makeMockContext(overrides?: { scorePlayer?: PluginScorePlayerContext & 
         return () => pitchSubscribers.delete(handler);
       }),
       onError: vi.fn((_handler: (e: string) => void) => () => {}),
+      stop: vi.fn(),
     },
     midi: {
       subscribe: vi.fn((handler: (e: PluginNoteEvent) => void) => {
@@ -159,7 +160,7 @@ function makeMockContext(overrides?: { scorePlayer?: PluginScorePlayerContext & 
       ScoreSelector: MockScoreSelector,
     },
     manifest: {
-      id: 'practice-view',
+      id: 'train-view',
       name: 'Practice',
       version: '1.0.0',
       pluginApiVersion: '4',
@@ -191,13 +192,13 @@ afterEach(() => {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe('PracticePlugin', () => {
+describe('TrainPlugin', () => {
   // ── (a) Ready phase ────────────────────────────────────────────────────────
 
   describe('ready phase', () => {
     it('renders exercise staff and config UI on mount', () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Exercise staff is visible
       expect(screen.getAllByTestId('staff-viewer').length).toBeGreaterThanOrEqual(1);
@@ -209,14 +210,14 @@ describe('PracticePlugin', () => {
 
     it('shows "Press any note to start" prompt in the ready state', () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       expect(screen.getByText(/press any note to start/i)).toBeDefined();
     });
 
     it('does NOT show results panel on mount', () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       expect(screen.queryByText(/your score/i)).toBeNull();
       expect(screen.queryByText(/try again/i)).toBeNull();
@@ -228,7 +229,7 @@ describe('PracticePlugin', () => {
   describe('countdown phase', () => {
     it('shows countdown steps 3, 2, 1 and then transitions to playing', async () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Switch to flow mode (default level is low → step; flow needed for countdown)
       await act(async () => { fireEvent.change(screen.getByLabelText(/mode/i), { target: { value: 'flow' } }); });
@@ -260,7 +261,7 @@ describe('PracticePlugin', () => {
   describe('recording subscription', () => {
     it('calls context.recording.subscribe on mount', () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       expect(ctx.recording.subscribe).toHaveBeenCalledTimes(1);
     });
@@ -270,7 +271,7 @@ describe('PracticePlugin', () => {
       const unsubSpy = vi.fn();
       (ctx.recording.subscribe as ReturnType<typeof vi.fn>).mockReturnValue(unsubSpy);
 
-      const { unmount } = render(<PracticePlugin context={ctx} />);
+      const { unmount } = render(<TrainPlugin context={ctx} />);
       unmount();
 
       expect(unsubSpy).toHaveBeenCalledTimes(1);
@@ -282,7 +283,7 @@ describe('PracticePlugin', () => {
   describe('midi subscription', () => {
     it('registers a MIDI subscriber on mount', () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       expect(ctx.midi.subscribe).toHaveBeenCalledTimes(1);
     });
@@ -292,7 +293,7 @@ describe('PracticePlugin', () => {
       const unsubSpy = vi.fn();
       (ctx.midi.subscribe as ReturnType<typeof vi.fn>).mockReturnValue(unsubSpy);
 
-      const { unmount } = render(<PracticePlugin context={ctx} />);
+      const { unmount } = render(<TrainPlugin context={ctx} />);
       unmount();
 
       expect(unsubSpy).toHaveBeenCalledTimes(1);
@@ -304,7 +305,7 @@ describe('PracticePlugin', () => {
   describe('scheduled playback', () => {
     it('calls context.playNote for each exercise note when Play is pressed', async () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Switch to flow mode so notes are scheduled via playNote
       await act(async () => { fireEvent.change(screen.getByLabelText(/mode/i), { target: { value: 'flow' } }); });
@@ -332,7 +333,7 @@ describe('PracticePlugin', () => {
   describe('stop button', () => {
     it('calls context.stopPlayback when Stop is pressed during playing', async () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       await act(async () => { fireMidiAttack(ctx); });
 
@@ -352,7 +353,7 @@ describe('PracticePlugin', () => {
   describe('results phase', () => {
     it('shows a score and result panel after exercise completes', async () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Switch to flow mode so the exercise drives itself to completion
       await act(async () => { fireEvent.change(screen.getByLabelText(/mode/i), { target: { value: 'flow' } }); });
@@ -362,8 +363,8 @@ describe('PracticePlugin', () => {
       // Advance well past the exercise duration (countdown 3s + exercise up to ~10s + buffer)
       await act(async () => { vi.advanceTimersByTime(20_000); });
 
-      // Should show results — the Retry button is now in the toolbar (data-testid="practice-retry-btn")
-      const retryBtn = screen.queryByTestId('practice-retry-btn')
+      // Should show results — the Retry button is now in the toolbar (data-testid="train-retry-btn")
+      const retryBtn = screen.queryByTestId('train-retry-btn')
         ?? screen.queryByRole('button', { name: /retry/i })
         ?? screen.queryByRole('region', { name: /exercise results/i });
       expect(retryBtn).not.toBeNull();
@@ -375,7 +376,7 @@ describe('PracticePlugin', () => {
   describe('"Try Again" action', () => {
     it('resets to ready phase with the same exercise', async () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Complete an exercise to reach results
       await act(async () => { fireMidiAttack(ctx); });
@@ -396,7 +397,7 @@ describe('PracticePlugin', () => {
   describe('"New Exercise" action', () => {
     it('resets to ready phase with new notes', async () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Complete an exercise to reach results
       await act(async () => { fireMidiAttack(ctx); });
@@ -417,7 +418,7 @@ describe('PracticePlugin', () => {
   describe('cleanup on unmount', () => {
     it('calls stopPlayback and unsubscribes when unmounted during playing', async () => {
       const ctx = makeMockContext();
-      const { unmount } = render(<PracticePlugin context={ctx} />);
+      const { unmount } = render(<TrainPlugin context={ctx} />);
 
       // Start exercise
       await act(async () => { fireMidiAttack(ctx); });
@@ -437,7 +438,7 @@ describe('PracticePlugin', () => {
   describe('Score preset (US1 — T007)', () => {
     it('renders three preset options: Random, C4 Scale, and Score', () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // All three radio options must be present in the preset selector
       expect(screen.getByRole('radio', { name: /random/i })).toBeDefined();
@@ -447,7 +448,7 @@ describe('PracticePlugin', () => {
 
     it('selecting Score with no scorePitches makes ScoreSelector visible', async () => {
       const ctx = makeMockContext();
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // ScoreSelector must NOT be open initially
       expect(screen.queryByTestId('score-selector-dialog')).toBeNull();
@@ -464,7 +465,7 @@ describe('PracticePlugin', () => {
     it('after loadScore resolves and extractPracticeNotes returns pitches the exercise populates', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Select Score preset → dialog opens
       await act(async () => {
@@ -491,7 +492,7 @@ describe('PracticePlugin', () => {
     it('Notes slider max equals scorePitches.totalAvailable when Score preset active', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Select Score → pick score → mark ready
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -517,20 +518,20 @@ describe('PracticePlugin', () => {
     it('clef and octave controls are disabled when Score preset is active', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: /beethoven/i })); });
       await act(async () => { spPlayer._notify({ status: 'ready', currentTick: 0, totalDurationTicks: 1000, highlightedNoteIds: new Set<string>(), bpm: 120, title: null, error: null }); });
 
       // Clef control (radio group) should be disabled
-      const clefRadios = document.querySelectorAll('input[name="practice-clef"]');
+      const clefRadios = document.querySelectorAll('input[name="train-clef"]');
       if (clefRadios.length > 0) {
         clefRadios.forEach(r => expect((r as HTMLInputElement).disabled).toBe(true));
       }
 
       // Octave control should be disabled
-      const octaveRadios = document.querySelectorAll('input[name="practice-octaves"]');
+      const octaveRadios = document.querySelectorAll('input[name="train-octaves"]');
       if (octaveRadios.length > 0) {
         octaveRadios.forEach(r => expect((r as HTMLInputElement).disabled).toBe(true));
       }
@@ -542,7 +543,7 @@ describe('PracticePlugin', () => {
     it('"Set by score" disabled label is visible when Score preset is active', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: /beethoven/i })); });
@@ -554,7 +555,7 @@ describe('PracticePlugin', () => {
     it('"Change score" button is present when Score preset is active with a loaded score', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: /beethoven/i })); });
@@ -566,7 +567,7 @@ describe('PracticePlugin', () => {
     it('"Change score" button is disabled during countdown and playing phases', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Load score
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -589,7 +590,7 @@ describe('PracticePlugin', () => {
     it('"Change score" click reopens ScoreSelector overlay', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Load score and dismiss dialog
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -615,7 +616,7 @@ describe('PracticePlugin', () => {
     it('onLoadFile triggers loadScore with kind=file', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Open selector
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -635,7 +636,7 @@ describe('PracticePlugin', () => {
     it('scorePlayerState.error is passed to ScoreSelector as error prop', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Open the selector
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -652,7 +653,7 @@ describe('PracticePlugin', () => {
     it('error state does NOT clear previously cached scorePitches', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Load score successfully
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -681,7 +682,7 @@ describe('PracticePlugin', () => {
     it('cancel with no score loaded reverts preset to random', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Select Score → dialog opens (no score loaded)
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -703,7 +704,7 @@ describe('PracticePlugin', () => {
     it('cancel after score is loaded closes dialog without changing preset', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Load score
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -729,7 +730,7 @@ describe('PracticePlugin', () => {
     it('scorePitches is preserved when switching away from Score preset', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Load a score
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -758,7 +759,7 @@ describe('PracticePlugin', () => {
     it('switching back to Score with cached pitches does NOT open ScoreSelector', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // Load a score
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -776,7 +777,7 @@ describe('PracticePlugin', () => {
     it('switching to Score with null cache opens ScoreSelector', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<PracticePlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />);
 
       // No score loaded yet — selecting Score should open the dialog
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -788,10 +789,10 @@ describe('PracticePlugin', () => {
 
 // ─── T004 — Complexity Level Selector (US1) ───────────────────────────────────
 
-describe('PracticePlugin — complexity level selector (US1)', () => {
+describe('TrainPlugin — complexity level selector (US1)', () => {
   it('renders a level select dropdown with Low, Mid, High options', () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     const values = Array.from(sel.options).map(o => o.value);
@@ -802,7 +803,7 @@ describe('PracticePlugin — complexity level selector (US1)', () => {
 
   it('select defaults to "low" (default level)', () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     expect(sel.value).toBe('low');
@@ -810,7 +811,7 @@ describe('PracticePlugin — complexity level selector (US1)', () => {
 
   it('selecting Low sets BPM slider to 40', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'mid' } }); });
@@ -822,7 +823,7 @@ describe('PracticePlugin — complexity level selector (US1)', () => {
 
   it('selecting Mid sets BPM slider to 80', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'mid' } }); });
@@ -833,7 +834,7 @@ describe('PracticePlugin — complexity level selector (US1)', () => {
 
   it('selecting High sets BPM slider to 100', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'high' } }); });
@@ -844,7 +845,7 @@ describe('PracticePlugin — complexity level selector (US1)', () => {
 
   it('selecting Low sets Clef to Treble', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'high' } }); });
@@ -856,7 +857,7 @@ describe('PracticePlugin — complexity level selector (US1)', () => {
 
   it('selecting High sets Clef to Bass', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'high' } }); });
@@ -867,7 +868,7 @@ describe('PracticePlugin — complexity level selector (US1)', () => {
 
   it('selecting High makes select value "high"', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'high' } }); });
@@ -877,7 +878,7 @@ describe('PracticePlugin — complexity level selector (US1)', () => {
 
   it('level selector is disabled while not in ready phase', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     // Trigger playing phase via MIDI auto-start
     await act(async () => { fireMidiAttack(ctx); });
@@ -889,31 +890,31 @@ describe('PracticePlugin — complexity level selector (US1)', () => {
 });
 // ─── T008 — localStorage persistence (US2) ────────────────────────────────────
 
-describe('PracticePlugin — localStorage persistence (US2)', () => {
-  it('selecting Mid writes \'mid\' to localStorage[practice-complexity-level-v1]', async () => {
+describe('TrainPlugin — localStorage persistence (US2)', () => {
+  it('selecting Mid writes \'mid\' to localStorage[train-complexity-level-v1]', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i);
     await act(async () => { fireEvent.change(sel, { target: { value: 'mid' } }); });
 
-    expect(localStorage.getItem('practice-complexity-level-v1')).toBe('mid');
+    expect(localStorage.getItem('train-complexity-level-v1')).toBe('mid');
   });
 
-  it('selecting High writes \'high\' to localStorage[practice-complexity-level-v1]', async () => {
+  it('selecting High writes \'high\' to localStorage[train-complexity-level-v1]', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i);
     await act(async () => { fireEvent.change(sel, { target: { value: 'high' } }); });
 
-    expect(localStorage.getItem('practice-complexity-level-v1')).toBe('high');
+    expect(localStorage.getItem('train-complexity-level-v1')).toBe('high');
   });
 
   it('when localStorage contains \'high\' on mount, select shows \'high\'', async () => {
-    localStorage.setItem('practice-complexity-level-v1', 'high');
+    localStorage.setItem('train-complexity-level-v1', 'high');
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     await act(async () => { vi.runAllTimers(); });
 
@@ -922,9 +923,9 @@ describe('PracticePlugin — localStorage persistence (US2)', () => {
   });
 
   it('when localStorage contains \'high\', BPM slider initialises to 100', async () => {
-    localStorage.setItem('practice-complexity-level-v1', 'high');
+    localStorage.setItem('train-complexity-level-v1', 'high');
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     await act(async () => { vi.runAllTimers(); });
 
@@ -933,9 +934,9 @@ describe('PracticePlugin — localStorage persistence (US2)', () => {
   });
 
   it('when localStorage contains invalid value, select defaults to \'low\'', async () => {
-    localStorage.setItem('practice-complexity-level-v1', 'extreme');
+    localStorage.setItem('train-complexity-level-v1', 'extreme');
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     await act(async () => { vi.runAllTimers(); });
 
@@ -947,7 +948,7 @@ describe('PracticePlugin — localStorage persistence (US2)', () => {
 
   it('when localStorage is empty, select defaults to \'low\' with BPM=40', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     await act(async () => { vi.runAllTimers(); });
 
@@ -960,10 +961,10 @@ describe('PracticePlugin — localStorage persistence (US2)', () => {
 
 // ─── T011 — Visual differentiation + badge-clear (US3) ──────────────────
 
-describe('PracticePlugin — visual differentiation and badge-clear (US3)', () => {
+describe('TrainPlugin — visual differentiation and badge-clear (US3)', () => {
   it('Low option text is "Low"', () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     const lowOption = Array.from(sel.options).find(o => o.value === 'low');
@@ -973,7 +974,7 @@ describe('PracticePlugin — visual differentiation and badge-clear (US3)', () =
 
   it('Mid option text is "Mid"', () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     const midOption = Array.from(sel.options).find(o => o.value === 'mid');
@@ -983,7 +984,7 @@ describe('PracticePlugin — visual differentiation and badge-clear (US3)', () =
 
   it('High option text is "High"', () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     const highOption = Array.from(sel.options).find(o => o.value === 'high');
@@ -993,7 +994,7 @@ describe('PracticePlugin — visual differentiation and badge-clear (US3)', () =
 
   it('after selecting Low then changing Notes slider, select shows "custom"', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     await act(async () => { vi.runAllTimers(); });
 
@@ -1009,7 +1010,7 @@ describe('PracticePlugin — visual differentiation and badge-clear (US3)', () =
 
   it('after selecting Mid then changing Clef, select shows "custom"', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'mid' } }); });
@@ -1024,7 +1025,7 @@ describe('PracticePlugin — visual differentiation and badge-clear (US3)', () =
 
   it('after selecting High then changing BPM slider, select shows "custom"', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'high' } }); });
@@ -1042,23 +1043,23 @@ describe('PracticePlugin — visual differentiation and badge-clear (US3)', () =
 // T016 — Feature 035: Metronome button in Practice plugin header
 // ---------------------------------------------------------------------------
 
-describe('PracticePlugin — metronome button (Feature 035)', () => {
+describe('TrainPlugin — metronome button (Feature 035)', () => {
   it('renders a metronome toggle button with aria-label "Toggle metronome"', () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
     expect(screen.getByRole('button', { name: /toggle metronome/i })).toBeTruthy();
   });
 
   it('has aria-pressed="false" on mount (metronome inactive)', () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
     const btn = screen.getByRole('button', { name: /toggle metronome/i });
     expect(btn.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('calls context.metronome.toggle when the metronome button is clicked', async () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
     });
@@ -1067,7 +1068,7 @@ describe('PracticePlugin — metronome button (Feature 035)', () => {
 
   it('subscribes to context.metronome on mount', () => {
     const ctx = makeMockContext();
-    render(<PracticePlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />);
     expect(ctx.metronome.subscribe).toHaveBeenCalledTimes(1);
   });
 });

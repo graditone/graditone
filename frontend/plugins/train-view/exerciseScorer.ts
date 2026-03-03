@@ -1,9 +1,9 @@
 /**
  * exerciseScorer.ts — Plugin-internal beat-slot scoring
- * Feature 031: Practice View Plugin
+ * Feature 036: Rename Practice Plugin to Train
  *
  * Adapted from src/services/practice/exerciseScorer.ts.
- * Imports ONLY from ./practiceTypes — no src/ imports permitted (ESLint boundary).
+ * Imports ONLY from ./trainTypes — no src/ imports permitted (ESLint boundary).
  *
  * Exports:
  * - scoreCapture(exercise, rawNotes, options?) → ExerciseResult
@@ -13,12 +13,12 @@
  */
 
 import type {
-  PracticeExercise,
+  TrainExercise,
   ResponseNote,
   NoteComparison,
   NoteComparisonStatus,
   ExerciseResult,
-} from './practiceTypes';
+} from './trainTypes';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ import { matchRawNotesToSlots } from './matchRawNotesToSlots';
  * @param options    includeTimingScore: true = MIDI mode (timing matters)
  */
 export function scoreCapture(
-  exercise: PracticeExercise,
+  exercise: TrainExercise,
   rawNotes: ResponseNote[],
   options: { includeTimingScore?: boolean } = {},
 ): ExerciseResult {
@@ -66,7 +66,7 @@ export function scoreCapture(
  *                          contributes 50% of the score. Default false (mic mode).
  */
 export function scoreExercise(
-  exercise: PracticeExercise,
+  exercise: TrainExercise,
   responses: (ResponseNote | null)[],
   extraneousNotes: ResponseNote[],
   options: { includeTimingScore?: boolean } = {},

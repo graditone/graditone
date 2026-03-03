@@ -1,15 +1,15 @@
 /**
  * matchRawNotesToSlots.ts — Plugin-internal slot alignment
- * Feature 031: Practice View Plugin
+ * Feature 036: Rename Practice Plugin to Train
  *
  * Adapted from src/services/practice/usePracticeRecorder.ts:matchRawNotesToSlots.
- * Imports ONLY from ./practiceTypes — no src/ imports permitted (ESLint boundary).
+ * Imports ONLY from ./trainTypes — no src/ imports permitted (ESLint boundary).
  *
  * For each slot, the closest unmatched raw note within one full beat period is
  * chosen. Response notes outside every slot window are returned as extraneous.
  */
 
-import type { PracticeExercise, ResponseNote } from './practiceTypes';
+import type { TrainExercise, ResponseNote } from './trainTypes';
 
 /**
  * matchRawNotesToSlots — pairs recorded notes to exercise slots by nearest timing.
@@ -23,7 +23,7 @@ import type { PracticeExercise, ResponseNote } from './practiceTypes';
  * @returns         Per-slot responses (null = missed) + unmatched extraneous notes
  */
 export function matchRawNotesToSlots(
-  exercise: PracticeExercise,
+  exercise: TrainExercise,
   rawNotes: ResponseNote[],
 ): { responses: (ResponseNote | null)[]; extraneousNotes: ResponseNote[] } {
   const msPerBeat = 60_000 / exercise.bpm;

@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { generateScoreExercise } from './exerciseGenerator';
-import { COMPLEXITY_PRESETS, COMPLEXITY_LEVEL_STORAGE_KEY } from './practiceTypes';
+import { COMPLEXITY_PRESETS, COMPLEXITY_LEVEL_STORAGE_KEY } from './trainTypes';
 
 // ─── generateScoreExercise ────────────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ describe('generateScoreExercise()', () => {
     { midiPitch: 67 },
   ];
 
-  it('returns a PracticeExercise with notes.length === min(noteCount, pitches.length)', () => {
+  it('returns a TrainExercise with notes.length === min(noteCount, pitches.length)', () => {
     const exercise = generateScoreExercise(80, samplePitches, 3);
     expect(exercise.notes).toHaveLength(3);
   });
@@ -130,7 +130,7 @@ describe('COMPLEXITY_PRESETS', () => {
 // ─── COMPLEXITY_LEVEL_STORAGE_KEY ─────────────────────────────────────────────
 
 describe('COMPLEXITY_LEVEL_STORAGE_KEY', () => {
-  it('equals practice-complexity-level-v1', () => {
-    expect(COMPLEXITY_LEVEL_STORAGE_KEY).toBe('practice-complexity-level-v1');
+  it('equals train-complexity-level-v1', () => {
+    expect(COMPLEXITY_LEVEL_STORAGE_KEY).toBe('train-complexity-level-v1');
   });
 });

@@ -247,4 +247,32 @@ describe('PluginMicBroadcaster', () => {
     unsub1();
     unsub2();
   });
+
+  it('stop() force-closes the mic and clears all handlers', async () => {
+    const broadcaster = await freshBroadcaster();
+    const handler = vi.fn();
+    const errorHandler = vi.fn();
+
+    broadcaster.subscribe(handler);
+    broadcaster.onError(errorHandler);
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(broadcaster.isActive()).toBe(true);
+
+    broadcaster.stop();
+
+    expect(broadcaster.isActive()).toBe(false);
+    // AudioContext.close() should have been called
+    expect(lastAudioCtxClose).toHaveBeenCalled();
+    // Stream tracks should have been stopped
+    expect(mockStream.getTracks()[0].stop).toHaveBeenCalled();
+  });
+
+  it('stop() is safe to call when mic is not active', async () => {
+    const broadcaster = await freshBroadcaster();
+    expect(broadcaster.isActive()).toBe(false);
+    // Should not throw
+    broadcaster.stop();
+    expect(broadcaster.isActive()).toBe(false);
+  });
 });

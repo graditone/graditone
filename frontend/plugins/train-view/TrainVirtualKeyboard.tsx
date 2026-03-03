@@ -1,9 +1,9 @@
 /**
- * PracticeVirtualKeyboard.tsx — Feature 001: Virtual Keyboard in Practice View
+ * TrainVirtualKeyboard.tsx — Feature 001: Virtual Keyboard in Practice View
  *
  * Renders an interactive two-octave piano keyboard inside the Practice plugin.
  * Mirrors the visual design and interaction model of VirtualKeyboard.tsx but is
- * a self-contained component inside practice-view/ to respect the cross-plugin
+ * a self-contained component inside train-view/ to respect the cross-plugin
  * import boundary (R-002).
  *
  * Responsibilities:
@@ -21,7 +21,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import './PracticeVirtualKeyboard.css';
+import './TrainVirtualKeyboard.css';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -116,7 +116,7 @@ function blackKeyLeft(whiteKeyBeforeGlobal: number): number {
 // Props contract (matches contracts/input-source.ts)
 // ---------------------------------------------------------------------------
 
-export interface PracticeVirtualKeyboardProps {
+export interface TrainVirtualKeyboardProps {
   /** Plugin context — used ONLY for context.playNote (audio). */
   context: {
     playNote: (event: { midiNote: number; timestamp: number; type: 'attack' | 'release' }) => void;
@@ -131,7 +131,7 @@ export interface PracticeVirtualKeyboardProps {
 // Component
 // ---------------------------------------------------------------------------
 
-export function PracticeVirtualKeyboard({ context, onKeyDown, onKeyUp }: PracticeVirtualKeyboardProps) {
+export function TrainVirtualKeyboard({ context, onKeyDown, onKeyUp }: TrainVirtualKeyboardProps) {
   // Fixed 88-key piano: A0–C8.
   const whiteNotes = PIANO_WHITE_NOTES;   // 52 white keys
   const blackNotes = PIANO_BLACK_NOTES;   // 36 black keys
@@ -324,10 +324,10 @@ export function PracticeVirtualKeyboard({ context, onKeyDown, onKeyUp }: Practic
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="practice-vkb" data-testid="practice-vkb" role="group" aria-label="Virtual piano keyboard">
+    <div className="train-vkb" data-testid="train-vkb" role="group" aria-label="Virtual piano keyboard">
       {/* Hidden label — consumed by screen readers and unit tests */}
       <span
-        className="practice-vkb__range-label--sr"
+        className="train-vkb__range-label--sr"
         aria-live="polite"
         data-testid="vkb-range-label"
       >
@@ -336,7 +336,7 @@ export function PracticeVirtualKeyboard({ context, onKeyDown, onKeyUp }: Practic
 
       {/* Oct− button — left of keyboard */}
       <button
-        className="practice-vkb__octave-btn"
+        className="train-vkb__octave-btn"
         onClick={shiftDown}
         disabled={atLeftEdge}
         aria-label="Scroll keyboard left one octave"
@@ -346,17 +346,17 @@ export function PracticeVirtualKeyboard({ context, onKeyDown, onKeyUp }: Practic
       </button>
 
       {/* Keyboard (scrollable, centred on C4+shift) */}
-      <div className="practice-vkb__scroll" ref={scrollRef}>
+      <div className="train-vkb__scroll" ref={scrollRef}>
         <div
-          className="practice-vkb__keyboard"
+          className="train-vkb__keyboard"
           style={{ width: `${totalWidth}px` }}
-          data-testid="practice-vkb-keyboard"
+          data-testid="train-vkb-keyboard"
         >
           {/* White keys (z-index 1) */}
           {whiteNotes.map(note => (
             <div
               key={note.midi}
-              className={`practice-vkb__key practice-vkb__key--white${pressedKeys.has(note.midi) ? ' practice-vkb__key--pressed' : ''}`}
+              className={`train-vkb__key train-vkb__key--white${pressedKeys.has(note.midi) ? ' train-vkb__key--pressed' : ''}`}
               data-midi={note.midi}
               data-testid={`vkb-key-${note.midi}`}
               onMouseDown={() => handleMouseDown(note)}
@@ -379,7 +379,7 @@ export function PracticeVirtualKeyboard({ context, onKeyDown, onKeyUp }: Practic
           {blackNotes.map(note => (
             <div
               key={note.midi}
-              className={`practice-vkb__key practice-vkb__key--black${pressedKeys.has(note.midi) ? ' practice-vkb__key--pressed' : ''}`}
+              className={`train-vkb__key train-vkb__key--black${pressedKeys.has(note.midi) ? ' train-vkb__key--pressed' : ''}`}
               data-midi={note.midi}
               data-testid={`vkb-key-${note.midi}`}
               style={{ left: `${blackKeyLeft(note.whiteKeyBeforeGlobal!)}px` }}
@@ -400,7 +400,7 @@ export function PracticeVirtualKeyboard({ context, onKeyDown, onKeyUp }: Practic
 
       {/* Oct+ button — right of keyboard */}
       <button
-        className="practice-vkb__octave-btn"
+        className="train-vkb__octave-btn"
         onClick={shiftUp}
         disabled={atRightEdge}
         aria-label="Scroll keyboard right one octave"

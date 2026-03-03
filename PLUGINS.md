@@ -13,7 +13,7 @@ Plugins extend Musicore with new UI views and interactive musical tools. They ru
 5. [API constraints and ESLint boundary](#api-constraints-and-eslint-boundary)
 6. [Testing your plugin](#testing-your-plugin)
 7. [Reference: Virtual Keyboard plugin](#reference-virtual-keyboard-plugin)
-8. [Reference: Practice View plugin](#reference-practice-view-plugin)
+8. [Reference: Train plugin](#reference-train-plugin)
 9. [Reference: Virtual Keyboard Pro (importable plugin)](#reference-virtual-keyboard-pro-importable-plugin)
 
 ---
@@ -127,6 +127,18 @@ interface PluginManifest {
   readonly pluginApiVersion: string;
   readonly entryPoint: string;
   readonly description?: string;
+  readonly type?: 'core' | 'common';
+  readonly view?: 'full-screen' | 'window';
+  readonly icon?: string;
+  /**
+   * Controls the position of this plugin in the app navigation.
+   * Lower values appear before higher values.
+   * Plugins without this field appear after all ordered plugins,
+   * sorted alphabetically by `id`.
+   * Non-finite or non-number values are treated as absent.
+   * Example order values: 1 (Play), 2 (Train), 3 (Practice), 4 (Performance).
+   */
+  readonly order?: number;
   readonly origin: 'builtin' | 'imported';
 }
 ```
@@ -400,9 +412,9 @@ The Virtual Keyboard (`frontend/plugins/virtual-keyboard/`) is the canonical ref
 
 ---
 
-## Reference: Practice View plugin
+## Reference: Train plugin
 
-The Practice View (`frontend/plugins/practice-view/`) is the reference implementation for:
+The Train plugin (`frontend/plugins/train-view/`) is the reference implementation for:
 
 - **Scheduled playback** — `context.playNote({ offsetMs })` fires notes at precise future times
 - **Stop control** — `context.stopPlayback()` cancels all pending scheduled notes

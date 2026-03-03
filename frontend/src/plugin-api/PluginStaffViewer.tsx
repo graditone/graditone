@@ -31,7 +31,7 @@ import type { Note, ClefType } from '../types/score';
 import type { PluginNoteEvent, PluginStaffViewerProps } from './types';
 import { computeLayout } from '../wasm/layout';
 import { initWasm } from '../services/wasm/loader';
-import { ScoreViewer } from '../pages/ScoreViewer';
+import { ScoreViewer, LABEL_MARGIN } from '../pages/ScoreViewer';
 import type { GlobalLayout } from '../wasm/layout';
 
 // ---------------------------------------------------------------------------
@@ -193,6 +193,20 @@ export const PluginStaffViewer: React.FC<PluginStaffViewerProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // ── WASM path: container ref + width measurement ──────────────────────────
+  const wasmContainerRef = useRef<HTMLDivElement>(null);
+  const [wasmContainerWidth, setWasmContainerWidth] = useState(VIEWER_WIDTH_FALLBACK);
+
+  useEffect(() => {
+    const el = wasmContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() =>
+      setWasmContainerWidth(el.clientWidth || VIEWER_WIDTH_FALLBACK)
+    );
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // ── WASM path hooks (always run — bpm guard is inside the effect) ─────────
   const [wasmLayout, setWasmLayout] = useState<GlobalLayout | null>(null);
 
@@ -207,8 +221,11 @@ export const PluginStaffViewer: React.FC<PluginStaffViewerProps> = ({
       try {
         await initWasm();
         const score = toConvertedScore(notes, clef, bpm, timestampOffset);
+        // Convert CSS px width to layout units (BASE_SCALE = 0.5, so layout units = px * 2)
+        // Subtract LABEL_MARGIN so the rendered content fits the container exactly.
+        const maxSystemWidth = Math.max(400, wasmContainerWidth * 2 - LABEL_MARGIN);
         const layout = await computeLayout(score, {
-          max_system_width: 99999,
+          max_system_width: maxSystemWidth,
           system_height: 200,
           system_spacing: 0,
           units_per_space: 20,
@@ -219,7 +236,7 @@ export const PluginStaffViewer: React.FC<PluginStaffViewerProps> = ({
       }
     })();
     return () => { cancelled = true; };
-  }, [notes, clef, bpm, timestampOffset]);
+  }, [notes, clef, bpm, timestampOffset, wasmContainerWidth]);
 
   // Build source map + pitch→noteId index for highlighting (WASM path)
   const { sourceToNoteIdMap: pluginSourceMap } = useMemo(() => {
@@ -307,39 +324,29 @@ export const PluginStaffViewer: React.FC<PluginStaffViewerProps> = ({
 
   // ── Conditional rendering ─────────────────────────────────────────────────
   if (bpm != null) {
-    if (wasmLayout == null) {
-      return (
-        <div
-          data-testid="plugin-staff-viewer"
-          style={{
-            height: 100,
-            border: '1px solid #e0e0e0',
-            borderRadius: 4,
-            backgroundColor: '#ffffff',
-            marginBottom: 12,
-          }}
-        />
-      );
-    }
     return (
       <div
+        ref={wasmContainerRef}
         data-testid="plugin-staff-viewer"
         style={{
           width: '100%',
-          overflowX: 'auto',
+          overflowX: 'hidden',
           overflowY: 'hidden',
           border: '1px solid #e0e0e0',
           borderRadius: 4,
           backgroundColor: '#ffffff',
           marginBottom: 12,
+          minHeight: wasmLayout == null ? 100 : undefined,
         }}
       >
-        <ScoreViewer
-          layout={wasmLayout}
-          hideMeasureNumbers
-          highlightedNoteIds={highlightedNoteIdsForWasm}
-          sourceToNoteIdMap={pluginSourceMap}
-        />
+        {wasmLayout != null && (
+          <ScoreViewer
+            layout={wasmLayout}
+            hideMeasureNumbers
+            highlightedNoteIds={highlightedNoteIdsForWasm}
+            sourceToNoteIdMap={pluginSourceMap}
+          />
+        )}
       </div>
     );
   }

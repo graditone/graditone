@@ -8,6 +8,7 @@ import { FileStateProvider } from './services/state/FileStateContext'
 import { TempoStateProvider } from './services/state/TempoStateContext'
 import { initWasm } from './services/wasm/loader'
 import { BUILTIN_PLUGINS, type BuiltinPluginEntry } from './services/plugins/builtinPlugins'
+import { sortPluginsByOrder } from './services/plugins/sortPlugins'
 import { pluginRegistry } from './services/plugins/PluginRegistry'
 import { PluginView, V3PluginWrapper, createBoundScoreRenderer, type V3ProxyRefs } from './components/plugins/PluginView'
 import { PluginNavEntry } from './components/plugins/PluginNavEntry'
@@ -259,6 +260,7 @@ function App() {
           recording: {
             subscribe: (handler) => pluginMicBroadcaster.subscribe(handler),
             onError: (handler) => pluginMicBroadcaster.onError(handler),
+            stop: () => pluginMicBroadcaster.stop(),
           },
           components: {
             // Host-provided notation staff — plugins use this to visualise notes
@@ -290,7 +292,8 @@ function App() {
         plugin.init(context)
       })
 
-      setAllPlugins(entries)
+      // Feature 036: sort plugins by manifest.order before setting state
+      setAllPlugins(sortPluginsByOrder(entries))
     }
 
     loadPlugins()

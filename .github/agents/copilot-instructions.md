@@ -75,6 +75,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - N/A — toggle state is session-only, no persistence (FR-009) (001-practice-virtual-keyboard)
 - TypeScript 5, React 18 + Tone.js v14.9.17 (`MembraneSynth` + `Synth`), Web Audio API (via Tone.js Transport), React rAF loop (`ITickSource`) (035-metronome)
 - N/A (no persistence; metronome state is transient per view) (035-metronome)
+- TypeScript 5 + React 18 (frontend only; no backend change) + React, Vite, Vitest, Testing Library — no new dependencies introduced (036-rename-practice-train)
+- localStorage (`practice-complexity-level-v1` → `train-complexity-level-v1`), sessionStorage (`practice-tips-v1-dismissed` → `train-tips-v1-dismissed`); IndexedDB not affected (built-in plugins are held in-memory only, never written to IndexedDB) (036-rename-practice-train)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -95,9 +97,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 036-rename-practice-train: Added TypeScript 5 + React 18 (frontend only; no backend change) + React, Vite, Vitest, Testing Library — no new dependencies introduced
 - 035-metronome: Added TypeScript 5, React 18 + Tone.js v14.9.17 (`MembraneSynth` + `Synth`), Web Audio API (via Tone.js Transport), React rAF loop (`ITickSource`)
 - 001-practice-virtual-keyboard: Added TypeScript 5.x, React 18 + React, Plugin API v4 (`context.playNote`, `context.midi.subscribe`, `context.recording.subscribe`), Vitest (unit), Playwright (e2e)
-- 001-practice-complexity-levels: Added TypeScript 5.9, React 19, Vite 7 + Vitest 4, Playwright 1.58 — no new npm packages required
 
 
 <!-- MANUAL ADDITIONS START -->

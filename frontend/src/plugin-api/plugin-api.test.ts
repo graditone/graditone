@@ -131,6 +131,7 @@ describe('Plugin API contract', () => {
         recording: {
           subscribe: () => () => {},
           onError: () => () => {},
+          stop: () => {},
         },
         stopPlayback: () => { /* no-op */ },
         close: () => { /* no-op */ },
@@ -160,6 +161,7 @@ describe('Plugin API contract', () => {
         recording: {
           subscribe: (_handler: (e: PluginPitchEvent) => void) => () => {},
           onError: (_handler: (e: string) => void) => () => {},
+          stop: () => {},
         },
         stopPlayback: () => {},
         close: () => {},
@@ -184,7 +186,7 @@ describe('Plugin API contract', () => {
         playNote: () => {},
         midi: { subscribe: () => () => {} },
         components: { StaffViewer: () => null },
-        recording: { subscribe: () => () => {}, onError: () => () => {} },
+        recording: { subscribe: () => () => {}, onError: () => () => {}, stop: () => {} },
         stopPlayback: () => {},
         close: () => {},
         manifest,
@@ -228,15 +230,18 @@ describe('Plugin API contract', () => {
       const recording: PluginRecordingContext = {
         subscribe: (_handler) => () => {},
         onError: (_handler) => () => {},
+        stop: () => {},
       };
       expect(typeof recording.subscribe).toBe('function');
       expect(typeof recording.onError).toBe('function');
+      expect(typeof recording.stop).toBe('function');
     });
 
     it('subscribe returns an unsubscribe function', () => {
       const recording: PluginRecordingContext = {
         subscribe: (_handler) => () => {},
         onError: (_handler) => () => {},
+        stop: () => {},
       };
       const unsub = recording.subscribe(() => {});
       expect(typeof unsub).toBe('function');

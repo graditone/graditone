@@ -69,7 +69,7 @@ function createMockContext(stateOverride: Partial<ScorePlayerState> = {}, ScoreR
     playNote: vi.fn(),
     stopPlayback: vi.fn(),
     close: mockClose,
-    recording: { subscribe: vi.fn(() => () => {}), onError: vi.fn(() => () => {}) },
+    recording: { subscribe: vi.fn(() => () => {}), onError: vi.fn(() => () => {}), stop: vi.fn() },
     midi: { subscribe: vi.fn(() => () => {}) },
     components: {
       StaffViewer: () => null,

@@ -1,8 +1,8 @@
 /**
- * practiceTypes.ts — Plugin-internal domain types
- * Feature 031: Practice View Plugin
+ * trainTypes.ts — Plugin-internal domain types
+ * Feature 036: Rename Practice Plugin to Train (was practiceTypes.ts)
  *
- * Self-contained type definitions for the practice-view plugin.
+ * Self-contained type definitions for the train-view plugin.
  * NO imports from src/ — all types are defined here.
  * Self-contained — intentionally not importing from src/ to respect the
  * plugin/host ESLint import boundary.
@@ -10,10 +10,10 @@
 
 // ─── Exercise configuration ───────────────────────────────────────────────────
 
-/** Which notes to practice */
-export type PracticeMode = 'flow' | 'step';
+/** Which notes to train */
+export type TrainMode = 'flow' | 'step';
 
-/** Exercise configuration for generating a practice set */
+/** Exercise configuration for generating a training set */
 export interface ExerciseConfig {
   /** Note pool selection */
   preset: 'random' | 'c4scale' | 'score';
@@ -23,8 +23,8 @@ export interface ExerciseConfig {
   clef: 'Treble' | 'Bass';
   /** 1 = one octave around the clef centre; 2 = two octaves */
   octaveRange: 1 | 2;
-  /** Practice mode: 'flow' = timed play-through; 'step' = wait for correct note each slot */
-  mode: PracticeMode;
+  /** Train mode: 'flow' = timed play-through; 'step' = wait for correct note each slot */
+  mode: TrainMode;
   /**
    * Step mode only. Multiplier applied to the quarter-note duration to derive
    * the per-slot timeout. E.g. 4 = the user has 4× the note's duration to press it.
@@ -35,10 +35,10 @@ export interface ExerciseConfig {
 // ─── Phase state machine ──────────────────────────────────────────────────────
 
 /**
- * Phase state machine for the Practice plugin UI:
+ * Phase state machine for the Train plugin UI:
  *   ready → countdown → playing → results
  */
-export type PracticePhase = 'ready' | 'countdown' | 'playing' | 'results';
+export type TrainPhase = 'ready' | 'countdown' | 'playing' | 'results';
 
 // ─── Exercise ─────────────────────────────────────────────────────────────────
 
@@ -54,8 +54,8 @@ export interface ExerciseNote {
   expectedOnsetMs: number;
 }
 
-/** The immutable sequence of target notes for one practice session */
-export interface PracticeExercise {
+/** The immutable sequence of target notes for one training session */
+export interface TrainExercise {
   /** Ordered target notes */
   notes: ExerciseNote[];
   /** Beats per minute used to compute onset times */
@@ -146,7 +146,7 @@ export interface ComplexityPreset {
 export type ComplexityPresets = Record<ComplexityLevel, ComplexityPreset>;
 
 /** localStorage key used to persist the selected complexity level across sessions. */
-export const COMPLEXITY_LEVEL_STORAGE_KEY = 'practice-complexity-level-v1';
+export const COMPLEXITY_LEVEL_STORAGE_KEY = 'train-complexity-level-v1';
 
 /**
  * Preset definitions for Low / Mid / High complexity levels.

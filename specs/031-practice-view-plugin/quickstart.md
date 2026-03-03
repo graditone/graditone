@@ -1,3 +1,9 @@
+> **Renamed** — The plugin described in this document was renamed to **Train** in feature 036.
+> Canonical plugin path: `frontend/plugins/train-view/`
+> See [specs/036-rename-practice-train/](../036-rename-practice-train/) for the rename spec.
+
+---
+
 # Quickstart: Practice View Plugin & Plugin API Recording Extension
 
 ## Overview

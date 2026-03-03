@@ -178,6 +178,13 @@ export interface PluginRecordingContext {
    * Returns an unsubscribe function.
    */
   onError(handler: (error: string) => void): () => void;
+  /**
+   * Force-stop the microphone stream immediately.
+   * Call this during view teardown (e.g. plugin unmount) as a safety net
+   * to ensure the mic is released even if individual unsubscribe calls
+   * haven't all fired yet.
+   */
+  stop(): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +225,15 @@ export interface PluginManifest {
    * Example: '𝄞' (treble clef), '🎹' (keyboard).
    */
   readonly icon?: string;
+  /**
+   * Controls the position of this plugin in the app navigation.
+   * Lower values appear before higher values.
+   * Plugins without this field appear after all ordered plugins,
+   * then sorted alphabetically by `id`.
+   * Non-finite or non-number values are treated as absent (console.warn emitted).
+   * Example: `1` (Play), `2` (Train), `3` (Practice), `4` (Performance).
+   */
+  readonly order?: number;
   /** Set by the host: 'builtin' for repo plugins, 'imported' for user-installed. */
   readonly origin: 'builtin' | 'imported';
 }

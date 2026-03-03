@@ -12,7 +12,7 @@
 
 /* ── Outer container ──────────────────────────────────────────────────────── */
 
-.practice-vkb {
+.train-vkb {
   display: flex;
   flex-direction: row;
   align-items: stretch;
@@ -26,7 +26,7 @@
 
 /* ── Visually-hidden range label (screen-reader + unit-test accessible) ───── */
 
-.practice-vkb__range-label--sr {
+.train-vkb__range-label--sr {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -39,7 +39,7 @@
 
 /* ── Octave shift buttons (left / right of keyboard) ─────────────────────── */
 
-.practice-vkb__octave-btn {
+.train-vkb__octave-btn {
   width: 44px;
   min-width: 44px;           /* 44 px touch target */
   flex-shrink: 0;
@@ -60,18 +60,18 @@
   justify-content: center;
 }
 
-.practice-vkb__octave-btn:hover:not(:disabled) {
+.train-vkb__octave-btn:hover:not(:disabled) {
   background: var(--color-surface-hover, #ebebeb);
 }
 
-.practice-vkb__octave-btn:disabled {
+.train-vkb__octave-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 
 /* ── Keyboard scroll container ────────────────────────────────────────────── */
 
-.practice-vkb__scroll {
+.train-vkb__scroll {
   flex: 1;
   min-width: 0;              /* allow shrinking inside flex row */
   overflow-x: auto;
@@ -88,7 +88,7 @@
 
 /* ── Key container ────────────────────────────────────────────────────────── */
 
-.practice-vkb__keyboard {
+.train-vkb__keyboard {
   position: relative;
   display: inline-flex;
   flex-direction: row;
@@ -100,7 +100,7 @@
 
 /* ── Key base ─────────────────────────────────────────────────────────────── */
 
-.practice-vkb__key {
+.train-vkb__key {
   position: relative;
   box-sizing: border-box;
   border-radius: 0 0 4px 4px;
@@ -113,7 +113,7 @@
 
 /* ── White keys ───────────────────────────────────────────────────────────── */
 
-.practice-vkb__key--white {
+.train-vkb__key--white {
   width: 44px;
   min-width: 44px;           /* 44 px touch target */
   height: 100px;
@@ -129,8 +129,8 @@
   font-family: monospace;
 }
 
-.practice-vkb__key--white:active,
-.practice-vkb__key--white.practice-vkb__key--pressed {
+.train-vkb__key--white:active,
+.train-vkb__key--white.train-vkb__key--pressed {
   background: #b8d4ff;
   border-color: #5599ee;
   color: #3366cc;
@@ -138,7 +138,7 @@
 
 /* ── Black keys ───────────────────────────────────────────────────────────── */
 
-.practice-vkb__key--black {
+.train-vkb__key--black {
   position: absolute;
   top: 0;
   width: 26px;
@@ -152,8 +152,8 @@
   transform: translateX(-50%);
 }
 
-.practice-vkb__key--black:active,
-.practice-vkb__key--black.practice-vkb__key--pressed {
+.train-vkb__key--black:active,
+.train-vkb__key--black.train-vkb__key--pressed {
   background: #1a4fcf;
   border-color: #0033aa;
 }
@@ -161,16 +161,16 @@
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 480px) {
-  .practice-vkb__key--white {
+  .train-vkb__key--white {
     width: 38px;
     min-width: 38px;
     height: 88px;
   }
-  .practice-vkb__key--black {
+  .train-vkb__key--black {
     width: 22px;
     height: 58px;
   }
-  .practice-vkb__keyboard {
+  .train-vkb__keyboard {
     height: 88px;
   }
 }
