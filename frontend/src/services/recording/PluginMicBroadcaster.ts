@@ -58,6 +58,20 @@ class PluginMicBroadcaster {
   private stream: MediaStream | null = null;
   /** Cached error, if any — delivered to late onError subscribers immediately */
   private errorState: string | null = null;
+  /**
+   * Monotonically increasing counter. Incremented whenever startMic() is
+   * invoked or stopMic() runs. Each startMic() invocation captures its value
+   * at entry; if the counter has advanced by the time an await resumes, the
+   * invocation is stale (a new startup was requested or a stop ran) and must
+   * release any resources it has already acquired.
+   *
+   * This prevents TWO concurrent startMic() calls from both completing when
+   * React StrictMode mounts-unmounts-remounts the component: the first call's
+   * async continuation resumes after pitchHandlers have been re-populated by
+   * the second mount, so pitchHandlers.size would be > 0 and the old guards
+   * would pass — leaving two open streams, one of which is never closed.
+   */
+  private micGeneration = 0;
 
   /**
    * Subscribe to microphone pitch events.
@@ -66,13 +80,16 @@ class PluginMicBroadcaster {
    */
   subscribe(handler: (e: PluginPitchEvent) => void): () => void {
     this.pitchHandlers.add(handler);
+    console.log(`[MicBroadcaster] subscribe() — handlers now: ${this.pitchHandlers.size}, stream: ${this.stream ? 'open' : 'null'}`);
     if (this.pitchHandlers.size === 1 && !this.stream) {
-      // First subscriber: open mic
+      console.log('[MicBroadcaster] first subscriber → calling startMic()');
       this.startMic();
     }
     return () => {
       this.pitchHandlers.delete(handler);
+      console.log(`[MicBroadcaster] unsubscribe() — handlers now: ${this.pitchHandlers.size}, stream: ${this.stream ? 'open' : 'null'}`);
       if (this.pitchHandlers.size === 0) {
+        console.log('[MicBroadcaster] last subscriber removed → calling stopMic()');
         this.stopMic();
       }
     };
@@ -102,6 +119,7 @@ class PluginMicBroadcaster {
    * unsubscribe running before the browser releases the stream).
    */
   stop(): void {
+    console.log(`[MicBroadcaster] stop() called — handlers: ${this.pitchHandlers.size}, stream: ${this.stream ? 'open' : 'null'}`);
     this.pitchHandlers.clear();
     this.errorHandlers.clear();
     this.stopMic();
@@ -118,8 +136,11 @@ class PluginMicBroadcaster {
   // ─── Private: mic lifecycle ─────────────────────────────────────────────────
 
   private async startMic(): Promise<void> {
+    const gen = ++this.micGeneration;
+    console.log(`[MicBroadcaster] startMic() started (gen=${gen})`);
     // Guard: AudioWorklet supported
     if (typeof AudioWorkletNode === 'undefined') {
+      console.log('[MicBroadcaster] startMic() ✗ AudioWorklet not supported');
       this.dispatchError('AudioWorklet not supported in this browser');
       return;
     }
@@ -145,8 +166,11 @@ class PluginMicBroadcaster {
         },
       });
     } catch (err) {
-      // Check if subscriber count dropped to zero while we were awaiting permission
-      if (this.pitchHandlers.size === 0) return;
+      // Check if this invocation was superseded while we were awaiting permission
+      if (this.micGeneration !== gen) {
+        console.log(`[MicBroadcaster] startMic() getUserMedia catch — stale gen=${gen}, aborting`);
+        return;
+      }
       const name = (err as DOMException).name;
       const message =
         name === 'NotAllowedError'
@@ -158,8 +182,10 @@ class PluginMicBroadcaster {
       return;
     }
 
-    // Check if all subscribers unsubscribed while awaiting permission
-    if (this.pitchHandlers.size === 0) {
+    console.log(`[MicBroadcaster] startMic() getUserMedia succeeded (gen=${gen})`);
+    // Check if this invocation was superseded while we were awaiting getUserMedia
+    if (this.micGeneration !== gen) {
+      console.log(`[MicBroadcaster] startMic() stale after getUserMedia — gen=${gen} vs current=${this.micGeneration}, stopping tracks`);
       stream.getTracks().forEach((t) => t.stop());
       return;
     }
@@ -171,22 +197,26 @@ class PluginMicBroadcaster {
         `${typeof import.meta !== 'undefined' ? import.meta.env?.BASE_URL ?? '/' : '/'}audio-processor.worklet.js`
       );
     } catch {
-      if (this.pitchHandlers.size === 0) {
+      if (this.micGeneration !== gen) {
+        console.log(`[MicBroadcaster] startMic() addModule catch — stale gen=${gen}, stopping tracks`);
         stream.getTracks().forEach((t) => t.stop());
         audioCtx.close();
         return;
       }
+      console.log('[MicBroadcaster] startMic() addModule failed — dispatching error');
       stream.getTracks().forEach((t) => t.stop());
       audioCtx.close();
       this.dispatchError('Failed to load audio processor');
       return;
     }
 
-    if (this.pitchHandlers.size === 0) {
+    if (this.micGeneration !== gen) {
+      console.log(`[MicBroadcaster] startMic() stale after addModule — gen=${gen} vs current=${this.micGeneration}, stopping tracks`);
       stream.getTracks().forEach((t) => t.stop());
       audioCtx.close();
       return;
     }
+    console.log(`[MicBroadcaster] startMic() addModule succeeded, building audio graph (gen=${gen})`);
 
     const workletNode = new AudioWorkletNode(audioCtx, 'audio-capture-processor');
     const source = audioCtx.createMediaStreamSource(stream);
@@ -222,34 +252,45 @@ class PluginMicBroadcaster {
       this.dispatch(event);
     };
 
-    // Final guard: stop() may have been called while we were awaiting the
-    // worklet module. If so, all handlers were already cleared — tear down the
-    // resources we just built and return without assigning this.stream, which
-    // would orphan the stream forever (stop() already set this.stream = null).
-    if (this.pitchHandlers.size === 0) {
+    // Final guard: check generation before committing resources to the singleton.
+    // If stopMic() or a new startMic() ran while this invocation was suspended
+    // at any await, the generation will have advanced and we must tear down
+    // rather than orphan this stream.
+    if (this.micGeneration !== gen) {
+      console.log(`[MicBroadcaster] startMic() FINAL guard — stale gen=${gen} vs current=${this.micGeneration}, tearing down graph`);
       workletNode.disconnect();
       stream.getTracks().forEach((t) => t.stop());
       audioCtx.close();
       return;
     }
 
+    console.log(`[MicBroadcaster] startMic() ✓ complete — mic is open, handlers: ${this.pitchHandlers.size} (gen=${gen})`);
     this.stream = stream;
     this.audioCtx = audioCtx;
     this.workletNode = workletNode;
   }
 
   private stopMic(): void {
+    // Advance the generation counter so any in-flight startMic() invocation
+    // will see a mismatch at its next guard and tear down its own resources.
+    this.micGeneration++;
+    console.log(`[MicBroadcaster] stopMic() (gen now=${this.micGeneration}) — workletNode: ${this.workletNode ? 'exists' : 'null'}, stream: ${this.stream ? 'open' : 'null'}, audioCtx: ${this.audioCtx ? 'exists' : 'null'}`);
     // Each teardown step runs independently so a failed disconnect()
     // cannot prevent the MediaStream tracks from being stopped — the tracks
     // must be stopped for the browser to release the mic indicator.
-    try { this.workletNode?.disconnect(); } catch { /* ignore */ }
-    try { this.stream?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
-    try { this.audioCtx?.close(); } catch { /* ignore */ }
+    try { this.workletNode?.disconnect(); } catch (e) { console.warn('[MicBroadcaster] stopMic() workletNode.disconnect() threw:', e); }
+    try {
+      const tracks = this.stream?.getTracks() ?? [];
+      console.log(`[MicBroadcaster] stopMic() stopping ${tracks.length} track(s)`);
+      tracks.forEach((t) => t.stop());
+    } catch (e) { console.warn('[MicBroadcaster] stopMic() getTracks/stop threw:', e); }
+    try { this.audioCtx?.close(); } catch (e) { console.warn('[MicBroadcaster] stopMic() audioCtx.close() threw:', e); }
     this.stream = null;
     this.audioCtx = null;
     this.workletNode = null;
     // Clear error state so re-subscribing gets a fresh attempt
     this.errorState = null;
+    console.log('[MicBroadcaster] stopMic() done');
   }
 
   private dispatch(event: PluginPitchEvent): void {

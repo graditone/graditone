@@ -313,4 +313,78 @@ describe('PluginMicBroadcaster', () => {
     // Broadcaster must remain inactive
     expect(broadcaster.isActive()).toBe(false);
   });
+
+  it('React StrictMode double-mount: stale startMic() does not survive a re-subscribe', async () => {
+    // React StrictMode mounts → unmounts → remounts in quick succession.
+    // Both mount cycles call subscribe() → startMic(). If the stale first
+    // startMic() completes after the second one has started, it must not
+    // commit its stream to the singleton (double open = one stream orphaned).
+    let resolveFirst!: () => void;
+    let resolveSecond!: () => void;
+    let addModuleCallCount = 0;
+
+    vi.stubGlobal('AudioContext', class MockAudioContextStrict {
+      sampleRate = 44100;
+      destination = {};
+      audioWorklet = {
+        addModule: vi.fn().mockImplementation(() => {
+          addModuleCallCount++;
+          if (addModuleCallCount === 1) {
+            return new Promise<void>((res) => { resolveFirst = res; });
+          }
+          return new Promise<void>((res) => { resolveSecond = res; });
+        }),
+      };
+      close = vi.fn().mockResolvedValue(undefined);
+      createMediaStreamSource() { return { connect: vi.fn(), disconnect: vi.fn() }; }
+      createBiquadFilter() {
+        return { type: 'highpass', frequency: { value: 0 }, Q: { value: 0 }, connect: vi.fn(), disconnect: vi.fn() };
+      }
+    } as unknown as typeof AudioContext);
+
+    // Two streams so we can tell them apart
+    const stream1 = makeMockStream();
+    const stream2 = makeMockStream();
+    let getUserMediaCallCount = 0;
+    getUserMediaSpy.mockImplementation(() => {
+      getUserMediaCallCount++;
+      return Promise.resolve(getUserMediaCallCount === 1 ? stream1 : stream2);
+    });
+
+    const broadcaster = await freshBroadcaster();
+    const handler = vi.fn();
+
+    // ── First mount ──────────────────────────────────────────────────────────
+    const unsub1 = broadcaster.subscribe(handler);
+    await new Promise(resolve => setTimeout(resolve, 10)); // let getUserMedia1 resolve
+
+    // ── First unmount ────────────────────────────────────────────────────────
+    unsub1(); // pitchHandlers.size → 0, stopMic() increments generation
+    await new Promise(resolve => setTimeout(resolve, 5));
+
+    // ── Second mount ─────────────────────────────────────────────────────────
+    const unsub2 = broadcaster.subscribe(handler); // new startMic(), new gen
+    await new Promise(resolve => setTimeout(resolve, 10)); // let getUserMedia2 resolve
+
+    // Both addModule awaits are still pending. Let the STALE first one resolve.
+    resolveFirst();
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    // stream1's tracks must have been stopped by the stale-gen guard
+    expect(stream1.getTracks()[0].stop).toHaveBeenCalled();
+    // Broadcaster must still be inactive (second startMic not yet complete)
+    expect(broadcaster.isActive()).toBe(false);
+
+    // Now let the live second addModule resolve
+    resolveSecond();
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    // Only one stream should be open — the second one
+    expect(broadcaster.isActive()).toBe(true);
+    expect(stream2.getTracks()[0].stop).not.toHaveBeenCalled();
+
+    unsub2();
+    expect(stream2.getTracks()[0].stop).toHaveBeenCalled();
+    expect(broadcaster.isActive()).toBe(false);
+  });
 });
