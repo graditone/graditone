@@ -5,20 +5,18 @@
  * Built-in plugins are bundled at build time and registered in-memory on app
  * startup. They are NOT written to IndexedDB (see research.md R-006).
  *
- * Plugins are discovered automatically via Vite's import.meta.glob — only
- * directories under frontend/plugins/ that have both an index file and a
- * plugin.json with `"type": "core"` are included. Display order is driven
- * by the `order` field in each plugin.json (lower = earlier; plugins without
- * an order appear last, sorted alphabetically by id).
+ * Both core and common plugins are discovered automatically via Vite's
+ * import.meta.glob — any directory under frontend/plugins/ that has both an
+ * index file and a plugin.json is included. Type is read from plugin.json:
  *
- * To add a new core plugin: create the directory, add index + plugin.json
- * with `"type": "core"` and the desired `"order"` — no manual registration
- * needed here.
+ *   type: "core"   → landing screen buttons, sorted by `order` field
+ *   type: "common" → banner items below the title, sorted alphabetically by id
+ *
+ * To add a new plugin (built-in or symlinked external): create / symlink the
+ * directory with index + plugin.json — no manual registration needed here.
  */
 
 import type { PluginManifest, MusicorePlugin } from '../../plugin-api/index';
-import virtualKeyboardPlugin from '../../../plugins/virtual-keyboard/index';
-import virtualKeyboardManifestJson from '../../../plugins/virtual-keyboard/plugin.json';
 
 // Both globs are resolved eagerly at build time by Vite (no runtime overhead).
 const indexModules = import.meta.glob('../../../plugins/*/index.{ts,tsx}', {
@@ -35,34 +33,30 @@ export interface BuiltinPluginEntry {
   plugin: MusicorePlugin;
 }
 
-const CORE_BUILTINS: BuiltinPluginEntry[] = Object.entries(indexModules)
-  .flatMap(([indexPath, plugin]) => {
-    const manifestPath = indexPath.replace(/index\.(ts|tsx)$/, 'plugin.json');
-    const manifestJson = manifestModules[manifestPath];
-    // Only include plugins whose manifest declares type: 'core'
-    if (!manifestJson || manifestJson.type !== 'core') return [];
-    return [{
-      plugin,
-      manifest: { ...manifestJson, origin: 'builtin' as const },
-    }];
-  })
-  .sort((a, b) => {
-    const oa = a.manifest.order ?? Infinity;
-    const ob = b.manifest.order ?? Infinity;
-    if (oa !== ob) return oa - ob;
-    return a.manifest.id.localeCompare(b.manifest.id);
-  });
+function buildEntries(type: 'core' | 'common'): BuiltinPluginEntry[] {
+  return Object.entries(indexModules)
+    .flatMap(([indexPath, plugin]) => {
+      const manifestPath = indexPath.replace(/index\.(ts|tsx)$/, 'plugin.json');
+      const manifestJson = manifestModules[manifestPath];
+      if (!manifestJson || manifestJson.type !== type) return [];
+      return [{
+        plugin,
+        manifest: { ...manifestJson, origin: 'builtin' as const },
+      }];
+    })
+    .sort((a, b) => {
+      // Core plugins: sort by explicit order field, then by id.
+      // Common plugins: sort alphabetically by id (no order convention).
+      if (type === 'core') {
+        const oa = a.manifest.order ?? Infinity;
+        const ob = b.manifest.order ?? Infinity;
+        if (oa !== ob) return oa - ob;
+      }
+      return a.manifest.id.localeCompare(b.manifest.id);
+    });
+}
 
-// Common-type builtin plugins are not auto-discovered (no order field convention
-// for common plugins). They are appended after the core plugins.
-const COMMON_BUILTINS: BuiltinPluginEntry[] = [
-  {
-    plugin: virtualKeyboardPlugin,
-    manifest: {
-      ...(virtualKeyboardManifestJson as Omit<PluginManifest, 'origin'>),
-      origin: 'builtin' as const,
-    },
-  },
-];
+const CORE_BUILTINS = buildEntries('core');
+const COMMON_BUILTINS = buildEntries('common');
 
 export const BUILTIN_PLUGINS: BuiltinPluginEntry[] = [...CORE_BUILTINS, ...COMMON_BUILTINS];

@@ -13,6 +13,9 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/e2e/**',         // Playwright tests — run via `playwright test`, not vitest
+      // External plugins symlinked for local dev — they have their own test suite
+      'plugins/practice-view-plugin/**',
+      'plugins/virtual-keyboard-pro/**',
     ],
   },
   resolve: {

@@ -26,5 +26,14 @@
     "noUncheckedSideEffectImports": true
   },
   "include": ["src", "plugins"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "tests/**/*", "plugins/**/*.test.ts", "plugins/**/*.test.tsx", "plugins/lint-test/**"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "tests/**/*",
+    "plugins/**/*.test.ts",
+    "plugins/**/*.test.tsx",
+    "plugins/lint-test/**",
+    "plugins/practice-view-plugin/**",
+    "plugins/virtual-keyboard-pro/**"
+  ]
 }
