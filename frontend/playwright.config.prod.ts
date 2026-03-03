@@ -23,10 +23,9 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   reporter: process.env.CI ? 'github' : 'html',
-  // WASM parse + 3.5 s countdown means tests like SC-001 routinely exceed
-  // Playwright's default 30 s test timeout in CI.  90 s is generous without
-  // being open-ended -- individual assertions still carry their own timeouts.
-  timeout: 90_000,
+  // Individual assertions carry their own explicit timeouts; 30 s at the
+  // test level is enough for all current E2E flows.
+  timeout: 30_000,
 
   use: {
     // Must match the sub-path the build was produced with
