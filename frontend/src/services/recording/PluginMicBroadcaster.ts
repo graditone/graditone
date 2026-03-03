@@ -222,6 +222,17 @@ class PluginMicBroadcaster {
       this.dispatch(event);
     };
 
+    // Final guard: stop() may have been called while we were awaiting the
+    // worklet module. If so, all handlers were already cleared — tear down the
+    // resources we just built and return without assigning this.stream, which
+    // would orphan the stream forever (stop() already set this.stream = null).
+    if (this.pitchHandlers.size === 0) {
+      workletNode.disconnect();
+      stream.getTracks().forEach((t) => t.stop());
+      audioCtx.close();
+      return;
+    }
+
     this.stream = stream;
     this.audioCtx = audioCtx;
     this.workletNode = workletNode;

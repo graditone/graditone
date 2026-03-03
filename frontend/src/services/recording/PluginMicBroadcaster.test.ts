@@ -275,4 +275,42 @@ describe('PluginMicBroadcaster', () => {
     broadcaster.stop();
     expect(broadcaster.isActive()).toBe(false);
   });
+
+  it('race condition: stop() called while startMic() awaits addModule does not orphan the stream', async () => {
+    // Control when addModule resolves so we can inject stop() between the
+    // getUserMedia await and the addModule await in startMic().
+    let resolveAddModule!: () => void;
+    const addModulePromise = new Promise<void>((res) => { resolveAddModule = res; });
+
+    vi.stubGlobal('AudioContext', class MockAudioContextDeferred {
+      sampleRate = 44100;
+      destination = {};
+      audioWorklet = { addModule: vi.fn().mockReturnValue(addModulePromise) };
+      close = vi.fn().mockResolvedValue(undefined);
+      createMediaStreamSource() { return { connect: vi.fn(), disconnect: vi.fn() }; }
+      createBiquadFilter() {
+        return { type: 'highpass', frequency: { value: 0 }, Q: { value: 0 }, connect: vi.fn(), disconnect: vi.fn() };
+      }
+    } as unknown as typeof AudioContext);
+
+    const broadcaster = await freshBroadcaster();
+    const handler = vi.fn();
+
+    // Subscribe → startMic() starts, suspends at await addModule
+    broadcaster.subscribe(handler);
+
+    // Simulate component unmount: stop() runs while addModule is still pending
+    await new Promise(resolve => setTimeout(resolve, 10)); // let getUserMedia resolve first
+    broadcaster.stop();
+    expect(broadcaster.isActive()).toBe(false);
+
+    // Now let addModule resolve — startMic() resumes and hits the final guard
+    resolveAddModule();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // The stream must have been stopped by the final guard in startMic()
+    expect(mockStream.getTracks()[0].stop).toHaveBeenCalled();
+    // Broadcaster must remain inactive
+    expect(broadcaster.isActive()).toBe(false);
+  });
 });
