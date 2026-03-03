@@ -228,13 +228,12 @@ class PluginMicBroadcaster {
   }
 
   private stopMic(): void {
-    try {
-      this.workletNode?.disconnect();
-      this.stream?.getTracks().forEach((t) => t.stop());
-      this.audioCtx?.close();
-    } catch {
-      // Ignore teardown errors
-    }
+    // Each teardown step runs independently so a failed disconnect()
+    // cannot prevent the MediaStream tracks from being stopped — the tracks
+    // must be stopped for the browser to release the mic indicator.
+    try { this.workletNode?.disconnect(); } catch { /* ignore */ }
+    try { this.stream?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+    try { this.audioCtx?.close(); } catch { /* ignore */ }
     this.stream = null;
     this.audioCtx = null;
     this.workletNode = null;
