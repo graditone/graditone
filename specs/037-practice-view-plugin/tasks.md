@@ -177,6 +177,8 @@
 
 - [X] T051 Run `vitest run` in both `frontend/` and `plugins-external/practice-view-plugin/`, confirm all tests pass; run production build in `plugins-external/practice-view-plugin/` and verify bundle size ≤ 50 KB.
 
+- [X] T052 Add "Both Clefs" staff option: add `value={-1}` option to `practiceToolbar.tsx` staff `<select>` (shown when `staffCount >= 2`); add `mergePracticeNotesByTick` helper to `PracticeViewPlugin.tsx` that merges entries from all staves by tick (union of pitches at the same tick); update `handlePracticeToggle` to extract from all staves and merge when `staffIndex === -1`; update toolbar tests (options count: `staffCount + 1`; new tests for Both Clefs presence and `-1` dispatch).
+
 ---
 
 ## Dependencies & Execution Order
