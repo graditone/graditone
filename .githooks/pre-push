@@ -1,6 +1,7 @@
 #!/bin/sh
-# Pre-push hook: fast checks (Rust tests, TS build, unit tests).
-# E2E tests are intentionally excluded — they take 20+ minutes and run in CI.
+# Pre-push hook: fast checks (Rust tests, TS build, unit tests, E2E with timeout).
+# E2E: killed after 3 min. Zero failures + timeout → CI handles the rest.
+# Any failure in the captured output → push is blocked.
 
 echo "🚀 Running pre-push validation..."
 
@@ -49,6 +50,42 @@ if [ "$current_branch" = "main" ] || echo "$current_branch" | grep -qE '^[0-9]+-
     echo ""
     echo "Tip: Use 'git push --no-verify' to skip if tests are expected to fail."
     exit 1
+  fi
+
+  # Run E2E tests with a 3-minute hard limit.
+  # Correct tests finish in < 2 min. Hanging past 3 min means a test is timing
+  # out due to a broken selector or missing element -- those show up as failures
+  # in the captured output. If we hit the limit with zero failures recorded,
+  # the suite was passing cleanly and CI will finish the run.
+  echo "  - Running E2E tests (3 min limit)..."
+  lsof -i :4173 -t 2>/dev/null | xargs kill -9 2>/dev/null || true
+  timeout 180 npx playwright test --config playwright.config.prod.ts --reporter=list > /tmp/e2e-prepush.log 2>&1
+  e2e_exit=$?
+
+  e2e_passed=$(grep -c ' ✓ ' /tmp/e2e-prepush.log 2>/dev/null || echo 0)
+  e2e_failed=$(grep -cE '^\s+[0-9]+\) \[' /tmp/e2e-prepush.log 2>/dev/null || echo 0)
+
+  if [ "$e2e_exit" -eq 124 ]; then
+    # Killed by the 3-min timeout
+    if [ "$e2e_failed" -gt 0 ]; then
+      echo ""
+      echo "❌ E2E timed out with $e2e_failed failure(s) already detected ($e2e_passed passed):"
+      tail -50 /tmp/e2e-prepush.log
+      echo ""
+      echo "Run 'cd frontend && npm run e2e' to reproduce locally."
+      exit 1
+    else
+      echo "  ⏱  E2E hit 3-min limit — $e2e_passed passed, 0 failures. CI will finish the run."
+    fi
+  elif [ "$e2e_exit" -ne 0 ]; then
+    echo ""
+    echo "❌ E2E tests failed ($e2e_passed passed, $e2e_failed failed):"
+    tail -50 /tmp/e2e-prepush.log
+    echo ""
+    echo "Run 'cd frontend && npm run e2e' to reproduce locally."
+    exit 1
+  else
+    echo "  E2E: $e2e_passed tests passed"
   fi
 
   cd ..
