@@ -32,6 +32,8 @@ export interface ScoreViewerProps {
   sourceToNoteIdMap?: Map<string, string>;
   /** Long-press pinned note IDs — rendered with permanent green highlight */
   pinnedNoteIds?: Set<string>;
+  /** Note IDs for auto-scroll targeting; overrides highlightedNoteIds for scroll only */
+  scrollTargetNoteIds?: Set<string>;
   /** Loop region for overlay rect and rAF loop-back */
   loopRegion?: { startTick: number; endTick: number } | null;
   /** Toggle playback on click/touch of the score */
@@ -261,22 +263,27 @@ export class ScoreViewer extends Component<ScoreViewerProps, ScoreViewerState> {
       this.updateViewport();
     }
 
-    // Auto-scroll to follow highlighted notes during playback
+    // Auto-scroll to follow the scroll target (if set) or highlighted notes.
+    // scrollTargetNoteIds overrides highlightedNoteIds for scroll purposes,
+    // allowing practice mode to scroll to the user's target note while the
+    // highlight shows the phantom tempo position.
+    const scrollIds = this.props.scrollTargetNoteIds ?? this.props.highlightedNoteIds;
+    const prevScrollIds = prevProps.scrollTargetNoteIds ?? prevProps.highlightedNoteIds;
     if (
-      this.props.highlightedNoteIds !== prevProps.highlightedNoteIds &&
-      this.props.highlightedNoteIds &&
-      this.props.highlightedNoteIds.size > 0 &&
+      scrollIds !== prevScrollIds &&
+      scrollIds &&
+      scrollIds.size > 0 &&
       this.props.layout &&
       this.props.sourceToNoteIdMap
     ) {
-      this.scrollToHighlightedSystem();
+      this.scrollToHighlightedSystem(scrollIds);
     }
 
-    // Reset auto-scroll tracking when highlighting stops (playback stopped)
+    // Reset auto-scroll tracking when scroll target stops
     if (
-      prevProps.highlightedNoteIds &&
-      prevProps.highlightedNoteIds.size > 0 &&
-      (!this.props.highlightedNoteIds || this.props.highlightedNoteIds.size === 0)
+      prevScrollIds &&
+      prevScrollIds.size > 0 &&
+      (!scrollIds || scrollIds.size === 0)
     ) {
       this.lastAutoScrollSystemIndex = -1;
     }
@@ -547,16 +554,17 @@ export class ScoreViewer extends Component<ScoreViewerProps, ScoreViewerState> {
     }
   }
 
-  private scrollToHighlightedSystem(): void {
-    const { layout, highlightedNoteIds, sourceToNoteIdMap } = this.props;
-    if (!layout || !highlightedNoteIds || !sourceToNoteIdMap) return;
+  private scrollToHighlightedSystem(noteIds?: Set<string>): void {
+    const { layout, sourceToNoteIdMap } = this.props;
+    const targetNoteIds = noteIds ?? this.props.scrollTargetNoteIds ?? this.props.highlightedNoteIds;
+    if (!layout || !targetNoteIds || !sourceToNoteIdMap) return;
 
     // Ensure reverse index is up-to-date (O(N) once, then cached)
     this.ensureNoteIdIndex();
 
-    // O(k) lookup: find system index for any highlighted note
+    // O(k) lookup: find system index for any target note
     let targetSystemIndex = -1;
-    for (const noteId of highlightedNoteIds) {
+    for (const noteId of targetNoteIds) {
       const systemIndex = this.noteIdToSystemIndex.get(noteId);
       if (systemIndex !== undefined) {
         targetSystemIndex = systemIndex;

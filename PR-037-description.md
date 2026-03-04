@@ -46,6 +46,24 @@ Implement the **Practice View Plugin** — an external MIDI step-by-step practic
 - Overlay shows: dynamic score ring with colour-coded grade (Perfect / Great / Good / Keep Practising), 4-stat row (Notes / Correct / Late / Wrong), practice time vs. score time comparison, collapsible per-note detail table with outcome row colours
 - Overlay dismissed via × or backdrop; Practice button available to restart
 
+### Deferred Start, Phantom Highlights & Delay Graph (T057–T059)
+- Practice timer stays in `'waiting'` mode until the user plays their first correct MIDI note — no pressure to start immediately
+- "Waiting for first note…" status copy shown in toolbar during `waiting` mode
+- Phantom tempo highlight (amber, 50% opacity) advances at the configured BPM, giving a visual tempo reference while the user's green target stays pinned at the current note
+- Results overlay now includes a per-note **delay evolution SVG graph**: X-axis = note index, Y-axis = timing delta (ms); early notes shown in green, late in amber
+- `delayDeltaMs = responseTimeMs − expectedTimeMs` stored per `PracticeNoteResult`
+
+### MIDI Hotplug Fix (T060)
+- Root cause: `navigator.requestMIDIAccess()` returns the same `MIDIAccess` singleton; multiple hook instances assigning `onstatechange` silently overwrote each other
+- Fix: switched both `useMidiInput.ts` and `PracticeViewPlugin.tsx` to `addEventListener('statechange', …)` / `removeEventListener` cleanup
+- `mockMidi.ts` updated with `addEventListener`/`removeEventListener` support; `useMidiInput.test.ts` cleanup assertion updated
+
+### Auto-Scroll Follows User Target Note (T061)
+- During practice, the phantom advances `highlightedNoteIds`, so `ScoreViewer` auto-scroll was tracking the wrong note
+- New optional `scrollTargetNoteIds?: ReadonlySet<string>` prop on `PluginScoreRendererProps` flows through `ScoreRendererPlugin → LayoutView → ScoreViewer`
+- `ScoreViewer.scrollToHighlightedSystem()` prefers `scrollTargetNoteIds` when present — scroll now tracks the green target note (user position)
+- `PracticeViewPlugin` passes `scrollTargetNoteIds={practiceActive ? targetNoteIds : undefined}`
+
 ### Both Clefs Mode (T052)
 - Staff selector "Both Clefs" option (`value=-1`) merges all staves by tick
 - `mergePracticeNotesByTick()` helper unions pitches at the same tick across staves
@@ -77,7 +95,16 @@ Implement the **Practice View Plugin** — an external MIDI step-by-step practic
 | `frontend/src/services/recording/useMidiInput.ts` | Fix: `addEventListener` instead of `onstatechange` assignment |
 | `frontend/src/services/recording/useMidiInput.test.ts` | Updated cleanup test for addEventListener-based handler |
 | `frontend/src/test/mockMidi.ts` | Added `addEventListener`/`removeEventListener` support to MockMidiAccess |
-| `specs/037-practice-view-plugin/` | Full spec suite + Phase 8 amendment |
+| `frontend/src/plugin-api/types.ts` | `scrollTargetNoteIds` prop on `PluginScoreRendererProps` |
+| `frontend/src/components/plugins/ScoreRendererPlugin.tsx` | Forward `scrollTargetNoteIds` to LayoutView |
+| `frontend/src/components/layout/LayoutView.tsx` | Forward `scrollTargetNoteIds` to ScoreViewer |
+| `frontend/src/pages/ScoreViewer.tsx` | `scrollToHighlightedSystem()` prefers `scrollTargetNoteIds` for scroll targeting |
+| `plugins-external/practice-view-plugin/practiceEngine.types.ts` | `'waiting'` mode + `delayDeltaMs` on `PracticeNoteResult` |
+| `plugins-external/practice-view-plugin/practiceEngine.ts` | Deferred start reducer: `START → waiting`, first `CORRECT_MIDI → active` |
+| `plugins-external/practice-view-plugin/PracticeViewPlugin.tsx` | Phantom highlights, deferred start wiring, `scrollTargetNoteIds`, delay delta payload |
+| `plugins-external/practice-view-plugin/PracticeViewPlugin.css` | Phantom opacity rule + delay graph styles |
+| `plugins-external/practice-view-plugin/practiceEngine.test.ts` | 3 new deferred-start tests (92 total passing) |
+| `specs/037-practice-view-plugin/` | Full spec suite + Phase 8–10 amendments |
 
 ## Test Results
 

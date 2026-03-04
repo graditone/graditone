@@ -537,6 +537,13 @@ export interface PluginScoreRendererProps {
   loopRegion: { readonly startTick: number; readonly endTick: number } | null;
   /** Note IDs carrying a pin marker (green indicator). 0–2 IDs. */
   pinnedNoteIds: ReadonlySet<string>;
+  /**
+   * Note IDs that auto-scroll should track. When set, ScoreViewer scrolls
+   * to keep these notes visible instead of `highlightedNoteIds`.
+   * Use case: during practice, scroll follows the user's target note (green)
+   * while the highlight shows the phantom tempo position (amber, 50% opacity).
+   */
+  scrollTargetNoteIds?: ReadonlySet<string>;
   /** Short tap (< 500 ms, drift < 15 px) on a note — seek intent. */
   onNoteShortTap: (tick: number, noteId: string) => void;
   /** Long press (≥ 500 ms) on a note or canvas — pin/loop intent. */

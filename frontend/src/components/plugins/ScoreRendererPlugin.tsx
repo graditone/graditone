@@ -67,6 +67,7 @@ export function ScoreRendererPlugin({
   highlightedNoteIds,
   loopRegion,
   pinnedNoteIds,
+  scrollTargetNoteIds,
   onNoteShortTap,
   onNoteLongPress,
   onCanvasTap,
@@ -116,6 +117,7 @@ export function ScoreRendererPlugin({
           tickSourceRef={tickSourceRef}
           highlightedNoteIds={highlightedNoteIds instanceof Set ? highlightedNoteIds : new Set(highlightedNoteIds)}
           pinnedNoteIds={pinnedNoteIds instanceof Set ? pinnedNoteIds : new Set(pinnedNoteIds)}
+          scrollTargetNoteIds={scrollTargetNoteIds ? (scrollTargetNoteIds instanceof Set ? scrollTargetNoteIds : new Set(scrollTargetNoteIds)) : undefined}
           pinnedNoteId={pinnedNoteId}
           loopRegion={loopRegion}
           playbackStatus={playbackStatus}
