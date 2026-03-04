@@ -170,7 +170,7 @@
   - `isCorrect` from `practiceEngine` is no longer called from the MIDI handler (it remains for use by tests).
   - Depends on T047.
 
-- [ ] T050 [P] Update `plugins-external/practice-view-plugin/practiceEngine.test.ts` chord section:
+- [X] T050 [P] Update `plugins-external/practice-view-plugin/practiceEngine.test.ts` chord section:
   - Add test: pressing only one note of a chord does NOT dispatch `CORRECT_MIDI` — the engine state stays at the same `currentIndex`.
   - Add test: pressing all chord notes within window → `CORRECT_MIDI` → `currentIndex` advances.
   - (Both tests validate the integration contract between `ChordDetector` and the engine reducer, using the new wiring from T049.)
