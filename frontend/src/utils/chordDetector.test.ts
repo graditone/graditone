@@ -44,7 +44,7 @@ describe('ChordDetector — three-note chord [60, 64, 67]', () => {
   let det: ChordDetector;
 
   beforeEach(() => {
-    det = new ChordDetector({ windowMs: 80 });
+    det = new ChordDetector({ windowMs: 200 });
     det.reset([60, 64, 67]);
   });
 
@@ -55,6 +55,13 @@ describe('ChordDetector — three-note chord [60, 64, 67]', () => {
     expect(result.complete).toBe(true);
     expect(result.collected).toEqual(expect.arrayContaining([60, 64, 67]));
     expect(result.missing).toEqual([]);
+  });
+
+  it('completes when all three are pressed spread across 150 ms (realistic chord)', () => {
+    det.press(60, T0);
+    det.press(64, T0 + 70);
+    const result = det.press(67, T0 + 150);
+    expect(result.complete).toBe(true);
   });
 
   it('does not complete when only two are pressed', () => {
@@ -74,11 +81,21 @@ describe('ChordDetector — three-note chord [60, 64, 67]', () => {
   it('does not complete when the first press has expired (> windowMs)', () => {
     det.press(60, T0);
     det.press(64, T0 + 50);
-    // Third press arrives 90 ms after first — first has expired
-    const result = det.press(67, T0 + 90);
+    // Third press arrives 210 ms after first — window exceeded, collection restarted
+    const result = det.press(67, T0 + 210);
     expect(result.complete).toBe(false);
-    // 60 should have been evicted
+    // 60 and 64 should have been discarded; only 67 collected
     expect(result.collected).not.toContain(60);
+    expect(result.collected).not.toContain(64);
+  });
+
+  it('a non-chord note press does NOT reset the window', () => {
+    det.press(60, T0);
+    det.press(64, T0 + 50);
+    // Non-chord note arrives between chord presses — must not evict the earlier ones
+    det.press(99, T0 + 100);
+    const result = det.press(67, T0 + 150);
+    expect(result.complete).toBe(true);
   });
 
   it('ignores pitches not in the required set', () => {
@@ -137,21 +154,21 @@ describe('ChordDetector — reset()', () => {
 // ---------------------------------------------------------------------------
 
 describe('ChordDetector — window boundary', () => {
-  it('accepts presses exactly at the window edge (windowMs = 80)', () => {
-    const det = new ChordDetector({ windowMs: 80 });
+  it('accepts presses exactly at the window edge (windowMs = 200)', () => {
+    const det = new ChordDetector({ windowMs: 200 });
     det.reset([60, 64]);
     det.press(60, T0);
-    // Exactly 80 ms later — still within window (cutoff = timestamp - 80, press at T0)
-    const result = det.press(64, T0 + 80);
+    // Exactly 200 ms later — still within window (not strictly greater)
+    const result = det.press(64, T0 + 200);
     expect(result.complete).toBe(true);
   });
 
   it('rejects presses 1 ms past the window edge', () => {
-    const det = new ChordDetector({ windowMs: 80 });
+    const det = new ChordDetector({ windowMs: 200 });
     det.reset([60, 64]);
     det.press(60, T0);
-    // 81 ms — first press is now 1 ms outside the window
-    const result = det.press(64, T0 + 81);
+    // 201 ms — first press is now 1 ms outside the window
+    const result = det.press(64, T0 + 201);
     expect(result.complete).toBe(false);
   });
 
