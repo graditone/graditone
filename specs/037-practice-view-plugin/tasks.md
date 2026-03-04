@@ -170,14 +170,28 @@
   - `isCorrect` from `practiceEngine` is no longer called from the MIDI handler (it remains for use by tests).
   - Depends on T047.
 
-- [ ] T050 [P] Update `plugins-external/practice-view-plugin/practiceEngine.test.ts` chord section:
+- [X] T050 [P] Update `plugins-external/practice-view-plugin/practiceEngine.test.ts` chord section:
   - Add test: pressing only one note of a chord does NOT dispatch `CORRECT_MIDI` — the engine state stays at the same `currentIndex`.
   - Add test: pressing all chord notes within window → `CORRECT_MIDI` → `currentIndex` advances.
   - (Both tests validate the integration contract between `ChordDetector` and the engine reducer, using the new wiring from T049.)
 
 - [X] T051 Run `vitest run` in both `frontend/` and `plugins-external/practice-view-plugin/`, confirm all tests pass; run production build in `plugins-external/practice-view-plugin/` and verify bundle size ≤ 50 KB.
 
-- [X] T052 Add "Both Clefs" staff option: add `value={-1}` option to `practiceToolbar.tsx` staff `<select>` (shown when `staffCount >= 2`); add `mergePracticeNotesByTick` helper to `PracticeViewPlugin.tsx` that merges entries from all staves by tick (union of pitches at the same tick); update `handlePracticeToggle` to extract from all staves and merge when `staffIndex === -1`; update toolbar tests (options count: `staffCount + 1`; new tests for Both Clefs presence and `-1` dispatch).
+- [X] T052 [US2] Add "Both Clefs" staff option: add `value={-1}` option to `practiceToolbar.tsx` staff `<select>` (shown when `staffCount >= 2`); add `mergePracticeNotesByTick` helper to `PracticeViewPlugin.tsx` that merges entries from all staves by tick (union of pitches at the same tick); update `handlePracticeToggle` to extract from all staves and merge when `staffIndex === -1`; update toolbar tests (options count: `staffCount + 1`; new tests for Both Clefs presence and `-1` dispatch).
+
+---
+
+## Phase 9: Results Overlay & MIDI Gate (Amendment 2026-03-04)
+
+**Context**: After completing the core practice loop (T029–T052), two post-MVP enhancements were requested: (1) disable the Practice button when no MIDI device is known to be connected, and (2) show a rich results overlay when the user finishes all notes — including per-note outcome tracking, timing analytics, and a collapsible detail table.
+
+- [X] T053 [US2] Disable Practice button when MIDI disconnected: change `midiConnected` type in `PracticeViewPlugin.tsx` from `boolean` to `boolean | null` (null = pending check); disable the toolbar Practice button when `midiConnected === false`; wrap disabled button in a `<span title="…">` for native tooltip; update `practiceToolbar.tsx` and `practiceToolbar.test.tsx` to cover disabled state (FR-016).
+
+- [X] T054 [US2] Add per-note result tracking to practice engine: extend `practiceEngine.types.ts` with `NoteOutcome` (`'correct' | 'correct-late' | 'wrong' | 'pending'`) and `PracticeNoteResult` interface (`noteIndex`, `outcome`, `playedMidi`, `expectedMidi`, `responseTimeMs`, `expectedTimeMs`, `wrongAttempts`); add `noteResults: ReadonlyArray<PracticeNoteResult>` and `currentWrongAttempts: number` to `PracticeState` and `INITIAL_PRACTICE_STATE`; extend `CORRECT_MIDI` action with `midiNote`, `responseTimeMs`, `expectedTimeMs` and `WRONG_MIDI` with `midiNote`; update `practiceEngine.ts` reducer: `LATE_THRESHOLD_MS = 500`, `CORRECT_MIDI` appends a `PracticeNoteResult` and resets `currentWrongAttempts`, `WRONG_MIDI` increments `currentWrongAttempts`, `START`/`STOP` reset both; export `LATE_THRESHOLD_MS` for test use.
+
+- [X] T055 [US2] Implement results overlay in `PracticeViewPlugin.tsx` and `PracticeViewPlugin.css`: add `practiceStartTimeRef` (set to `Date.now()` on START) and `tempoMultiplierRef`; add `midiToLabel()` helper (MIDI number → pitch name e.g. "C4"); add `practiceReport` useMemo computing `totalNotes`, `correctCount`, `lateCount`, `totalWrongAttempts`, numeric `score` per FR-017 formula, grade label, `practiceTimeMs`, `scoreTimeMs`; render results overlay when `mode === 'complete'` with backdrop, score ring, grade, 4-stat row (Notes / Correct / Late / Wrong), time comparison, and `<details>` collapsible per-note table; add all CSS including colour-coded row backgrounds (green = correct, amber = correct-late, red = wrong); pass enriched action payloads from the MIDI handler (`midiNote`, `responseTimeMs`, `expectedTimeMs` on `CORRECT_MIDI`; `midiNote` on `WRONG_MIDI`) (FR-017).
+
+- [X] T056 [P] [US2] Update `practiceEngine.test.ts` for amended action shapes: fix `activeState()` helper to include `noteResults: []` and `currentWrongAttempts: 0`; update all `CORRECT_MIDI` dispatches to include `midiNote`, `responseTimeMs`, `expectedTimeMs`; update all `WRONG_MIDI` dispatches to include `midiNote`; fix `WRONG_MIDI` suite (now tests that `currentWrongAttempts` increments, not that state is unchanged); add 11 new tests covering `noteResults` accumulation, late-note classification at/above `LATE_THRESHOLD_MS`, wrong-attempt recording, results preserved in `complete` mode, cleared on `START`/`STOP`, and graceful handling of zero `expectedTimeMs`.
 
 ---
 
