@@ -32,9 +32,21 @@ import type {
 import { PracticeToolbar } from './practiceToolbar';
 import { reduce } from './practiceEngine';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
-import type { PracticeNoteResult } from './practiceEngine.types';
+import type { PracticeNoteResult, WrongNoteEvent } from './practiceEngine.types';
 import { ChordDetector } from '../../src/plugin-api/index';
 import './PracticeViewPlugin.css';
+
+// ---------------------------------------------------------------------------
+// Replay types (T002 — 038-practice-replay)
+// ---------------------------------------------------------------------------
+
+/** Frozen snapshot of a completed practice exercise for replay. */
+interface PerformanceRecord {
+  notes: PluginPracticeNoteEntry[];
+  noteResults: PracticeNoteResult[];
+  wrongNoteEvents: WrongNoteEvent[];
+  bpmAtCompletion: number;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -197,10 +209,23 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // Shown when practice completes; dismissed only via the × button.
   const [resultsOverlayVisible, setResultsOverlayVisible] = useState(false);
 
-  // Show overlay each time practice enters 'complete' mode
+  // ─── Replay state (038-practice-replay) ────────────────────────────────────
+  const [performanceRecord, setPerformanceRecord] = useState<PerformanceRecord | null>(null);
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [replayHighlightedNoteIds, setReplayHighlightedNoteIds] = useState<ReadonlySet<string>>(new Set());
+  const replayTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Show overlay each time practice enters 'complete' mode, capture PerformanceRecord (T005)
   useEffect(() => {
     if (practiceState.mode === 'complete') {
       setResultsOverlayVisible(true);
+      setPerformanceRecord({
+        notes: [...practiceState.notes],
+        noteResults: [...practiceState.noteResults],
+        wrongNoteEvents: [...practiceState.wrongNoteEvents],
+        bpmAtCompletion: playerState.bpm * tempoMultiplier,
+      });
+      setIsReplaying(false);
     }
   }, [practiceState.mode]);
 
@@ -395,6 +420,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     return () => {
       context.scorePlayer.stop();
       context.stopPlayback();
+      // Replay cleanup (038-practice-replay, T017)
+      replayTimersRef.current.forEach(clearTimeout);
+      replayTimersRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -474,7 +502,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         }
       } else if (!isInChord) {
         // Pitch outside the required chord — treat as wrong note.
-        dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote });
+        const wrongResponseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
+        dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs: wrongResponseTimeMs });
       }
       // If isInChord but not yet complete: partial chord press — stay silent
       // (don't penalise the user, just wait for remaining notes).
@@ -700,6 +729,81 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     }
   }, [context.scorePlayer, playerState.status]);
 
+  // ─── Replay handlers (038-practice-replay, T015–T016) ─────────────────────
+
+  const handleReplayStop = useCallback(() => {
+    context.stopPlayback();
+    replayTimersRef.current.forEach(clearTimeout);
+    replayTimersRef.current = [];
+    setReplayHighlightedNoteIds(new Set());
+    setIsReplaying(false);
+  }, [context]);
+
+  const handleReplay = useCallback(() => {
+    if (!performanceRecord || isReplaying) return;
+    setIsReplaying(true);
+
+    const msPerBeat = 60_000 / performanceRecord.bpmAtCompletion;
+    const msPerNote = msPerBeat * 0.85;
+
+    // Build a merged timeline: correct notes + wrong notes, sorted by responseTimeMs
+    type ReplayEvent = { responseTimeMs: number; midiNote: number; isCorrect: boolean; noteIndex: number };
+    const timeline: ReplayEvent[] = [];
+
+    for (const result of performanceRecord.noteResults) {
+      timeline.push({
+        responseTimeMs: result.responseTimeMs,
+        midiNote: result.playedMidi,
+        isCorrect: true,
+        noteIndex: result.noteIndex,
+      });
+    }
+    for (const wrong of performanceRecord.wrongNoteEvents) {
+      timeline.push({
+        responseTimeMs: wrong.responseTimeMs,
+        midiNote: wrong.midiNote,
+        isCorrect: false,
+        noteIndex: wrong.noteIndex,
+      });
+    }
+    timeline.sort((a, b) => a.responseTimeMs - b.responseTimeMs);
+
+    // Schedule all audio events at once — offsetMs staggers them
+    for (const event of timeline) {
+      context.playNote({
+        midiNote: event.midiNote,
+        timestamp: Date.now(),
+        type: 'attack',
+        offsetMs: event.responseTimeMs,
+        durationMs: msPerNote,
+      });
+    }
+
+    // Schedule per-note staff highlights (correct notes only)
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (const event of timeline) {
+      if (!event.isCorrect) continue;
+      const noteIds = performanceRecord.notes[event.noteIndex]?.noteIds ?? [];
+      const t = setTimeout(() => {
+        setReplayHighlightedNoteIds(new Set(noteIds));
+      }, event.responseTimeMs);
+      timers.push(t);
+    }
+
+    // Finish timer — auto-stop after last event + note duration + buffer
+    const lastMs = timeline.length > 0 ? timeline[timeline.length - 1].responseTimeMs : 0;
+    const totalMs = lastMs + msPerNote + 300;
+    const finishTimer = setTimeout(() => {
+      context.stopPlayback();
+      timers.forEach(clearTimeout);
+      setReplayHighlightedNoteIds(new Set());
+      setIsReplaying(false);
+    }, totalMs);
+    timers.push(finishTimer);
+
+    replayTimersRef.current = timers;
+  }, [context, performanceRecord, isReplaying]);
+
   // ─── Derived values ────────────────────────────────────────────────────────
 
   // During active practice:
@@ -712,7 +816,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const practiceActive = practiceState.mode === 'active' && practiceState.notes.length > 0;
   const practiceWaiting = practiceState.mode === 'waiting' && practiceState.notes.length > 0;
 
-  const highlightedNoteIds = practiceActive && phantomIndex >= 0 && phantomIndex < practiceState.notes.length
+  const highlightedNoteIds = isReplaying && replayHighlightedNoteIds.size > 0
+    ? replayHighlightedNoteIds
+    : practiceActive && phantomIndex >= 0 && phantomIndex < practiceState.notes.length
     ? new Set<string>(practiceState.notes[phantomIndex].noteIds)
     : practiceWaiting
       ? new Set<string>(practiceState.notes[practiceState.currentIndex].noteIds)
@@ -971,18 +1077,22 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
               </div>
             </details>
 
-            {/* Delay evolution graph — SVG line chart of timing delta per note */}
+            {/* Delay evolution graph — SVG line chart of timing deviation per note (incremental, X=real time) */}
             {(() => {
               const delayData = practiceReport.results
-                .map((r: PracticeNoteResult, i: number) => ({
-                  index: i,
-                  delay: r.expectedTimeMs > 0 && r.responseTimeMs > 0
-                    ? Math.round(r.responseTimeMs - r.expectedTimeMs)
-                    : null,
-                }))
-                .filter((d): d is { index: number; delay: number } => d.delay !== null);
+                .map((r: PracticeNoteResult, i: number) => {
+                  if (i === 0) return { index: 0, delay: 0, timeMs: r.responseTimeMs };
+                  const prev = practiceReport.results[i - 1];
+                  if (r.expectedTimeMs <= 0 || prev.expectedTimeMs <= 0) return null;
+                  const actualInterval = r.responseTimeMs - prev.responseTimeMs;
+                  const expectedInterval = r.expectedTimeMs - prev.expectedTimeMs;
+                  return { index: i, delay: Math.round(actualInterval - expectedInterval), timeMs: r.responseTimeMs };
+                })
+                .filter((d): d is { index: number; delay: number; timeMs: number } => d !== null);
 
               if (delayData.length < 2) return null;
+
+              const totalMs = Math.max(delayData[delayData.length - 1].timeMs, 1);
 
               const W = 320;    // SVG width
               const H = 140;    // SVG height
@@ -995,23 +1105,33 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
               const chartH = H - PAD_T - PAD_B;
 
               const delays = delayData.map((d) => d.delay);
-              const maxAbs = Math.max(Math.abs(Math.min(...delays)), Math.abs(Math.max(...delays)), 50);
-              const yMin = -maxAbs;
-              const yMax = maxAbs;
+              const yMax = Math.max(Math.max(...delays), 50);
+              const yMin = Math.min(Math.min(...delays), -50);
 
-              const xScale = (i: number) => PAD_L + (i / (delayData.length - 1)) * chartW;
+              const xScale = (ms: number) => PAD_L + (ms / totalMs) * chartW;
               const yScale = (v: number) => PAD_T + ((yMax - v) / (yMax - yMin)) * chartH;
 
               const polyline = delayData
-                .map((d, i) => `${xScale(i).toFixed(1)},${yScale(d.delay).toFixed(1)}`)
+                .map((d) => `${xScale(d.timeMs).toFixed(1)},${yScale(d.delay).toFixed(1)}`)
                 .join(' ');
 
               const zeroY = yScale(0);
 
+              // Pick a "nice" tick interval in seconds
+              const totalSec = totalMs / 1000;
+              const rawStep = totalSec / 6;
+              const niceSteps = [0.5, 1, 2, 5, 10, 15, 20, 30, 60, 120];
+              const tickStepSec = niceSteps.find((s) => s >= rawStep) ?? Math.ceil(rawStep / 10) * 10;
+              const xTicks: number[] = [];
+              for (let s = 0; s <= totalSec + tickStepSec * 0.01; s += tickStepSec) {
+                xTicks.push(Math.min(s, totalSec));
+                if (s >= totalSec) break;
+              }
+
               return (
                 <details className="practice-results__details" style={{ marginTop: '8px' }}>
                   <summary className="practice-results__details-summary">
-                    Timing delay graph
+                    Timing deviation per note
                   </summary>
                   <div className="practice-results__graph-wrapper">
                     <svg
@@ -1029,21 +1149,30 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
                       />
                       {/* Y axis labels */}
                       <text x={PAD_L - 4} y={PAD_T + 4} textAnchor="end" fontSize="9" fill="#888">
-                        +{maxAbs}ms
+                        +{yMax}ms
                       </text>
                       <text x={PAD_L - 4} y={zeroY + 3} textAnchor="end" fontSize="9" fill="#888">
                         0
                       </text>
-                      <text x={PAD_L - 4} y={PAD_T + chartH + 4} textAnchor="end" fontSize="9" fill="#888">
-                        -{maxAbs}ms
+                      <text x={PAD_L - 4} y={PAD_T + chartH - 2} textAnchor="end" fontSize="9" fill="#888">
+                        {yMin}ms
                       </text>
-                      {/* X axis label */}
-                      <text x={PAD_L + chartW / 2} y={H - 2} textAnchor="middle" fontSize="9" fill="#888">
-                        Note #
-                      </text>
+                      {/* X axis time ticks */}
+                      {xTicks.map((sec) => {
+                        const x = xScale(sec * 1000);
+                        const label = Number.isInteger(sec) ? `${sec}s` : `${sec.toFixed(1)}s`;
+                        return (
+                          <g key={sec}>
+                            <line x1={x} y1={PAD_T + chartH} x2={x} y2={PAD_T + chartH + 3} stroke="#ccc" strokeWidth="1" />
+                            <text x={x} y={H - 4} textAnchor="middle" fontSize="9" fill="#888">
+                              {label}
+                            </text>
+                          </g>
+                        );
+                      })}
                       {/* Area fill */}
                       <polygon
-                        points={`${xScale(0).toFixed(1)},${zeroY} ${polyline} ${xScale(delayData.length - 1).toFixed(1)},${zeroY}`}
+                        points={`${xScale(delayData[0].timeMs).toFixed(1)},${zeroY} ${polyline} ${xScale(totalMs).toFixed(1)},${zeroY}`}
                         fill="rgba(245, 163, 64, 0.15)"
                       />
                       {/* Line */}
@@ -1061,7 +1190,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
                         return (
                           <circle
                             key={i}
-                            cx={xScale(i)}
+                            cx={xScale(d.timeMs)}
                             cy={yScale(d.delay)}
                             r="3"
                             fill="#f57f17"
@@ -1073,6 +1202,29 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
                 </details>
               );
             })()}
+
+            {/* Replay / Stop button (038-practice-replay, T018) */}
+            {performanceRecord && (
+              <div className="practice-results__replay-row">
+                {!isReplaying ? (
+                  <button
+                    className="practice-results__replay-btn"
+                    onClick={handleReplay}
+                    aria-label="Replay your performance"
+                  >
+                    ▶ Replay
+                  </button>
+                ) : (
+                  <button
+                    className="practice-results__replay-btn practice-results__replay-btn--stop"
+                    onClick={handleReplayStop}
+                    aria-label="Stop replay"
+                  >
+                    ■ Stop
+                  </button>
+                )}
+              </div>
+            )}
 
             <p className="practice-results__hint">
               Press <strong>♩ Practice</strong> to try again

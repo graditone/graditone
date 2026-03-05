@@ -50,7 +50,7 @@ function activeState(
   currentIndex = 0,
   selectedStaffIndex = 0,
 ): PracticeState {
-  return { mode: 'active', notes, currentIndex, selectedStaffIndex, noteResults: [], currentWrongAttempts: 0 };
+  return { mode: 'active', notes, currentIndex, selectedStaffIndex, noteResults: [], currentWrongAttempts: 0, wrongNoteEvents: [] };
 }
 
 function waitingState(
@@ -58,7 +58,7 @@ function waitingState(
   currentIndex = 0,
   selectedStaffIndex = 0,
 ): PracticeState {
-  return { mode: 'waiting', notes, currentIndex, selectedStaffIndex, noteResults: [], currentWrongAttempts: 0 };
+  return { mode: 'waiting', notes, currentIndex, selectedStaffIndex, noteResults: [], currentWrongAttempts: 0, wrongNoteEvents: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -223,7 +223,7 @@ describe('reduce() — CORRECT_MIDI action', () => {
 describe('reduce() — WRONG_MIDI action', () => {
   it('increments currentWrongAttempts when wrong note pressed', () => {
     const state = activeState(THREE_NOTES, 1);
-    const next = reduce(state, { type: 'WRONG_MIDI', midiNote: 61 });
+    const next = reduce(state, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 500 });
     expect(next.currentWrongAttempts).toBe(1);
     expect(next.currentIndex).toBe(1); // index unchanged
     expect(next.mode).toBe('active');
@@ -231,20 +231,20 @@ describe('reduce() — WRONG_MIDI action', () => {
 
   it('accepts WRONG_MIDI in waiting mode', () => {
     const state = waitingState(THREE_NOTES, 0);
-    const next = reduce(state, { type: 'WRONG_MIDI', midiNote: 61 });
+    const next = reduce(state, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 200 });
     expect(next.currentWrongAttempts).toBe(1);
     expect(next.mode).toBe('waiting');
   });
 
   it('accumulates wrong attempts across multiple presses', () => {
     let s = activeState(THREE_NOTES, 1);
-    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61 });
-    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 63 });
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 500 });
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 63, responseTimeMs: 600 });
     expect(s.currentWrongAttempts).toBe(2);
   });
 
   it('does NOT change state when inactive', () => {
-    const next = reduce(INITIAL_PRACTICE_STATE, { type: 'WRONG_MIDI', midiNote: 61 });
+    const next = reduce(INITIAL_PRACTICE_STATE, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 100 });
     expect(next).toStrictEqual(INITIAL_PRACTICE_STATE);
   });
 });
@@ -302,15 +302,15 @@ describe('reduce() — noteResults tracking', () => {
   it('records wrongAttempts count from currentWrongAttempts', () => {
     let s = activeState(THREE_NOTES, 0);
     // Two wrong attempts before correct
-    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61 });
-    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 63 });
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 800 });
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 63, responseTimeMs: 900 });
     s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 1000, expectedTimeMs: 1000 });
     expect(s.noteResults[0].wrongAttempts).toBe(2);
   });
 
   it('resets currentWrongAttempts to 0 after CORRECT_MIDI', () => {
     let s = activeState(THREE_NOTES, 0);
-    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61 });
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 500 });
     s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 1000, expectedTimeMs: 1000 });
     expect(s.currentWrongAttempts).toBe(0);
     // Next correct note should have 0 wrong attempts
@@ -447,5 +447,54 @@ describe('reduce() — tick-based note ordering', () => {
     expect(next.notes[0].tick).toBe(0);
     expect(next.notes[1].tick).toBe(960);
     expect(next.notes[2].tick).toBe(1920);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reduce() — wrongNoteEvents (038-practice-replay Phase B)
+// ---------------------------------------------------------------------------
+
+describe('reduce() — wrongNoteEvents tracking', () => {
+  it('records a WrongNoteEvent with midiNote, responseTimeMs, and noteIndex on WRONG_MIDI', () => {
+    const state = activeState(THREE_NOTES, 1);
+    const next = reduce(state, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 800 });
+    expect(next.wrongNoteEvents).toHaveLength(1);
+    expect(next.wrongNoteEvents[0]).toEqual({
+      midiNote: 61,
+      responseTimeMs: 800,
+      noteIndex: 1,
+    });
+  });
+
+  it('accumulates multiple wrong note events', () => {
+    let s = activeState(THREE_NOTES, 0);
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 300 });
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 63, responseTimeMs: 500 });
+    expect(s.wrongNoteEvents).toHaveLength(2);
+    expect(s.wrongNoteEvents[0].midiNote).toBe(61);
+    expect(s.wrongNoteEvents[1].midiNote).toBe(63);
+  });
+
+  it('clears wrongNoteEvents on START', () => {
+    let s = activeState(THREE_NOTES, 0);
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 300 });
+    const restarted = reduce(s, { type: 'START', notes: THREE_NOTES, staffIndex: 0, startIndex: 0 });
+    expect(restarted.wrongNoteEvents).toHaveLength(0);
+  });
+
+  it('clears wrongNoteEvents on STOP', () => {
+    let s = activeState(THREE_NOTES, 0);
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 300 });
+    const stopped = reduce(s, { type: 'STOP' });
+    expect(stopped.wrongNoteEvents).toHaveLength(0);
+  });
+
+  it('preserves wrongNoteEvents across CORRECT_MIDI transitions', () => {
+    let s = activeState(THREE_NOTES, 0);
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 300 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 500, expectedTimeMs: 500 });
+    // Wrong event should survive the correct note advance
+    expect(s.wrongNoteEvents).toHaveLength(1);
+    expect(s.wrongNoteEvents[0].midiNote).toBe(61);
   });
 });

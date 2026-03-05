@@ -11,7 +11,7 @@
  *   reduce(state, action)       — reducer: returns next PracticeState
  */
 
-import type { PracticeNoteEntry, PracticeState, PracticeAction, PracticeNoteResult } from './practiceEngine.types';
+import type { PracticeNoteEntry, PracticeState, PracticeAction, PracticeNoteResult, WrongNoteEvent } from './practiceEngine.types';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
 
 // ---------------------------------------------------------------------------
@@ -61,6 +61,7 @@ export function reduce(state: PracticeState, action: PracticeAction): PracticeSt
         selectedStaffIndex: action.staffIndex,
         noteResults: [],
         currentWrongAttempts: 0,
+        wrongNoteEvents: [],
       };
     }
 
@@ -101,7 +102,16 @@ export function reduce(state: PracticeState, action: PracticeAction): PracticeSt
 
     case 'WRONG_MIDI': {
       if (state.mode !== 'active' && state.mode !== 'waiting') return state;
-      return { ...state, currentWrongAttempts: state.currentWrongAttempts + 1 };
+      const wrongEvent: WrongNoteEvent = {
+        midiNote: action.midiNote,
+        responseTimeMs: action.responseTimeMs,
+        noteIndex: state.currentIndex,
+      };
+      return {
+        ...state,
+        currentWrongAttempts: state.currentWrongAttempts + 1,
+        wrongNoteEvents: [...state.wrongNoteEvents, wrongEvent],
+      };
     }
 
     case 'STOP': {
@@ -112,6 +122,7 @@ export function reduce(state: PracticeState, action: PracticeAction): PracticeSt
         selectedStaffIndex: state.selectedStaffIndex,
         noteResults: [],
         currentWrongAttempts: 0,
+        wrongNoteEvents: [],
       };
     }
 

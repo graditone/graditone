@@ -608,6 +608,49 @@
   margin: 0;
 }
 
+/* ── Replay button (038-practice-replay) ─────────────────────────────────── */
+
+.practice-results__replay-row {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 4px;
+}
+
+.practice-results__replay-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #1976d2;
+  color: #fff;
+  transition: background 0.15s ease;
+}
+
+.practice-results__replay-btn:hover {
+  background: #1565c0;
+}
+
+.practice-results__replay-btn:active {
+  background: #0d47a1;
+}
+
+.practice-results__replay-btn--stop {
+  background: #c62828;
+}
+
+.practice-results__replay-btn--stop:hover {
+  background: #b71c1c;
+}
+
+.practice-results__replay-btn--stop:active {
+  background: #8e0000;
+}
+
 @media (max-width: 768px) {
   .practice-results__score-number {
     font-size: 2.25rem;

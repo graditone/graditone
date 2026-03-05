@@ -45,6 +45,16 @@ export interface PracticeNoteResult {
   readonly wrongAttempts: number;
 }
 
+/** A single wrong-note event captured during practice (038-practice-replay Phase B). */
+export interface WrongNoteEvent {
+  /** MIDI note the user played (wrong pitch). */
+  readonly midiNote: number;
+  /** Time in ms from practice start when the wrong note was played. */
+  readonly responseTimeMs: number;
+  /** Index into the notes array — which target note was active when the mistake happened. */
+  readonly noteIndex: number;
+}
+
 // ---------------------------------------------------------------------------
 // Practice State Machine Types
 // ---------------------------------------------------------------------------
@@ -73,6 +83,8 @@ export interface PracticeState {
   readonly noteResults: ReadonlyArray<PracticeNoteResult>;
   /** Running count of wrong MIDI presses for the current note. */
   readonly currentWrongAttempts: number;
+  /** All wrong-note events captured during this session (038-practice-replay Phase B). */
+  readonly wrongNoteEvents: ReadonlyArray<WrongNoteEvent>;
 }
 
 /** Describes a staff available for selection during practice setup. */
@@ -115,6 +127,8 @@ export type PracticeAction =
       readonly type: 'WRONG_MIDI';
       /** MIDI note that the user played (wrong). */
       readonly midiNote: number;
+      /** Time in ms from practice start (038-practice-replay Phase B). */
+      readonly responseTimeMs: number;
     }
   | { readonly type: 'STOP' }
   | { readonly type: 'DEACTIVATE' }
@@ -135,4 +149,5 @@ export const INITIAL_PRACTICE_STATE: PracticeState = {
   selectedStaffIndex: 0,
   noteResults: [],
   currentWrongAttempts: 0,
+  wrongNoteEvents: [],
 };
