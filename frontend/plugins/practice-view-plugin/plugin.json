@@ -1,0 +1,12 @@
+{
+  "id": "practice-view-plugin",
+  "name": "Practice",
+  "version": "1.0.0",
+  "pluginApiVersion": "6",
+  "entryPoint": "index.tsx",
+  "description": "MIDI-driven step-by-step score practice. Load a score, press Practice, and play each target note on your MIDI device to advance through the piece one note at a time.",
+  "type": "core",
+  "view": "full-screen",
+  "icon": "🎯",
+  "order": 3
+}

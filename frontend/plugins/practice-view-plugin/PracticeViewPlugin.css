@@ -1,0 +1,615 @@
+/**
+ * Practice View Plugin — Styles (T024)
+ * Feature 037: Practice View Plugin
+ *
+ * Full-screen layout mirroring play-score-plugin.
+ * All sizing uses flex/100% — zero coordinate arithmetic (Principle VI).
+ */
+
+/* ─── Root container ──────────────────────────────────────────────────────── */
+
+.practice-plugin {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* ─── Phantom tempo highlight — 50% opacity amber during active practice ── */
+/* Reuses the existing .layout-glyph.highlighted style from LayoutRenderer
+   but reduces opacity so the user can distinguish the tempo-driven phantom
+   (where they *should* be) from the green pinned target (where they ARE). */
+.practice-plugin--phantom .layout-glyph.highlighted {
+  opacity: 0.5;
+}
+
+/* ─── Score area (flex:1 so toolbar gets intrinsic height) ────────────────── */
+
+.practice-plugin__score-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ─── Toolbar ─────────────────────────────────────────────────────────────── */
+
+.practice-plugin__toolbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f8f8f8;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+  overflow: visible;
+  min-height: 52px;
+}
+
+/* ─── Toolbar buttons ─────────────────────────────────────────────────────── */
+
+.practice-plugin__toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #d0d0d0;
+  background: #fff;
+  font-size: 0.875rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s;
+  color: #222;
+  min-height: 36px;
+}
+
+.practice-plugin__toolbar-btn:hover:not(:disabled) {
+  background: #f0f4ff;
+  border-color: #aac;
+}
+
+.practice-plugin__toolbar-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.practice-plugin__toolbar-btn--back {
+  padding: 6px 10px;
+  font-size: 1rem;
+}
+
+.practice-plugin__toolbar-btn--play {
+  color: #1a7a2a;
+  border-color: #1a7a2a;
+}
+
+.practice-plugin__toolbar-btn--pause {
+  color: #7a6a10;
+  border-color: #c5a800;
+}
+
+.practice-plugin__toolbar-btn--stop {
+  color: #7a1a1a;
+  border-color: #c84040;
+}
+
+/* Practice button in inactive state */
+.practice-plugin__toolbar-btn--practice {
+  color: #1a4a9a;
+  border-color: #3060cc;
+  font-weight: 600;
+}
+
+/* Practice button in active state */
+.practice-plugin__toolbar-btn--practice-active {
+  background: #1a4a9a;
+  color: #fff;
+  border-color: #1a4a9a;
+  font-weight: 600;
+}
+
+.practice-plugin__toolbar-btn--practice-active:hover:not(:disabled) {
+  background: #163e84;
+}
+
+/* Complete badge */
+.practice-plugin__toolbar-btn--practice-complete {
+  background: #1a7a2a;
+  color: #fff;
+  border-color: #1a7a2a;
+  font-weight: 600;
+}
+
+/* ─── Toolbar title ───────────────────────────────────────────────────────── */
+
+.practice-plugin__toolbar-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  flex-shrink: 1;
+}
+
+/* ─── Elapsed timer ───────────────────────────────────────────────────────── */
+
+.practice-plugin__toolbar-timer {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: #555;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.practice-plugin__toolbar-timer-total {
+  color: #999;
+}
+
+/* ─── Tempo control ───────────────────────────────────────────────────────── */
+
+.practice-plugin__toolbar-tempo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 220px;
+}
+
+.practice-plugin__toolbar-tempo-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #999;
+  white-space: nowrap;
+}
+
+.practice-plugin__toolbar-tempo-slider {
+  width: 130px;
+  accent-color: #3060cc;
+}
+
+.practice-plugin__toolbar-bpm {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: #555;
+  white-space: nowrap;
+  min-width: 2.5ch;
+}
+
+/* ─── Staff selector ──────────────────────────────────────────────────────── */
+
+.practice-plugin__staff-select {
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #d0d0d0;
+  background: #fff;
+  color: #222;
+  cursor: pointer;
+  max-width: 120px;
+}
+
+/* ─── Metronome group ────────────────────────────────────────────────────── */
+
+.practice-plugin__metro-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.practice-plugin__metro-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #7c3aed;
+  color: #fff;
+  border: none;
+  border-radius: 8px 0 0 8px;
+  min-width: 40px;
+  padding: 0 10px;
+  font-size: 1.2rem;
+  line-height: 1;
+  min-height: 36px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 0.12s;
+}
+
+/* Metro button hover — simple filter, no base-class conflict ——————————— */
+.practice-plugin__metro-btn:hover {
+  filter: brightness(1.18);
+}
+
+.practice-plugin__metro-btn:focus-visible {
+  outline: 2px solid rgba(255,255,255,0.5);
+  outline-offset: -2px;
+}
+
+.practice-plugin__metro-btn--active,
+.practice-plugin__metro-btn--active:hover {
+  background: #7c3aed;
+  animation: practice-metro-pulse 0.12s ease-out;
+}
+
+.practice-plugin__metro-btn--downbeat,
+.practice-plugin__metro-btn--downbeat:hover {
+  background: #6d28d9;
+  animation: practice-metro-pulse-down 0.14s ease-out;
+}
+
+@keyframes practice-metro-pulse {
+  0% { filter: brightness(1.6); }
+  100% { filter: brightness(1); }
+}
+
+@keyframes practice-metro-pulse-down {
+  0% { filter: brightness(2) saturate(1.4); }
+  100% { filter: brightness(1); }
+}
+
+.practice-plugin__metro-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 6px;
+  border: none;
+  border-left: 1px solid rgba(255,255,255,0.25);
+  border-radius: 0 8px 8px 0;
+  background: #7c3aed;
+  color: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: filter 0.12s;
+}
+
+.practice-plugin__metro-chevron:hover {
+  filter: brightness(1.15);
+}
+
+.practice-plugin__metro-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 120px;
+  background: #1e1b2e;
+  border: 1px solid #7c3aed;
+  border-radius: 8px;
+  padding: 4px 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  z-index: 200;
+}
+
+.practice-plugin__metro-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: #e2d9f3;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.practice-plugin__metro-menu-item:hover {
+  background: rgba(124, 58, 237, 0.25);
+}
+
+.practice-plugin__metro-menu-item--active {
+  color: #fff;
+  font-weight: 700;
+}
+
+.practice-plugin__metro-menu-check {
+  color: #a78bfa;
+  font-size: 0.8rem;
+  width: 12px;
+  flex-shrink: 0;
+}
+
+/* ─── Toolbar spacer (pushes right-side items to the right) ──────────────── */
+
+.practice-plugin__no-midi-notice {
+  font-size: 0.78rem;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Wrapper that keeps the tooltip reachable when inner button is disabled */
+.practice-plugin__practice-btn-wrapper {
+  display: inline-flex;
+  align-items: center;
+}
+
+.practice-plugin__toolbar-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── MIDI badge (only rendered when device detected) ────────────────────── */
+
+.practice-plugin__midi-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #1a53c0;
+  background: #e8f0fe;
+  border: 1px solid #a8c0f8;
+  border-radius: 6px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* ─── Staff picker inline prompt (shown when staffCount > 1 and no selection) */
+
+.practice-plugin__staff-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #333;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.practice-plugin__staff-picker-label {
+  font-weight: 600;
+  color: #555;
+}
+
+/* ─── Practice progress label (x / total) ────────────────────────────────── */
+
+.practice-plugin__progress {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: #555;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ─── Selection screen (reuses play-score approach) ──────────────────────── */
+
+.practice-plugin--selection {
+  justify-content: flex-start;
+}
+
+/* ─── Results overlay (mirrors Train view mobile-CSS results) ────────────── */
+
+.practice-results__backdrop {
+  display: none;
+}
+
+.practice-results__close {
+  display: none;
+}
+
+.practice-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  background: #fff;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 201;
+  width: min(92vw, 420px);
+  max-height: calc(100dvh - 64px);
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+}
+
+.practice-plugin--results .practice-results__backdrop {
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 200;
+  pointer-events: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.practice-plugin--results .practice-results__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.12);
+  color: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.practice-results__score-block {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.practice-results__score-ring {
+  display: flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  flex-shrink: 0;
+}
+
+.practice-results__score-number {
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.practice-results__score-label {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.practice-results__score-grade {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.practice-results__stats {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+.practice-results__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.practice-results__stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #222;
+}
+
+.practice-results__stat-label {
+  font-size: 0.75rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.practice-results__stat-value--warn {
+  color: #f57f17;
+}
+
+.practice-results__stat-value--error {
+  color: #c62828;
+}
+
+.practice-results__time-comparison {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+  color: #333;
+  padding: 0.4rem 0;
+}
+
+.practice-results__time-separator {
+  color: #999;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+/* ── Collapsible details ─────────────────────────────────────────────────── */
+
+.practice-results__details {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.practice-results__details-summary {
+  padding: 0.6rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  background: #f5f5f5;
+  color: #222;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.practice-results__details-summary::-webkit-details-marker { display: none; }
+.practice-results__details[open] .practice-results__details-summary::after { content: '∧'; }
+.practice-results__details:not([open]) .practice-results__details-summary::after { content: '∨'; }
+
+/* ── Per-note table ──────────────────────────────────────────────────────── */
+
+.practice-results__table-wrapper {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 40vh;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.practice-results__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.practice-results__table th {
+  text-align: left;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 2px solid #e0e0e0;
+  font-size: 0.75rem;
+  color: #666;
+  white-space: nowrap;
+}
+
+.practice-results__table td {
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid #f0f0f0;
+  white-space: nowrap;
+  color: #222;
+}
+
+.practice-results__row--correct       { background: #f1f8e9; }
+.practice-results__row--correct-late  { background: #fff8e1; }
+.practice-results__row--wrong         { background: #ffebee; }
+
+.practice-results__status-icon {
+  font-size: 0.85em;
+  vertical-align: middle;
+}
+
+.practice-results__hint {
+  font-size: 0.85rem;
+  color: #666;
+  text-align: center;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .practice-results__score-number {
+    font-size: 2.25rem;
+  }
+}

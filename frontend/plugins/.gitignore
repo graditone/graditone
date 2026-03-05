@@ -3,6 +3,5 @@
 # committed as part of this repository.
 #
 # To add a symlink for local dev:
-#   ln -s ../../plugins-external/practice-view-plugin practice-view-plugin
-practice-view-plugin
+#   ln -s ../../plugins-external/virtual-keyboard-pro virtual-keyboard-pro
 virtual-keyboard-pro
