@@ -931,8 +931,23 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         selectedStaffIndex={selectedStaffIndex}
         onStaffChange={handleStaffChange}
         practiceMode={practiceState.mode}
-        currentPracticeIndex={practiceState.currentIndex}
-        totalPracticeNotes={practiceState.notes.length}
+        currentPracticeIndex={(() => {
+          const range = loopPracticeRangeRef.current;
+          if (range && practiceState.mode === 'active') {
+            const notesInLoop = range.endIndex - range.startIndex + 1;
+            const completedLoops = Math.max(0, (loopCount - 1) - remainingLoopsRef.current);
+            return completedLoops * notesInLoop + (practiceState.currentIndex - range.startIndex);
+          }
+          return practiceState.currentIndex;
+        })()}
+        totalPracticeNotes={(() => {
+          const range = loopPracticeRangeRef.current;
+          if (range && practiceState.mode === 'active') {
+            const notesInLoop = range.endIndex - range.startIndex + 1;
+            return notesInLoop * loopCount;
+          }
+          return practiceState.notes.length;
+        })()}
         onPracticeToggle={handlePracticeToggle}
         showStaffPicker={false}
         midiConnected={midiConnected}
@@ -1098,15 +1113,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
             {/* Delay evolution graph — SVG line chart of timing deviation per note (incremental, X=real time) */}
             {(() => {
               const delayData = practiceReport.results
-                .map((r: PracticeNoteResult, i: number) => {
-                  if (i === 0) return { index: 0, delay: 0, timeMs: r.responseTimeMs };
-                  const prev = practiceReport.results[i - 1];
-                  if (r.expectedTimeMs <= 0 || prev.expectedTimeMs <= 0) return null;
-                  const actualInterval = r.responseTimeMs - prev.responseTimeMs;
-                  const expectedInterval = r.expectedTimeMs - prev.expectedTimeMs;
-                  return { index: i, delay: Math.round(actualInterval - expectedInterval), timeMs: r.responseTimeMs };
-                })
-                .filter((d): d is { index: number; delay: number; timeMs: number } => d !== null);
+                .map((r: PracticeNoteResult, i: number) => ({
+                  index: i, delay: r.relativeDeltaMs, timeMs: r.responseTimeMs,
+                }));
 
               if (delayData.length < 2) return null;
 
