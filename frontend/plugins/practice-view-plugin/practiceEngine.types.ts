@@ -122,6 +122,8 @@ export type PracticeAction =
       readonly responseTimeMs: number;
       /** Expected time in ms based on tick & BPM. */
       readonly expectedTimeMs: number;
+      /** Optional: last index in notes[] for this session (loop-region completion). */
+      readonly endIndex?: number;
     }
   | {
       readonly type: 'WRONG_MIDI';

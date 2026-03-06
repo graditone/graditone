@@ -477,30 +477,27 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       const chordResult = chordDetectorRef.current.press(event.midiNote, event.timestamp);
       const isInChord = (currentEntry.midiPitches as number[]).includes(event.midiNote);
       if (chordResult.complete) {
-        // All chord notes collected — advance (or loop-wrap).
-        const range = loopPracticeRangeRef.current;
-        if (range && ps.currentIndex >= range.endIndex) {
-          dispatchPractice({ type: 'SEEK', index: range.startIndex });
-        } else {
-          // Deferred start: if in 'waiting' mode, set the start time NOW
-          // (first correct note begins the clock).
-          if (ps.mode === 'waiting') {
-            practiceStartTimeRef.current = Date.now();
-          }
-          // Compute timing data for the result
-          // playerState.bpm already includes tempoMultiplier (scoreTempo × multiplier)
-          const bpm = playerStateRef.current.bpm;
-          const expectedTimeMs = bpm > 0
-            ? (currentEntry.tick / ((bpm / 60) * PPQ)) * 1000
-            : 0;
-          const responseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
-          dispatchPractice({
-            type: 'CORRECT_MIDI',
-            midiNote: event.midiNote,
-            responseTimeMs,
-            expectedTimeMs,
-          });
+        // All chord notes collected — advance.
+        // Deferred start: if in 'waiting' mode, set the start time NOW
+        // (first correct note begins the clock).
+        if (ps.mode === 'waiting') {
+          practiceStartTimeRef.current = Date.now();
         }
+        // Compute timing data for the result
+        // playerState.bpm already includes tempoMultiplier (scoreTempo × multiplier)
+        const bpm = playerStateRef.current.bpm;
+        const expectedTimeMs = bpm > 0
+          ? (currentEntry.tick / ((bpm / 60) * PPQ)) * 1000
+          : 0;
+        const responseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
+        const range = loopPracticeRangeRef.current;
+        dispatchPractice({
+          type: 'CORRECT_MIDI',
+          midiNote: event.midiNote,
+          responseTimeMs,
+          expectedTimeMs,
+          endIndex: range?.endIndex,
+        });
       } else if (!isInChord) {
         // Pitch outside the required chord — treat as wrong note.
         const wrongResponseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;

@@ -498,3 +498,33 @@ describe('reduce() — wrongNoteEvents tracking', () => {
     expect(s.wrongNoteEvents[0].midiNote).toBe(61);
   });
 });
+
+// ---------------------------------------------------------------------------
+// reduce() — loop-region completion via CORRECT_MIDI endIndex
+// ---------------------------------------------------------------------------
+
+describe('reduce() — loop-region completion (endIndex)', () => {
+  it('completes at endIndex instead of notes.length - 1 when endIndex is provided', () => {
+    // 3 notes, but endIndex=1 means practice ends after note at index 1
+    let s = activeState(THREE_NOTES, 0);
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 0, expectedTimeMs: 0, endIndex: 1 });
+    expect(s.mode).toBe('active');
+    expect(s.currentIndex).toBe(1);
+    // Now at index 1 which is the endIndex — completing this note should finish
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 62, responseTimeMs: 500, expectedTimeMs: 500, endIndex: 1 });
+    expect(s.mode).toBe('complete');
+    expect(s.noteResults).toHaveLength(2);
+  });
+
+  it('uses notes.length - 1 when endIndex is not provided (default)', () => {
+    let s = activeState(THREE_NOTES, 0);
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 0, expectedTimeMs: 0 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 62, responseTimeMs: 500, expectedTimeMs: 500 });
+    // At index 2 now but not yet complete since there are 3 notes
+    expect(s.mode).toBe('active');
+    expect(s.currentIndex).toBe(2);
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 1000, expectedTimeMs: 1000 });
+    expect(s.mode).toBe('complete');
+    expect(s.noteResults).toHaveLength(3);
+  });
+});

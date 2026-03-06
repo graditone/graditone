@@ -92,9 +92,9 @@ export function reduce(state: PracticeState, action: PracticeAction): PracticeSt
 
       const newResults = [...state.noteResults, result];
 
-      const lastIndex = state.notes.length - 1;
+      const lastIndex = action.endIndex ?? state.notes.length - 1;
       if (state.currentIndex >= lastIndex) {
-        // Completed all notes
+        // Completed all notes (or loop-region boundary)
         return { ...state, mode: 'complete', noteResults: newResults, currentWrongAttempts: 0 };
       }
       return { ...state, mode: 'active', currentIndex: state.currentIndex + 1, noteResults: newResults, currentWrongAttempts: 0 };
