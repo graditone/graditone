@@ -200,6 +200,7 @@ describe('reduce() — CORRECT_MIDI action', () => {
       selectedStaffIndex: 0,
       noteResults: [],
       currentWrongAttempts: 0,
+      wrongNoteEvents: [],
     };
     const next = reduce(state, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 3000, expectedTimeMs: 3000 });
     expect(next).toStrictEqual(state);
@@ -615,10 +616,66 @@ describe('reduce() — loop boundary relative delta', () => {
     s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 1000, expectedTimeMs: 1000, endIndex: 2 });
     // Restart loop
     s = reduce(s, { type: 'LOOP_RESTART', startIndex: 0 });
-    // First note of second loop — expectedTimeMs goes back to 0 (< prevResult's 1000)
+    // First note of second loop — if caller doesn't offset, expectedTimeMs goes backwards
+    // Engine treats backwards expectedTimeMs as loop boundary → delta = 0
     s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 1500, expectedTimeMs: 0 });
     const loopBoundaryResult = s.noteResults[3]; // 4th result (index 3)
     expect(loopBoundaryResult.relativeDeltaMs).toBe(0);
     expect(loopBoundaryResult.outcome).toBe('correct');
+  });
+
+  it('computes correct delta for single-note loop when caller offsets expectedTimeMs', () => {
+    // Single note at tick 19200 → baseExpectedTimeMs = 10000 at 120 BPM
+    // Loop region duration = 10000ms (e.g. ticks [0, 19200])
+    const SINGLE_NOTE = [makeNoteAtTick(19200, [36])];
+    let s = activeState(SINGLE_NOTE, 0);
+
+    // Loop 0: first note, delta = 0
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 36, responseTimeMs: 0, expectedTimeMs: 10000, endIndex: 0 });
+    expect(s.mode).toBe('complete');
+    expect(s.noteResults[0].relativeDeltaMs).toBe(0);
+
+    // LOOP_RESTART
+    s = reduce(s, { type: 'LOOP_RESTART', startIndex: 0 });
+
+    // Loop 1: caller offsets expectedTimeMs by loopDuration (10000)
+    // User plays ~10s after first note → on time
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 36, responseTimeMs: 10000, expectedTimeMs: 20000, endIndex: 0 });
+    expect(s.noteResults[1].relativeDeltaMs).toBe(0);
+    expect(s.noteResults[1].outcome).toBe('correct');
+
+    // LOOP_RESTART
+    s = reduce(s, { type: 'LOOP_RESTART', startIndex: 0 });
+
+    // Loop 2: user is 300ms late
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 36, responseTimeMs: 20300, expectedTimeMs: 30000, endIndex: 0 });
+    expect(s.noteResults[2].relativeDeltaMs).toBe(300);
+    expect(s.noteResults[2].outcome).toBe('correct');
+  });
+
+  it('computes correct delta for multi-note loop when caller offsets expectedTimeMs', () => {
+    // 3 notes at ticks 0, 960, 1920 → expectedTimeMs 0, 500, 1000 at 120 BPM
+    // Loop region [0, 3840] → loopDurationMs = 2000
+    let s = activeState(THREE_NOTES, 0);
+
+    // --- Loop 0 ---
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 0, expectedTimeMs: 0, endIndex: 2 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 62, responseTimeMs: 500, expectedTimeMs: 500, endIndex: 2 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 1000, expectedTimeMs: 1000, endIndex: 2 });
+    expect(s.mode).toBe('complete');
+
+    s = reduce(s, { type: 'LOOP_RESTART', startIndex: 0 });
+
+    // --- Loop 1: offset all expectedTimeMs by +2000 ---
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 2000, expectedTimeMs: 2000, endIndex: 2 });
+    // expectedInterval = 2000 - 1000 = 1000, actualInterval = 2000 - 1000 = 1000 → delta = 0
+    expect(s.noteResults[3].relativeDeltaMs).toBe(0);
+
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 62, responseTimeMs: 2500, expectedTimeMs: 2500, endIndex: 2 });
+    expect(s.noteResults[4].relativeDeltaMs).toBe(0);
+
+    // Third note: user is 200ms late
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 3200, expectedTimeMs: 3000, endIndex: 2 });
+    expect(s.noteResults[5].relativeDeltaMs).toBe(200);
   });
 });

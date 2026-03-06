@@ -79,12 +79,15 @@ export function reduce(state: PracticeState, action: PracticeAction): PracticeSt
       // Compute relative timing delta: how far off was the interval
       // between this note and the previous one vs. the expected interval.
       // First note always gets relativeDeltaMs = 0 (no reference).
+      // The caller is responsible for offsetting expectedTimeMs by the loop
+      // duration on each iteration so the engine sees monotonically increasing
+      // values. This makes the >= guard and interval math work identically
+      // for single notes, chords, and multi-note loops.
       const prevResult = state.noteResults.length > 0
         ? state.noteResults[state.noteResults.length - 1]
         : null;
       let relativeDeltaMs = 0;
       if (prevResult) {
-        // At loop boundary (ticks go backwards), treat as no-reference.
         if (action.expectedTimeMs >= prevResult.expectedTimeMs) {
           const actualInterval = action.responseTimeMs - prevResult.responseTimeMs;
           const expectedInterval = action.expectedTimeMs - prevResult.expectedTimeMs;

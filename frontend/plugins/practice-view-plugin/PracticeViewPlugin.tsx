@@ -218,6 +218,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // ─── Multi-loop practice state ─────────────────────────────────────────────
   const [loopCount, setLoopCount] = useState(1);
   const remainingLoopsRef = useRef(0);
+  /** Completed loop iterations so far (0 = first loop). Used to offset expectedTimeMs. */
+  const loopIterationRef = useRef(0);
+  /**
+   * Wall-clock timestamp (relative to practiceStartTime) when the phantom restarts
+   * each loop. Recorded at each LOOP_RESTART so the next iteration can compute
+   * the real loop period for expectedTimeMs offset. Index 0 = loop 0 start = 0.
+   */
+  const loopStartTimesRef = useRef<number[]>([0]);
 
   // Show overlay each time practice enters 'complete' mode, capture PerformanceRecord (T005)
   useEffect(() => {
@@ -225,6 +233,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       // Multi-loop: if remaining loops > 0, restart at the loop start
       if (remainingLoopsRef.current > 0) {
         remainingLoopsRef.current -= 1;
+        loopIterationRef.current += 1;
+        // Record the wall-clock time when this new loop starts (relative to practice start)
+        const loopStartMs = Date.now() - practiceStartTimeRef.current;
+        loopStartTimesRef.current.push(loopStartMs);
         const range = loopPracticeRangeRef.current;
         if (range) {
           dispatchPractice({ type: 'LOOP_RESTART', startIndex: range.startIndex });
@@ -499,9 +511,26 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         // Compute timing data for the result
         // playerState.bpm already includes tempoMultiplier (scoreTempo × multiplier)
         const bpm = playerStateRef.current.bpm;
-        const expectedTimeMs = bpm > 0
+        const baseExpectedTimeMs = bpm > 0
           ? (currentEntry.tick / ((bpm / 60) * PPQ)) * 1000
           : 0;
+        // In multi-loop practice, compute expectedTimeMs relative to the real
+        // wall-clock time when the phantom restarted this loop iteration.
+        // This accounts for the last-note duration that MusicTimeline adds
+        // before wrapping, which is not reflected in loopRegion tick span.
+        const lr = loopRegionRef.current;
+        const loopK = loopIterationRef.current;
+        let expectedTimeMs: number;
+        if (lr && loopK > 0 && bpm > 0) {
+          // Time from loop start tick to this note's tick within the loop
+          const loopStartBaseMs = (lr.startTick / ((bpm / 60) * PPQ)) * 1000;
+          const timeWithinLoop = baseExpectedTimeMs - loopStartBaseMs;
+          // Wall-clock time when this loop iteration started
+          const loopStartMs = loopStartTimesRef.current[loopK] ?? 0;
+          expectedTimeMs = loopStartMs + timeWithinLoop;
+        } else {
+          expectedTimeMs = baseExpectedTimeMs;
+        }
         const responseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
         const range = loopPracticeRangeRef.current;
         dispatchPractice({
@@ -818,6 +847,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const handleRepractice = useCallback(() => {
     if (isReplaying) handleReplayStop();
     remainingLoopsRef.current = loopCount - 1;
+    loopIterationRef.current = 0;
+    loopStartTimesRef.current = [0];
     setResultsOverlayVisible(false);
     handlePracticeToggle();
   }, [isReplaying, handleReplayStop, handlePracticeToggle, loopCount]);
