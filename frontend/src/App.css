@@ -68,12 +68,11 @@ body[data-landing-theme] .app-slogan {
   padding-bottom: 2px;
 }
 
-/* Plugin management (+/−) buttons — pinned to the right edge of the header */
+/* Plugin management (+/−) buttons — pinned to the top-right of the header */
 .plugin-manage-btns {
   position: absolute;
   right: 20px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 12px;
   display: flex;
   gap: 4px;
 }
