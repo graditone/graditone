@@ -44,6 +44,88 @@ body[data-landing-theme] .app-header a {
   color: var(--ls-accent);
 }
 
+/* ── Feature 039: Plugin navigation entries ────────────────────────────────── */
+/* Default: works on the dark purple gradient header.                          */
+.plugin-nav-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #e0e0ff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.plugin-nav-entry:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.plugin-nav-entry--active {
+  background: rgba(255, 255, 255, 0.9);
+  color: #4a0080;
+  font-weight: 700;
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
+.plugin-nav-entry__badge {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+/* +/- plugin management buttons */
+.plugin-manage-btn {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px dashed #666;
+  border-radius: 6px;
+  background: transparent;
+  color: #999;
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 0 10px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+/* Theme overrides: plugin nav entries */
+body[data-landing-theme] .plugin-nav-entry {
+  color: var(--ls-body);
+  background: color-mix(in srgb, var(--ls-heading) 8%, var(--ls-navbar-bg));
+  border-color: color-mix(in srgb, var(--ls-heading) 18%, transparent);
+  font-family: var(--ls-font-body);
+}
+
+body[data-landing-theme] .plugin-nav-entry:hover {
+  background: color-mix(in srgb, var(--ls-heading) 16%, var(--ls-navbar-bg));
+  border-color: color-mix(in srgb, var(--ls-heading) 32%, transparent);
+}
+
+body[data-landing-theme] .plugin-nav-entry--active {
+  background: var(--ls-cta-bg);
+  color: var(--ls-cta-text);
+  border-color: var(--ls-cta-bg);
+  font-weight: var(--ls-heading-weight, 700);
+}
+
+/* Theme overrides: +/- management buttons */
+body[data-landing-theme] .plugin-manage-btn {
+  border-color: color-mix(in srgb, var(--ls-heading) 30%, transparent);
+  color: var(--ls-body);
+}
+
+body[data-landing-theme] .plugin-manage-btn:hover {
+  background: color-mix(in srgb, var(--ls-heading) 10%, var(--ls-navbar-bg));
+  border-color: var(--ls-heading);
+  color: var(--ls-heading);
+}
+
 /* ── Feature 039: Bridge --color-* tokens for plugins that use them ───────── */
 /* The train-view plugin uses --color-* vars internally. Map them to --ls-*   */
 /* landing tokens so every theme update propagates without touching plugin CSS. */

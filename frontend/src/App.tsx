@@ -568,17 +568,7 @@ function App() {
                   aria-label="Import Plugin"
                   title="Import Plugin"
                   onClick={() => setShowImporter(true)}
-                  style={{
-                    minWidth: '44px',
-                    minHeight: '44px',
-                    border: '1px dashed #666',
-                    borderRadius: '6px',
-                    background: 'transparent',
-                    color: '#999',
-                    fontSize: '1.2em',
-                    cursor: 'pointer',
-                    padding: '0 10px',
-                  }}
+                  className="plugin-manage-btn"
                 >
                   +
                 </button>
@@ -587,17 +577,7 @@ function App() {
                   aria-label="Remove Plugin"
                   title="Remove Plugin"
                   onClick={() => setShowRemover(true)}
-                  style={{
-                    minWidth: '44px',
-                    minHeight: '44px',
-                    border: '1px dashed #666',
-                    borderRadius: '6px',
-                    background: 'transparent',
-                    color: '#999',
-                    fontSize: '1.2em',
-                    cursor: 'pointer',
-                    padding: '0 10px',
-                  }}
+                  className="plugin-manage-btn"
                 >
                   −
                 </button>
