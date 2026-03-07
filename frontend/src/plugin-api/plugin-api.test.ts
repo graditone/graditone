@@ -17,7 +17,7 @@ import {
   type PluginManifest,
   type PluginNoteEvent,
   type PluginContext,
-  type MusicorePlugin,
+  type GraditonePlugin,
   type PluginPitchEvent,
   type PluginRecordingContext,
 } from './index';
@@ -84,10 +84,10 @@ describe('Plugin API contract', () => {
     });
   });
 
-  describe('MusicorePlugin interface contract', () => {
-    it('an object satisfying MusicorePlugin compiles and has init + Component', () => {
+  describe('GraditonePlugin interface contract', () => {
+    it('an object satisfying GraditonePlugin compiles and has init + Component', () => {
       // Runtime check: confirm the shape is as expected by constructing a minimal mock
-      const mockPlugin: MusicorePlugin = {
+      const mockPlugin: GraditonePlugin = {
         init: (_ctx: PluginContext) => { /* no-op */ },
         Component: () => null,
       };
@@ -96,13 +96,13 @@ describe('Plugin API contract', () => {
     });
 
     it('dispose is optional', () => {
-      const withoutDispose: MusicorePlugin = {
+      const withoutDispose: GraditonePlugin = {
         init: () => { /* no-op */ },
         Component: () => null,
       };
       expect(withoutDispose.dispose).toBeUndefined();
 
-      const withDispose: MusicorePlugin = {
+      const withDispose: GraditonePlugin = {
         init: () => { /* no-op */ },
         dispose: () => { /* no-op */ },
         Component: () => null,

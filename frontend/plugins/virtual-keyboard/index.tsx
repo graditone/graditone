@@ -2,18 +2,18 @@
  * Virtual Keyboard plugin — entry point (T015)
  * Feature 030: Plugin Architecture
  *
- * Default export must satisfy the MusicorePlugin interface.
+ * Default export must satisfy the GraditonePlugin interface.
  * Only imports from ../../src/plugin-api are permitted (enforced by ESLint).
  *
  * This plugin is registered as a built-in in builtinPlugins.ts (T016).
  *
  * Note: react-refresh/only-export-components is silenced here because plugin
- * entry points export a MusicorePlugin object (not a React component) by design.
+ * entry points export a GraditonePlugin object (not a React component) by design.
  * HMR for plugins is not required — see R-006 in research.md.
  */
 /* eslint-disable react-refresh/only-export-components */
 
-import type { MusicorePlugin, PluginContext } from '../../src/plugin-api/index';
+import type { GraditonePlugin, PluginContext } from '../../src/plugin-api/index';
 import { VirtualKeyboard } from './VirtualKeyboard';
 
 let _context: PluginContext | null = null;
@@ -30,7 +30,7 @@ function VirtualKeyboardWithContext() {
   return <VirtualKeyboard context={_context} />;
 }
 
-const virtualKeyboardPlugin: MusicorePlugin = {
+const virtualKeyboardPlugin: GraditonePlugin = {
   init(context: PluginContext) {
     _context = context;
     console.log('[VirtualKeyboard] init', context.manifest.version);

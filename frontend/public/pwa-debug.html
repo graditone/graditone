@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PWA Debug - Musicore</title>
+  <title>PWA Debug - Graditone</title>
   <style>
     body {
       font-family: system-ui, -apple-system, sans-serif;
@@ -43,7 +43,7 @@
   </style>
 </head>
 <body>
-  <h1>🔍 PWA Debug Tool - Musicore</h1>
+  <h1>🔍 PWA Debug Tool - Graditone</h1>
   
   <div class="section">
     <h2>Installation Status</h2>
@@ -84,7 +84,7 @@
     </ol>
     <p><strong>Manual Install (if beforeinstallprompt doesn't fire):</strong></p>
     <ul>
-      <li><strong>Chrome/Edge Desktop:</strong> Menu (⋮) → "Install Musicore..."</li>
+      <li><strong>Chrome/Edge Desktop:</strong> Menu (⋮) → "Install Graditone..."</li>
       <li><strong>Chrome Android:</strong> Menu (⋮) → "Add to Home screen" or "Install app"</li>
       <li><strong>Safari iOS:</strong> Share button → "Add to Home Screen"</li>
     </ul>
@@ -155,7 +155,7 @@
             • May require 30+ seconds of engagement<br>
             • Must not already be installed<br><br>
             <strong>To install manually:</strong><br>
-            • Chrome/Edge Desktop: Three dots menu → "Install Musicore..."<br>
+            • Chrome/Edge Desktop: Three dots menu → "Install Graditone..."<br>
             • Chrome Android: Three dots menu → "Add to Home screen" or "Install app"<br>
             • Safari iOS: Cannot use Chrome install; use Share → "Add to Home Screen"<br><br>
             <strong>If all checks below are ✅, the PWA is installable!</strong>
@@ -170,7 +170,7 @@
     async function checkManifest() {
       const el = document.getElementById('manifestCheck');
       try {
-        const basePath = document.querySelector('base')?.href || window.location.origin + '/musicore/';
+        const basePath = document.querySelector('base')?.href || window.location.origin + '/graditone/';
         const manifestUrl = new URL('manifest.webmanifest', basePath).href;
         log(`Fetching manifest from: ${manifestUrl}`);
         

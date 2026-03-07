@@ -16,13 +16,13 @@
  * directory with index + plugin.json — no manual registration needed here.
  */
 
-import type { PluginManifest, MusicorePlugin } from '../../plugin-api/index';
+import type { PluginManifest, GraditonePlugin } from '../../plugin-api/index';
 
 // Both globs are resolved eagerly at build time by Vite (no runtime overhead).
 const indexModules = import.meta.glob('../../../plugins/*/index.{ts,tsx}', {
   eager: true,
   import: 'default',
-}) as Record<string, MusicorePlugin>;
+}) as Record<string, GraditonePlugin>;
 
 const manifestModules = import.meta.glob('../../../plugins/*/plugin.json', {
   eager: true,
@@ -30,7 +30,7 @@ const manifestModules = import.meta.glob('../../../plugins/*/plugin.json', {
 
 export interface BuiltinPluginEntry {
   manifest: PluginManifest;
-  plugin: MusicorePlugin;
+  plugin: GraditonePlugin;
 }
 
 function buildEntries(type: 'core' | 'common'): BuiltinPluginEntry[] {

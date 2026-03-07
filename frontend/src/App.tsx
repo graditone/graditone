@@ -15,7 +15,7 @@ import { PluginNavEntry } from './components/plugins/PluginNavEntry'
 import { PluginImporterDialog } from './components/plugins/PluginImporterDialog'
 import { PluginRemoverDialog } from './components/plugins/PluginRemoverDialog'
 import { ScoreSelectorPlugin } from './components/plugins/ScoreSelectorPlugin'
-import type { PluginContext, PluginNoteEvent, MusicorePlugin } from './plugin-api/index'
+import type { PluginContext, PluginNoteEvent, GraditonePlugin } from './plugin-api/index'
 import { PluginStaffViewer } from './plugin-api/PluginStaffViewer'
 import { createNoOpScorePlayer, createScorePlayerProxy } from './plugin-api/scorePlayerContext'
 import { createNoOpMetronome, createMetronomeProxy } from './plugin-api/metronomeContext'
@@ -29,10 +29,10 @@ import './App.css'
 // Expose the host's React instance on window so imported plugins loaded as Blob
 // URL ESM modules can share it via their react-shim.js alias (avoids the
 // "Cannot read properties of null (reading 'useState')" dual-React error).
-;(window as unknown as Record<string, unknown>).__MUSICORE_REACT__ = _ReactNS
+;(window as unknown as Record<string, unknown>).__GRADITON_REACT__ = _ReactNS
 
 /**
- * Musicore - Music Score Editor
+ * Graditone - Music Score Editor
  * 
  * Main application component that renders the score viewer.
  * Connects to backend API at http://localhost:8080
@@ -173,7 +173,7 @@ function App() {
       try {
         const imported = await pluginRegistry.list()
         for (const { manifest } of imported) {
-          let plugin: MusicorePlugin
+          let plugin: GraditonePlugin
           try {
             const assets = await pluginRegistry.getAssets(manifest.id)
             const entryAsset = assets.find(a => a.name === manifest.entryPoint)
@@ -182,7 +182,7 @@ function App() {
             const blobUrl = URL.createObjectURL(blob)
             const mod = await import(/* @vite-ignore */ blobUrl)
             URL.revokeObjectURL(blobUrl)
-            plugin = mod.default as MusicorePlugin
+            plugin = mod.default as GraditonePlugin
             console.log(`[App] Loaded imported plugin "${manifest.id}" from IndexedDB`)
           } catch (loadErr) {
             console.error(`[App] Failed to load plugin "${manifest.id}":`, loadErr)
@@ -366,13 +366,13 @@ function App() {
       <div className="app">
         <header className="app-header">
           <h1>
-            Musicore{' '}
+            <span className="app-title-initial">G</span>raditone{' '}
             <a 
-              href="https://github.com/aylabs/musicore" 
+              href="https://github.com/aylabs/graditone" 
               target="_blank" 
               rel="noopener noreferrer"
               style={{ 
-                fontSize: '0.5em', 
+                fontSize: '0.375em', 
                 color: '#999', 
                 fontWeight: 'normal',
                 textDecoration: 'none'
@@ -403,13 +403,13 @@ function App() {
       <div className="app">
         <header className="app-header">
           <h1>
-            Musicore{' '}
+            <span className="app-title-initial">G</span>raditone{' '}
             <a 
-              href="https://github.com/aylabs/musicore" 
+              href="https://github.com/aylabs/graditone" 
               target="_blank" 
               rel="noopener noreferrer"
               style={{ 
-                fontSize: '0.5em', 
+                fontSize: '0.375em', 
                 color: '#999', 
                 fontWeight: 'normal',
                 textDecoration: 'none'
@@ -527,11 +527,11 @@ function App() {
           <header className="app-header">
             <div className="app-header-brand">
               <div className="app-header-title-row">
-                <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Musicore logo" className="app-logo" />
+                <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Graditone logo" className="app-logo" />
                 <h1>
                   <span className="app-title-initial">G</span>raditone{' '}
                   <a
-                    href="https://github.com/aylabs/musicore"
+                    href="https://github.com/aylabs/graditone"
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{

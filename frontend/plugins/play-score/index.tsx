@@ -2,13 +2,13 @@
  * Play Score Plugin — Entry Point
  * Feature 033: Play Score Plugin
  *
- * Implements the Plugin API v3 MusicorePlugin contract.
+ * Implements the Plugin API v3 GraditonePlugin contract.
  * Context is stored at module level and passed to the React component.
  */
 
 /* eslint-disable react-refresh/only-export-components */
 
-import type { MusicorePlugin, PluginContext } from '../../src/plugin-api/index';
+import type { GraditonePlugin, PluginContext } from '../../src/plugin-api/index';
 import { PlayScorePlugin } from './PlayScorePlugin';
 
 let _context: PluginContext | null = null;
@@ -20,7 +20,7 @@ function PlayScorePluginWithContext() {
   return <PlayScorePlugin context={_context} />;
 }
 
-const playScorePlugin: MusicorePlugin = {
+const playScorePlugin: GraditonePlugin = {
   init(context: PluginContext) {
     _context = context;
   },

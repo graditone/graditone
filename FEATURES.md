@@ -1,6 +1,6 @@
-# Musicore
+# Graditone
 
-**Live App**: [https://aylabs.github.io/musicore/](https://aylabs.github.io/musicore/)
+**Live App**: [https://aylabs.github.io/graditone/](https://aylabs.github.io/graditone/)
 
 A tablet-native app for interactive scores, designed for practice and performance.
 
@@ -76,7 +76,7 @@ A tablet-native app for interactive scores, designed for practice and performanc
 
 ## Quick Start
 
-**Try it now**: [https://aylabs.github.io/musicore/](https://aylabs.github.io/musicore/)
+**Try it now**: [https://aylabs.github.io/graditone/](https://aylabs.github.io/graditone/)
 
 1. **Launch the app** - Opens with a demo score
 2. **Import your score** - Click "Import Score" to load MusicXML files

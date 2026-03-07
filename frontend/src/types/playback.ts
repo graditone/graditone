@@ -90,8 +90,8 @@ export interface TempoState {
  * Tempo preference stored in browser localStorage
  * 
  * Feature 008 - Tempo Change: Per-score tempo persistence
- * Key format: "musicore:tempo:{scoreId}"
- * Example: "musicore:tempo:d5f8a9c2-4b3e-11ef-9a1b-0242ac110002"
+ * Key format: "graditone:tempo:{scoreId}"
+ * Example: "graditone:tempo:d5f8a9c2-4b3e-11ef-9a1b-0242ac110002"
  */
 export interface TempoPreference {
   /**

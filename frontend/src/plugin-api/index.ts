@@ -1,5 +1,5 @@
 /**
- * Musicore Plugin API — public barrel (v5)
+ * Graditone Plugin API — public barrel (v5)
  * Feature 030: Plugin Architecture (v1 baseline)
  * Feature 031: Practice View Plugin — adds PluginPitchEvent, PluginRecordingContext (v2)
  * Feature 033: Play Score Plugin — adds scorePlayer namespace + ScoreRenderer (v3)
@@ -20,7 +20,7 @@ export type {
   PluginManifest,
   PluginContext,
   PluginStaffViewerProps,
-  MusicorePlugin,
+  GraditonePlugin,
   PluginPitchEvent,
   PluginRecordingContext,
   // v3 additions (Feature 033)

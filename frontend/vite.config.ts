@@ -34,8 +34,8 @@ export default defineConfig(({ command }) => {
       registerType: 'autoUpdate',  // Auto-install updates on reload
       includeAssets: ['favicon.ico', 'robots.txt', 'icons/*.png', 'wasm/*'],
       manifest: {
-        name: 'Musicore',
-        short_name: 'Musicore',
+        name: 'Graditone',
+        short_name: 'Graditone',
         description: 'Tablet-native app for interactive scores, designed for practice and performance. Display scores, control tempo, navigate with ease - even offline.',
         theme_color: '#6366f1',
         background_color: '#1a1a1a',
@@ -70,7 +70,7 @@ export default defineConfig(({ command }) => {
             urlPattern: /\/api\/scores\/.*/,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'musicore-scores-v2',
+              cacheName: 'graditone-scores-v2',
               networkTimeoutSeconds: 3,
               expiration: {
                 maxEntries: 50,
@@ -84,7 +84,7 @@ export default defineConfig(({ command }) => {
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
             handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'musicore-images-v2',
+              cacheName: 'graditone-images-v2',
               expiration: {
                 maxEntries: 100,
                 maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
@@ -96,7 +96,7 @@ export default defineConfig(({ command }) => {
             urlPattern: /\.(?:woff|woff2|ttf|eot)$/,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'musicore-fonts-v2',
+              cacheName: 'graditone-fonts-v2',
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 365 * 24 * 60 * 60, // 1 year

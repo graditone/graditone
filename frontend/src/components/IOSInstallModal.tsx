@@ -56,7 +56,7 @@ export const IOSInstallModal: React.FC = () => {
     <div className="ios-install-modal">
       <div className="ios-install-modal__backdrop" onClick={handleDismiss} />
       <div className="ios-install-modal__content">
-        <h2 className="ios-install-modal__title">Install Musicore</h2>
+        <h2 className="ios-install-modal__title">Install Graditone</h2>
         <p className="ios-install-modal__description">
           Install this app on your iPad for the best experience:
         </p>

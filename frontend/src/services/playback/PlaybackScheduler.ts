@@ -6,7 +6,7 @@ import type { Note } from '../../types/score';
  * 
  * Feature 003 - Music Playback: US2 T039
  * 
- * Musicore uses 960 ticks per quarter note (PPQ) for high timing precision.
+ * Graditone uses 960 ticks per quarter note (PPQ) for high timing precision.
  * This allows accurate representation of tuplets, dotted notes, and complex rhythms.
  * 
  * Examples at 120 BPM (one beat = 0.5 seconds):

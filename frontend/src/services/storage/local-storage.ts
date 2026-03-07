@@ -3,7 +3,7 @@
 
 import type { Score } from '../../types/score';
 
-const DB_NAME = 'musicore-db';
+const DB_NAME = 'graditone-db';
 const DB_VERSION = 1;
 const SCORES_STORE = 'scores';
 

@@ -11,13 +11,13 @@
 3. **Create git tag**: `v0.1.1`, `v0.1.2`, etc.
 4. **Commit back to main**: `chore: bump version to v0.1.X [skip ci]`
 5. **Build and deploy**: New version deployed to GitHub Pages
-6. **Version visible in app**: Header shows `🎵 Musicore v0.1.X`
+6. **Version visible in app**: Header shows `🎵 Graditone v0.1.X`
 
 ### Version Display
 
 The version number appears in the app header:
 ```
-🎵 Musicore v0.1.2
+🎵 Graditone v0.1.2
            ^^^^^^ (gray, smaller text)
 ```
 
@@ -109,7 +109,7 @@ The `[skip ci]` tag prevents infinite loops (version bump commit doesn't trigger
 - PWA may cache old version (service worker update can take up to 24h)
 
 ### Version bump failed in CI?
-Check workflow logs: https://github.com/aylabs/musicore/actions
+Check workflow logs: https://github.com/aylabs/graditone/actions
 - Ensure `contents: write` permission is set
 - Check for merge conflicts in package.json
 

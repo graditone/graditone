@@ -1,5 +1,5 @@
 /**
- * Musicore Plugin API — Types (v5)
+ * Graditone Plugin API — Types (v5)
  * Feature 030: Plugin Architecture (v1 baseline)
  * Feature 031: Practice View Plugin — adds recording namespace and offsetMs (v2)
  * Feature 033: Play Score Plugin — adds scorePlayer namespace, ScoreRenderer component (v3)
@@ -8,7 +8,7 @@
  * Feature 035: Metronome — adds MetronomeState, PluginMetronomeContext,
  *              context.metronome namespace, ScorePlayerState.timeSignature (v5)
  *
- * Defines all public types for the Musicore Plugin API.
+ * Defines all public types for the Graditone Plugin API.
  * See specs/030-plugin-architecture/contracts/plugin-api.ts for the v1 canonical contract.
  * See specs/031-practice-view-plugin/contracts/plugin-api-v2.ts for the v2 contract.
  * See specs/034-practice-from-score/contracts/plugin-api-v4.ts for the v4 canonical contract.
@@ -804,16 +804,16 @@ export interface PluginContext {
  *
  * @example
  * ```ts
- * import type { MusicorePlugin } from '../../src/plugin-api';
+ * import type { GraditonePlugin } from '../../src/plugin-api';
  *
- * const plugin: MusicorePlugin = {
+ * const plugin: GraditonePlugin = {
  *   init(context) { ctx = context; },
  *   Component: () => <div>My Plugin</div>,
  * };
  * export default plugin;
  * ```
  */
-export interface MusicorePlugin {
+export interface GraditonePlugin {
   /** Called once when the plugin is first activated. Store context for later use. */
   init(context: PluginContext): void;
   /** Optional cleanup: remove listeners and release resources. */
@@ -826,5 +826,5 @@ export interface MusicorePlugin {
 // Current API version
 // ---------------------------------------------------------------------------
 
-/** Major version of the currently running Musicore Plugin API. */
+/** Major version of the currently running Graditone Plugin API. */
 export const PLUGIN_API_VERSION = '6' as const;

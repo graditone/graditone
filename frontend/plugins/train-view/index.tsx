@@ -2,18 +2,18 @@
  * Train plugin — entry point
  * Feature 036: Rename Practice Plugin to Train (was Practice View plugin, Feature 031)
  *
- * Default export satisfies the MusicorePlugin interface.
+ * Default export satisfies the GraditonePlugin interface.
  * Only imports from ../../src/plugin-api are permitted (enforced by ESLint).
  *
  * This plugin is registered as a built-in in builtinPlugins.ts.
  *
  * Note: react-refresh/only-export-components is silenced here because plugin
- * entry points export a MusicorePlugin object (not a React component) by design.
+ * entry points export a GraditonePlugin object (not a React component) by design.
  * HMR for plugins is not required.
  */
 /* eslint-disable react-refresh/only-export-components */
 
-import type { MusicorePlugin, PluginContext } from '../../src/plugin-api/index';
+import type { GraditonePlugin, PluginContext } from '../../src/plugin-api/index';
 import { TrainPlugin } from './TrainPlugin';
 import { migrateStorageKeys } from './migrateStorageKeys';
 
@@ -31,7 +31,7 @@ function TrainPluginWithContext() {
   return <TrainPlugin context={_context} />;
 }
 
-const trainViewPlugin: MusicorePlugin = {
+const trainViewPlugin: GraditonePlugin = {
   init(context: PluginContext) {
     migrateStorageKeys();
     _context = context;

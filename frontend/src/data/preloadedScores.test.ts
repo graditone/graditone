@@ -13,7 +13,7 @@ describe('PRELOADED_SCORES', () => {
 
   it('all paths end with scores/<filename>.mxl', () => {
     for (const score of PRELOADED_SCORES) {
-      // BASE_URL is '/' in tests, '/musicore/' in production — allow any prefix
+      // BASE_URL is '/' in tests, '/graditone/' in production — allow any prefix
       expect(score.path).toMatch(/scores\/[^/]+\.mxl$/);
     }
   });

@@ -3,18 +3,18 @@
  * Files are served from {BASE_URL}scores/ (symlinked from frontend/public/scores/ → ../../scores).
  *
  * Paths use import.meta.env.BASE_URL so they resolve correctly both locally (/)
- * and on GitHub Pages (/musicore/).
+ * and on GitHub Pages (/graditone/).
  *
  * Feature 028: Load Score Dialog
  */
 export interface PreloadedScore {
   id: string;
   displayName: string;
-  /** Path relative to the app's base URL, e.g. "/musicore/scores/Bach_InventionNo1.mxl" */
+  /** Path relative to the app's base URL, e.g. "/graditone/scores/Bach_InventionNo1.mxl" */
   path: string;
 }
 
-const base = import.meta.env.BASE_URL; // "/" locally, "/musicore/" on GitHub Pages
+const base = import.meta.env.BASE_URL; // "/" locally, "/graditone/" on GitHub Pages
 
 export const PRELOADED_SCORES: ReadonlyArray<PreloadedScore> = [
   {

@@ -99,7 +99,7 @@ describe('FileService - saveScore', () => {
 
       saveScore(mockScore, 'my-symphony');
 
-      expect(mockAnchor.download).toBe('my-symphony.musicore.json');
+      expect(mockAnchor.download).toBe('my-symphony.graditone.json');
       expect(mockAnchor.click).toHaveBeenCalledTimes(1);
     });
 
@@ -112,7 +112,7 @@ describe('FileService - saveScore', () => {
 
       saveScore(mockScore);
 
-      expect(mockAnchor.download).toMatch(/^score.*\.musicore\.json$/);
+      expect(mockAnchor.download).toMatch(/^score.*\.graditone\.json$/);
       expect(mockAnchor.click).toHaveBeenCalledTimes(1);
     });
 
@@ -269,7 +269,7 @@ describe('FileService - saveScore', () => {
       expect(mockAnchor.download).not.toContain(':');
       expect(mockAnchor.download).not.toContain('*');
       expect(mockAnchor.download).not.toContain('?');
-      expect(mockAnchor.download).toMatch(/\.musicore\.json$/);
+      expect(mockAnchor.download).toMatch(/\.graditone\.json$/);
     });
 
     it('should handle empty filename', () => {
@@ -282,10 +282,10 @@ describe('FileService - saveScore', () => {
       saveScore(mockScore, '');
 
       // Should use default filename
-      expect(mockAnchor.download).toMatch(/^score.*\.musicore\.json$/);
+      expect(mockAnchor.download).toMatch(/^score.*\.graditone\.json$/);
     });
 
-    it('should append .musicore.json extension', () => {
+    it('should append .graditone.json extension', () => {
       const mockScore: Score = {
         id: '550e8400-e29b-41d4-a716-446655440000',
         global_structural_events: [],
@@ -294,7 +294,7 @@ describe('FileService - saveScore', () => {
 
       saveScore(mockScore, 'my-score');
 
-      expect(mockAnchor.download).toBe('my-score.musicore.json');
+      expect(mockAnchor.download).toBe('my-score.graditone.json');
     });
 
     it('should not duplicate extension if already present', () => {
@@ -304,10 +304,10 @@ describe('FileService - saveScore', () => {
         instruments: [],
       };
 
-      saveScore(mockScore, 'my-score.musicore.json');
+      saveScore(mockScore, 'my-score.graditone.json');
 
-      // Should not become 'my-score.musicore.json.musicore.json'
-      expect(mockAnchor.download).toBe('my-score.musicore.json');
+      // Should not become 'my-score.graditone.json.graditone.json'
+      expect(mockAnchor.download).toBe('my-score.graditone.json');
     });
   });
 

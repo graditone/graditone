@@ -12,13 +12,13 @@ import { CURRENT_SCHEMA_VERSION } from '../storage/local-storage';
  * ```ts
  * const score = await apiClient.getScore(scoreId);
  * saveScore(score, 'my-symphony');
- * // Downloads: my-symphony.musicore.json
+ * // Downloads: my-symphony.graditone.json
  * ```
  */
 export function saveScore(score: Score, filename?: string): void {
   // Sanitize and prepare filename
   const sanitizedFilename = sanitizeFilename(filename || 'score');
-  const fullFilename = ensureExtension(sanitizedFilename, '.musicore.json');
+  const fullFilename = ensureExtension(sanitizedFilename, '.graditone.json');
 
   // Convert score to pretty-printed JSON
   const json = JSON.stringify(score, null, 2);
@@ -63,10 +63,10 @@ function sanitizeFilename(filename: string): string {
 
 /**
  * Ensure filename has the correct extension
- * Avoids duplicate extensions (e.g., file.musicore.json.musicore.json)
+ * Avoids duplicate extensions (e.g., file.graditone.json.graditone.json)
  * 
  * @param filename - Filename to check
- * @param extension - Extension to add (e.g., '.musicore.json')
+ * @param extension - Extension to add (e.g., '.graditone.json')
  * @returns Filename with extension
  */
 function ensureExtension(filename: string, extension: string): string {
@@ -75,8 +75,8 @@ function ensureExtension(filename: string, extension: string): string {
   }
 
   // Remove any partial extension match
-  if (filename.endsWith('.musicore') || filename.endsWith('.json')) {
-    filename = filename.replace(/\.(musicore|json)$/, '');
+  if (filename.endsWith('.graditone') || filename.endsWith('.json')) {
+    filename = filename.replace(/\.(graditone|json)$/, '');
   }
 
   return filename + extension;
