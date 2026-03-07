@@ -52,6 +52,11 @@ export function DesignNavbar({ themes, activeThemeId, onThemeChange }: DesignNav
               }}
               type="button"
             >
+              <span
+                className="design-navbar__swatch"
+                style={{ background: theme.palette.ctaBg }}
+                aria-hidden="true"
+              />
               {theme.name}
             </button>
           );

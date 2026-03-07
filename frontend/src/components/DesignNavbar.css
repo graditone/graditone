@@ -33,6 +33,9 @@
 
 /* ── Tab buttons ────────────────────────────────────────────────────────── */
 .design-navbar__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
   padding: 0.625rem 1rem;
   background: transparent;
@@ -42,13 +45,23 @@
   font-size: 0.875rem;
   font-weight: 500;
   font-family: var(--ls-font-body, system-ui, sans-serif);
-  color: inherit;
+  color: var(--ls-body, #555);
   cursor: pointer;
   white-space: nowrap;
-  transition: border-color 0.2s ease, font-weight 0.15s ease;
+  transition: border-color 0.2s ease, font-weight 0.15s ease, color 0.2s ease;
   /* Override global button styles */
   outline: none;
   line-height: 1.4;
+}
+
+/* ── Color swatch per theme ─────────────────────────────────────────────── */
+.design-navbar__swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 
 .design-navbar__tab:hover {

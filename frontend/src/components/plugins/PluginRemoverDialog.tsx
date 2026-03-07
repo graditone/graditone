@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import type { PluginManifest } from '../../plugin-api/index';
 import { pluginRegistry } from '../../services/plugins/PluginRegistry';
+import './plugin-dialog.css';
 
 export interface PluginRemoverDialogProps {
   /** Only user-imported plugins (origin === 'imported'). */
@@ -41,50 +42,18 @@ export function PluginRemoverDialog({
       role="dialog"
       aria-modal="true"
       aria-label="Remove Plugin"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(0,0,0,0.55)',
-        backdropFilter: 'blur(2px)',
-      }}
+      className="plugin-dialog-overlay"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div
-        style={{
-          background: '#fff',
-          color: '#222',
-          borderRadius: '10px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
-          width: 'min(420px, 92vw)',
-          padding: '24px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-        }}
-      >
+      <div className="plugin-dialog">
         {/* Header */}
-        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-          <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#1a1a1a' }}>
-            Remove Plugin
-          </h2>
+        <header className="plugin-dialog__header">
+          <h2 className="plugin-dialog__title">Remove Plugin</h2>
           <button
             type="button"
             aria-label="Close"
             onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '1.4rem',
-              lineHeight: 1,
-              cursor: 'pointer',
-              color: '#666',
-              padding: '2px 6px',
-              borderRadius: '4px',
-            }}
+            className="plugin-dialog__close"
           >
             ×
           </button>
@@ -92,60 +61,21 @@ export function PluginRemoverDialog({
 
         {/* Body */}
         {importedPlugins.length === 0 ? (
-          <p style={{ margin: 0, color: '#666', fontSize: '0.9rem' }}>
-            No user-installed plugins found.
-          </p>
+          <p className="plugin-dialog__empty">No user-installed plugins found.</p>
         ) : (
-          <ul
-            style={{
-              margin: 0,
-              padding: 0,
-              listStyle: 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-            }}
-          >
+          <ul className="plugin-dialog__list">
             {importedPlugins.map((manifest) => (
-              <li
-                key={manifest.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px',
-                  padding: '10px 12px',
-                  border: '1px solid #e0e0e0',
-                  borderRadius: '8px',
-                  background: '#fafafa',
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                  <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {manifest.name}
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: '#888' }}>
-                    v{manifest.version} · {manifest.id}
-                  </span>
+              <li key={manifest.id} className="plugin-dialog__item">
+                <div className="plugin-dialog__item-info">
+                  <span className="plugin-dialog__item-name">{manifest.name}</span>
+                  <span className="plugin-dialog__item-meta">v{manifest.version} · {manifest.id}</span>
                 </div>
                 <button
                   type="button"
                   aria-label={`Remove ${manifest.name}`}
                   disabled={removing !== null}
                   onClick={() => handleRemove(manifest.id)}
-                  style={{
-                    flexShrink: 0,
-                    padding: '6px 14px',
-                    border: 'none',
-                    borderRadius: '6px',
-                    background: removing === manifest.id ? '#ccc' : '#e74c3c',
-                    color: '#fff',
-                    fontWeight: 600,
-                    fontSize: '0.8rem',
-                    cursor: removing !== null ? 'not-allowed' : 'pointer',
-                    transition: 'background 0.15s',
-                    minHeight: '32px',
-                  }}
+                  className="plugin-dialog__btn plugin-dialog__btn--danger"
                 >
                   {removing === manifest.id ? 'Removing…' : 'Remove'}
                 </button>
@@ -155,18 +85,7 @@ export function PluginRemoverDialog({
         )}
 
         {error && (
-          <p
-            role="alert"
-            style={{
-              margin: 0,
-              padding: '10px 12px',
-              background: '#fff0f0',
-              border: '1px solid #f5c6c6',
-              borderRadius: '6px',
-              color: '#c0392b',
-              fontSize: '0.875rem',
-            }}
-          >
+          <p role="alert" className="plugin-dialog__message plugin-dialog__message--error">
             {error}
           </p>
         )}

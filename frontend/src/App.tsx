@@ -541,68 +541,42 @@ function App() {
                 v{packageJson.version}
               </a>
             </h1>
+            <p className="app-slogan">The open platform for musical practice</p>
             {/* Feature 030: Plugin navigation entries */}
-            {allPlugins.length > 0 && (
-              <nav
-                aria-label="Installed plugins"
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '8px',
-                  justifyContent: 'center',
-                  marginTop: '8px',
-                  paddingBottom: '4px',
-                }}
+            <nav
+              aria-label="Installed plugins"
+              className="plugin-nav"
+            >
+              {allPlugins.filter(p => p.manifest.type !== 'core' && !p.manifest.hidden).map(({ manifest }) => (
+                <PluginNavEntry
+                  key={manifest.id}
+                  plugin={manifest}
+                  isActive={activePlugin === manifest.id}
+                  onSelect={() => handleSelectPlugin(manifest.id)}
+                />
+              ))}
+            </nav>
+            {/* T025: Plugin management buttons — always at the right edge */}
+            <div className="plugin-manage-btns">
+              <button
+                type="button"
+                aria-label="Import Plugin"
+                title="Import Plugin"
+                onClick={() => setShowImporter(true)}
+                className="plugin-manage-btn"
               >
-                {allPlugins.filter(p => p.manifest.type !== 'core').map(({ manifest }) => (
-                  <PluginNavEntry
-                    key={manifest.id}
-                    plugin={manifest}
-                    isActive={activePlugin === manifest.id}
-                    onSelect={() => handleSelectPlugin(manifest.id)}
-                  />
-                ))}
-                {/* T025: Import plugin trigger button */}
-                <button
-                  type="button"
-                  aria-label="Import Plugin"
-                  title="Import Plugin"
-                  onClick={() => setShowImporter(true)}
-                  style={{
-                    minWidth: '44px',
-                    minHeight: '44px',
-                    border: '1px dashed #666',
-                    borderRadius: '6px',
-                    background: 'transparent',
-                    color: '#999',
-                    fontSize: '1.2em',
-                    cursor: 'pointer',
-                    padding: '0 10px',
-                  }}
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  aria-label="Remove Plugin"
-                  title="Remove Plugin"
-                  onClick={() => setShowRemover(true)}
-                  style={{
-                    minWidth: '44px',
-                    minHeight: '44px',
-                    border: '1px dashed #666',
-                    borderRadius: '6px',
-                    background: 'transparent',
-                    color: '#999',
-                    fontSize: '1.2em',
-                    cursor: 'pointer',
-                    padding: '0 10px',
-                  }}
-                >
-                  −
-                </button>
-              </nav>
-            )}
+                +
+              </button>
+              <button
+                type="button"
+                aria-label="Remove Plugin"
+                title="Remove Plugin"
+                onClick={() => setShowRemover(true)}
+                className="plugin-manage-btn"
+              >
+                −
+              </button>
+            </div>
           </header>
           {/* T024: Plugin importer dialog overlay */}
           {showImporter && (
@@ -615,7 +589,7 @@ function App() {
             <PluginRemoverDialog
               importedPlugins={allPlugins
                 .map(e => e.manifest)
-                .filter(m => m.origin === 'imported')}
+                .filter(m => m.origin === 'imported' && !m.hidden)}
               onRemoveComplete={(id) => { handleRemoveComplete(id); setShowRemover(false); }}
               onClose={() => setShowRemover(false)}
             />
@@ -626,7 +600,7 @@ function App() {
                 debugMode={debugMode}
                 onShowRecording={() => { setShowRecording(true); setActivePlugin(null); }}
                 corePlugins={allPlugins
-                  .filter(p => p.manifest.type === 'core')
+                  .filter(p => p.manifest.type === 'core' && !p.manifest.hidden)
                   .map(p => ({ id: p.manifest.id, name: p.manifest.name, icon: p.manifest.icon }))}
                 onLaunchPlugin={handleSelectPlugin}
                 activeThemeId={activeThemeId}

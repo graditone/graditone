@@ -16,6 +16,7 @@ import React, { useRef, useState } from 'react';
 import type { PluginManifest } from '../../plugin-api/index';
 import { importPlugin } from '../../services/plugins/PluginImporter';
 import { pluginRegistry } from '../../services/plugins/PluginRegistry';
+import './plugin-dialog.css';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,6 +43,7 @@ export function PluginImporterDialog({
   onClose,
 }: PluginImporterDialogProps) {
   const [state, setState] = useState<DialogState>({ phase: 'idle' });
+  const [fileName, setFileName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // ── File selection ─────────────────────────────────────────────────────
@@ -64,7 +66,10 @@ export function PluginImporterDialog({
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) handleFile(file);
+    if (file) {
+      setFileName(file.name);
+      handleFile(file);
+    }
   }
 
   // ── Duplicate confirmation ─────────────────────────────────────────────
@@ -85,6 +90,7 @@ export function PluginImporterDialog({
 
   function handleCancelDuplicate() {
     setState({ phase: 'idle' });
+    setFileName(null);
     // Reset file input so the same file can be re-selected
     if (inputRef.current) inputRef.current.value = '';
   }
@@ -96,64 +102,27 @@ export function PluginImporterDialog({
       role="dialog"
       aria-modal="true"
       aria-label="Import Plugin"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(0,0,0,0.55)',
-        backdropFilter: 'blur(2px)',
-      }}
+      className="plugin-dialog-overlay"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div
-        style={{
-          background: '#fff',
-          color: '#222',
-          borderRadius: '10px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
-          width: 'min(420px, 92vw)',
-          padding: '24px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-        }}
-      >
-        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-          <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#1a1a1a' }}>
-            Import Plugin
-          </h2>
+      <div className="plugin-dialog">
+        <header className="plugin-dialog__header">
+          <h2 className="plugin-dialog__title">Import Plugin</h2>
           <button
             type="button"
             aria-label="Close"
             onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '1.4rem',
-              lineHeight: 1,
-              cursor: 'pointer',
-              color: '#666',
-              padding: '2px 6px',
-              borderRadius: '4px',
-            }}
+            className="plugin-dialog__close"
           >
             ×
           </button>
         </header>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="plugin-dialog__body">
           {/* ── File picker ─────────────────────────────────────────────── */}
           {(state.phase === 'idle' || state.phase === 'error') && (
             <>
-              <label
-                htmlFor="plugin-file-input"
-                style={{ fontSize: '0.9rem', color: '#444', fontWeight: 500 }}
-              >
-                Select a plugin ZIP package:
-              </label>
+              {/* Hidden native input keeps testid for tests and handles the OS picker */}
               <input
                 ref={inputRef}
                 id="plugin-file-input"
@@ -161,21 +130,24 @@ export function PluginImporterDialog({
                 type="file"
                 accept=".zip"
                 onChange={handleInputChange}
-                style={{ fontSize: '0.875rem', cursor: 'pointer' }}
+                className="plugin-dialog__file-input--hidden"
+                aria-hidden="true"
+                tabIndex={-1}
               />
-              {state.phase === 'error' && (
-                <p
-                  role="alert"
-                  style={{
-                    margin: 0,
-                    padding: '10px 12px',
-                    background: '#fff0f0',
-                    border: '1px solid #f5c6c6',
-                    borderRadius: '6px',
-                    color: '#c0392b',
-                    fontSize: '0.875rem',
-                  }}
+              <div className="plugin-dialog__pick-row">
+                <button
+                  type="button"
+                  className="plugin-dialog__btn plugin-dialog__btn--pick"
+                  onClick={() => inputRef.current?.click()}
                 >
+                  📂 Choose ZIP file…
+                </button>
+                {fileName && (
+                  <span className="plugin-dialog__filename" title={fileName}>{fileName}</span>
+                )}
+              </div>
+              {state.phase === 'error' && (
+                <p role="alert" className="plugin-dialog__message plugin-dialog__message--error">
                   {state.message}
                 </p>
               )}
@@ -184,73 +156,28 @@ export function PluginImporterDialog({
 
           {/* ── Loading ─────────────────────────────────────────────────── */}
           {state.phase === 'loading' && (
-            <p aria-live="polite" style={{ margin: 0, color: '#555', fontSize: '0.9rem' }}>
-              Installing plugin…
-            </p>
+            <p aria-live="polite" className="plugin-dialog__status">Installing plugin…</p>
           )}
 
           {/* ── Success ─────────────────────────────────────────────────── */}
           {state.phase === 'success' && (
-            <p
-              role="status"
-              style={{
-                margin: 0,
-                padding: '10px 12px',
-                background: '#f0fff4',
-                border: '1px solid #a8e6c3',
-                borderRadius: '6px',
-                color: '#27ae60',
-                fontSize: '0.875rem',
-              }}
-            >
+            <p role="status" className="plugin-dialog__message plugin-dialog__message--success">
               ✓ "{state.manifest.name}" imported successfully!
             </p>
           )}
 
           {/* ── Duplicate confirm ────────────────────────────────────────── */}
           {state.phase === 'duplicate' && (
-            <div
-              role="alert"
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '14px',
-              }}
-            >
-              <p style={{ margin: 0, color: '#333', fontSize: '0.9rem' }}>
+            <div role="alert" className="plugin-dialog__confirm">
+              <p className="plugin-dialog__confirm-text">
                 A plugin named <strong>"{state.manifest.name}"</strong> is already installed.
                 Replace it?
               </p>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  onClick={handleCancelDuplicate}
-                  style={{
-                    padding: '7px 16px',
-                    border: '1px solid #ccc',
-                    borderRadius: '6px',
-                    background: '#fff',
-                    color: '#444',
-                    cursor: 'pointer',
-                    fontSize: '0.875rem',
-                  }}
-                >
+              <div className="plugin-dialog__actions">
+                <button type="button" onClick={handleCancelDuplicate} className="plugin-dialog__btn">
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  onClick={handleReplace}
-                  style={{
-                    padding: '7px 16px',
-                    border: 'none',
-                    borderRadius: '6px',
-                    background: '#e74c3c',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                    fontSize: '0.875rem',
-                  }}
-                >
+                <button type="button" onClick={handleReplace} className="plugin-dialog__btn plugin-dialog__btn--danger">
                   Replace
                 </button>
               </div>

@@ -1,0 +1,249 @@
+/* ==========================================================================
+   plugin-dialog.css — shared styles for PluginImporterDialog and
+   PluginRemoverDialog. All colours use --ls-* tokens so the active landing
+   theme cascades in automatically; sensible hard-coded defaults apply when
+   no theme is active (default purple-gradient header).
+   ========================================================================== */
+
+/* ── Backdrop overlay ───────────────────────────────────────────────────── */
+.plugin-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+/* ── Dialog card ────────────────────────────────────────────────────────── */
+.plugin-dialog {
+  background: var(--ls-bg, #fff);
+  color: var(--ls-heading, #1a1a1a);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  width: min(420px, 92vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: var(--ls-font-body, system-ui, sans-serif);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.plugin-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.plugin-dialog__title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ls-heading, #1a1a1a);
+  font-family: var(--ls-font-heading, system-ui, sans-serif);
+}
+
+.plugin-dialog__close {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ls-body, #666);
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.plugin-dialog__close:hover {
+  background: color-mix(in srgb, var(--ls-heading, #222) 10%, transparent);
+  color: var(--ls-heading, #222);
+}
+
+/* ── Body / content area ─────────────────────────────────────────────────── */
+.plugin-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Label ───────────────────────────────────────────────────────────────── */
+.plugin-dialog__label {
+  font-size: 0.9rem;
+  color: var(--ls-body, #444);
+  font-weight: 500;
+}
+
+/* ── File input: hidden native picker (keeps testid for tests) ──────── */
+.plugin-dialog__file-input--hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Pick button row ─────────────────────────────────────────────────── */
+.plugin-dialog__pick-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Filename badge shown after a file is selected ──────────────────── */
+.plugin-dialog__filename {
+  font-size: 0.8rem;
+  color: var(--ls-body, #555);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+  opacity: 0.85;
+}
+
+/* ── Variant: pick / neutral primary action ─────────────────────────── */
+.plugin-dialog__btn--pick {
+  background: var(--ls-cta-bg, #4a90e2);
+  color: var(--ls-cta-text, #fff);
+  border: none;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.plugin-dialog__btn--pick:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ls-cta-bg, #4a90e2) 80%, #000);
+}
+
+/* ── Status / loading text ──────────────────────────────────────────────── */
+.plugin-dialog__status {
+  margin: 0;
+  color: var(--ls-body, #555);
+  font-size: 0.9rem;
+}
+
+/* ── Message boxes (error / success) ───────────────────────────────────── */
+.plugin-dialog__message {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.plugin-dialog__message--error {
+  background: color-mix(in srgb, var(--ls-accent, #e74c3c) 10%, var(--ls-bg, #fff));
+  border: 1px solid color-mix(in srgb, var(--ls-accent, #e74c3c) 35%, transparent);
+  color: var(--ls-accent, #c0392b);
+}
+
+.plugin-dialog__message--success {
+  background: color-mix(in srgb, var(--ls-cta-bg, #27ae60) 10%, var(--ls-bg, #fff));
+  border: 1px solid color-mix(in srgb, var(--ls-cta-bg, #27ae60) 35%, transparent);
+  color: var(--ls-cta-bg, #27ae60);
+}
+
+/* ── Duplicate confirm ───────────────────────────────────────────────────── */
+.plugin-dialog__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.plugin-dialog__confirm-text {
+  margin: 0;
+  color: var(--ls-heading, #333);
+  font-size: 0.9rem;
+}
+
+/* ── Button row ─────────────────────────────────────────────────────────── */
+.plugin-dialog__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.plugin-dialog__btn {
+  padding: 7px 16px;
+  border: 1px solid color-mix(in srgb, var(--ls-heading, #999) 25%, transparent);
+  border-radius: 6px;
+  background: var(--ls-bg, #fff);
+  color: var(--ls-body, #444);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-family: var(--ls-font-body, system-ui, sans-serif);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.plugin-dialog__btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ls-heading, #222) 8%, var(--ls-bg, #fff));
+}
+
+.plugin-dialog__btn--danger {
+  background: var(--ls-accent, #e74c3c);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+}
+
+.plugin-dialog__btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ls-accent, #e74c3c) 80%, #000);
+}
+
+.plugin-dialog__btn:disabled {
+  background: color-mix(in srgb, var(--ls-heading, #999) 20%, var(--ls-bg, #fff));
+  color: var(--ls-body, #888);
+  cursor: not-allowed;
+  border-color: transparent;
+}
+
+/* ── Plugin list (Remover) ───────────────────────────────────────────────── */
+.plugin-dialog__empty {
+  margin: 0;
+  color: var(--ls-body, #666);
+  font-size: 0.9rem;
+}
+
+.plugin-dialog__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plugin-dialog__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--ls-heading, #222) 12%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ls-heading, #222) 4%, var(--ls-bg, #fff));
+}
+
+.plugin-dialog__item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.plugin-dialog__item-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--ls-heading, #1a1a1a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plugin-dialog__item-meta {
+  font-size: 0.75rem;
+  color: var(--ls-body, #888);
+}
