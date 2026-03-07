@@ -55,6 +55,16 @@ body[data-landing-theme] .app-header a {
   padding-bottom: 2px;
 }
 
+/* Plugin management (+/−) buttons — pinned to the right edge of the header */
+.plugin-manage-btns {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 4px;
+}
+
 /* ── Feature 039: Plugin navigation entries (scaled ~50% from touch defaults) */
 /* Default: works on the dark purple gradient header.                          */
 .plugin-nav-entry {

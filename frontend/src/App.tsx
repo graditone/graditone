@@ -554,7 +554,9 @@ function App() {
                   onSelect={() => handleSelectPlugin(manifest.id)}
                 />
               ))}
-              {/* T025: Import plugin trigger button */}
+            </nav>
+            {/* T025: Plugin management buttons — always at the right edge */}
+            <div className="plugin-manage-btns">
               <button
                 type="button"
                 aria-label="Import Plugin"
@@ -573,7 +575,7 @@ function App() {
               >
                 −
               </button>
-            </nav>
+            </div>
           </header>
           {/* T024: Plugin importer dialog overlay */}
           {showImporter && (
