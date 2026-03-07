@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 320 520"
+     fill="none"
+     stroke="#3344bb"
+     stroke-width="2.8"
+     stroke-linecap="round"
+     stroke-linejoin="round">
+
+  <!-- ===== Dome / bell (top oval cap) ===== -->
+  <path d="M 55 165
+           C 50 120, 55 65, 90 40
+           C 125 15, 175 10, 210 15
+           C 245 20, 275 50, 280 80
+           C 285 110, 278 150, 270 168"/>
+
+  <!-- Flat underside of the dome -->
+  <path d="M 55 165 C 100 175, 230 178, 270 168"/>
+
+  <!-- ===== Body outline — left contour ===== -->
+  <!-- Descends from left-centre of dome base, curves left -->
+  <path d="M 130 172
+           C 122 210, 105 260, 85 300
+           C 68 335, 50 360, 45 385"/>
+
+  <!-- ===== Body outline — right contour ===== -->
+  <!-- Descends from right edge of dome, long flowing curve -->
+  <path d="M 270 168
+           C 268 220, 265 290, 260 350
+           C 256 400, 250 440, 240 470"/>
+
+  <!-- ===== Left tentacle frills (3 small wave marks) ===== -->
+  <!-- Top frill -->
+  <path d="M 30 305 C 48 315, 68 318, 85 300"/>
+  <!-- Middle frill -->
+  <path d="M 22 350 C 42 362, 62 365, 72 348"/>
+  <!-- Bottom frill -->
+  <path d="M 25 390 C 45 405, 60 408, 68 395"/>
+
+  <!-- ===== Bottom sweep — connects left body to right body ===== -->
+  <path d="M 45 385
+           C 40 410, 48 435, 70 450
+           C 100 470, 170 480, 240 470"/>
+
+</svg>
