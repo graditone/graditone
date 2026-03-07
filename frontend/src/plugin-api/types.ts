@@ -236,6 +236,13 @@ export interface PluginManifest {
   readonly order?: number;
   /** Set by the host: 'builtin' for repo plugins, 'imported' for user-installed. */
   readonly origin: 'builtin' | 'imported';
+  /**
+   * When `true`, the plugin is loaded but never shown in any UI surface
+   * (nav bar, landing screen, remover dialog). Useful for disabling a plugin
+   * without removing it from the codebase.
+   * Defaults to `false` when omitted.
+   */
+  readonly hidden?: boolean;
 }
 
 // ---------------------------------------------------------------------------

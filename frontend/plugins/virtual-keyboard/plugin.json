@@ -7,5 +7,6 @@
   "description": "An interactive piano keyboard that shows played notes on a music staff in real time.",
   "type": "common",
   "view": "window",
-  "icon": "🎹"
+  "icon": "🎹",
+  "hidden": true
 }

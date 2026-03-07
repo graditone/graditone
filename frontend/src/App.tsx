@@ -547,7 +547,7 @@ function App() {
                 aria-label="Installed plugins"
                 className="plugin-nav"
               >
-                {allPlugins.filter(p => p.manifest.type !== 'core').map(({ manifest }) => (
+                {allPlugins.filter(p => p.manifest.type !== 'core' && !p.manifest.hidden).map(({ manifest }) => (
                   <PluginNavEntry
                     key={manifest.id}
                     plugin={manifest}
@@ -588,7 +588,7 @@ function App() {
             <PluginRemoverDialog
               importedPlugins={allPlugins
                 .map(e => e.manifest)
-                .filter(m => m.origin === 'imported')}
+                .filter(m => m.origin === 'imported' && !m.hidden)}
               onRemoveComplete={(id) => { handleRemoveComplete(id); setShowRemover(false); }}
               onClose={() => setShowRemover(false)}
             />
@@ -599,7 +599,7 @@ function App() {
                 debugMode={debugMode}
                 onShowRecording={() => { setShowRecording(true); setActivePlugin(null); }}
                 corePlugins={allPlugins
-                  .filter(p => p.manifest.type === 'core')
+                  .filter(p => p.manifest.type === 'core' && !p.manifest.hidden)
                   .map(p => ({ id: p.manifest.id, name: p.manifest.name, icon: p.manifest.icon }))}
                 onLaunchPlugin={handleSelectPlugin}
                 activeThemeId={activeThemeId}
