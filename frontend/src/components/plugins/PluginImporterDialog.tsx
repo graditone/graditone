@@ -122,7 +122,6 @@ export function PluginImporterDialog({
           {/* ── File picker ─────────────────────────────────────────────── */}
           {(state.phase === 'idle' || state.phase === 'error') && (
             <>
-              <label className="plugin-dialog__label">Select a plugin ZIP package:</label>
               {/* Hidden native input keeps testid for tests and handles the OS picker */}
               <input
                 ref={inputRef}
