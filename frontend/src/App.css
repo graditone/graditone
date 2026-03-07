@@ -21,7 +21,7 @@
 
 .app-header h1 {
   margin: 0;
-  font-size: 1.5em;
+  font-size: 2em;
   font-weight: 600;
   transition: color 0.3s ease, font-family 0.1s, font-weight 0.1s;
 }
@@ -34,7 +34,29 @@
   opacity: 0.8;
 }
 
-/* ── Feature 039: Theme-aware header ────────────────────────────────────── */
+.app-header-brand {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.app-header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-logo {
+  height: 2em;
+  width: auto;
+  flex-shrink: 0;
+}
+
+.app-title-initial {
+  color: var(--ls-accent, #FF7043);
+}
+
+
 /* When a landing theme is active, override the default purple gradient.      */
 body[data-landing-theme] .app-header {
   background: var(--ls-navbar-bg);
