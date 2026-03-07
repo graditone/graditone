@@ -542,40 +542,38 @@ function App() {
               </a>
             </h1>
             {/* Feature 030: Plugin navigation entries */}
-            {allPlugins.some(p => p.manifest.type !== 'core' && !p.manifest.hidden) && (
-              <nav
-                aria-label="Installed plugins"
-                className="plugin-nav"
+            <nav
+              aria-label="Installed plugins"
+              className="plugin-nav"
+            >
+              {allPlugins.filter(p => p.manifest.type !== 'core' && !p.manifest.hidden).map(({ manifest }) => (
+                <PluginNavEntry
+                  key={manifest.id}
+                  plugin={manifest}
+                  isActive={activePlugin === manifest.id}
+                  onSelect={() => handleSelectPlugin(manifest.id)}
+                />
+              ))}
+              {/* T025: Import plugin trigger button */}
+              <button
+                type="button"
+                aria-label="Import Plugin"
+                title="Import Plugin"
+                onClick={() => setShowImporter(true)}
+                className="plugin-manage-btn"
               >
-                {allPlugins.filter(p => p.manifest.type !== 'core' && !p.manifest.hidden).map(({ manifest }) => (
-                  <PluginNavEntry
-                    key={manifest.id}
-                    plugin={manifest}
-                    isActive={activePlugin === manifest.id}
-                    onSelect={() => handleSelectPlugin(manifest.id)}
-                  />
-                ))}
-                {/* T025: Import plugin trigger button */}
-                <button
-                  type="button"
-                  aria-label="Import Plugin"
-                  title="Import Plugin"
-                  onClick={() => setShowImporter(true)}
-                  className="plugin-manage-btn"
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  aria-label="Remove Plugin"
-                  title="Remove Plugin"
-                  onClick={() => setShowRemover(true)}
-                  className="plugin-manage-btn"
-                >
-                  −
-                </button>
-              </nav>
-            )}
+                +
+              </button>
+              <button
+                type="button"
+                aria-label="Remove Plugin"
+                title="Remove Plugin"
+                onClick={() => setShowRemover(true)}
+                className="plugin-manage-btn"
+              >
+                −
+              </button>
+            </nav>
           </header>
           {/* T024: Plugin importer dialog overlay */}
           {showImporter && (
