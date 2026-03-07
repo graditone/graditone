@@ -128,7 +128,7 @@ describe.skip('File Persistence - Save Flow Integration', () => {
       fireEvent.click(saveButton);
 
       await waitFor(() => {
-        expect(mockAnchor.download).toMatch(/\.musicore\.json$/);
+        expect(mockAnchor.download).toMatch(/\.graditone\.json$/);
       });
     });
 

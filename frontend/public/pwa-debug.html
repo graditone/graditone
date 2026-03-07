@@ -170,7 +170,7 @@
     async function checkManifest() {
       const el = document.getElementById('manifestCheck');
       try {
-        const basePath = document.querySelector('base')?.href || window.location.origin + '/musicore/';
+        const basePath = document.querySelector('base')?.href || window.location.origin + '/graditone/';
         const manifestUrl = new URL('manifest.webmanifest', basePath).href;
         log(`Fetching manifest from: ${manifestUrl}`);
         

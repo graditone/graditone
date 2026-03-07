@@ -6,7 +6,7 @@
  * - All 6 preloaded score files are fetched at the correct URL (no 404)
  * - Selecting a preloaded score loads it without console errors
  *
- * Run against the production build (VITE_BASE=/musicore/) to catch
+ * Run against the production build (VITE_BASE=/graditone/) to catch
  * sub-path base URL issues before they reach GitHub Pages.
  *
  * ## Why we stub .mxl responses in the URL test
@@ -64,7 +64,7 @@ test.describe('Feature 028: Load Score Dialog', () => {
     const fetchedUrl = request.url();
 
     // URL must include the correct scores path.
-    // On GitHub Pages (VITE_BASE=/musicore/): …/musicore/scores/Bach_InventionNo1.mxl
+    // On GitHub Pages (VITE_BASE=/graditone/): …/graditone/scores/Bach_InventionNo1.mxl
     // Locally (VITE_BASE=/):                  …/scores/Bach_InventionNo1.mxl
     expect(fetchedUrl).toMatch(/\/scores\/Bach_InventionNo1\.mxl$/);
   });

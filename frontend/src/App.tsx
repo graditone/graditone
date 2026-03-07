@@ -368,7 +368,7 @@ function App() {
           <h1>
             <span className="app-title-initial">G</span>raditone{' '}
             <a 
-              href="https://github.com/aylabs/musicore" 
+              href="https://github.com/aylabs/graditone" 
               target="_blank" 
               rel="noopener noreferrer"
               style={{ 
@@ -405,7 +405,7 @@ function App() {
           <h1>
             <span className="app-title-initial">G</span>raditone{' '}
             <a 
-              href="https://github.com/aylabs/musicore" 
+              href="https://github.com/aylabs/graditone" 
               target="_blank" 
               rel="noopener noreferrer"
               style={{ 
@@ -531,7 +531,7 @@ function App() {
                 <h1>
                   <span className="app-title-initial">G</span>raditone{' '}
                   <a
-                    href="https://github.com/aylabs/musicore"
+                    href="https://github.com/aylabs/graditone"
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
