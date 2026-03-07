@@ -16,6 +16,7 @@
 import { useMemo, useRef } from 'react';
 import { LayoutView } from '../layout/LayoutView';
 import type { PluginScoreRendererProps } from '../../plugin-api/types';
+import './ScoreRendererPlugin.css';
 import type { Note, Score } from '../../types/score';
 import type { PlaybackStatus, ITickSource } from '../../types/playback';
 
@@ -140,7 +141,7 @@ export function ScoreRendererPlugin({
           at the bottom of the container. play-score__score-area is overflow:hidden
           so layoutWrapperRef is the only scroll container; scrollTop=0 works. */}
       <button
-        style={styles.returnToStartButton}
+        className="score-renderer-return-btn"
         onClick={() => {
           onReturnToStart();
           if (layoutWrapperRef.current) {
@@ -191,21 +192,5 @@ const styles = {
     fontSize: '1.1rem',
     color: '#888',
   },
-  returnToStartButton: {
-    display: 'block',
-    width: '100%',
-    padding: '12px 0',
-    fontSize: '0.9rem',
-    fontWeight: 'bold' as const,
-    color: '#1976d2',
-    background: '#fff',
-    border: 'none',
-    borderTop: '1px solid #e0e0e0',
-    cursor: 'pointer',
-    textAlign: 'center' as const,
-    letterSpacing: '0.03em',
-    userSelect: 'none' as const,
-    WebkitUserSelect: 'none' as const,
-    WebkitTapHighlightColor: 'transparent',
-  },
+
 } as const;
