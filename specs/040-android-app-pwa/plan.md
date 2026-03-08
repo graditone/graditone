@@ -5,7 +5,7 @@
 
 ## Summary
 
-Package the existing Graditone PWA (deployed at `https://graditone.github.io/`) as an Android Trusted Web Activity (TWA) and publish it to the Google Play Store. Implementation uses Bubblewrap CLI to generate the Android project from the existing Web App Manifest, adds Digital Asset Links verification to the PWA production host, configures anonymous crash reporting (Firebase Crashlytics, no PII), and extends GitHub Actions CI to build and sign the Android App Bundle on each release tag. Publishing follows a staged rollout: internal → closed beta → production.
+Package the existing Graditone PWA (deployed at `https://graditone.com/`) as an Android Trusted Web Activity (TWA) and publish it to the Google Play Store. Implementation uses Bubblewrap CLI to generate the Android project from the existing Web App Manifest, adds Digital Asset Links verification to the PWA production host, configures anonymous crash reporting (Firebase Crashlytics, no PII), and extends GitHub Actions CI to build and sign the Android App Bundle on each release tag. Publishing follows a staged rollout: internal → closed beta → production.
 
 No backend or frontend domain logic changes. The Rust/WASM engine and React frontend remain untouched; this feature adds only a new `android/` project and a new CI workflow.
 
@@ -15,7 +15,7 @@ No backend or frontend domain logic changes. The Rust/WASM engine and React fron
 **Primary Dependencies**: Bubblewrap CLI (Google official TWA generator), Android Gradle Plugin 8.x, Android SDK API 34 (target) / API 28 (minimum), Firebase Crashlytics (anonymous), `r0adkll/upload-google-play` GitHub Action  
 **Storage**: N/A — all app state lives in the PWA IndexedDB / Service Worker cache  
 **Testing**: Node.js manifest validation script for TWA-readiness checks; manual device testing for Digital Asset Links verification  
-**Target Platform**: Android 9.0 (API 28) and above. Production PWA host: `https://graditone.github.io/`  
+**Target Platform**: Android 9.0 (API 28) and above. Production PWA host: `https://graditone.com/`  
 **Project Type**: Mobile — new `android/` directory in existing monorepo  
 **Performance Goals**: Cold-start launch to interactive < 3 s; AAB size < 5 MB (wrapper only)  
 **Constraints**: No PII collected; anonymous crash diagnostics only; staged rollout enforced; CI builds signed AAB on release tag; manual Play Console publish gate

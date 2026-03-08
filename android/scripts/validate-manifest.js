@@ -7,7 +7,7 @@
  *
  * Usage:
  *   node android/scripts/validate-manifest.js
- *   node android/scripts/validate-manifest.js --url https://graditone.github.io/manifest.webmanifest
+ *   node android/scripts/validate-manifest.js --url https://graditone.com/manifest.webmanifest
  *
  * Exit codes:
  *   0 — all checks pass
@@ -23,7 +23,7 @@ const fs = require('fs');
 
 // --- Configuration -----------------------------------------------------------
 
-const DEFAULT_MANIFEST_URL = 'https://graditone.github.io/manifest.webmanifest';
+const DEFAULT_MANIFEST_URL = 'https://graditone.com/manifest.webmanifest';
 
 // Minimum icon sizes required by Bubblewrap / Play Store
 const REQUIRED_ICON_SIZES = ['192x192', '512x512'];

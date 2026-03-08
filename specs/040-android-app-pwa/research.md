@@ -53,7 +53,7 @@ Current manifest specifies `"purpose": "any maskable"` (space-separated) for bot
 **Rationale**: TWA requires Google to verify that the Android app is authorized to use the web domain. This is done via a Digital Asset Links JSON file served from the production URL. Without this file the TWA launches in a Chrome Custom Tab (with browser chrome visible), defeating FR-002.
 
 **File location**: `frontend/public/.well-known/assetlinks.json`  
-→ Deployed to: `https://graditone.github.io/.well-known/assetlinks.json`
+→ Deployed to: `https://graditone.com/.well-known/assetlinks.json`
 
 **Expected format**:
 ```json
@@ -61,7 +61,7 @@ Current manifest specifies `"purpose": "any maskable"` (space-separated) for bot
   "relation": ["delegate_permission/common.handle_all_urls"],
   "target": {
     "namespace": "android_app",
-    "package_name": "io.graditone.app",
+    "package_name": "com.graditone.app",
     "sha256_cert_fingerprints": [
       "FILLED_IN_AFTER_KEYSTORE_GENERATION"
     ]

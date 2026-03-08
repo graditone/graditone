@@ -45,7 +45,7 @@ Graditone is fully open source (MIT licence) and will always be free — no ads,
 
 🔒 YOUR PRIVACY, RESPECTED
 Graditone collects zero personal data. Anonymous crash reports help improve stability, but they cannot identify you.
-See the full privacy policy at: https://graditone.github.io/privacy-policy.html
+See the full privacy policy at: https://graditone.com/privacy-policy.html
 
 ---
 
@@ -113,7 +113,7 @@ sheet music, music score, MusicXML, practice, piano, notation, offline, score vi
 ## Privacy Policy URL
 
 ```
-https://graditone.github.io/privacy-policy.html
+https://graditone.com/privacy-policy.html
 ```
 
 ---

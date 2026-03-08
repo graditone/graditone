@@ -20,7 +20,7 @@
 - [X] T001 Fix PWA manifest icon `purpose` — split combined `"any maskable"` value into separate `"any"` and `"maskable"` entries per icon size in `frontend/vite.config.ts`
 - [X] T002 [P] Create manifest TWA-readiness validation script that asserts required fields and correct icon purpose values in `android/scripts/validate-manifest.js`
 - [X] T003 Generate Android release keystore (25-year validity), record SHA-256 fingerprint, and store base64-encoded keystore + passwords as GitHub Actions secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, `ANDROID_STORE_PASSWORD`)
-- [ ] T004 Initialise Android TWA project using Bubblewrap CLI (`bubblewrap init --manifest https://graditone.github.io/manifest.webmanifest`) with package ID `io.graditone.app`, minSdk 28, targetSdk 34 — commit generated project to `android/`
+- [X] T004 Initialise Android TWA project using Bubblewrap CLI (`bubblewrap init --manifest https://graditone.com/manifest.webmanifest`) with package ID `com.graditone.app`, minSdk 28, targetSdk 34 — commit generated project to `android/`
 
 **Checkpoint**: Android project exists in `android/`; signing credentials are stored; manifest icons are correct.
 
@@ -38,7 +38,7 @@
 - [ ] T008 Integrate Firebase Crashlytics SDK into the Android project — add Firebase BOM and Crashlytics Gradle plugin in `android/app/build.gradle` and `android/build.gradle`
 - [X] T009 Create Android CI build workflow that triggers on `v*` tags, decodes keystore secret, reads version from `frontend/package.json`, computes `versionCode = major×10000 + minor×100 + patch`, builds signed release AAB, and uploads as workflow artifact at `.github/workflows/build-android.yml`
 - [ ] T010 Enrol app in Google Play App Signing; retrieve Play App Signing key SHA-256 fingerprint from Play Console; update `frontend/public/.well-known/assetlinks.json` with both fingerprints (upload key + Play App Signing key)
-- [ ] T011 Deploy PWA to production (push to main → triggers `deploy-pwa.yml`); verify `https://graditone.github.io/.well-known/assetlinks.json` returns valid JSON with correct fingerprints
+- [ ] T011 Deploy PWA to production (push to main → triggers `deploy-pwa.yml`); verify `https://graditone.com/.well-known/assetlinks.json` returns valid JSON with correct fingerprints
 
 **Checkpoint**: Digital Asset Links live at production URL with correct fingerprints; CI workflow builds signed AAB; privacy policy is live; Crashlytics SDK integrated.
 

@@ -13,7 +13,7 @@ import './AndroidInstallBanner.css';
  * - User has dismissed it before
  */
 
-const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=io.graditone.app';
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.graditone.app';
 const DISMISS_KEY = 'android-install-banner-dismissed';
 
 export const AndroidInstallBanner: React.FC = () => {

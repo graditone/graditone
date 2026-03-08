@@ -4,6 +4,14 @@ on:
   push:
     tags:
       - 'v*'
+  # Also trigger when deploy-pwa.yml completes (it creates v* tags via GITHUB_TOKEN,
+  # which does not re-trigger push.tags events due to GitHub's loop-prevention policy).
+  workflow_run:
+    workflows: ["Deploy PWA to GitHub Pages"]
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       version_override:
@@ -18,15 +26,30 @@ jobs:
   build-android:
     name: Build signed release AAB
     runs-on: ubuntu-latest
+    # For workflow_run triggers: only run if the upstream workflow succeeded.
+    # For push/manual triggers: always run.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       # ── Checkout ────────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ── Guard: skip if android Gradle project not yet initialised ────────────
+      - name: Check android project exists
+        id: android_check
+        run: |
+          if [ ! -f "android/gradlew" ]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::android/gradlew not found — skipping build. Run 'bubblewrap init' first (T004)."
+          else
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
       # ── Determine version ────────────────────────────────────────────────────
       - name: Compute versionName and versionCode
         id: version
+        if: steps.android_check.outputs.exists == 'true'
         run: |
           if [ -n "${{ github.event.inputs.version_override }}" ]; then
             VERSION="${{ github.event.inputs.version_override }}"
@@ -52,16 +75,19 @@ jobs:
 
       # ── Java & Android SDK ───────────────────────────────────────────────────
       - name: Set up Java 17
+        if: steps.android_check.outputs.exists == 'true'
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Set up Android SDK
+        if: steps.android_check.outputs.exists == 'true'
         uses: android-actions/setup-android@v3
 
       # ── Google Services (Firebase) ───────────────────────────────────────────
       - name: Restore google-services.json
+        if: steps.android_check.outputs.exists == 'true'
         env:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
@@ -69,6 +95,7 @@ jobs:
 
       # ── Signing keystore ─────────────────────────────────────────────────────
       - name: Restore release keystore
+        if: steps.android_check.outputs.exists == 'true'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
@@ -76,6 +103,7 @@ jobs:
 
       # ── Inject signing config into gradle.properties ─────────────────────────
       - name: Write signing properties
+        if: steps.android_check.outputs.exists == 'true'
         run: |
           cat >> android/gradle.properties << EOF
           RELEASE_STORE_FILE=graditone-release.keystore
@@ -86,6 +114,7 @@ jobs:
 
       # ── Inject versionCode / versionName ────────────────────────────────────
       - name: Set version in gradle.properties
+        if: steps.android_check.outputs.exists == 'true'
         run: |
           cat >> android/gradle.properties << EOF
           APP_VERSION_CODE=${{ steps.version.outputs.versionCode }}
@@ -94,6 +123,7 @@ jobs:
 
       # ── Build signed release AAB ─────────────────────────────────────────────
       - name: Build release AAB
+        if: steps.android_check.outputs.exists == 'true'
         working-directory: android
         run: |
           chmod +x gradlew
@@ -101,6 +131,7 @@ jobs:
 
       # ── Upload artifact ───────────────────────────────────────────────────────
       - name: Upload AAB artifact
+        if: steps.android_check.outputs.exists == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: graditone-${{ steps.version.outputs.versionName }}-release
@@ -109,6 +140,7 @@ jobs:
 
       # ── Summary ───────────────────────────────────────────────────────────────
       - name: Print build summary
+        if: steps.android_check.outputs.exists == 'true'
         run: |
           echo "### Android Build Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"

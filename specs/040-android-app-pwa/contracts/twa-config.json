@@ -20,12 +20,12 @@
     "packageId": {
       "type": "string",
       "description": "Reverse-domain package name. IMMUTABLE after first Play Store publication.",
-      "example": "io.graditone.app"
+      "example": "com.graditone.app"
     },
     "host": {
       "type": "string",
       "description": "Production domain of the PWA (no scheme, no trailing slash). Must match the domain where assetlinks.json is hosted.",
-      "example": "graditone.github.io"
+      "example": "graditone.com"
     },
     "startUrl": {
       "type": "string",
@@ -106,13 +106,13 @@
     "iconUrl": {
       "type": "string",
       "description": "URL or path to the maskable 512x512 icon used for Play Store upload.",
-      "example": "https://graditone.github.io/icons/icon-512x512.png"
+      "example": "https://graditone.com/icons/icon-512x512.png"
     }
   },
   "examples": [
     {
-      "packageId": "io.graditone.app",
-      "host": "graditone.github.io",
+      "packageId": "com.graditone.app",
+      "host": "graditone.com",
       "startUrl": "/",
       "name": "Graditone",
       "launcherName": "Graditone",

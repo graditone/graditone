@@ -3,9 +3,9 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "io.graditone.app",
+      "package_name": "com.graditone.app",
       "sha256_cert_fingerprints": [
-        "UPLOAD_KEY_SHA256_FINGERPRINT_PLACEHOLDER",
+        "5E:07:29:25:BB:82:FD:ED:E1:CF:B0:D4:CD:16:3C:B3:A4:EE:CF:55:87:A3:48:8F:EB:BB:F3:97:BD:AD:51:68",
         "PLAY_SIGNING_KEY_SHA256_FINGERPRINT_PLACEHOLDER"
       ]
     }
