@@ -50,8 +50,8 @@
 
 **Independent Test**: Search "Graditone" on the Play Store → install → launch → verify full-screen display, correct icon, all PWA features functional.
 
-- [ ] T012 [P] [US1] Create Play Store feature graphic 1024×500 PNG at `assets/store/feature-graphic.png`
-- [ ] T013 [P] [US1] Capture minimum 2 phone screenshots at 1080×1920–2400 resolution at `assets/store/screenshots/phone/`
+- [X] T012 [P] [US1] Create Play Store feature graphic 1024×500 PNG at `assets/store/feature-graphic.png`
+- [X] T013 [P] [US1] Capture minimum 2 phone screenshots at 1080×1920–2400 resolution at `assets/store/screenshots/phone/`
 - [ ] T014 [P] [US1] Capture tablet screenshots at 1200×1920 resolution at `assets/store/screenshots/tablet/`
 - [X] T015 [US1] Write Play Store short description (≤80 chars) and full description (≤4000 chars) in `android/store-listing.md`
 - [X] T016 [US1] Create new app in Google Play Console ($25 one-time fee); set app name "Graditone", default language English, category "Music & Audio"
