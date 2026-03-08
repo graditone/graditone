@@ -138,6 +138,18 @@ jobs:
           path: android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 30
 
+      # ── Deploy to Google Play ─────────────────────────────────────────────────
+      - name: Upload to Google Play
+        if: steps.android_check.outputs.exists == 'true' && secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != ''
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.graditone.app
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: production
+          status: completed
+          whatsNewDirectory: android/whatsnew
+
       # ── Summary ───────────────────────────────────────────────────────────────
       - name: Print build summary
         if: steps.android_check.outputs.exists == 'true'
@@ -149,5 +161,4 @@ jobs:
           echo "| versionName | ${{ steps.version.outputs.versionName }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| versionCode | ${{ steps.version.outputs.versionCode }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Artifact | graditone-${{ steps.version.outputs.versionName }}-release |" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Download the AAB from the **Artifacts** section above and upload it to Play Console." >> "$GITHUB_STEP_SUMMARY"
+          echo "| Play Store | ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != '' && 'Uploaded to production track' || 'Skipped (GOOGLE_PLAY_SERVICE_ACCOUNT_JSON not set)' }} |" >> "$GITHUB_STEP_SUMMARY"

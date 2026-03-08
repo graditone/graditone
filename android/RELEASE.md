@@ -7,10 +7,12 @@ This document covers the end-to-end process for publishing a new version of the 
 ## Overview
 
 ```
-Version bump → Push tag → CI builds signed AAB → Download artifact → Play Console upload → Track promotion
+Version bump → Push tag → CI builds signed AAB → CI uploads to Play Store production → Google review
 ```
 
-The CI workflow (`.github/workflows/build-android.yml`) builds and signs the Android App Bundle automatically when a `v*` tag is pushed. Publishing to Play Console is a **manual gate** — you download the AAB artifact from GitHub Actions and upload it yourself.
+The CI workflow (`.github/workflows/build-android.yml`) builds, signs, and **automatically uploads** the AAB to the Play Store production track when `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` is configured. Publishing is still gated by Google's review, but the upload is fully automated.
+
+> **If `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` is not set**: The workflow still builds and signs the AAB, uploads it as a GitHub Actions artifact, and skips the Play Store upload step — fallback to manual upload.
 
 ---
 
@@ -44,25 +46,33 @@ The `npm version` command automatically:
 - Creates a git commit with message `vX.Y.Z`
 - Creates a git tag `vX.Y.Z`
 
-### 2. Push the tag to trigger the CI build
+### 2. Push the tag to trigger the CI build and deploy
 
 ```bash
 git push origin main
 git push origin vX.Y.Z    # e.g. git push origin v0.1.71
 ```
 
-This triggers `.github/workflows/build-android.yml`.
+This triggers `.github/workflows/build-android.yml`, which:
+- Builds and signs the AAB
+- Uploads it directly to the Play Store production track (if `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` is set)
 
-### 3. Download the signed AAB from GitHub Actions
+### 3. Monitor the release
+
+1. Go to <https://github.com/graditone/graditone/actions/workflows/build-android.yml>
+2. Confirm the run succeeded — the build summary shows whether the Play Store upload step ran
+3. In Play Console → **Production** → you'll see the new release in review
+
+> If the CI upload step is skipped (secret not set), fall back to downloading the AAB artifact and uploading manually — see step 3 below.
+
+### 4. (Fallback) Download the signed AAB from GitHub Actions
 
 1. Go to <https://github.com/graditone/graditone/actions/workflows/build-android.yml>
 2. Click the completed run for your tag
 3. Under **Artifacts**, download `graditone-X.Y.Z-release`
 4. Unzip → you'll have `app-release.aab`
 
-> Verify the build summary in the GitHub Actions run to confirm `versionCode` and `versionName` are correct before uploading.
-
-### 4. Upload to Play Console
+### 5. (Fallback) Upload to Play Console manually
 
 1. Open [Google Play Console](https://play.google.com/console)
 2. Select **Graditone**
@@ -117,6 +127,20 @@ These must be set in the repository Settings → Secrets and variables → Actio
 | `ANDROID_KEY_PASSWORD` | Password for the key entry | From keystore generation |
 | `ANDROID_STORE_PASSWORD` | Password for the keystore | From keystore generation |
 | `GOOGLE_SERVICES_JSON_BASE64` | Base64-encoded `google-services.json` | `base64 -i google-services.json` |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Google Play service account JSON (plain text) | See below |
+
+### Setting up `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
+
+1. Go to [Google Play Console](https://play.google.com/console) → **Setup → API access**
+2. Click **Link to a Google Cloud project** (create new or use existing)
+3. In Google Cloud Console → **IAM & Admin → Service Accounts** → **Create service account**
+   - Name: `graditone-ci-deploy`
+   - Role: none (permissions are granted in Play Console)
+4. Create a JSON key for the service account → download it
+5. Back in Play Console → **Setup → API access** → find the service account → click **Grant access**
+   - Account permissions: **Release manager** (or **Admin** for full access)
+6. Add the **full contents** of the JSON key file as the GitHub secret `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
+   (not base64 — paste the raw JSON)
 
 > **CRITICAL**: If the upload keystore is ever lost or the password forgotten, you can no longer sign updates for the app. Keep a secure backup (e.g., password manager or encrypted storage).
 
