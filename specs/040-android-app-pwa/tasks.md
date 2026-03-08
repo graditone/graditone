@@ -37,7 +37,7 @@
 - [ ] T007 [P] Create Firebase project in Firebase Console, download `google-services.json`, add it to `android/app/google-services.json`
 - [ ] T008 Integrate Firebase Crashlytics SDK into the Android project — add Firebase BOM and Crashlytics Gradle plugin in `android/app/build.gradle` and `android/build.gradle`
 - [X] T009 Create Android CI build workflow that triggers on `v*` tags, decodes keystore secret, reads version from `frontend/package.json`, computes `versionCode = major×10000 + minor×100 + patch`, builds signed release AAB, and uploads as workflow artifact at `.github/workflows/build-android.yml`
-- [ ] T010 Enrol app in Google Play App Signing; retrieve Play App Signing key SHA-256 fingerprint from Play Console; update `frontend/public/.well-known/assetlinks.json` with both fingerprints (upload key + Play App Signing key)
+- [X] T010 Enrol app in Google Play App Signing; retrieve Play App Signing key SHA-256 fingerprint from Play Console; update `frontend/public/.well-known/assetlinks.json` with both fingerprints (upload key + Play App Signing key)
 - [ ] T011 Deploy PWA to production (push to main → triggers `deploy-pwa.yml`); verify `https://graditone.com/.well-known/assetlinks.json` returns valid JSON with correct fingerprints
 
 **Checkpoint**: Digital Asset Links live at production URL with correct fingerprints; CI workflow builds signed AAB; privacy policy is live; Crashlytics SDK integrated.
