@@ -31,6 +31,7 @@ import { useNoteHighlight } from '../services/highlight/useNoteHighlight';
 import { MusicXMLImportService } from '../services/import/MusicXMLImportService';
 import { PRELOADED_SCORES } from '../data/preloadedScores';
 import type { Note, Score } from '../types/score';
+import { expandNotesWithRepeats } from '../services/playback/RepeatNoteExpander';
 
 // ---------------------------------------------------------------------------
 // Bridge type (T005) — internal state exposed to the HOST only, never plugins
@@ -44,8 +45,10 @@ import type { Note, Score } from '../types/score';
 export interface ScorePlayerInternal {
   /** Parsed Score from the last successful loadScore call; null before any load. */
   score: Score | null;
-  /** All notes extracted from the score (voice-0 of all staves). */
+  /** All notes extracted from the score (voice-0 of all staves). Expanded with repeats for playback. */
   notes: readonly Note[];
+  /** Raw (unexpanded) notes — original ticks matching the layout engine's tick space. */
+  rawNotes: readonly Note[];
   /** Raw playback engine status (stopped/playing/paused). */
   playbackStatus: PlaybackStatus;
   /** Live tick source ref for rAF consumers — same ref as LayoutView's tickSourceRef. */
@@ -197,6 +200,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
 
   const [score, setScore] = useState<Score | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [rawNotes, setRawNotes] = useState<Note[]>([]);
   const [scoreTempo, setScoreTempo] = useState<number>(120);
   const [scoreTimeSignature, setScoreTimeSignature] = useState<{ numerator: number; denominator: number }>({ numerator: 4, denominator: 4 });
   const [title, setTitle] = useState<string | null>(null);
@@ -317,7 +321,8 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       const service = new MusicXMLImportService();
       const result = await service.importFile(file);
 
-      const parsedNotes = extractNotes(result.score);
+      const extractedNotes = extractNotes(result.score);
+      const parsedNotes = expandNotesWithRepeats(extractedNotes, result.score.repeat_barlines);
       const parsedTempo = extractTempo(result.score);
       const parsedTimeSignature = extractTimeSignature(result.score);
       const parsedTitle =
@@ -330,6 +335,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
 
       setScore(result.score);
       setNotes(parsedNotes);
+      setRawNotes(extractedNotes);
       setScoreTempo(parsedTempo);
       setScoreTimeSignature(parsedTimeSignature);
       setTitle(parsedTitle);
@@ -442,10 +448,11 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
   const internal = useMemo((): ScorePlayerInternal => ({
     score,
     notes,
+    rawNotes,
     playbackStatus: playbackState.status,
     tickSourceRef: playbackState.tickSourceRef,
     highlightedNoteIds,
-  }), [score, notes, playbackState.status, playbackState.tickSourceRef, highlightedNoteIds]);
+  }), [score, notes, rawNotes, playbackState.status, playbackState.tickSourceRef, highlightedNoteIds]);
 
   return useMemo((): ScorePlayerBridge => ({ api, internal }), [api, internal]);
 }

@@ -146,6 +146,24 @@ export interface Score {
   
   global_structural_events: GlobalStructuralEvent[];
   instruments: Instrument[];
+
+  /** Repeat barlines parsed from the score source (Feature 041) */
+  repeat_barlines?: RepeatBarline[];
+}
+
+/** Type of repeat barline (Feature 041) */
+export type RepeatBarlineType = 'Start' | 'End' | 'Both';
+
+/** A repeat barline anchored to a specific measure (Feature 041) */
+export interface RepeatBarline {
+  /** 0-based measure index within the score */
+  measure_index: number;
+  /** Tick position at the start of this measure (inclusive) */
+  start_tick: number;
+  /** Tick position at the end of this measure (exclusive) */
+  end_tick: number;
+  /** Whether this is a start-repeat, end-repeat, or both */
+  barline_type: RepeatBarlineType;
 }
 
 /**

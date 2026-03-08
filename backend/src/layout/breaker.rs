@@ -12,6 +12,10 @@ pub struct MeasureInfo {
     pub start_tick: u32,
     /// Last tick after measure (exclusive)
     pub end_tick: u32,
+    /// True if this measure has a start-repeat barline on its left edge
+    pub start_repeat: bool,
+    /// True if this measure has an end-repeat barline on its right edge
+    pub end_repeat: bool,
 }
 
 /// Break measures into systems using greedy algorithm

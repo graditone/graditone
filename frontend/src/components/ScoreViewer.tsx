@@ -11,6 +11,7 @@ import { LandingScreen } from "./LandingScreen";
 import { DesignNavbar } from "./DesignNavbar";
 import { LANDING_THEMES, getThemeById } from "../themes/landing-themes";
 import { usePlayback } from "../services/playback/MusicTimeline";
+import { expandNotesWithRepeats } from "../services/playback/RepeatNoteExpander";
 import { useTempoState } from "../services/state/TempoStateContext";
 import "./ScoreViewer.css";
 
@@ -92,14 +93,14 @@ export function ScoreViewer({
   /** Flatten all notes from voice 0 of every staff (mirrors LayoutView). */
   const allNotes = useMemo((): Note[] => {
     if (!score) return [];
-    const notes: Note[] = [];
+    const rawNotes: Note[] = [];
     for (const instrument of score.instruments) {
       for (const staff of instrument.staves) {
         const firstVoice = staff.voices[0];
-        if (firstVoice) notes.push(...firstVoice.interval_events);
+        if (firstVoice) rawNotes.push(...firstVoice.interval_events);
       }
     }
-    return notes;
+    return expandNotesWithRepeats(rawNotes, score.repeat_barlines);
   }, [score]);
 
   const initialTempo = (() => {

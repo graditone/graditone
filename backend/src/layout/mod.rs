@@ -23,8 +23,8 @@ pub mod wasm;
 pub use breaker::MeasureInfo;
 pub use types::{
     BarLine, BarLineSegment, BarLineType, BoundingBox, BracketGlyph, BracketType, Color,
-    GlobalLayout, Glyph, GlyphRun, LedgerLine, MeasureNumber, NameLabel, Point, SourceReference,
-    Staff, StaffGroup, StaffLine, System, TickRange,
+    GlobalLayout, Glyph, GlyphRun, LedgerLine, MeasureNumber, NameLabel, Point, RepeatDotPosition,
+    SourceReference, Staff, StaffGroup, StaffLine, System, TickRange,
 };
 
 /// Configuration for layout computation
@@ -64,6 +64,29 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
     // Extract measures from score (simplified - assumes 4/4 time)
     let measures = extract_measures(score);
 
+    // Extract repeat barline flags indexed by measure position (Feature 041)
+    let mut start_repeat_set: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    let mut end_repeat_set: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    if let Some(repeat_barlines) = score["repeat_barlines"].as_array() {
+        for rb in repeat_barlines {
+            if let Some(idx) = rb["measure_index"].as_u64() {
+                match rb["barline_type"].as_str().unwrap_or("") {
+                    "Start" => {
+                        start_repeat_set.insert(idx as u32);
+                    }
+                    "End" => {
+                        end_repeat_set.insert(idx as u32);
+                    }
+                    "Both" => {
+                        start_repeat_set.insert(idx as u32);
+                        end_repeat_set.insert(idx as u32);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
     // Compute measure widths using spacer
     let spacing_config = spacer::SpacingConfig::default();
     let measure_infos: Vec<breaker::MeasureInfo> = measures
@@ -77,6 +100,8 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                 width,
                 start_tick,
                 end_tick,
+                start_repeat: start_repeat_set.contains(&(i as u32)),
+                end_repeat: end_repeat_set.contains(&(i as u32)),
             }
         })
         .collect();
@@ -1385,23 +1410,43 @@ fn create_bar_lines(
             });
 
         // Determine bar line type
-        let bar_type = if measure.end_tick == tick_range.end_tick {
-            // Check if this is the very last measure in the entire score
-            let is_last_measure =
-                measure_infos.last().map(|m| m.end_tick) == Some(measure.end_tick);
-            if is_last_measure {
-                BarLineType::Final
+        let bar_type = {
+            // Check repeat flags for this measure and the one that starts next
+            let next_start_repeat = measure_infos
+                .iter()
+                .find(|m| m.start_tick == measure.end_tick)
+                .map(|m| m.start_repeat)
+                .unwrap_or(false);
+
+            if measure.end_repeat && next_start_repeat {
+                BarLineType::RepeatBoth
+            } else if measure.end_repeat {
+                BarLineType::RepeatEnd
+            } else if next_start_repeat {
+                BarLineType::RepeatStart
+            } else if measure.end_tick == tick_range.end_tick {
+                // Check if this is the very last measure in the entire score
+                let is_last_measure =
+                    measure_infos.last().map(|m| m.end_tick) == Some(measure.end_tick);
+                if is_last_measure {
+                    BarLineType::Final
+                } else {
+                    BarLineType::Single
+                }
             } else {
                 BarLineType::Single
             }
-        } else {
-            BarLineType::Single
         };
 
         // Create bar line segments with explicit geometry (Principle VI: Layout Engine Authority)
         let segments = create_bar_line_segments(barline_x, y_start, y_end, &bar_type);
+        let dots = compute_repeat_dots(barline_x, y_start, units_per_space, &bar_type);
 
-        bar_lines.push(BarLine { segments, bar_type });
+        bar_lines.push(BarLine {
+            segments,
+            bar_type,
+            dots,
+        });
     }
 
     bar_lines
@@ -1461,6 +1506,149 @@ fn create_bar_line_segments(
                 },
             ]
         }
+        BarLineType::RepeatEnd => {
+            // Same visual as Final: thin bar on left, thick bar on right
+            vec![
+                BarLineSegment {
+                    x_position: x_position - FINAL_SPACING - THICK_WIDTH / 2.0,
+                    y_start,
+                    y_end,
+                    stroke_width: THIN_WIDTH,
+                },
+                BarLineSegment {
+                    x_position: x_position + THICK_WIDTH / 2.0,
+                    y_start,
+                    y_end,
+                    stroke_width: THICK_WIDTH,
+                },
+            ]
+        }
+        BarLineType::RepeatStart => {
+            // Mirror of Final: thick bar on left, thin bar on right
+            vec![
+                BarLineSegment {
+                    x_position: x_position - THICK_WIDTH / 2.0,
+                    y_start,
+                    y_end,
+                    stroke_width: THICK_WIDTH,
+                },
+                BarLineSegment {
+                    x_position: x_position + FINAL_SPACING + THICK_WIDTH / 2.0,
+                    y_start,
+                    y_end,
+                    stroke_width: THIN_WIDTH,
+                },
+            ]
+        }
+        BarLineType::RepeatBoth => {
+            // Combined end-repeat and start-repeat: thin-thick-thick-thin
+            vec![
+                BarLineSegment {
+                    x_position: x_position - FINAL_SPACING - THICK_WIDTH,
+                    y_start,
+                    y_end,
+                    stroke_width: THIN_WIDTH,
+                },
+                BarLineSegment {
+                    x_position: x_position - THICK_WIDTH / 2.0,
+                    y_start,
+                    y_end,
+                    stroke_width: THICK_WIDTH,
+                },
+                BarLineSegment {
+                    x_position: x_position + THICK_WIDTH / 2.0,
+                    y_start,
+                    y_end,
+                    stroke_width: THICK_WIDTH,
+                },
+                BarLineSegment {
+                    x_position: x_position + FINAL_SPACING + THICK_WIDTH,
+                    y_start,
+                    y_end,
+                    stroke_width: THIN_WIDTH,
+                },
+            ]
+        }
+    }
+}
+
+/// Compute repeat dot positions for repeat barline types (Principle VI: Layout Engine Authority)
+///
+/// All dot coordinates are computed here in Rust. TypeScript renders them verbatim.
+fn compute_repeat_dots(
+    x_position: f32,
+    y_start: f32,
+    units_per_space: f32,
+    bar_type: &BarLineType,
+) -> Vec<RepeatDotPosition> {
+    const THICK_WIDTH: f32 = 4.0;
+    let dot_radius = 0.25 * units_per_space;
+    let x_offset = 0.6 * units_per_space;
+    let dot_y0 = y_start + 1.0 * units_per_space;
+    let dot_y1 = y_start + 3.0 * units_per_space;
+
+    match bar_type {
+        BarLineType::RepeatEnd => {
+            // Thick bar center at x_position + THICK_WIDTH/2.0; dots to its left
+            let dot_x = x_position + THICK_WIDTH / 2.0 - x_offset;
+            vec![
+                RepeatDotPosition {
+                    x: dot_x,
+                    y: dot_y0,
+                    radius: dot_radius,
+                },
+                RepeatDotPosition {
+                    x: dot_x,
+                    y: dot_y1,
+                    radius: dot_radius,
+                },
+            ]
+        }
+        BarLineType::RepeatStart => {
+            // Thick bar center at x_position - THICK_WIDTH/2.0; dots to its right
+            let dot_x = x_position - THICK_WIDTH / 2.0 + x_offset;
+            vec![
+                RepeatDotPosition {
+                    x: dot_x,
+                    y: dot_y0,
+                    radius: dot_radius,
+                },
+                RepeatDotPosition {
+                    x: dot_x,
+                    y: dot_y1,
+                    radius: dot_radius,
+                },
+            ]
+        }
+        BarLineType::RepeatBoth => {
+            // Left thick bar (end-repeat) at x_position - THICK_WIDTH/2.0
+            // Right thick bar (start-repeat) at x_position + THICK_WIDTH/2.0
+            let dot_x_left = x_position - THICK_WIDTH / 2.0 - x_offset;
+            let dot_x_right = x_position + THICK_WIDTH / 2.0 + x_offset;
+            vec![
+                RepeatDotPosition {
+                    x: dot_x_left,
+                    y: dot_y0,
+                    radius: dot_radius,
+                },
+                RepeatDotPosition {
+                    x: dot_x_left,
+                    y: dot_y1,
+                    radius: dot_radius,
+                },
+                RepeatDotPosition {
+                    x: dot_x_right,
+                    y: dot_y0,
+                    radius: dot_radius,
+                },
+                RepeatDotPosition {
+                    x: dot_x_right,
+                    y: dot_y1,
+                    radius: dot_radius,
+                },
+            ]
+        }
+        _ => vec![],
     }
 }
 

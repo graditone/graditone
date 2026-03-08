@@ -4,6 +4,7 @@
 use crate::domain::{
     events::{global::GlobalStructuralEvent, staff::StaffStructuralEvent},
     instrument::Instrument,
+    repeat::RepeatBarline,
     score::Score,
     staff::Staff,
     value_objects::Clef,
@@ -67,7 +68,8 @@ impl From<&Instrument> for InstrumentDto {
 /// Increment when adding/changing fields
 /// v2: active_clef added to StaffDto
 /// v3: WASM now returns ScoreDto instead of raw Score
-const SCORE_SCHEMA_VERSION: u32 = 3;
+/// v4: repeat_barlines added to ScoreDto
+const SCORE_SCHEMA_VERSION: u32 = 4;
 
 /// DTO for Score containing InstrumentDtos with schema versioning
 #[derive(Debug, Serialize, Deserialize)]
@@ -77,10 +79,13 @@ pub struct ScoreDto {
     /// Schema version for data structure evolution
     /// v1: Original structure
     /// v2: Added active_clef to StaffDto
+    /// v4: Added repeat_barlines
     pub schema_version: u32,
 
     pub global_structural_events: Vec<GlobalStructuralEvent>,
     pub instruments: Vec<InstrumentDto>,
+    #[serde(default)]
+    pub repeat_barlines: Vec<RepeatBarline>,
 }
 
 impl From<&Score> for ScoreDto {
@@ -90,6 +95,7 @@ impl From<&Score> for ScoreDto {
             schema_version: SCORE_SCHEMA_VERSION,
             global_structural_events: score.global_structural_events.clone(),
             instruments: score.instruments.iter().map(InstrumentDto::from).collect(),
+            repeat_barlines: score.repeat_barlines.clone(),
         }
     }
 }

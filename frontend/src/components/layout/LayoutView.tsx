@@ -42,6 +42,7 @@ interface ConvertedScore {
   }>;
   tempo_changes: unknown[];
   time_signature_changes: unknown[];
+  repeat_barlines: unknown[];
 }
 
 interface LayoutViewProps {
@@ -62,6 +63,9 @@ interface LayoutViewProps {
   tickSourceRef?: { current: ITickSource };
   /** Feature 024: All notes for building HighlightIndex in LayoutRenderer */
   allNotes?: ReadonlyArray<{ id: string; start_tick: number; duration_ticks: number }>;
+  /** Raw (unexpanded) notes — original ticks matching the layout engine's tick space.
+   * Used for loop overlay rendering and tick lookups in ScoreViewer. */
+  rawNotes?: ReadonlyArray<{ id: string; start_tick: number; duration_ticks: number }>;
   /** Green pinned highlight note IDs — permanent until unpinned */
   pinnedNoteIds?: Set<string>;
   /** Note IDs for auto-scroll targeting (overrides highlightedNoteIds for scroll) */
@@ -177,10 +181,11 @@ function convertScoreToLayoutFormat(score: Score): ConvertedScore {
       .filter((e): e is any => 'TimeSignature' in e)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((e: any) => e.TimeSignature),
+    repeat_barlines: score.repeat_barlines ?? [],
   };
 }
 
-export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playbackStatus, onNoteClick, selectedNoteId, tickSourceRef, allNotes, pinnedNoteIds, scrollTargetNoteIds, pinnedNoteId, onPin, onSeekAndPlay, loopRegion, scrollContainerRef }: LayoutViewProps) {
+export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playbackStatus, onNoteClick, selectedNoteId, tickSourceRef, allNotes, rawNotes, pinnedNoteIds, scrollTargetNoteIds, pinnedNoteId, onPin, onSeekAndPlay, loopRegion, scrollContainerRef }: LayoutViewProps) {
   const [layout, setLayout] = useState<GlobalLayout | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -332,6 +337,7 @@ export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playba
         selectedNoteId={selectedNoteId}
         tickSourceRef={tickSourceRef}
         notes={allNotes}
+        rawNotes={rawNotes}
         pinnedNoteIds={pinnedNoteIds}
         scrollTargetNoteIds={scrollTargetNoteIds}
         pinnedNoteId={pinnedNoteId}

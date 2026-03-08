@@ -158,10 +158,13 @@ pub struct StaffLine {
 /// Vertical bar line that separates measures
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BarLine {
-    /// Individual line segments (1 for Single, 2 for Double/Final)
+    /// Individual line segments (1 for Single, 2 for Double/Final/Repeat)
     pub segments: Vec<BarLineSegment>,
-    /// Type of bar line (single, double, final)
+    /// Type of bar line (single, double, final, repeat)
     pub bar_type: BarLineType,
+    /// Repeat dots for repeat barline types (empty for non-repeat types)
+    #[serde(default)]
+    pub dots: Vec<RepeatDotPosition>,
 }
 
 /// Individual line segment within a bar line
@@ -190,6 +193,26 @@ pub enum BarLineType {
     Double,
     /// Thin + thick lines (final bar line at end of piece)
     Final,
+    /// Thick-thin bar with repeat dots on the right (start repeating this section)
+    RepeatStart,
+    /// Thin-thick bar with repeat dots on the left (end of repeated section)
+    RepeatEnd,
+    /// Combined end-repeat + start-repeat at same position
+    RepeatBoth,
+}
+
+/// Position of a single repeat dot in layout coordinates
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepeatDotPosition {
+    /// Horizontal center of dot in logical units (system-relative)
+    #[serde(serialize_with = "round_f32")]
+    pub x: f32,
+    /// Vertical center of dot in logical units (system-relative)
+    #[serde(serialize_with = "round_f32")]
+    pub y: f32,
+    /// Dot radius in logical units
+    #[serde(serialize_with = "round_f32")]
+    pub radius: f32,
 }
 
 /// Batches consecutive glyphs with identical drawing properties

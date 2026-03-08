@@ -749,7 +749,12 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         // Second long-press on a different note: create loop end
         const id = noteId ?? '';
         setLoopEndPin({ tick, noteId: id });
-        if (!isPlaying) context.scorePlayer.setLoopEnd(tick);
+        if (!isPlaying) {
+          const regionStart = Math.min(loopStart.tick, tick);
+          const regionEnd = Math.max(loopStart.tick, tick);
+          context.scorePlayer.setPinnedStart(regionStart);
+          context.scorePlayer.setLoopEnd(regionEnd);
+        }
       }
     },
     [context.scorePlayer, loopStart, loopRegion, playerState.status],

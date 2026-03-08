@@ -37,6 +37,11 @@ export interface ScoreRendererPluginInternalProps {
    */
   allNotes: readonly Note[];
   /**
+   * Raw (unexpanded) notes — original ticks matching the layout engine.
+   * Used for noteId→tick lookups (pin/loop) and loop overlay rendering.
+   */
+  rawNotes: readonly Note[];
+  /**
    * Live tick source ref from the playback engine — forwarded to LayoutView
    * so the rAF-based note highlight loop works at 60 Hz.
    */
@@ -76,12 +81,14 @@ export function ScoreRendererPlugin({
   // Internal props
   score,
   allNotes,
+  rawNotes,
   tickSourceRef,
   playbackStatus,
 }: ScoreRendererPluginProps) {
 
-  // Build noteId → startTick lookup from the flat notes array.
-  // This is needed because LayoutView.onNoteClick only delivers noteId.
+  // Build noteId → startTick lookup from the expanded notes array.
+  // Expanded ticks are needed because playback engine (MusicTimeline) operates
+  // in expanded tick space for seek, pin, and loop-end calls.
   const noteIdToTick = useMemo(
     () => new Map<string, number>(allNotes.map(n => [n.id, n.start_tick])),
     [allNotes]
@@ -115,6 +122,7 @@ export function ScoreRendererPlugin({
         <LayoutView
           score={score}
           allNotes={allNotes}
+          rawNotes={rawNotes}
           tickSourceRef={tickSourceRef}
           highlightedNoteIds={highlightedNoteIds instanceof Set ? highlightedNoteIds : new Set(highlightedNoteIds)}
           pinnedNoteIds={pinnedNoteIds instanceof Set ? pinnedNoteIds : new Set(pinnedNoteIds)}

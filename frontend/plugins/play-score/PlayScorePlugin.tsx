@@ -224,7 +224,14 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
       // Second long-press on a different note: create loop end
       const id = noteId ?? '';
       setLoopEndPin({ tick, noteId: id });
-      if (!isPlaying) context.scorePlayer.setLoopEnd(tick);
+      if (!isPlaying) {
+        // Sync pinnedStart to loop region start (min of both ticks) so playback
+        // always begins from the visual start of the loop, regardless of pin order.
+        const regionStart = Math.min(loopStart.tick, tick);
+        const regionEnd = Math.max(loopStart.tick, tick);
+        context.scorePlayer.setPinnedStart(regionStart);
+        context.scorePlayer.setLoopEnd(regionEnd);
+      }
     }
   }, [context.scorePlayer, loopStart, loopRegion, playerState.status]);
 
@@ -239,8 +246,9 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
 
   // US5 (wired in T023): return to start — seeks to pin if set, else tick 0
   const handleReturnToStart = useCallback(() => {
-    context.scorePlayer.seekToTick(loopStart?.tick ?? 0);
-  }, [context.scorePlayer, loopStart]);
+    const startTick = loopRegion ? loopRegion.startTick : (loopStart?.tick ?? 0);
+    context.scorePlayer.seekToTick(startTick);
+  }, [context.scorePlayer, loopStart, loopRegion]);
 
   // ─── Selection screen ──────────────────────────────────────────────────────
   if (screen === 'selection') {

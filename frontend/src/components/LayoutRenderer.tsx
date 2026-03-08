@@ -61,6 +61,9 @@ export interface LayoutRendererProps {
   tickSourceRef?: { current: ITickSource };
   /** Feature 024: Notes array for building HighlightIndex */
   notes?: ReadonlyArray<{ id: string; start_tick: number; duration_ticks: number }>;
+  /** Raw (unexpanded) notes — original ticks matching the layout engine.
+   * Used for loop overlay tick→x mapping. Falls back to notes if absent. */
+  rawNotes?: ReadonlyArray<{ id: string; start_tick: number; duration_ticks: number }>;
 }
 
 /**
@@ -382,7 +385,11 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       currentIds = [];
     }
 
-    const patch = computeHighlightPatch(this.prevHighlightedIds, currentIds);
+    // Strip repeat-expansion suffix (e.g. "-r1") so layout DOM elements
+    // (which use original note IDs) are found during repeated sections.
+    const baseIds = [...new Set(currentIds.map(id => id.replace(/-r\d+$/, '')))];
+
+    const patch = computeHighlightPatch(this.prevHighlightedIds, baseIds);
     if (patch.unchanged) return;
 
     const svg = this.svgRef.current;
@@ -407,7 +414,7 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       });
     }
 
-    this.prevHighlightedIds = new Set(currentIds);
+    this.prevHighlightedIds = new Set(baseIds);
   }
 
   /**
@@ -436,13 +443,16 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       currentIds = [];
     }
 
-    // Update prevHighlightedIds to match what we're applying
-    this.prevHighlightedIds = new Set(currentIds);
+    // Strip repeat-expansion suffix (e.g. "-r1") — same reasoning as updateHighlights.
+    const baseIds = [...new Set(currentIds.map(id => id.replace(/-r\d+$/, '')))];
 
-    if (currentIds.length === 0) return;
+    // Update prevHighlightedIds to match what we're applying
+    this.prevHighlightedIds = new Set(baseIds);
+
+    if (baseIds.length === 0) return;
 
     // Scoped to .layout-glyph — skips hit-rects and beams (same reasoning as updateHighlights).
-    for (const id of currentIds) {
+    for (const id of baseIds) {
       svg.querySelectorAll(`.layout-glyph[data-note-id="${id}"]`).forEach(el => {
         if (!el.classList.contains('pinned')) {
           el.classList.add('highlighted');
@@ -606,7 +616,23 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
    */
   private renderLoopOverlay(system: System): SVGRectElement | null {
     const loopRegion = this.props.loopRegion!;
-    const { startTick, endTick } = loopRegion;
+
+    // loopRegion ticks are in expanded (repeat-aware) tick space, but layout
+    // systems use raw ticks. Convert expanded→raw via the note arrays.
+    const rawNotes = this.props.rawNotes ?? this.props.notes;
+    const expandedNotes = this.props.notes;
+    let { startTick, endTick } = loopRegion;
+    if (rawNotes && expandedNotes && rawNotes !== expandedNotes) {
+      const rawById = new Map<string, number>();
+      for (const n of rawNotes) rawById.set(n.id, n.start_tick);
+      const exp2raw = new Map<number, number>();
+      for (const n of expandedNotes) {
+        const raw = rawById.get(n.id);
+        if (raw !== undefined) exp2raw.set(n.start_tick, raw);
+      }
+      startTick = exp2raw.get(startTick) ?? startTick;
+      endTick = exp2raw.get(endTick) ?? endTick;
+    }
 
     const sysStart = system.tick_range.start_tick;
     const sysEnd   = system.tick_range.end_tick;
@@ -614,13 +640,13 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
     // No overlap between loop and this system
     if (endTick <= sysStart || startTick >= sysEnd) return null;
 
-    // Build tick → leftmost-x map from all glyphs in this system
+    // Build tick → leftmost-x map from all glyphs in this system (raw ticks)
     const tickToX = new Map<number, number>();
-    const { sourceToNoteIdMap, notes } = this.props;
+    const { sourceToNoteIdMap } = this.props;
 
-    if (sourceToNoteIdMap && notes && notes.length > 0) {
+    if (sourceToNoteIdMap && rawNotes && rawNotes.length > 0) {
       const noteIdToTick = new Map<string, number>();
-      for (const note of notes) noteIdToTick.set(note.id, note.start_tick);
+      for (const note of rawNotes) noteIdToTick.set(note.id, note.start_tick);
 
       for (const staffGroup of system.staff_groups) {
         for (const staff of staffGroup.staves) {
@@ -932,6 +958,17 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       line.setAttribute('stroke', strokeColor);
       line.setAttribute('stroke-width', segment.stroke_width.toString());
       barLineGroup.appendChild(line);
+    }
+
+    // Render repeat dots using coordinates pre-calculated by Rust layout engine
+    // Principle VI: dot positions are never recalculated here — read verbatim from layout output
+    for (const dot of barLine.dots ?? []) {
+      const circle = createSVGElement('circle');
+      circle.setAttribute('cx', dot.x.toString());
+      circle.setAttribute('cy', dot.y.toString());
+      circle.setAttribute('r', dot.radius.toString());
+      circle.setAttribute('fill', strokeColor);
+      barLineGroup.appendChild(circle);
     }
 
     return barLineGroup;

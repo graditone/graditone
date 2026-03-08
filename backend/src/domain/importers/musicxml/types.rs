@@ -96,6 +96,12 @@ pub struct MeasureData {
 
     /// All elements in this measure (notes, rests, etc.)
     pub elements: Vec<MeasureElement>,
+
+    /// True if this measure has a start-repeat barline (Feature 041)
+    pub start_repeat: bool,
+
+    /// True if this measure has an end-repeat barline (Feature 041)
+    pub end_repeat: bool,
 }
 
 /// Timing and notation attributes from <attributes> element

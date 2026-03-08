@@ -391,6 +391,8 @@ impl MusicXMLParser {
             number: measure_number,
             attributes: None,
             elements: Vec::new(),
+            start_repeat: false,
+            end_repeat: false,
         };
 
         let mut buf = Vec::new();
@@ -424,6 +426,22 @@ impl MusicXMLParser {
                             measure.elements.push(MeasureElement::Forward(duration));
                         }
                     }
+                    b"barline" => {
+                        // Get location attribute: "left" for start-repeat, "right" for end-repeat
+                        let location = e
+                            .attributes()
+                            .filter_map(|a| a.ok())
+                            .find(|a| a.key.as_ref() == b"location")
+                            .and_then(|a| String::from_utf8(a.value.into_owned()).ok())
+                            .unwrap_or_default();
+                        let (start_rep, end_rep) = Self::parse_barline_content(reader, &location)?;
+                        if start_rep {
+                            measure.start_repeat = true;
+                        }
+                        if end_rep {
+                            measure.end_repeat = true;
+                        }
+                    }
                     _ => {}
                 },
                 Ok(Event::Empty(e)) => {
@@ -452,6 +470,60 @@ impl MusicXMLParser {
         }
 
         Ok(measure)
+    }
+
+    /// Parses children of a `<barline>` element to detect `<repeat>` markers.
+    ///
+    /// Returns `(start_repeat, end_repeat)`:
+    /// - `start_repeat = true` when location="left" and `<repeat direction="forward"/>` found
+    /// - `end_repeat = true` when location="right" and `<repeat direction="backward"/>` found
+    fn parse_barline_content<B: BufRead>(
+        reader: &mut Reader<B>,
+        location: &str,
+    ) -> Result<(bool, bool), ImportError> {
+        let mut start_repeat = false;
+        let mut end_repeat = false;
+        let mut buf = Vec::new();
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                    if e.name().as_ref() == b"repeat" =>
+                {
+                    let direction = e
+                        .attributes()
+                        .filter_map(|a| a.ok())
+                        .find(|a| a.key.as_ref() == b"direction")
+                        .and_then(|a| String::from_utf8(a.value.into_owned()).ok())
+                        .unwrap_or_default();
+                    match direction.as_str() {
+                        "forward" if location == "left" => {
+                            start_repeat = true;
+                        }
+                        // Backward repeat: standard location is "right" of the current measure.
+                        // Some editors (e.g., MuseScore) encode it at "left" of the NEXT measure;
+                        // treat both as end-repeat on the current measure so the expansion
+                        // includes the correct section length.
+                        "backward" => {
+                            end_repeat = true;
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(Event::End(e)) if e.name().as_ref() == b"barline" => {
+                    break;
+                }
+                Ok(Event::Eof) => {
+                    return Err(ImportError::InvalidStructure {
+                        reason: "Unexpected EOF in barline".to_string(),
+                    });
+                }
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        Ok((start_repeat, end_repeat))
     }
 
     /// Parses <attributes> element containing time signature, key, clef, divisions

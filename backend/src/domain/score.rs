@@ -5,6 +5,7 @@ use crate::domain::{
     },
     ids::ScoreId,
     instrument::Instrument,
+    repeat::RepeatBarline,
     value_objects::{BPM, Tick},
 };
 use serde::{Deserialize, Serialize};
@@ -15,6 +16,9 @@ pub struct Score {
     pub id: ScoreId,
     pub global_structural_events: Vec<GlobalStructuralEvent>,
     pub instruments: Vec<Instrument>,
+    /// Repeat barlines parsed from the score source (Feature 041)
+    #[serde(default)]
+    pub repeat_barlines: Vec<RepeatBarline>,
 }
 
 impl Score {
@@ -24,6 +28,7 @@ impl Score {
             id: ScoreId::new(),
             global_structural_events: Vec::new(),
             instruments: Vec::new(),
+            repeat_barlines: Vec::new(),
         };
 
         // Add default tempo (120 BPM) at tick 0

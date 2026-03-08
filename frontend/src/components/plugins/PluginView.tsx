@@ -163,6 +163,7 @@ export function createBoundScoreRenderer(
         {...props}
         score={internal.score}
         allNotes={internal.notes}
+        rawNotes={internal.rawNotes}
         tickSourceRef={internal.tickSourceRef}
         playbackStatus={internal.playbackStatus}
       />

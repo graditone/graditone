@@ -156,10 +156,12 @@ export interface StaffLine {
  * Vertical bar line that separates measures
  */
 export interface BarLine {
-  /** Individual line segments (1 for Single, 2 for Double/Final) */
+  /** Individual line segments (1 for Single, 2 for Double/Final/Repeat) */
   segments: BarLineSegment[];
-  /** Type of bar line (single, double, final) */
+  /** Type of bar line (single, double, final, repeat) */
   bar_type: BarLineType;
+  /** Repeat dots for repeat barline types (empty for non-repeat types) */
+  dots?: RepeatDot[];
 }
 
 /**
@@ -179,7 +181,19 @@ export interface BarLineSegment {
 /**
  * Type of bar line
  */
-export type BarLineType = 'Single' | 'Double' | 'Final';
+export type BarLineType = 'Single' | 'Double' | 'Final' | 'RepeatStart' | 'RepeatEnd' | 'RepeatBoth';
+
+/**
+ * A single repeat dot position in layout coordinates (Feature 041)
+ */
+export interface RepeatDot {
+  /** Horizontal center of dot in logical units */
+  x: number;
+  /** Vertical center of dot in logical units */
+  y: number;
+  /** Dot radius in logical units */
+  radius: number;
+}
 
 /**
  * Batches consecutive glyphs with identical drawing properties

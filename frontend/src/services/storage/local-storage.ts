@@ -10,8 +10,9 @@ const SCORES_STORE = 'scores';
 /**
  * Current schema version - must match backend SCORE_SCHEMA_VERSION
  * Increment when data structure changes (e.g., v2 added active_clef)
+ * v4: repeat_barlines added
  */
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 /**
  * Initialize IndexedDB database

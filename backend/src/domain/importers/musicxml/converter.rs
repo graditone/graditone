@@ -7,6 +7,7 @@ use crate::domain::events::note::Note;
 use crate::domain::events::tempo::TempoEvent;
 use crate::domain::events::time_signature::TimeSignatureEvent;
 use crate::domain::instrument::Instrument;
+use crate::domain::repeat::{RepeatBarline, RepeatBarlineType};
 use crate::domain::score::Score;
 use crate::domain::staff::Staff;
 use crate::domain::value_objects::{BPM, Tick};
@@ -213,13 +214,57 @@ impl MusicXMLConverter {
             score.add_time_signature_event(time_sig)?;
         }
 
+        // Collect repeat barlines from the first part (repeat structure is score-wide)
+        let repeat_barlines = doc
+            .parts
+            .first()
+            .map(|first_part| Self::collect_repeat_barlines(&first_part.measures))
+            .unwrap_or_default();
+
         // Convert each part to an Instrument
         for part_data in doc.parts {
             let instrument = Self::convert_part(part_data, context)?;
             score.add_instrument(instrument);
         }
 
+        score.repeat_barlines = repeat_barlines;
+
         Ok(score)
+    }
+
+    /// Collects repeat barlines from a slice of MeasureData.
+    ///
+    /// Each measure with `start_repeat` or `end_repeat` produces a `RepeatBarline` entry.
+    /// Tick positions assume 4/4 time at 960 PPQ (3840 ticks per measure).
+    fn collect_repeat_barlines(measures: &[MeasureData]) -> Vec<RepeatBarline> {
+        const TICKS_PER_MEASURE: u32 = 3840;
+        let mut result = Vec::new();
+        for (i, measure) in measures.iter().enumerate() {
+            let start_tick = i as u32 * TICKS_PER_MEASURE;
+            let end_tick = start_tick + TICKS_PER_MEASURE;
+            match (measure.start_repeat, measure.end_repeat) {
+                (true, true) => result.push(RepeatBarline {
+                    measure_index: i as u32,
+                    start_tick,
+                    end_tick,
+                    barline_type: RepeatBarlineType::Both,
+                }),
+                (true, false) => result.push(RepeatBarline {
+                    measure_index: i as u32,
+                    start_tick,
+                    end_tick,
+                    barline_type: RepeatBarlineType::Start,
+                }),
+                (false, true) => result.push(RepeatBarline {
+                    measure_index: i as u32,
+                    start_tick,
+                    end_tick,
+                    barline_type: RepeatBarlineType::End,
+                }),
+                (false, false) => {}
+            }
+        }
+        result
     }
 
     /// Converts PartData to Instrument
@@ -748,6 +793,8 @@ mod tests {
                 is_chord: false,
                 beams: Vec::new(),
             })],
+            start_repeat: false,
+            end_repeat: false,
         };
 
         part.measures.push(measure);
@@ -869,6 +916,8 @@ mod tests {
                     beams: Vec::new(),
                 }),
             ],
+            start_repeat: false,
+            end_repeat: false,
         }];
 
         let result = MusicXMLConverter::convert_voice(&measures);
@@ -946,6 +995,8 @@ mod tests {
                     beams: Vec::new(),
                 }),
             ],
+            start_repeat: false,
+            end_repeat: false,
         }];
 
         let result = MusicXMLConverter::convert_voice(&measures);

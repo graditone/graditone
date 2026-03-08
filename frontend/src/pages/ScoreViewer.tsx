@@ -48,6 +48,9 @@ export interface ScoreViewerProps {
   tickSourceRef?: { current: ITickSource };
   /** Feature 024: Notes array for building HighlightIndex */
   notes?: ReadonlyArray<{ id: string; start_tick: number; duration_ticks: number }>;
+  /** Raw (unexpanded) notes — original ticks matching the layout engine.
+   * Used for tickFromNoteId lookups and loop overlay rendering. */
+  rawNotes?: ReadonlyArray<{ id: string; start_tick: number; duration_ticks: number }>;
   /** Long-press pin: combined seek + note highlight callback.
    * tick=null means unpin. noteId is the spatially nearest note to the tap. */
   onPin?: (tick: number | null, noteId: string | null) => void;
@@ -815,6 +818,7 @@ export class ScoreViewer extends Component<ScoreViewerProps, ScoreViewerState> {
                 selectedNoteId={this.props.selectedNoteId}
                 tickSourceRef={this.props.tickSourceRef}
                 notes={this.props.notes}
+                rawNotes={this.props.rawNotes}
                 pinnedNoteIds={this.props.pinnedNoteIds}
                 loopRegion={this.props.loopRegion}
                 hideMeasureNumbers={this.props.hideMeasureNumbers}

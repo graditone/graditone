@@ -83,6 +83,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - N/A — all replay state is transient in-memory (results screen lifetime only) (038-practice-replay)
 - TypeScript 5.x, React 18, CSS3 (custom properties) + Vite 5 (bundler), React 18, @testing-library/react, Vitest (unit), Playwright (E2E) (039-landing-page-redesign)
 - N/A (no persistence; theme state is React component state) (039-landing-page-redesign)
+- Rust (edition 2024, stable toolchain), TypeScript 5, React 18 + quick-xml (MusicXML streaming parser), wasm-bindgen 0.2, serde-wasm-bindgen 0.6, serde 1.0, ToneJS (scheduling), Vitest (TS tests), cargo test (Rust tests) (041-repeat-barlines)
+- N/A — repeat barlines serialized as part of existing score JSON (no new persistence layer) (041-repeat-barlines)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -103,9 +105,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 041-repeat-barlines: Added Rust (edition 2024, stable toolchain), TypeScript 5, React 18 + quick-xml (MusicXML streaming parser), wasm-bindgen 0.2, serde-wasm-bindgen 0.6, serde 1.0, ToneJS (scheduling), Vitest (TS tests), cargo test (Rust tests)
 - 040-android-app-pwa: Added Android TWA (Trusted Web Activity via Bubblewrap CLI), Kotlin/Gradle (Android App Bundle), Firebase Crashlytics (anonymous crash reporting), `android/` project directory, `frontend/public/.well-known/assetlinks.json` (Digital Asset Links), `.github/workflows/build-android.yml` (CI AAB build on release tag). No changes to backend Rust or frontend React/WASM.
 - 039-landing-page-redesign: Added TypeScript 5.x, React 18, CSS3 (custom properties) + Vite 5 (bundler), React 18, @testing-library/react, Vitest (unit), Playwright (E2E)
-- 038-practice-replay: Added TypeScript 5+, React 18+ + Plugin API v2 (`context.playNote`, `context.stopPlayback` — existing); `practiceEngine.types.ts` (existing); no new dependencies
 
 
 <!-- MANUAL ADDITIONS START -->
