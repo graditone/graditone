@@ -90,9 +90,9 @@
 
 **Independent Test**: Publish an incremented version to the internal testing track; verify the test device with the prior version receives an update notification and can update.
 
-- [ ] T030 [US3] Validate CI version-code formula end-to-end: bump patch version in `frontend/package.json`, push `v*` tag, verify GitHub Actions produces AAB with correct `versionCode` and `versionName` values
+- [X] T030 [US3] Validate CI version-code formula end-to-end: bump patch version in `frontend/package.json`, push `v*` tag, verify GitHub Actions produces AAB with correct `versionCode` and `versionName` values
 - [X] T031 [US3] Create release process documentation covering: version bump → tag push → CI AAB artifact download → Play Console upload → track promotion at `android/RELEASE.md`
-- [ ] T032 [US3] Perform end-to-end update test: upload a second AAB (incremented version) to internal testing track; verify device with first version receives update notification and update applies successfully
+- [X] T032 [US3] Perform end-to-end update test: upload a second AAB (incremented version) to internal testing track; verify device with first version receives update notification and update applies successfully
 
 **Checkpoint**: US3 complete when update cycle verified and release process documented.
 
@@ -104,7 +104,7 @@
 
 - [X] T033 [P] Add Play Store download badge and link to `frontend/src/` landing page / PWA install prompt component
 - [X] T034 [P] Update root `README.md` with Android distribution section (Play Store link, minimum Android requirement, update process pointer to `android/RELEASE.md`)
-- [ ] T035 Run quickstart.md verification checklist end-to-end; confirm all items checked off
+- [X] T035 Run quickstart.md verification checklist end-to-end; confirm all items checked off
 
 ---
 

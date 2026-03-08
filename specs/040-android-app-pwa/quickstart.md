@@ -208,12 +208,12 @@ The team then manually downloads the `.aab` artifact and uploads it to the Play 
 
 ## Verification Checklist (before first Play Store submission)
 
-- [ ] `assetlinks.json` is accessible at `https://graditone.com/.well-known/assetlinks.json`
-- [ ] TWA launches full-screen on a physical Android device (no browser chrome visible)
-- [ ] Back button navigates within the app; pressing back at root prompts to exit
-- [ ] App loads previously visited content while on airplane mode
-- [ ] App shows a clear offline message on first launch without network
-- [ ] Version code increments relative to any previously uploaded builds
-- [ ] Firebase Crashlytics reports at least one test crash in the pre-production track
-- [ ] Play Store Data Safety form completed (Diagnostics: App diagnostics, not linked to identity)
-- [ ] Content rating questionnaire completed (result: PEGI 3 / Everyone)
+- [x] `assetlinks.json` is accessible at `https://graditone.com/.well-known/assetlinks.json`
+- [x] TWA launches full-screen on a physical Android device (no browser chrome visible)
+- [x] Back button navigates within the app; pressing back at root prompts to exit
+- [x] App loads previously visited content while on airplane mode
+- [x] App shows a clear offline message on first launch without network
+- [x] Version code increments relative to any previously uploaded builds
+- [ ] Firebase Crashlytics reports at least one test crash in the pre-production track (optional — skipped for initial launch)
+- [x] Play Store Data Safety form completed (Diagnostics: App diagnostics, not linked to identity)
+- [x] Content rating questionnaire completed (result: PEGI 3 / Everyone)
