@@ -58,7 +58,7 @@
 - [X] T017 [US1] Upload all store listing assets (icon, feature graphic, screenshots, descriptions, privacy policy URL) in Play Console → Store presence
 - [X] T018 [US1] Complete Play Store content rating questionnaire in Play Console (expected result: PEGI 3 / Everyone)
 - [X] T019 [US1] Complete Play Store Data Safety form: declare "App diagnostics" collected, not linked to identity (per research.md Unknown 4)
-- [ ] T020 [US1] Build signed release AAB using CI workflow (push release tag → download artifact from GitHub Actions)
+- [X] T020 [US1] Build signed release AAB using CI workflow (push release tag → download artifact from GitHub Actions)
 - [ ] T021 [US1] Upload AAB to Play Console → Testing → Internal testing track; create release
 - [ ] T022 [US1] Test internal track on a physical Android device: verify full-screen display with no browser chrome, Graditone icon on home screen, all PWA core features (score loading, playback, navigation) work identically to browser PWA
 - [ ] T023 [US1] Promote release to closed testing (beta) track in Play Console; invite minimum 1 external tester
