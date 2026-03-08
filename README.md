@@ -1,6 +1,6 @@
 # 🎵 Graditone
 
-**🚀 Live App**: [https://aylabs.github.io/graditone/](https://aylabs.github.io/graditone/)
+**🚀 Live App**: [https://graditone.github.io/graditone/](https://graditone.github.io/graditone/)
 
 ### Play view gestures
 
@@ -100,7 +100,7 @@ Graditone is a tablet-native app for interactive scores, designed for practice a
 
 ### Use the Live App
 
-**🚀 [Launch Graditone](https://aylabs.github.io/graditone/)**
+**🚀 [Launch Graditone](https://graditone.github.io/graditone/)**
 
 - Works on tablets (iPad, Surface, Android)
 - No installation required
@@ -303,7 +303,7 @@ See repository root for license information.
 
 ---
 
-**Version**: [1.0](https://github.com/aylabs/graditone)  
+**Version**: [1.0](https://github.com/graditone/graditone)  
 **Last Updated**: 2026-02-12  
 **Status**: ✅ PWA deployed to GitHub Pages | Layout Engine Complete  
 **Test Coverage**: 669 tests (589 integration + 47 layout utilities + 33 component) - 100% passing

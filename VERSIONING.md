@@ -109,7 +109,7 @@ The `[skip ci]` tag prevents infinite loops (version bump commit doesn't trigger
 - PWA may cache old version (service worker update can take up to 24h)
 
 ### Version bump failed in CI?
-Check workflow logs: https://github.com/aylabs/graditone/actions
+Check workflow logs: https://github.com/graditone/graditone/actions
 - Ensure `contents: write` permission is set
 - Check for merge conflicts in package.json
 
