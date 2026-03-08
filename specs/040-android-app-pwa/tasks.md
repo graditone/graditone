@@ -60,7 +60,7 @@
 - [X] T019 [US1] Complete Play Store Data Safety form: declare "App diagnostics" collected, not linked to identity (per research.md Unknown 4)
 - [X] T020 [US1] Build signed release AAB using CI workflow (push release tag → download artifact from GitHub Actions)
 - [X] T021 [US1] Upload AAB to Play Console → Testing → Internal testing track; create release
-- [ ] T022 [US1] Test internal track on a physical Android device: verify full-screen display with no browser chrome, Graditone icon on home screen, all PWA core features (score loading, playback, navigation) work identically to browser PWA
+- [X] T022 [US1] Test internal track on a physical Android device: verify full-screen display with no browser chrome, Graditone icon on home screen, all PWA core features (score loading, playback, navigation) work identically to browser PWA
 - [ ] T023 [US1] Promote release to closed testing (beta) track in Play Console; invite minimum 1 external tester
 - [ ] T024 [US1] Verify closed beta: external tester searches "Graditone" on Play Store (beta), installs, verifies app icon, home screen display, and full-screen launch
 - [ ] T025 [US1] Submit release to production track in Play Console for Google Play review
