@@ -38,7 +38,7 @@
 - [ ] T008 Integrate Firebase Crashlytics SDK into the Android project — add Firebase BOM and Crashlytics Gradle plugin in `android/app/build.gradle` and `android/build.gradle`
 - [X] T009 Create Android CI build workflow that triggers on `v*` tags, decodes keystore secret, reads version from `frontend/package.json`, computes `versionCode = major×10000 + minor×100 + patch`, builds signed release AAB, and uploads as workflow artifact at `.github/workflows/build-android.yml`
 - [X] T010 Enrol app in Google Play App Signing; retrieve Play App Signing key SHA-256 fingerprint from Play Console; update `frontend/public/.well-known/assetlinks.json` with both fingerprints (upload key + Play App Signing key)
-- [ ] T011 Deploy PWA to production (push to main → triggers `deploy-pwa.yml`); verify `https://graditone.com/.well-known/assetlinks.json` returns valid JSON with correct fingerprints
+- [X] T011 Deploy PWA to production (push to main → triggers `deploy-pwa.yml`); verify `https://graditone.com/.well-known/assetlinks.json` returns valid JSON with correct fingerprints
 
 **Checkpoint**: Digital Asset Links live at production URL with correct fingerprints; CI workflow builds signed AAB; privacy policy is live; Crashlytics SDK integrated.
 
@@ -54,7 +54,7 @@
 - [ ] T013 [P] [US1] Capture minimum 2 phone screenshots at 1080×1920–2400 resolution at `assets/store/screenshots/phone/`
 - [ ] T014 [P] [US1] Capture tablet screenshots at 1200×1920 resolution at `assets/store/screenshots/tablet/`
 - [X] T015 [US1] Write Play Store short description (≤80 chars) and full description (≤4000 chars) in `android/store-listing.md`
-- [ ] T016 [US1] Create new app in Google Play Console ($25 one-time fee); set app name "Graditone", default language English, category "Music & Audio"
+- [X] T016 [US1] Create new app in Google Play Console ($25 one-time fee); set app name "Graditone", default language English, category "Music & Audio"
 - [ ] T017 [US1] Upload all store listing assets (icon, feature graphic, screenshots, descriptions, privacy policy URL) in Play Console → Store presence
 - [ ] T018 [US1] Complete Play Store content rating questionnaire in Play Console (expected result: PEGI 3 / Everyone)
 - [ ] T019 [US1] Complete Play Store Data Safety form: declare "App diagnostics" collected, not linked to identity (per research.md Unknown 4)
