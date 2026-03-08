@@ -42,9 +42,9 @@ git push origin main
 
 After successful deployment:
 
-- **Base URL**: `https://<username>.github.io/graditone/`
-- **Manifest**: `https://<username>.github.io/graditone/manifest.webmanifest`
-- **Service Worker**: `https://<username>.github.io/graditone/sw.js`
+- **Base URL**: `https://graditone.com/`
+- **Manifest**: `https://graditone.com/manifest.webmanifest`
+- **Service Worker**: `https://graditone.com/sw.js`
 
 ---
 
@@ -92,7 +92,7 @@ The workflow supports two deployment scenarios:
 No configuration needed - uses default `base: '/'`
 
 #### Scenario 2: Project Site (Default)
-**URL Pattern**: `https://<username>.github.io/graditone/`
+**URL Pattern**: `https://graditone.com/`
 
 Configure base path in GitHub Actions workflow:
 
@@ -102,7 +102,7 @@ Configure base path in GitHub Actions workflow:
   working-directory: frontend
   run: npm run build
   env:
-VITE_BASE: '/graditone/'  # Uncomment and set your repo name
+VITE_BASE: '/'  # Uncomment and set your repo name
 ```
 
 The `vite.config.ts` automatically picks up `VITE_BASE` environment variable.
@@ -162,7 +162,7 @@ After deployment, verify these assets:
 
 ### 1. PWA Manifest
 ```bash
-curl https://<username>.github.io/graditone/manifest.webmanifest
+curl https://graditone.com/manifest.webmanifest
 ```
 
 Should return JSON with:
@@ -173,22 +173,22 @@ Should return JSON with:
 
 ### 2. Service Worker
 ```bash
-curl https://<username>.github.io/graditone/sw.js
+curl https://graditone.com/sw.js
 ```
 
 Should return minified JavaScript with Workbox
 
 ### 3. Icons
 ```bash
-curl -I https://<username>.github.io/graditone/icons/icon-512x512.png
-curl -I https://<username>.github.io/graditone/icons/apple-touch-icon.png
+curl -I https://graditone.com/icons/icon-512x512.png
+curl -I https://graditone.com/icons/apple-touch-icon.png
 ```
 
 Should return `200 OK` with `Content-Type: image/png`
 
 ### 4. WASM Module
 ```bash
-curl -I https://<username>.github.io/graditone/wasm/musicore_backend_bg.wasm
+curl -I https://graditone.com/wasm/musicore_backend_bg.wasm
 ```
 
 Should return `200 OK` with `Content-Type: application/wasm`

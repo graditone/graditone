@@ -1,6 +1,6 @@
 # Graditone
 
-**Live App**: [https://graditone.github.io/graditone/](https://graditone.github.io/graditone/)
+**Live App**: [https://graditone.com/](https://graditone.com/)
 
 A tablet-native app for interactive scores, designed for practice and performance.
 
@@ -76,7 +76,7 @@ A tablet-native app for interactive scores, designed for practice and performanc
 
 ## Quick Start
 
-**Try it now**: [https://graditone.github.io/graditone/](https://graditone.github.io/graditone/)
+**Try it now**: [https://graditone.com/](https://graditone.com/)
 
 1. **Launch the app** - Opens with a demo score
 2. **Import your score** - Click "Import Score" to load MusicXML files

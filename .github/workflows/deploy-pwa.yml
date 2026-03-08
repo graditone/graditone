@@ -125,7 +125,7 @@ jobs:
           # Set base path for GitHub Pages deployment
           # If deploying to https://<username>.github.io/<repo>/
           # Uncomment and set VITE_BASE if needed:
-          VITE_BASE: '/graditone/'
+          VITE_BASE: '/'
 
       # ========================================
       # Stage 3: Deploy to GitHub Pages

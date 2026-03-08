@@ -169,7 +169,7 @@ export function useAudioRecorder(
 
     // 3. Load AudioWorklet
     // Use import.meta.env.BASE_URL so the path is correct on both local dev
-    // (base '/') and GitHub Pages (base '/graditone/'). A hardcoded leading '/'
+    // (base '/') and GitHub Pages (base '/'). A hardcoded leading '/'
     // would skip the sub-path and produce a 404 on the deployed site.
     try {
       await audioCtx.audioWorklet.addModule(`${import.meta.env.BASE_URL}audio-processor.worklet.js`);

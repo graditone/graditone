@@ -94,7 +94,7 @@ jobs:
   # -----------------------------------------------------------------------
   # Production-simulation E2E tests
   #
-  # Builds the frontend with the GitHub Pages sub-path (VITE_BASE=/graditone/)
+  # Builds the frontend with the GitHub Pages sub-path (VITE_BASE=/)
   # and runs Playwright tests against `vite preview`. This catches asset-path
   # bugs (hardcoded '/' prefixes, missing BASE_URL usage, etc.) that only
   # appear on the deployed sub-path, not during local dev.
@@ -121,7 +121,7 @@ jobs:
       - name: Build with production base path
         working-directory: frontend
         env:
-          VITE_BASE: /graditone/
+          VITE_BASE: /
         run: npm run build
 
       - name: Install Playwright browsers

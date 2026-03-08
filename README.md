@@ -1,6 +1,6 @@
 # 🎵 Graditone
 
-**🚀 Live App**: [https://graditone.github.io/graditone/](https://graditone.github.io/graditone/)
+**🚀 Live App**: [https://graditone.com/](https://graditone.com/)
 
 ### Play view gestures
 
@@ -100,7 +100,7 @@ Graditone is a tablet-native app for interactive scores, designed for practice a
 
 ### Use the Live App
 
-**🚀 [Launch Graditone](https://graditone.github.io/graditone/)**
+**🚀 [Launch Graditone](https://graditone.com/)**
 
 - Works on tablets (iPad, Surface, Android)
 - No installation required

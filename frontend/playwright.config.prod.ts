@@ -4,10 +4,10 @@ import { defineConfig, devices } from '@playwright/test';
  * Production-simulation Playwright config.
  *
  * Runs E2E tests against a `vite preview` server built with
- * VITE_BASE=/graditone/ — the same sub-path used on GitHub Pages.
+ * VITE_BASE=/ — matches the root served at graditone.com.
  *
  * Usage (from the frontend/ directory):
- *   VITE_BASE=/graditone/ npm run build
+ *   VITE_BASE=/ npm run build
  *   npx playwright test --config playwright.config.prod.ts
  *
  * Why this exists:
@@ -29,7 +29,7 @@ export default defineConfig({
 
   use: {
     // Must match the sub-path the build was produced with
-    baseURL: 'http://localhost:4173/graditone/',
+    baseURL: 'http://localhost:4173/',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     // Block the PWA service worker during E2E tests.
@@ -46,11 +46,11 @@ export default defineConfig({
     },
   ],
 
-  // Expects the dist/ to already be built with VITE_BASE=/graditone/
+  // Expects the dist/ to already be built with VITE_BASE=/
   // The CI workflow does the build step before invoking playwright.
   webServer: {
-    command: 'VITE_BASE=/graditone/ npx vite preview --port 4173',
-    url: 'http://localhost:4173/graditone/',
+    command: 'VITE_BASE=/ npx vite preview --port 4173',
+    url: 'http://localhost:4173/',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },
