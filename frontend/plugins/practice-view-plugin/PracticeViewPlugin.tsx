@@ -153,6 +153,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // ─── Practice engine state ──────────────────────────────────────────────────
   const [practiceState, dispatchPractice] = useReducer(reduce, INITIAL_PRACTICE_STATE);
 
+  // ─── Hold-progress indicator state (feature 042) ──────────────────────────
+  // Tracks 0→1 progress of the current hold; fed by the rAF loop below.
+  const [holdProgress, setHoldProgress] = useState(0);
+  const rafRef = useRef<number | null>(null);
+
   // ─── Tempo multiplier ──────────────────────────────────────────────────────
   const [tempoMultiplier, setTempoMultiplier] = useState(1.0);
   const tempoMultiplierRef = useRef(tempoMultiplier);
@@ -300,28 +305,79 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // inside the region instead of advancing past it.
   // Indices into practiceState.notes[], recomputed whenever loop or notes change.
   type LoopRange = { startIndex: number; endIndex: number };
-  const loopPracticeRangeRef = useRef<LoopRange | null>(null);
-
-  useEffect(() => {
+  const loopPracticeRange = useMemo<LoopRange | null>(() => {
     const notes = practiceState.notes;
-    if (!loopRegion || notes.length === 0) {
-      loopPracticeRangeRef.current = null;
-      return;
-    }
+    if (!loopRegion || notes.length === 0) return null;
     const startIndex = notes.findIndex((n) => n.tick >= loopRegion.startTick);
-    if (startIndex === -1) { loopPracticeRangeRef.current = null; return; }
+    if (startIndex === -1) return null;
     let endIndex = startIndex;
     for (let i = startIndex; i < notes.length; i++) {
       if (notes[i].tick <= loopRegion.endTick) endIndex = i;
       else break;
     }
-    loopPracticeRangeRef.current = { startIndex, endIndex };
+    return { startIndex, endIndex };
   }, [loopRegion, practiceState.notes]);
+
+  // Ref mirror for MIDI handler (runs inside useEffect closure, needs sync access).
+  const loopPracticeRangeRef = useRef<LoopRange | null>(loopPracticeRange);
+  loopPracticeRangeRef.current = loopPracticeRange;
 
   // Keep a ref to practiceState so MIDI handler always sees latest state
   // without needing to re-subscribe.
   const practiceStateRef = useRef(practiceState);
   practiceStateRef.current = practiceState;
+
+  // ─── rAF hold-timer loop (feature 042, T017) ──────────────────────────────
+  // Starts when engine mode becomes 'holding'.
+  // Each frame: update holdProgress; dispatch HOLD_COMPLETE at ≥90%.
+  // Cancels on mode change or unmount.
+  useEffect(() => {
+    if (practiceState.mode === 'holding') {
+      const startMs = practiceState.holdStartTimeMs;
+      const required = practiceState.requiredHoldMs;
+
+      const tick = () => {
+        const elapsed = Date.now() - startMs;
+        const progress = required > 0 ? Math.min(elapsed / required, 1) : 0;
+        setHoldProgress(progress);
+
+        if (progress >= 0.9) {
+          dispatchPractice({ type: 'HOLD_COMPLETE', holdDurationMs: elapsed });
+          setHoldProgress(0);
+          rafRef.current = null;
+          return;
+        }
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    } else {
+      // Cancel any running loop when leaving holding mode
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      setHoldProgress(0);
+    }
+
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  // Re-run whenever we enter/exit holding mode or the hold parameters change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [practiceState.mode, practiceState.holdStartTimeMs, practiceState.requiredHoldMs]);
+
+  // Cleanup rAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, []);
 
   // Practice session start time (ms since epoch) for timing analysis
   const practiceStartTimeRef = useRef(0);
@@ -343,7 +399,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // Start/stop phantom timer when practice mode transitions.
   // The timer starts on the first correct note (waiting→active).
   useEffect(() => {
-    if (practiceState.mode === 'active' && phantomTimerRef.current === null) {
+    if ((practiceState.mode === 'active' || practiceState.mode === 'holding') && phantomTimerRef.current === null) {
       // Phantom starts from the note the user just matched.
       const notes = practiceState.notes;
       const startIdx = practiceState.currentIndex;
@@ -374,7 +430,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     }
 
     // Stop phantom timer when practice ends or deactivates
-    if (practiceState.mode !== 'active' && phantomTimerRef.current !== null) {
+    if (practiceState.mode !== 'active' && practiceState.mode !== 'holding' && phantomTimerRef.current !== null) {
       clearInterval(phantomTimerRef.current);
       phantomTimerRef.current = null;
       setPhantomIndex(-1);
@@ -459,6 +515,18 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         // Relay release for natural key-up audio and clear visual highlight
         context.playNote({ midiNote: event.midiNote, timestamp: event.timestamp, type: 'release' });
         setMidiPressedNoteIds(new Set());
+
+        // ─── Hold enforcement (feature 042, T016) ─────────────────────────
+        // If the engine is waiting for the user to sustain a note and one of
+        // the required pitches is released, that ends the hold attempt.
+        const holdPs = practiceStateRef.current;
+        if (holdPs.mode === 'holding') {
+          const holdEntry = holdPs.notes[holdPs.currentIndex];
+          if (holdEntry && (holdEntry.midiPitches as number[]).includes(event.midiNote)) {
+            const holdDurationMs = Date.now() - holdPs.holdStartTimeMs;
+            dispatchPractice({ type: 'EARLY_RELEASE', holdDurationMs });
+          }
+        }
         return;
       }
       if (event.type !== 'attack') return;
@@ -490,7 +558,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       }
 
       const ps = practiceStateRef.current;
-      if (ps.mode !== 'active' && ps.mode !== 'waiting') return;
+      // Allow WRONG_MIDI to be recorded during holding mode too (feature 042)
+      if (ps.mode !== 'active' && ps.mode !== 'waiting' && ps.mode !== 'holding') return;
 
       const currentEntry = ps.notes[ps.currentIndex];
       if (!currentEntry) return;
@@ -501,6 +570,15 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       // required set is still a WRONG_MIDI (no advance).
       const chordResult = chordDetectorRef.current.press(event.midiNote, event.timestamp);
       const isInChord = (currentEntry.midiPitches as number[]).includes(event.midiNote);
+      // During hold mode, new attack events don't trigger CORRECT_MIDI (feature 042)
+      if (ps.mode === 'holding') {
+        if (!isInChord) {
+          // Wrong note pressed during hold — still counts as an error
+          const wrongResponseTimeMs = Date.now() - practiceStartTimeRef.current;
+          dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs: wrongResponseTimeMs });
+        }
+        return;
+      }
       if (chordResult.complete) {
         // All chord notes collected — advance.
         // Deferred start: if in 'waiting' mode, set the start time NOW
@@ -533,12 +611,18 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         }
         const responseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
         const range = loopPracticeRangeRef.current;
+        // Compute required hold duration: (durationTicks / ticksPerMs) ms (feature 042)
+        const entryRequiredHoldMs = bpm > 0 && currentEntry.durationTicks > 0
+          ? (currentEntry.durationTicks / ((bpm / 60) * PPQ)) * 1000
+          : 0;
         dispatchPractice({
           type: 'CORRECT_MIDI',
           midiNote: event.midiNote,
           responseTimeMs,
           expectedTimeMs,
           endIndex: range?.endIndex,
+          pressTimeMs: Date.now(),
+          requiredHoldMs: entryRequiredHoldMs,
         });
       } else if (!isInChord) {
         // Pitch outside the required chord — treat as wrong note.
@@ -591,6 +675,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const handleStop = useCallback(() => {
     dispatchPractice({ type: 'STOP' });
     context.scorePlayer.stop();
+    const lr = loopRegionRef.current;
+    context.scorePlayer.seekToTick(lr ? lr.startTick : 0);
   }, [context.scorePlayer]);
 
   const handleTempoChange = useCallback(
@@ -625,11 +711,33 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const handlePracticeToggle = useCallback(() => {
     const ps = practiceStateRef.current;
 
-    if (ps.mode === 'active' || ps.mode === 'waiting') {
-      // Re-press while active/waiting → deactivate (T033)
-      dispatchPractice({ type: 'DEACTIVATE' });
+    if (ps.mode === 'active' || ps.mode === 'waiting' || ps.mode === 'holding') {
+      // Stop practice — full reset so restarting begins from the beginning.
+      dispatchPractice({ type: 'STOP' });
+      const lr = loopRegionRef.current;
+      context.scorePlayer.seekToTick(lr ? lr.startTick : 0);
       return;
     }
+
+    // When restarting from 'complete' mode, reset the engine first so any
+    // stale notes/index are cleared before computing the new practice set.
+    if (ps.mode === 'complete') {
+      dispatchPractice({ type: 'STOP' });
+    }
+
+    // After natural practice completion the score player may be in 'playing'
+    // or 'paused' state. Reset it to 'stopped' (→ 'ready') so that
+    // extractPracticeNotes returns valid data instead of null.
+    context.scorePlayer.stop();
+
+    // Reset loop count to 1 for a fresh practice start (repractice preserves
+    // the slider value, but a brand-new practice always starts with 1 loop).
+    setLoopCount(1);
+
+    // Reset loop iteration tracking so the progress counter starts from 1/N.
+    remainingLoopsRef.current = 0;
+    loopIterationRef.current = 0;
+    loopStartTimesRef.current = [0];
 
     // Start practice — staff is always already selected via the toolbar dropdown
     const ps2 = playerStateRef.current;
@@ -655,14 +763,15 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     if (notes.length === 0) return;
 
     // If a loop region is pinned, start from the first note inside it;
-    // otherwise fall back to the current seek position (T036: FR-010).
+    // otherwise always start from the beginning of the score.
     const lr = loopRegionRef.current;
-    const currentTick = lr ? lr.startTick : ps2.currentTick;
     let startIndex = 0;
-    for (let i = 0; i < notes.length; i++) {
-      if (notes[i].tick >= currentTick) {
-        startIndex = i;
-        break;
+    if (lr) {
+      for (let i = 0; i < notes.length; i++) {
+        if (notes[i].tick >= lr.startTick) {
+          startIndex = i;
+          break;
+        }
       }
     }
 
@@ -791,14 +900,15 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     const msPerBeat = 60_000 / performanceRecord.bpmAtCompletion;
     const msPerNote = msPerBeat * 0.85;
 
-    // Build a merged timeline: correct notes + wrong notes, sorted by responseTimeMs
-    type ReplayEvent = { responseTimeMs: number; midiNote: number; isCorrect: boolean; noteIndex: number };
+    // Build a merged timeline: correct notes + wrong notes, sorted by responseTimeMs.
+    // Correct entries use expectedMidi (all chord pitches); wrong entries use a single pitch.
+    type ReplayEvent = { responseTimeMs: number; midiNotes: number[]; isCorrect: boolean; noteIndex: number };
     const timeline: ReplayEvent[] = [];
 
     for (const result of performanceRecord.noteResults) {
       timeline.push({
         responseTimeMs: result.responseTimeMs,
-        midiNote: result.playedMidi,
+        midiNotes: result.expectedMidi as number[],
         isCorrect: true,
         noteIndex: result.noteIndex,
       });
@@ -806,22 +916,25 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     for (const wrong of performanceRecord.wrongNoteEvents) {
       timeline.push({
         responseTimeMs: wrong.responseTimeMs,
-        midiNote: wrong.midiNote,
+        midiNotes: [wrong.midiNote],
         isCorrect: false,
         noteIndex: wrong.noteIndex,
       });
     }
     timeline.sort((a, b) => a.responseTimeMs - b.responseTimeMs);
 
-    // Schedule all audio events at once — offsetMs staggers them
+    // Schedule all audio events at once — offsetMs staggers them.
+    // Each chord entry fires all its pitches at the same offset.
     for (const event of timeline) {
-      context.playNote({
-        midiNote: event.midiNote,
-        timestamp: Date.now(),
-        type: 'attack',
-        offsetMs: event.responseTimeMs,
-        durationMs: msPerNote,
-      });
+      for (const midiNote of event.midiNotes) {
+        context.playNote({
+          midiNote,
+          timestamp: Date.now(),
+          type: 'attack',
+          offsetMs: event.responseTimeMs,
+          durationMs: msPerNote,
+        });
+      }
     }
 
     // Schedule per-note staff highlights (correct notes only)
@@ -851,11 +964,15 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   const handleRepractice = useCallback(() => {
     if (isReplaying) handleReplayStop();
+    setResultsOverlayVisible(false);
+    handlePracticeToggle();
+    // Override the loop refs AFTER handlePracticeToggle (which resets them to
+    // single-loop defaults). Repractice preserves the user's slider loopCount.
     remainingLoopsRef.current = loopCount - 1;
     loopIterationRef.current = 0;
     loopStartTimesRef.current = [0];
-    setResultsOverlayVisible(false);
-    handlePracticeToggle();
+    // Also restore loopCount since handlePracticeToggle sets it to 1.
+    setLoopCount(loopCount);
   }, [isReplaying, handleReplayStop, handlePracticeToggle, loopCount]);
 
   // ─── Derived values ────────────────────────────────────────────────────────
@@ -867,7 +984,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   //   highlightedNoteIds = target note (amber, full — no phantom yet)
   // Otherwise:
   //   highlightedNoteIds = playback engine highlight / MIDI visual highlight
-  const practiceActive = practiceState.mode === 'active' && practiceState.notes.length > 0;
+  // 'holding' is a sub-state of 'active' (note duration being measured) — treat identically for UI.
+  const practiceActive = (practiceState.mode === 'active' || practiceState.mode === 'holding') && practiceState.notes.length > 0;
   const practiceWaiting = practiceState.mode === 'waiting' && practiceState.notes.length > 0;
 
   const highlightedNoteIds = isReplaying && replayHighlightedNoteIds.size > 0
@@ -882,7 +1000,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // Target note IDs (green pinned) — shown only during active practice.
   const targetNoteIds = useMemo<ReadonlySet<string>>(() => {
-    if (practiceActive) {
+    if (practiceActive && practiceState.currentIndex < practiceState.notes.length) {
       return new Set<string>(practiceState.notes[practiceState.currentIndex].noteIds);
     }
     return new Set<string>();
@@ -898,13 +1016,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     const totalNotes = results.length;
     const correctCount = results.filter((r) => r.outcome === 'correct').length;
     const lateCount = results.filter((r) => r.outcome === 'correct-late').length;
+    const earlyReleaseCount = results.filter((r) => r.outcome === 'early-release').length;
     const totalWrongAttempts = results.reduce((sum, r) => sum + r.wrongAttempts, 0);
 
-    // Score: penalise late notes (half credit) and wrong attempts
+    // Score: late and early-release get half credit; penalise wrong attempts
     const rawScore =
       totalNotes > 0
         ? Math.round(
-            ((correctCount + lateCount * 0.5) / totalNotes) * 100 -
+            ((correctCount + (lateCount + earlyReleaseCount) * 0.5) / totalNotes) * 100 -
               Math.min(totalWrongAttempts * 2, 30),
           )
         : 0;
@@ -968,8 +1087,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         onStaffChange={handleStaffChange}
         practiceMode={practiceState.mode}
         currentPracticeIndex={(() => {
-          const range = loopPracticeRangeRef.current;
-          if (range && practiceState.mode === 'active') {
+          const range = loopPracticeRange;
+          const mode = practiceState.mode;
+          if (range && (mode === 'active' || mode === 'holding' || mode === 'waiting')) {
             const notesInLoop = range.endIndex - range.startIndex + 1;
             const completedLoops = Math.max(0, (loopCount - 1) - remainingLoopsRef.current);
             return completedLoops * notesInLoop + (practiceState.currentIndex - range.startIndex);
@@ -977,8 +1097,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           return practiceState.currentIndex;
         })()}
         totalPracticeNotes={(() => {
-          const range = loopPracticeRangeRef.current;
-          if (range && practiceState.mode === 'active') {
+          const range = loopPracticeRange;
+          const mode = practiceState.mode;
+          if (range && (mode === 'active' || mode === 'holding' || mode === 'waiting')) {
             const notesInLoop = range.endIndex - range.startIndex + 1;
             return notesInLoop * loopCount;
           }
@@ -994,6 +1115,23 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         metronomeSubdivision={metronomeSubdivision}
         onMetronomeSubdivisionChange={handleMetronomeSubdivisionChange}
       />
+
+      {/* Hold indicator — visible while player holds a note longer than a quarter note */}
+      {holdProgress > 0 && practiceState.requiredHoldMs > (60_000 / (playerState.bpm || 120)) && (
+        <div
+          data-testid="hold-indicator"
+          className="practice-plugin__hold-indicator"
+          role="progressbar"
+          aria-valuenow={Math.round(holdProgress * 100)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div
+            className="practice-plugin__hold-indicator-bar"
+            style={{ width: `${Math.min(holdProgress * 100, 100)}%` }}
+          />
+        </div>
+      )}
 
       {/* Score */}
       <div className="practice-plugin__score-area">
@@ -1122,15 +1260,21 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
                       >
                         <td>{i + 1}</td>
                         <td>{r.expectedMidi.map(midiToLabel).join('+')}</td>
-                        <td>{r.playedMidi > 0 ? midiToLabel(r.playedMidi) : '—'}</td>
+                        <td>
+                          {r.outcome === 'correct' || r.outcome === 'correct-late'
+                            ? r.expectedMidi.map(midiToLabel).join('+')
+                            : r.playedMidi > 0 ? midiToLabel(r.playedMidi) : '—'}
+                        </td>
                         <td>
                           <span className="practice-results__status-icon">
                             {r.outcome === 'correct' ? '✅'
                               : r.outcome === 'correct-late' ? '⏱️'
+                              : r.outcome === 'early-release' ? '⏱️'
                               : '❌'}
                           </span>{' '}
                           {r.outcome === 'correct' ? 'Correct'
                             : r.outcome === 'correct-late' ? 'Off-beat'
+                            : r.outcome === 'early-release' ? 'Held too short'
                             : 'Wrong'}
                         </td>
                         <td>{r.wrongAttempts > 0 ? r.wrongAttempts : '—'}</td>

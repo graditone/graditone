@@ -23,6 +23,17 @@ function makeNote(midiPitches: number[], noteIds?: string[]): PracticeNoteEntry 
     midiPitches,
     noteIds: noteIds ?? midiPitches.map((p) => `note-${p}`),
     tick: 0,
+    durationTicks: 0,
+  };
+}
+
+/** Make a whole-note entry that requires a duration hold (feature 042). */
+function makeHoldNote(midiPitches: number[], durationTicks = 3840): PracticeNoteEntry {
+  return {
+    midiPitches,
+    noteIds: midiPitches.map((p) => `note-${p}`),
+    tick: 0,
+    durationTicks,
   };
 }
 
@@ -35,6 +46,7 @@ function makeNoteAtTick(
     midiPitches,
     noteIds: noteIds ?? midiPitches.map((p) => `note-${p}-t${tick}`),
     tick,
+    durationTicks: 0,
   };
 }
 
@@ -50,7 +62,7 @@ function activeState(
   currentIndex = 0,
   selectedStaffIndex = 0,
 ): PracticeState {
-  return { mode: 'active', notes, currentIndex, selectedStaffIndex, noteResults: [], currentWrongAttempts: 0, wrongNoteEvents: [] };
+  return { mode: 'active', notes, currentIndex, selectedStaffIndex, noteResults: [], currentWrongAttempts: 0, wrongNoteEvents: [], holdStartTimeMs: 0, requiredHoldMs: 0 };
 }
 
 function waitingState(
@@ -58,7 +70,30 @@ function waitingState(
   currentIndex = 0,
   selectedStaffIndex = 0,
 ): PracticeState {
-  return { mode: 'waiting', notes, currentIndex, selectedStaffIndex, noteResults: [], currentWrongAttempts: 0, wrongNoteEvents: [] };
+  return { mode: 'waiting', notes, currentIndex, selectedStaffIndex, noteResults: [], currentWrongAttempts: 0, wrongNoteEvents: [], holdStartTimeMs: 0, requiredHoldMs: 0 };
+}
+
+function holdingState(
+  notes: PracticeNoteEntry[],
+  currentIndex = 0,
+  holdStartTimeMs = 1000,
+  requiredHoldMs = 2000,
+): PracticeState {
+  return {
+    mode: 'holding',
+    notes,
+    currentIndex,
+    selectedStaffIndex: 0,
+    noteResults: [],
+    currentWrongAttempts: 0,
+    wrongNoteEvents: [],
+    holdStartTimeMs,
+    requiredHoldMs,
+    holdMidiNote: notes[currentIndex]?.midiPitches[0] ?? 60,
+    holdResponseTimeMs: 1000,
+    holdExpectedTimeMs: 1000,
+    holdEndIndex: -1,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -201,6 +236,12 @@ describe('reduce() — CORRECT_MIDI action', () => {
       noteResults: [],
       currentWrongAttempts: 0,
       wrongNoteEvents: [],
+      holdStartTimeMs: 0,
+      requiredHoldMs: 0,
+      holdMidiNote: 0,
+      holdResponseTimeMs: 0,
+      holdExpectedTimeMs: 0,
+      holdEndIndex: -1,
     };
     const next = reduce(state, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 3000, expectedTimeMs: 3000 });
     expect(next).toStrictEqual(state);
@@ -268,6 +309,8 @@ describe('reduce() — noteResults tracking', () => {
       expectedTimeMs: 1000,
       relativeDeltaMs: 0,
       wrongAttempts: 0,
+      holdDurationMs: 0,
+      requiredHoldMs: 0,
     });
   });
 
@@ -677,5 +720,214 @@ describe('reduce() — loop boundary relative delta', () => {
     // Third note: user is 200ms late
     s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 3200, expectedTimeMs: 3000, endIndex: 2 });
     expect(s.noteResults[5].relativeDeltaMs).toBe(200);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T007–T012 — Feature 042: Hold duration enforcement
+// ---------------------------------------------------------------------------
+
+const WHOLE_NOTE_C4 = makeHoldNote([60], 3840); // whole note at 960 PPQ
+const WHOLE_NOTE_CHORD = makeHoldNote([60, 64, 67], 3840); // C major whole-note chord
+// At 120 BPM: requiredHoldMs = (3840 / ((120/60)*960)) * 1000 = 2000 ms
+
+describe('reduce() — CORRECT_MIDI with durationTicks > 0 (T007)', () => {
+  it('enters holding mode instead of advancing when requiredHoldMs > 0', () => {
+    const state = activeState([WHOLE_NOTE_C4, NOTE_D4], 0);
+    const next = reduce(state, {
+      type: 'CORRECT_MIDI',
+      midiNote: 60,
+      responseTimeMs: 1000,
+      expectedTimeMs: 1000,
+      pressTimeMs: 50000,
+      requiredHoldMs: 2000,
+    });
+    expect(next.mode).toBe('holding');
+    expect(next.currentIndex).toBe(0); // index does NOT advance yet
+    expect(next.holdStartTimeMs).toBe(50000);
+    expect(next.requiredHoldMs).toBe(2000);
+  });
+
+  it('does NOT add a noteResult while entering holding mode', () => {
+    const state = activeState([WHOLE_NOTE_C4, NOTE_D4], 0);
+    const next = reduce(state, {
+      type: 'CORRECT_MIDI',
+      midiNote: 60,
+      responseTimeMs: 1000,
+      expectedTimeMs: 1000,
+      pressTimeMs: 50000,
+      requiredHoldMs: 2000,
+    });
+    expect(next.noteResults).toHaveLength(0);
+  });
+});
+
+describe('reduce() — CORRECT_MIDI with durationTicks === 0 (T008)', () => {
+  it('advances immediately (unchanged v6 behaviour) when requiredHoldMs is absent', () => {
+    const state = activeState(THREE_NOTES, 0); // all makeNote() → durationTicks 0
+    const next = reduce(state, {
+      type: 'CORRECT_MIDI',
+      midiNote: 60,
+      responseTimeMs: 1000,
+      expectedTimeMs: 1000,
+    });
+    expect(next.mode).toBe('active');
+    expect(next.currentIndex).toBe(1);
+  });
+
+  it('advances immediately when requiredHoldMs is explicitly 0', () => {
+    const state = activeState(THREE_NOTES, 0);
+    const next = reduce(state, {
+      type: 'CORRECT_MIDI',
+      midiNote: 60,
+      responseTimeMs: 1000,
+      expectedTimeMs: 1000,
+      pressTimeMs: 0,
+      requiredHoldMs: 0,
+    });
+    expect(next.mode).toBe('active');
+    expect(next.currentIndex).toBe(1);
+  });
+});
+
+describe('reduce() — HOLD_COMPLETE action (T009)', () => {
+  it('advances currentIndex and records a correct result', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    const state = holdingState(notes, 0, 50000, 2000);
+    const next = reduce(state, { type: 'HOLD_COMPLETE', holdDurationMs: 1900 });
+    expect(next.currentIndex).toBe(1);
+    expect(next.mode).toBe('active');
+    expect(next.noteResults).toHaveLength(1);
+    expect(next.noteResults[0].outcome).toBe('correct');
+  });
+
+  it('records holdDurationMs and requiredHoldMs in the result', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    const state = holdingState(notes, 0, 50000, 2000);
+    const next = reduce(state, { type: 'HOLD_COMPLETE', holdDurationMs: 1900 });
+    expect(next.noteResults[0].holdDurationMs).toBe(1900);
+    expect(next.noteResults[0].requiredHoldMs).toBe(2000);
+  });
+
+  it('clears holdStartTimeMs and requiredHoldMs after completing', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    const state = holdingState(notes, 0, 50000, 2000);
+    const next = reduce(state, { type: 'HOLD_COMPLETE', holdDurationMs: 1900 });
+    expect(next.holdStartTimeMs).toBe(0);
+    expect(next.requiredHoldMs).toBe(0);
+  });
+
+  it('transitions to complete when finishing the last note via HOLD_COMPLETE', () => {
+    const notes = [WHOLE_NOTE_C4];
+    const state = holdingState(notes, 0, 50000, 2000);
+    const next = reduce(state, { type: 'HOLD_COMPLETE', holdDurationMs: 1900 });
+    expect(next.mode).toBe('complete');
+  });
+
+  it('is a no-op when mode is not holding', () => {
+    const state = activeState(THREE_NOTES, 0);
+    const next = reduce(state, { type: 'HOLD_COMPLETE', holdDurationMs: 1000 });
+    expect(next).toBe(state); // same reference
+  });
+});
+
+describe('reduce() — EARLY_RELEASE action (T010)', () => {
+  it('records early-release result without advancing currentIndex', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    const state = holdingState(notes, 0, 50000, 2000);
+    const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 800 });
+    expect(next.currentIndex).toBe(0); // index unchanged
+    expect(next.noteResults).toHaveLength(1);
+    expect(next.noteResults[0].outcome).toBe('early-release');
+  });
+
+  it('records holdDurationMs and requiredHoldMs in the result', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    const state = holdingState(notes, 0, 50000, 2000);
+    const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 800 });
+    expect(next.noteResults[0].holdDurationMs).toBe(800);
+    expect(next.noteResults[0].requiredHoldMs).toBe(2000);
+  });
+
+  it('clears holdStartTimeMs and requiredHoldMs', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    const state = holdingState(notes, 0, 50000, 2000);
+    const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 800 });
+    expect(next.holdStartTimeMs).toBe(0);
+    expect(next.requiredHoldMs).toBe(0);
+  });
+
+  it('mode returns to active (not holding) after early-release', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    const state = holdingState(notes, 0, 50000, 2000);
+    const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 800 });
+    expect(next.mode).toBe('active');
+  });
+
+  it('is a no-op when mode is not holding', () => {
+    const state = activeState(THREE_NOTES, 0);
+    const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 800 });
+    expect(next).toBe(state); // same reference
+  });
+});
+
+describe('reduce() — CORRECT_MIDI retry after EARLY_RELEASE (T011)', () => {
+  it('re-enters holding mode after early-release on the same note', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    let s = holdingState(notes, 0, 50000, 2000);
+    // Early release
+    s = reduce(s, { type: 'EARLY_RELEASE', holdDurationMs: 300 });
+    expect(s.mode).toBe('active');
+    expect(s.noteResults[0].outcome).toBe('early-release');
+    // Retry correct press
+    s = reduce(s, {
+      type: 'CORRECT_MIDI',
+      midiNote: 60,
+      responseTimeMs: 1200,
+      expectedTimeMs: 1000,
+      pressTimeMs: 52000,
+      requiredHoldMs: 2000,
+    });
+    expect(s.mode).toBe('holding');
+    expect(s.holdStartTimeMs).toBe(52000);
+  });
+
+  it('does NOT add a duplicate noteResult on retry CORRECT_MIDI — only early-release result is kept', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    let s = holdingState(notes, 0, 50000, 2000);
+    s = reduce(s, { type: 'EARLY_RELEASE', holdDurationMs: 300 });
+    // Retry correct press — enters holding, noteResults stays at 1 (early-release)
+    s = reduce(s, {
+      type: 'CORRECT_MIDI',
+      midiNote: 60,
+      responseTimeMs: 1200,
+      expectedTimeMs: 1000,
+      pressTimeMs: 52000,
+      requiredHoldMs: 2000,
+    });
+    // Still just the one early-release result until HOLD_COMPLETE fires
+    expect(s.noteResults).toHaveLength(1);
+    expect(s.noteResults[0].outcome).toBe('early-release');
+  });
+});
+
+describe('reduce() — HOLD_COMPLETE and EARLY_RELEASE outside holding mode (T012)', () => {
+  it('HOLD_COMPLETE in active mode is a no-op (same state reference)', () => {
+    const state = activeState(THREE_NOTES, 1);
+    expect(reduce(state, { type: 'HOLD_COMPLETE', holdDurationMs: 500 })).toBe(state);
+  });
+
+  it('EARLY_RELEASE in active mode is a no-op (same state reference)', () => {
+    const state = activeState(THREE_NOTES, 1);
+    expect(reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 500 })).toBe(state);
+  });
+
+  it('HOLD_COMPLETE in waiting mode is a no-op', () => {
+    const state = waitingState(THREE_NOTES, 0);
+    expect(reduce(state, { type: 'HOLD_COMPLETE', holdDurationMs: 500 })).toBe(state);
+  });
+
+  it('EARLY_RELEASE in inactive mode is a no-op', () => {
+    expect(reduce(INITIAL_PRACTICE_STATE, { type: 'EARLY_RELEASE', holdDurationMs: 500 })).toBe(INITIAL_PRACTICE_STATE);
   });
 });

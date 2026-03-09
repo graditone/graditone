@@ -386,7 +386,8 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       // expanded ticks that match the playback engine tick space.
       const staffNotes = expandedNotesByStaff[staffIndex] ?? expandedNotesByStaff[0] ?? [];
 
-      // Group by start_tick; collect ALL pitches + note IDs at each tick (full chord)
+      // Group by start_tick; collect ALL pitches + note IDs at each tick (full chord).
+      // durationTicks: take the maximum across chord notes (v7, feature 042).
       const tickMap = new Map<number, PluginPracticeNoteEntry>();
       for (const note of staffNotes) {
         const existing = tickMap.get(note.start_tick);
@@ -395,12 +396,14 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
             midiPitches: [...existing.midiPitches, note.pitch],
             noteIds: [...existing.noteIds, note.id],
             tick: note.start_tick,
+            durationTicks: Math.max(existing.durationTicks, note.duration_ticks),
           });
         } else {
           tickMap.set(note.start_tick, {
             midiPitches: [note.pitch],
             noteIds: [note.id],
             tick: note.start_tick,
+            durationTicks: note.duration_ticks,
           });
         }
       }

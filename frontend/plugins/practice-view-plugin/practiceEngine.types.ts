@@ -19,7 +19,7 @@ export type PracticeNoteEntry = PluginPracticeNoteEntry;
 // ---------------------------------------------------------------------------
 
 /** Outcome of a single note during practice. */
-export type NoteOutcome = 'correct' | 'correct-late' | 'wrong' | 'pending';
+export type NoteOutcome = 'correct' | 'correct-late' | 'wrong' | 'pending' | 'early-release';
 
 /** Recorded result for one note entry in the practice session. */
 export interface PracticeNoteResult {
@@ -49,6 +49,16 @@ export interface PracticeNoteResult {
   readonly relativeDeltaMs: number;
   /** Number of wrong attempts before getting this note correct. */
   readonly wrongAttempts: number;
+  /**
+   * How long the user actually held the note in ms (feature 042).
+   * 0 for notes that do not require a hold (durationTicks === 0).
+   */
+  readonly holdDurationMs: number;
+  /**
+   * Required hold duration in ms at the current BPM (feature 042).
+   * 0 for notes that do not require a hold.
+   */
+  readonly requiredHoldMs: number;
 }
 
 /** A single wrong-note event captured during practice (038-practice-replay Phase B). */
@@ -66,7 +76,9 @@ export interface WrongNoteEvent {
 // ---------------------------------------------------------------------------
 
 /** Current state of the practice session. */
-export type PracticeMode = 'inactive' | 'waiting' | 'active' | 'complete';
+export type PracticeMode = 'inactive' | 'waiting' | 'active' | 'holding' | 'complete';
+// 'holding' (feature 042): the user pressed the correct pitch(es) but must
+// sustain them for ≥90% of the note's written duration before the session advances.
 
 /** Full state of the practice engine — produced by `reduce()`. */
 export interface PracticeState {
@@ -91,6 +103,46 @@ export interface PracticeState {
   readonly currentWrongAttempts: number;
   /** All wrong-note events captured during this session (038-practice-replay Phase B). */
   readonly wrongNoteEvents: ReadonlyArray<WrongNoteEvent>;
+  /**
+   * Wall-clock ms at which the current hold began (feature 042).
+   * Set when entering 'holding' mode; cleared (set to 0) when exiting.
+   * The component owns wall-clock time — the reducer receives this value
+   * from the CORRECT_MIDI action and stores it here.
+   */
+  readonly holdStartTimeMs: number;
+  /**
+   * Required hold duration in ms for the current note at the session BPM (feature 042).
+   * Computed by the component from entry.durationTicks and stored here for the rAF loop.
+   * 0 when not in 'holding' mode.
+   */
+  readonly requiredHoldMs: number;
+  /**
+   * The MIDI note pressed when entering 'holding' mode (feature 042).
+   * Used by HOLD_COMPLETE to reconstruct the PracticeNoteResult. 0 when not holding.
+   */
+  readonly holdMidiNote: number;
+  /**
+   * The responseTimeMs from the CORRECT_MIDI action that started the hold (feature 042).
+   * Used by HOLD_COMPLETE for timing result. 0 when not holding.
+   */
+  readonly holdResponseTimeMs: number;
+  /**
+   * The expectedTimeMs from the CORRECT_MIDI action that started the hold (feature 042).
+   * Used by HOLD_COMPLETE for relativeDeltaMs computation. 0 when not holding.
+   */
+  readonly holdExpectedTimeMs: number;
+  /**
+   * The endIndex from the CORRECT_MIDI action that started the hold (feature 042).
+   * -1 means "use notes.length - 1". -1 when not holding.
+   */
+  readonly holdEndIndex: number;
+  /**
+   * Index into noteResults[] where the current loop's results begin.
+   * Set to noteResults.length on each LOOP_RESTART so that early-release
+   * retry detection is scoped to the current loop only (prevents stale results
+   * from previous loops being mistaken for the current loop's results).
+   */
+  readonly currentLoopResultOffset: number;
 }
 
 /** Describes a staff available for selection during practice setup. */
@@ -107,6 +159,27 @@ export interface SelectedStaff {
 
 /** Union of all actions accepted by the practice engine reducer. */
 export type PracticeAction =
+  | {
+      /**
+       * Hold timer completed ≥90% of requiredHoldMs (feature 042).
+       * Dispatched by the rAF loop in PracticeViewPlugin.
+       * No-op if mode !== 'holding'.
+       */
+      readonly type: 'HOLD_COMPLETE';
+      /** Hold duration actually elapsed in ms. */
+      readonly holdDurationMs: number;
+    }
+  | {
+      /**
+       * User released a required pitch before the hold threshold (feature 042).
+       * Dispatched by the MIDI release handler in PracticeViewPlugin.
+       * No-op if mode !== 'holding'.
+       * The session stays on the same note; user may retry.
+       */
+      readonly type: 'EARLY_RELEASE';
+      /** How long the user actually held the note in ms. */
+      readonly holdDurationMs: number;
+    }
   | {
       /** Start a new practice session. */
       readonly type: 'START';
@@ -130,6 +203,19 @@ export type PracticeAction =
       readonly expectedTimeMs: number;
       /** Optional: last index in notes[] for this session (loop-region completion). */
       readonly endIndex?: number;
+      /**
+       * Wall-clock ms when the key was pressed (feature 042).
+       * Used to initialise holdStartTimeMs in the state when entering 'holding' mode.
+       * The component is responsible for supplying Date.now() here.
+       * Defaults to 0 (no-op) when not provided.
+       */
+      readonly pressTimeMs?: number;
+      /**
+       * Required hold duration in ms for this entry at the current BPM (feature 042).
+       * `(entry.durationTicks / ((bpm / 60) * 960)) * 1000`
+       * 0 (or absent) means no hold is required (entry.durationTicks === 0).
+       */
+      readonly requiredHoldMs?: number;
     }
   | {
       readonly type: 'WRONG_MIDI';
@@ -163,4 +249,11 @@ export const INITIAL_PRACTICE_STATE: PracticeState = {
   noteResults: [],
   currentWrongAttempts: 0,
   wrongNoteEvents: [],
+  holdStartTimeMs: 0,
+  requiredHoldMs: 0,
+  holdMidiNote: 0,
+  holdResponseTimeMs: 0,
+  holdExpectedTimeMs: 0,
+  holdEndIndex: -1,
+  currentLoopResultOffset: 0,
 };

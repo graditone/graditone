@@ -1,5 +1,5 @@
 /**
- * Graditone Plugin API — Types (v5)
+ * Graditone Plugin API — Types (v7)
  * Feature 030: Plugin Architecture (v1 baseline)
  * Feature 031: Practice View Plugin — adds recording namespace and offsetMs (v2)
  * Feature 033: Play Score Plugin — adds scorePlayer namespace, ScoreRenderer component (v3)
@@ -7,6 +7,7 @@
  *              PluginScoreSelectorProps, ScoreSelector component (v4)
  * Feature 035: Metronome — adds MetronomeState, PluginMetronomeContext,
  *              context.metronome namespace, ScorePlayerState.timeSignature (v5)
+ * Feature 042: Practice Note Duration — adds durationTicks to PluginPracticeNoteEntry (v7)
  *
  * Defines all public types for the Graditone Plugin API.
  * See specs/030-plugin-architecture/contracts/plugin-api.ts for the v1 canonical contract.
@@ -283,6 +284,21 @@ export interface PluginPracticeNoteEntry {
    * Use with context.scorePlayer.seekToTick(tick) to reposition the score.
    */
   readonly tick: number;
+  /**
+   * Written duration of this note/chord in 960-PPQ integer ticks (v7).
+   * For chords: maximum duration across all pitches at this tick.
+   *
+   * When `durationTicks > 0`, the practice engine enforces a hold requirement:
+   * the player must sustain the note for ≥90% of
+   * `(durationTicks / ((bpm / 60) * 960)) * 1000` ms before the session advances.
+   *
+   * When `durationTicks === 0`, the engine advances immediately on a correct
+   * press (backward-compatible with v6 behaviour, and for random/scale exercises).
+   *
+   * Common values at 960 PPQ:
+   *   whole note = 3840  half note = 1920  quarter = 960  eighth = 480
+   */
+  readonly durationTicks: number;
 }
 
 /**
@@ -296,7 +312,7 @@ export interface PluginPracticeNoteEntry {
  *   - Source: instruments[0].staves[staffIndex].voices[0] (first instrument, target staff, first voice)
  *   - Rests are skipped
  *   - Chords: ALL pitches at the same start_tick are collected (not just max)
- *   - Note durations are discarded
+   *   - Note durations: maximum duration_ticks across chord notes is stored in durationTicks (v7)
  *   - Result is capped to maxCount if provided; totalAvailable reflects the pre-cap count
  */
 export interface PluginScorePitches {

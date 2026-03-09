@@ -25,6 +25,23 @@
   opacity: 0.5;
 }
 
+/* ─── Hold indicator ──────────────────────────────────────────────────────── */
+
+.practice-plugin__hold-indicator {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 0 12px 4px;
+}
+
+.practice-plugin__hold-indicator-bar {
+  height: 100%;
+  background: #4caf50;
+  border-radius: 3px;
+  transition: width 0.05s linear;
+}
+
 /* ─── Score area (flex:1 so toolbar gets intrinsic height) ────────────────── */
 
 .practice-plugin__score-area {

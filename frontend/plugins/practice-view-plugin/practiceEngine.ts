@@ -24,6 +24,16 @@ import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
  */
 const LATE_THRESHOLD_MS = 500;
 
+/** Zero-value hold-context fields shared by states that are not in 'holding' mode. */
+const CLEAR_HOLD = {
+  holdStartTimeMs: 0,
+  requiredHoldMs: 0,
+  holdMidiNote: 0,
+  holdResponseTimeMs: 0,
+  holdExpectedTimeMs: 0,
+  holdEndIndex: -1,
+} as const;
+
 // ---------------------------------------------------------------------------
 // Predicate
 // ---------------------------------------------------------------------------
@@ -61,18 +71,144 @@ export function reduce(state: PracticeState, action: PracticeAction): PracticeSt
         selectedStaffIndex: action.staffIndex,
         noteResults: [],
         currentWrongAttempts: 0,
+        currentLoopResultOffset: 0,
         wrongNoteEvents: [],
+        ...CLEAR_HOLD,
       };
     }
 
-    case 'CORRECT_MIDI': {
-      if (state.mode !== 'active' && state.mode !== 'waiting') return state;
+    case 'HOLD_COMPLETE': {
+      // No-op outside holding mode
+      if (state.mode !== 'holding') return state;
 
-      // Waiting → active transition: the first correct note starts the clock
-      if (state.mode === 'waiting') {
-        // Fall through to normal CORRECT_MIDI handling — the caller is
-        // responsible for recording practiceStartTime when dispatching.
+      const lastIndex = state.holdEndIndex >= 0 ? state.holdEndIndex : state.notes.length - 1;
+
+      // Check if there's already a finalised result for this note in the CURRENT loop
+      // (e.g. early-release). Scoped to currentLoopResultOffset so that results from
+      // previous loops don't shadow the current loop's notes.
+      const existingResult = state.noteResults
+        .slice(state.currentLoopResultOffset)
+        .find((r) => r.noteIndex === state.currentIndex);
+
+      let newResults = state.noteResults;
+      if (!existingResult) {
+        // Compute relative timing delta using the stored CORRECT_MIDI context
+        const prevResult = state.noteResults.length > 0
+          ? state.noteResults[state.noteResults.length - 1]
+          : null;
+        let relativeDeltaMs = 0;
+        if (prevResult) {
+          if (state.holdExpectedTimeMs >= prevResult.expectedTimeMs) {
+            const actualInterval = state.holdResponseTimeMs - prevResult.responseTimeMs;
+            const expectedInterval = state.holdExpectedTimeMs - prevResult.expectedTimeMs;
+            relativeDeltaMs = Math.round(actualInterval - expectedInterval);
+          }
+        }
+        const isLate = Math.abs(relativeDeltaMs) > LATE_THRESHOLD_MS;
+        const entry = state.notes[state.currentIndex];
+        const result: PracticeNoteResult = {
+          noteIndex: state.currentIndex,
+          outcome: isLate ? 'correct-late' : 'correct',
+          playedMidi: state.holdMidiNote,
+          expectedMidi: entry.midiPitches,
+          responseTimeMs: state.holdResponseTimeMs,
+          expectedTimeMs: state.holdExpectedTimeMs,
+          relativeDeltaMs,
+          wrongAttempts: state.currentWrongAttempts,
+          holdDurationMs: action.holdDurationMs,
+          requiredHoldMs: state.requiredHoldMs,
+        };
+        newResults = [...state.noteResults, result];
       }
+
+      if (state.currentIndex >= lastIndex) {
+        return { ...state, mode: 'complete', noteResults: newResults, currentWrongAttempts: 0, ...CLEAR_HOLD };
+      }
+      return { ...state, mode: 'active', currentIndex: state.currentIndex + 1, noteResults: newResults, currentWrongAttempts: 0, ...CLEAR_HOLD };
+    }
+
+    case 'EARLY_RELEASE': {
+      // No-op outside holding mode
+      if (state.mode !== 'holding') return state;
+
+      const entry = state.notes[state.currentIndex];
+      const result: PracticeNoteResult = {
+        noteIndex: state.currentIndex,
+        outcome: 'early-release',
+        playedMidi: state.holdMidiNote,
+        expectedMidi: entry.midiPitches,
+        responseTimeMs: state.holdResponseTimeMs,
+        expectedTimeMs: state.holdExpectedTimeMs,
+        relativeDeltaMs: (() => {
+          const prevResult = state.noteResults.length > 0
+            ? state.noteResults[state.noteResults.length - 1]
+            : null;
+          if (!prevResult) return 0;
+          if (state.holdExpectedTimeMs < prevResult.expectedTimeMs) return 0;
+          const actualInterval = state.holdResponseTimeMs - prevResult.responseTimeMs;
+          const expectedInterval = state.holdExpectedTimeMs - prevResult.expectedTimeMs;
+          return Math.round(actualInterval - expectedInterval);
+        })(),
+        wrongAttempts: state.currentWrongAttempts,
+        holdDurationMs: action.holdDurationMs,
+        requiredHoldMs: state.requiredHoldMs,
+      };
+      // Stay on the same note (currentIndex unchanged); mode back to active for retry.
+      return { ...state, mode: 'active', noteResults: [...state.noteResults, result], ...CLEAR_HOLD };
+    }
+
+    case 'CORRECT_MIDI': {
+      if (state.mode !== 'active' && state.mode !== 'waiting' && state.mode !== 'holding') return state;
+
+      // When the user presses again after an early-release (mode='active', same index)
+      // we're back on the same note. Check if requiredHoldMs > 0 for hold enforcement.
+      // When re-entering hold after early-release, we enter 'holding' without adding
+      // a new noteResult (the early-release result is final).
+      if (state.mode === 'active' || state.mode === 'waiting') {
+        // Check if this is a retry after early-release for the same note in the CURRENT loop.
+        // Scoped to currentLoopResultOffset so previous-loop results don't interfere.
+        const hasEarlyRelease = state.noteResults
+          .slice(state.currentLoopResultOffset)
+          .some((r) => r.noteIndex === state.currentIndex && r.outcome === 'early-release');
+
+        // When entering holding mode (requiredHoldMs > 0):
+        if ((action.requiredHoldMs ?? 0) > 0) {
+          return {
+            ...state,
+            mode: 'holding',
+            holdStartTimeMs: action.pressTimeMs ?? 0,
+            requiredHoldMs: action.requiredHoldMs ?? 0,
+            holdMidiNote: action.midiNote,
+            holdResponseTimeMs: action.responseTimeMs,
+            holdExpectedTimeMs: action.expectedTimeMs,
+            holdEndIndex: action.endIndex ?? -1,
+            // Do NOT add a noteResult on entry to holding — wait for HOLD_COMPLETE/EARLY_RELEASE
+          };
+        }
+
+        // ── No hold required path (durationTicks === 0) ──────────────────────
+
+        // Waiting → active transition: the first correct note starts the clock
+        if (state.mode === 'waiting') {
+          // Fall through to normal CORRECT_MIDI handling
+        }
+
+        // If this was a retry after early-release, use the same note index context
+        // (but this path is only reached when requiredHoldMs === 0, which is unusual)
+        if (hasEarlyRelease) {
+          // Advance without adding a duplicate result
+          const lastIndex = action.endIndex ?? state.notes.length - 1;
+          if (state.currentIndex >= lastIndex) {
+            return { ...state, mode: 'complete', currentWrongAttempts: 0, ...CLEAR_HOLD };
+          }
+          return { ...state, mode: 'active', currentIndex: state.currentIndex + 1, currentWrongAttempts: 0, ...CLEAR_HOLD };
+        }
+      }
+
+      // ── Standard CORRECT_MIDI path ──────────────────────────────────────────
+      // (also reached when mode was 'holding' — but HOLD_COMPLETE is the preferred
+      //  path; this branch handles any edge cases)
+      if (state.mode === 'holding') return state; // already handled above
 
       const entry = state.notes[state.currentIndex];
 
@@ -106,20 +242,21 @@ export function reduce(state: PracticeState, action: PracticeAction): PracticeSt
         expectedTimeMs: action.expectedTimeMs,
         relativeDeltaMs,
         wrongAttempts: state.currentWrongAttempts,
+        holdDurationMs: 0,
+        requiredHoldMs: 0,
       };
 
       const newResults = [...state.noteResults, result];
 
       const lastIndex = action.endIndex ?? state.notes.length - 1;
       if (state.currentIndex >= lastIndex) {
-        // Completed all notes (or loop-region boundary)
-        return { ...state, mode: 'complete', noteResults: newResults, currentWrongAttempts: 0 };
+        return { ...state, mode: 'complete', noteResults: newResults, currentWrongAttempts: 0, ...CLEAR_HOLD };
       }
-      return { ...state, mode: 'active', currentIndex: state.currentIndex + 1, noteResults: newResults, currentWrongAttempts: 0 };
+      return { ...state, mode: 'active', currentIndex: state.currentIndex + 1, noteResults: newResults, currentWrongAttempts: 0, ...CLEAR_HOLD };
     }
 
     case 'WRONG_MIDI': {
-      if (state.mode !== 'active' && state.mode !== 'waiting') return state;
+      if (state.mode !== 'active' && state.mode !== 'waiting' && state.mode !== 'holding') return state;
       const wrongEvent: WrongNoteEvent = {
         midiNote: action.midiNote,
         responseTimeMs: action.responseTimeMs,
@@ -140,7 +277,9 @@ export function reduce(state: PracticeState, action: PracticeAction): PracticeSt
         selectedStaffIndex: state.selectedStaffIndex,
         noteResults: [],
         currentWrongAttempts: 0,
+        currentLoopResultOffset: 0,
         wrongNoteEvents: [],
+        ...CLEAR_HOLD,
       };
     }
 
@@ -166,6 +305,10 @@ export function reduce(state: PracticeState, action: PracticeAction): PracticeSt
         mode: 'active',
         currentIndex: idx,
         currentWrongAttempts: 0,
+        // Advance the result-window boundary so early-release detection in the next
+        // loop only looks at that loop's results, not those from previous loops.
+        currentLoopResultOffset: state.noteResults.length,
+        ...CLEAR_HOLD,
       };
     }
 

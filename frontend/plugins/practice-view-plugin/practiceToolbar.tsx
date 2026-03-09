@@ -141,9 +141,11 @@ export function PracticeToolbar({
   }, [metroMenuOpen]);
 
   // Practice button label and CSS class
+  // 'holding' is a sub-state of active (note duration being measured) — show Stop button during both
+  const practiceRunning = practiceMode === 'active' || practiceMode === 'holding' || practiceMode === 'waiting';
   let practiceBtnLabel = '♩ Practice';
   let practiceBtnClass = 'practice-plugin__toolbar-btn practice-plugin__toolbar-btn--practice';
-  if (practiceMode === 'active') {
+  if (practiceRunning) {
     practiceBtnLabel = '■ Stop Practice';
     practiceBtnClass =
       'practice-plugin__toolbar-btn practice-plugin__toolbar-btn--practice-active';
@@ -235,9 +237,9 @@ export function PracticeToolbar({
           className={practiceBtnClass}
           onClick={onPracticeToggle}
           aria-label={
-            practiceMode === 'active' ? 'Stop practice mode' : 'Start practice mode'
+            practiceRunning ? 'Stop practice mode' : 'Start practice mode'
           }
-          aria-pressed={practiceMode === 'active'}
+          aria-pressed={practiceRunning}
           disabled={!isLoaded || midiConnected === false}
         >
           {practiceBtnLabel}
@@ -245,14 +247,14 @@ export function PracticeToolbar({
       </span>
 
       {/* Practice progress x / total */}
-      {practiceMode === 'active' && totalPracticeNotes > 0 && (
+      {practiceRunning && totalPracticeNotes > 0 && (
         <span className="practice-plugin__progress" aria-live="polite">
           {currentPracticeIndex + 1}&nbsp;/&nbsp;{totalPracticeNotes}
         </span>
       )}
 
       {/* No-MIDI notice — shown when practice is active but MIDI is disconnected */}
-      {practiceMode === 'active' && midiConnected === false && (
+      {practiceRunning && midiConnected === false && (
         <span className="practice-plugin__no-midi-notice" role="alert">
           Connect a MIDI device to practice
         </span>

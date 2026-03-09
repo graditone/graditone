@@ -429,7 +429,14 @@ The Train plugin (`frontend/plugins/train-view/`) is the reference implementatio
   - Clef and octave are derived from the loaded score; controls disabled in Score mode
   - `generateScoreExercise(bpm, pitches, noteCount)` — plugin-internal factory
   - Preset caching: `scorePitches` preserved across preset switches
-- A full Vitest test suite covering all user-visible behaviours (US1–US3)
+- **Note-duration checking (Feature 042)** — requires **Plugin API v7**:
+  - `PluginPracticeNoteEntry.durationTicks` — written duration in ticks (960 PPQ); `0` = no hold required (backward-compatible)
+  - New practice mode `'holding'` — engine stays on current note until `HOLD_COMPLETE` is dispatched
+  - `HOLD_COMPLETE` action — advances session; records `correct` / `correct-late` result
+  - `EARLY_RELEASE` action — records `early-release` result (0.5× score credit); session stays on same note for retry
+  - Visual hold indicator rendered when `holdProgress > 0` and `requiredHoldMs > quarterNoteMs`
+  - Quarter notes (`durationTicks <= 960`) and shorter advance immediately — no hold required
+- A full Vitest test suite covering all user-visible behaviours (US1–US4)
 
 ---
 
