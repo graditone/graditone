@@ -342,7 +342,11 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
   private updatePinnedHighlights(): void {
     const svg = this.svgRef.current;
     if (!svg) return;
-    const currentPinned = this.props.pinnedNoteIds ?? new Set<string>();
+    const rawPinned = this.props.pinnedNoteIds ?? new Set<string>();
+
+    // Strip repeat-expansion suffix (e.g. "-r1") so layout DOM elements
+    // (which use original note IDs) are found during repeated sections.
+    const currentPinned = new Set([...rawPinned].map(id => id.replace(/-r\d+$/, '')));
 
     // Remove .pinned from ALL matching layout-glyph elements for IDs no longer pinned.
     // Scoped to .layout-glyph to skip hit-rects (transparent overlays) and beams.

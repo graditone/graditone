@@ -621,10 +621,13 @@ export class ScoreViewer extends Component<ScoreViewerProps, ScoreViewerState> {
     // Ensure reverse index is up-to-date (O(N) once, then cached)
     this.ensureNoteIdIndex();
 
-    // O(k) lookup: find system index for any target note
+    // O(k) lookup: find system index for any target note.
+    // Strip repeat-expansion suffix (e.g. "-r1") so repeated-section IDs
+    // resolve to their original layout position.
     let targetSystemIndex = -1;
     for (const noteId of targetNoteIds) {
-      const systemIndex = this.noteIdToSystemIndex.get(noteId);
+      const baseId = noteId.replace(/-r\d+$/, '');
+      const systemIndex = this.noteIdToSystemIndex.get(baseId);
       if (systemIndex !== undefined) {
         targetSystemIndex = systemIndex;
         break;

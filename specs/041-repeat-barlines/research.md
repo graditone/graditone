@@ -141,3 +141,37 @@ The SC-001 success criterion in `spec.md` encodes this exact count. Integration 
 **Lookup**: For each `measure_index` in the `repeat_barlines` array, set the corresponding `MeasureInfo` flag. Since `MeasureInfo` is built by iterating `measures` with `enumerate`, the index mapping is direct.
 
 **Alternatives considered**: A separate WASM function accepting a `repeat_barlines` parameter. Rejected as unnecessary indirection — the score JSON is already the single input contract.
+
+---
+
+## R-007: Practice View Repeat Expansion (Platform-Level)
+
+**Decision**: `extractPracticeNotes()` in `scorePlayerContext.ts` must use pre-expanded, per-staff note lists rather than re-reading raw `interval_events` from the `Score` object.
+
+**Problem identified (post-implementation bug)**: The original `extractPracticeNotesFromScore()` helper read `score.instruments[0].staves[staffIndex].voices[0].interval_events` directly — bypassing the `expandNotesWithRepeats()` call made during `loadScore`. The practice engine therefore received raw (unexpanded) ticks and stopped at the end of the written score without executing any repeat passes.
+
+**Evidence**: `scorePlayerContext.ts` `loadScore` already stores:
+- `notes` (expanded flat array, all staves merged) — used by the playback engine
+- `rawNotes` (unexpanded flat array) — used by the layout engine
+
+The practice engine needs per-staff expanded notes. `notes` is a flat merged array with no staff attribute on `Note`, so it cannot be filtered back to per-staff after the fact.
+
+**Fix**: Introduce `extractNotesByStaff(score): Note[][]` that returns one `Note[]` per staff (voice-0 only). In `loadScore`, map each per-staff slice through `expandNotesWithRepeats(staffNotes, score.repeat_barlines)` and store the result as `expandedNotesByStaff: Note[][]` state. `extractPracticeNotes(staffIndex)` reads from `expandedNotesByStaff[staffIndex]` and groups by `start_tick` to produce `PluginPracticeNoteEntry[]` with repeat-expanded ticks.
+
+**Architectural principle**: Repeat expansion is platform logic. Plugins receive already-expanded data; they do not call `expandNotesWithRepeats` themselves.
+
+**Tick space alignment**: `PluginPracticeNoteEntry.tick` values are now in the **expanded tick space**, matching `playerState.currentTick` (which also comes from the playback engine operating on expanded notes). Practice start-index lookup (`notes[i].tick >= currentTick`) is therefore correct.
+
+---
+
+## R-008: Pinned (Green) Highlight and Auto-Scroll Repeat Suffix Stripping
+
+**Decision**: `LayoutRenderer.updatePinnedHighlights()` and `ScoreViewer.scrollToHighlightedSystem()` must strip the `-r\d+$` repeat-expansion suffix from note IDs before querying DOM elements or the `noteIdToSystemIndex` reverse index.
+
+**Problem identified (post-implementation bug)**: `targetNoteIds` / `pinnedNoteIds` in the practice plugin are populated from `practiceState.notes[currentIndex].noteIds`. After the R-007 fix, those IDs are expanded IDs (e.g. `uuid-r1`) during repeat passes. The SVG DOM elements and the layout index both use raw IDs (no suffix), so:
+- `updatePinnedHighlights()` found zero matching `.layout-glyph[data-note-id="uuid-r1"]` elements → no green highlight rendered.
+- `scrollToHighlightedSystem()` looked up `uuid-r1` in `noteIdToSystemIndex` → got `undefined` → auto-scroll stopped during repeat sections.
+
+**Fix**: Both methods apply `.replace(/-r\d+$/, '')` to each ID before DOM queries / map lookups. This is consistent with `updateHighlights()` and `reapplyHighlights()`, which already stripped the suffix for the orange playback highlight.
+
+**Scope**: `LayoutRenderer.tsx` (`updatePinnedHighlights`) and `ScoreViewer.tsx` (`scrollToHighlightedSystem`). No changes to plugin code or the `PluginPracticeNoteEntry` type.

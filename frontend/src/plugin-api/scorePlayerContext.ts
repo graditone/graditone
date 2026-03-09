@@ -101,6 +101,22 @@ function extractNotes(score: Score): Note[] {
 }
 
 /**
+ * Extract notes per staff from a Score (voice-0 only).
+ * Returns an array indexed by staff position across all instruments.
+ * Used to build per-staff expanded note lists for practice mode.
+ */
+function extractNotesByStaff(score: Score): Note[][] {
+  const byStaff: Note[][] = [];
+  for (const instrument of score.instruments) {
+    for (const staff of instrument.staves) {
+      const firstVoice = staff.voices[0];
+      byStaff.push(firstVoice ? [...firstVoice.interval_events] : []);
+    }
+  }
+  return byStaff;
+}
+
+/**
  * Extract the initial tempo (BPM) from a Score's global structural events.
  * Defaults to 120 BPM if no Tempo event is found at tick 0.
  */
@@ -130,59 +146,6 @@ function extractTimeSignature(score: Score): { numerator: number; denominator: n
   return { numerator: 4, denominator: 4 };
 }
 
-/**
- * Extract pitched notes for practice from a Score, returning all chord pitches and note IDs (v6).
- *
- * Rules (v6 update from Feature 037):
- *   1. Source: instruments[0].staves[staffIndex].voices[0] (target staff by index)
- *   2. Group by start_tick; collect ALL pitches at each tick (full chord, not just max)
- *   3. Sort ascending by tick → ordered note-entry sequence
- *   4. Clef: read from the target staff's active_clef; normalise to 'Treble' | 'Bass'
- *   5. Cap to maxCount if provided; report totalAvailable before cap
- */
-function extractPracticeNotesFromScore(
-  score: Score,
-  staffIndex: number,
-  maxCount?: number,
-): PluginScorePitches {
-  const instrument = score.instruments[0];
-  const staff = instrument?.staves[staffIndex] ?? instrument?.staves[0];
-  const voice = staff?.voices[0];
-  const events = voice?.interval_events ?? [];
-
-  // Group by start_tick; collect ALL pitches + note IDs at each tick (full chord)
-  const tickMap = new Map<number, PluginPracticeNoteEntry>();
-  for (const note of events) {
-    const existing = tickMap.get(note.start_tick);
-    if (existing) {
-      // Append this note to the chord at this tick
-      tickMap.set(note.start_tick, {
-        midiPitches: [...existing.midiPitches, note.pitch],
-        noteIds: [...existing.noteIds, note.id],
-        tick: note.start_tick,
-      });
-    } else {
-      tickMap.set(note.start_tick, {
-        midiPitches: [note.pitch],
-        noteIds: [note.id],
-        tick: note.start_tick,
-      });
-    }
-  }
-
-  // Sort by tick → ordered sequence
-  const allEntries = [...tickMap.values()].sort((a, b) => a.tick - b.tick);
-
-  const totalAvailable = allEntries.length;
-  const notes = maxCount !== undefined ? allEntries.slice(0, maxCount) : allEntries;
-
-  // Clef normalisation: Bass passes through; everything else → Treble
-  const rawClef = staff?.active_clef ?? 'Treble';
-  const clef: 'Treble' | 'Bass' = rawClef === 'Bass' ? 'Bass' : 'Treble';
-
-  return { notes, totalAvailable, clef, title: null };
-}
-
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -201,6 +164,8 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
   const [score, setScore] = useState<Score | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [rawNotes, setRawNotes] = useState<Note[]>([]);
+  /** Expanded notes per staff (indexed by staff position), used by extractPracticeNotes. */
+  const [expandedNotesByStaff, setExpandedNotesByStaff] = useState<Note[][]>([]);
   const [scoreTempo, setScoreTempo] = useState<number>(120);
   const [scoreTimeSignature, setScoreTimeSignature] = useState<{ numerator: number; denominator: number }>({ numerator: 4, denominator: 4 });
   const [title, setTitle] = useState<string | null>(null);
@@ -330,12 +295,20 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
         result.metadata.file_name?.replace(/\.[^.]+$/, '') ??
         null;
 
+      // Per-staff expanded notes — used by extractPracticeNotes so the
+      // practice engine sees repeat-expanded ticks matching the playback engine.
+      const rawNotesByStaff = extractNotesByStaff(result.score);
+      const parsedNotesByStaff = rawNotesByStaff.map(staffNotes =>
+        expandNotesWithRepeats(staffNotes, result.score.repeat_barlines)
+      );
+
       // Reset playback state for the new score
       playbackState.resetPlayback();
 
       setScore(result.score);
       setNotes(parsedNotes);
       setRawNotes(extractedNotes);
+      setExpandedNotesByStaff(parsedNotesByStaff);
       setScoreTempo(parsedTempo);
       setScoreTimeSignature(parsedTimeSignature);
       setTitle(parsedTitle);
@@ -408,11 +381,43 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     (staffIndex: number, maxCount?: number): PluginScorePitches | null => {
       // Only available when a score is fully loaded
       if (pluginStatus !== 'ready' || !score) return null;
-      const result = extractPracticeNotesFromScore(score, staffIndex, maxCount);
-      // Include the display title from the loaded score metadata
-      return { ...result, title };
+
+      // Use pre-expanded per-staff notes so the practice engine sees repeat-
+      // expanded ticks that match the playback engine tick space.
+      const staffNotes = expandedNotesByStaff[staffIndex] ?? expandedNotesByStaff[0] ?? [];
+
+      // Group by start_tick; collect ALL pitches + note IDs at each tick (full chord)
+      const tickMap = new Map<number, PluginPracticeNoteEntry>();
+      for (const note of staffNotes) {
+        const existing = tickMap.get(note.start_tick);
+        if (existing) {
+          tickMap.set(note.start_tick, {
+            midiPitches: [...existing.midiPitches, note.pitch],
+            noteIds: [...existing.noteIds, note.id],
+            tick: note.start_tick,
+          });
+        } else {
+          tickMap.set(note.start_tick, {
+            midiPitches: [note.pitch],
+            noteIds: [note.id],
+            tick: note.start_tick,
+          });
+        }
+      }
+
+      const allEntries = [...tickMap.values()].sort((a, b) => a.tick - b.tick);
+      const totalAvailable = allEntries.length;
+      const notes = maxCount !== undefined ? allEntries.slice(0, maxCount) : allEntries;
+
+      // Clef: read from score structure (unchanged from original)
+      const instrument = score.instruments[0];
+      const staff = instrument?.staves[staffIndex] ?? instrument?.staves[0];
+      const rawClef = staff?.active_clef ?? 'Treble';
+      const clef: 'Treble' | 'Bass' = rawClef === 'Bass' ? 'Bass' : 'Treble';
+
+      return { notes, totalAvailable, clef, title };
     },
-    [pluginStatus, score, title],
+    [pluginStatus, score, expandedNotesByStaff, title],
   );
 
   // ─── Return the bridge object ─────────────────────────────────────────────
