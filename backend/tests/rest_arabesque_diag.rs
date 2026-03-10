@@ -85,3 +85,51 @@ fn arabesque_rests_positioned_in_layout() {
         "All rest glyphs at fallback x=210 — note_positions not used"
     );
 }
+
+#[test]
+fn arabesque_time_signature_2_4() {
+    use musicore_backend::domain::events::global::GlobalStructuralEvent;
+
+    let importer = MusicXMLImporter::new();
+    let result = importer
+        .import_file(Path::new("../scores/Burgmuller_Arabesque.mxl"))
+        .unwrap();
+
+    // Verify the score model has 2/4 time signature at tick 0
+    let time_sig = result
+        .score
+        .global_structural_events
+        .iter()
+        .find_map(|e| match e {
+            GlobalStructuralEvent::TimeSignature(ts) => Some(ts),
+            _ => None,
+        })
+        .expect("Score should have a TimeSignatureEvent");
+
+    assert_eq!(time_sig.numerator, 2, "Arabesque should be in 2/4 time");
+    assert_eq!(time_sig.denominator, 4, "Arabesque should be in 2/4 time");
+    assert_eq!(
+        time_sig.tick.value(),
+        0,
+        "Time signature should be at tick 0"
+    );
+
+    // Verify layout produces 2/4 measure boundaries (1920 ticks per measure)
+    let dto: musicore_backend::adapters::dtos::ScoreDto = (&result.score).into();
+    let json = serde_json::to_value(&dto).unwrap();
+    let layout = compute_layout(&json, &LayoutConfig::default());
+
+    // First system should start at tick 0, second at a multiple of 1920
+    assert!(!layout.systems.is_empty(), "Layout should have systems");
+    assert_eq!(layout.systems[0].tick_range.start_tick, 0);
+
+    if layout.systems.len() > 1 {
+        let sys1_start = layout.systems[1].tick_range.start_tick;
+        assert_eq!(
+            sys1_start % 1920,
+            0,
+            "Second system start tick {} should be a multiple of 1920 (2/4 measure)",
+            sys1_start
+        );
+    }
+}
