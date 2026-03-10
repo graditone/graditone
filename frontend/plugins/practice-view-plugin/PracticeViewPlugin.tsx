@@ -108,24 +108,32 @@ function mergePracticeNotesByTick(
   allNotes: PluginPracticeNoteEntry[],
 ): PluginPracticeNoteEntry[] {
   if (allNotes.length === 0) return [];
-  const byTick = new Map<number, { pitches: number[]; noteIds: string[] }>();
+  const byTick = new Map<number, { pitches: number[]; sustainedPitches: number[]; noteIds: string[]; durationTicks: number }>();
   for (const entry of allNotes) {
     const group = byTick.get(entry.tick);
     if (group) {
       for (const p of entry.midiPitches) {
         if (!group.pitches.includes(p)) group.pitches.push(p);
       }
+      for (const p of (entry.sustainedPitches ?? [])) {
+        if (!group.sustainedPitches.includes(p) && !group.pitches.includes(p)) group.sustainedPitches.push(p);
+      }
       group.noteIds.push(...entry.noteIds);
+      group.durationTicks = Math.max(group.durationTicks, entry.durationTicks);
     } else {
       byTick.set(entry.tick, {
         pitches: [...(entry.midiPitches as number[])],
+        sustainedPitches: [...((entry.sustainedPitches ?? []) as number[])],
         noteIds: [...entry.noteIds],
+        durationTicks: entry.durationTicks,
       });
     }
   }
   return Array.from(byTick.entries())
     .sort(([a], [b]) => a - b)
-    .map(([tick, { pitches, noteIds }]) => ({ tick, midiPitches: pitches, noteIds }));
+    .map(([tick, { pitches, sustainedPitches, noteIds, durationTicks }]) => ({
+      tick, midiPitches: pitches, sustainedPitches, noteIds, durationTicks,
+    }));
 }
 
 // ---------------------------------------------------------------------------
@@ -457,7 +465,21 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     const ps = practiceStateRef.current;
     if (ps.mode === 'active' || ps.mode === 'waiting') {
       const entry = ps.notes[ps.currentIndex];
-      chordDetectorRef.current.reset(entry ? (entry.midiPitches as number[]) : []);
+      if (entry) {
+        const onset = entry.midiPitches as number[];
+        const sustained = (entry.sustainedPitches ?? []) as number[];
+        // Require both onset and sustained pitches for chord completion
+        chordDetectorRef.current.reset([...onset, ...sustained]);
+        // Pin sustained pitches that the user is already holding so they
+        // are always counted as collected (immune to the 80 ms window).
+        for (const pitch of sustained) {
+          if (heldMidiKeysRef.current.has(pitch)) {
+            chordDetectorRef.current.pin(pitch);
+          }
+        }
+      } else {
+        chordDetectorRef.current.reset([]);
+      }
     } else {
       chordDetectorRef.current.reset([]);
     }
@@ -496,6 +518,12 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // MIDI-pressed note IDs — cleared on key release, merged into highlightedNoteIds
   const [midiPressedNoteIds, setMidiPressedNoteIds] = useState<ReadonlySet<string>>(new Set());
 
+  // ─── Held MIDI keys tracking (multi-voice sustained notes) ────────────────
+  // Tracks which MIDI keys are physically held down (attack adds, release removes).
+  // Used to pre-populate the ChordDetector with sustained pitches that are
+  // already held when advancing to the next practice entry.
+  const heldMidiKeysRef = useRef<Set<number>>(new Set());
+
   // ─── Teardown (SC-006) ──────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
@@ -512,6 +540,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   useEffect(() => {
     return context.midi.subscribe((event) => {
       if (event.type === 'release') {
+        // Track held keys — remove on release
+        heldMidiKeysRef.current.delete(event.midiNote);
         // Relay release for natural key-up audio and clear visual highlight
         context.playNote({ midiNote: event.midiNote, timestamp: event.timestamp, type: 'release' });
         setMidiPressedNoteIds(new Set());
@@ -522,7 +552,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         const holdPs = practiceStateRef.current;
         if (holdPs.mode === 'holding') {
           const holdEntry = holdPs.notes[holdPs.currentIndex];
-          if (holdEntry && (holdEntry.midiPitches as number[]).includes(event.midiNote)) {
+          if (holdEntry && (
+            (holdEntry.midiPitches as number[]).includes(event.midiNote) ||
+            ((holdEntry.sustainedPitches ?? []) as number[]).includes(event.midiNote)
+          )) {
             const holdDurationMs = Date.now() - holdPs.holdStartTimeMs;
             dispatchPractice({ type: 'EARLY_RELEASE', holdDurationMs });
           }
@@ -530,6 +563,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         return;
       }
       if (event.type !== 'attack') return;
+
+      // Track held keys — add on attack
+      heldMidiKeysRef.current.add(event.midiNote);
 
       // Play the note through the host audio engine
       context.playNote({
@@ -570,9 +606,12 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       // required set is still a WRONG_MIDI (no advance).
       const chordResult = chordDetectorRef.current.press(event.midiNote, event.timestamp);
       const isInChord = (currentEntry.midiPitches as number[]).includes(event.midiNote);
+      // Sustained pitches (held from a prior onset) are not wrong — the player
+      // may re-attack them or they may produce MIDI repeats.  Do not penalise.
+      const isSustained = ((currentEntry.sustainedPitches ?? []) as number[]).includes(event.midiNote);
       // During hold mode, new attack events don't trigger CORRECT_MIDI (feature 042)
       if (ps.mode === 'holding') {
-        if (!isInChord) {
+        if (!isInChord && !isSustained) {
           // Wrong note pressed during hold — still counts as an error
           const wrongResponseTimeMs = Date.now() - practiceStartTimeRef.current;
           dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs: wrongResponseTimeMs });
@@ -624,13 +663,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           pressTimeMs: Date.now(),
           requiredHoldMs: entryRequiredHoldMs,
         });
-      } else if (!isInChord) {
-        // Pitch outside the required chord — treat as wrong note.
+      } else if (!isInChord && !isSustained) {
+        // Pitch outside the required chord and not sustained — treat as wrong note.
         const wrongResponseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
         dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs: wrongResponseTimeMs });
       }
       // If isInChord but not yet complete: partial chord press — stay silent
       // (don't penalise the user, just wait for remaining notes).
+      // If isSustained: note is held from prior onset — also stay silent.
     });
   }, [context.midi, context]);
 

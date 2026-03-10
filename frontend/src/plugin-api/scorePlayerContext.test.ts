@@ -682,6 +682,75 @@ describe('useScorePlayerContext', () => {
         expect(n.noteIds.length).toBeGreaterThan(0);
       });
     });
+
+    it('multi-voice: sustained notes appear in later onset entries', async () => {
+      const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+
+      // Simulate La Candeur m13 treble staff:
+      // Voice 1: G5 half note (tick 0, duration 1920)
+      // Voice 2: rest 8th, Eb5 8th (tick 240), D5 8th (tick 480), C5 8th (tick 720)
+      const multiVoiceMock = {
+        ...mockScore,
+        instruments: [{
+          ...mockScore.instruments[0],
+          staves: [{
+            ...mockScore.instruments[0].staves[0],
+            voices: [
+              {
+                id: 'v1',
+                interval_events: [
+                  { id: 'g5', start_tick: 0, duration_ticks: 1920, pitch: 79 }, // G5
+                ],
+              },
+              {
+                id: 'v2',
+                interval_events: [
+                  { id: 'eb5', start_tick: 240, duration_ticks: 240, pitch: 75 }, // Eb5
+                  { id: 'd5',  start_tick: 480, duration_ticks: 240, pitch: 74 }, // D5
+                  { id: 'c5',  start_tick: 720, duration_ticks: 240, pitch: 72 }, // C5
+                ],
+              },
+            ],
+          }],
+        }],
+      };
+      mockImportFile.mockResolvedValueOnce({
+        ...mockImportResult,
+        score: multiVoiceMock,
+        metadata: { format: 'MusicXML', work_title: 'Multi Voice', file_name: 'mv.mxl' },
+      });
+
+      await act(async () => {
+        await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
+      });
+
+      const pitches = result.current.extractPracticeNotes(0);
+      expect(pitches).not.toBeNull();
+      const notes = pitches!.notes;
+
+      // 4 onset ticks: 0, 240, 480, 720
+      expect(notes).toHaveLength(4);
+
+      // tick 0: G5 alone (voice 2 has a rest here)
+      expect(notes[0].tick).toBe(0);
+      expect(notes[0].midiPitches).toEqual([79]);
+      expect(notes[0].sustainedPitches ?? []).toEqual([]);
+
+      // tick 240: Eb5 onset, G5 sustained (held from tick 0)
+      expect(notes[1].tick).toBe(240);
+      expect(notes[1].midiPitches).toEqual([75]); // only onset
+      expect(notes[1].sustainedPitches).toContain(79); // G5 held
+
+      // tick 480: D5 onset, G5 sustained
+      expect(notes[2].tick).toBe(480);
+      expect(notes[2].midiPitches).toEqual([74]); // only onset
+      expect(notes[2].sustainedPitches).toContain(79); // G5 held
+
+      // tick 720: C5 onset, G5 sustained
+      expect(notes[3].tick).toBe(720);
+      expect(notes[3].midiPitches).toEqual([72]); // only onset
+      expect(notes[3].sustainedPitches).toContain(79); // G5 held
+    });
   });
 });
 

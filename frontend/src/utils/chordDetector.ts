@@ -52,6 +52,12 @@ export class ChordDetector {
    * Contains only pitches that are in `required`.
    */
   private presses: Map<number, number> = new Map();
+  /**
+   * Pinned pitches are always considered collected regardless of the timing
+   * window.  Used for sustained notes that the player is already holding
+   * from a prior onset — they must not be evicted by the rolling window.
+   */
+  private pinned: Set<number> = new Set();
 
   constructor(options: ChordDetectorOptions = {}) {
     this.windowMs = options.windowMs ?? 80;
@@ -68,6 +74,20 @@ export class ChordDetector {
   reset(requiredPitches: ReadonlyArray<number>): void {
     this.required = requiredPitches;
     this.presses.clear();
+    this.pinned.clear();
+  }
+
+  /**
+   * Mark a required pitch as permanently collected for this chord.
+   *
+   * Pinned pitches survive the rolling-window eviction that `press()` uses,
+   * making them suitable for sustained notes the player is already holding.
+   * Call after `reset()` for each sustained pitch that is physically held.
+   */
+  pin(midiNote: number): void {
+    if ((this.required as number[]).includes(midiNote)) {
+      this.pinned.add(midiNote);
+    }
   }
 
   /**
@@ -107,8 +127,8 @@ export class ChordDetector {
   // ── Private helpers ───────────────────────────────────────────────────────
 
   private _evaluate(): ChordResult {
-    const collected = (this.required as number[]).filter((p) => this.presses.has(p));
-    const missing = (this.required as number[]).filter((p) => !this.presses.has(p));
+    const collected = (this.required as number[]).filter((p) => this.presses.has(p) || this.pinned.has(p));
+    const missing = (this.required as number[]).filter((p) => !this.presses.has(p) && !this.pinned.has(p));
     return {
       complete: this.required.length > 0 && missing.length === 0,
       collected,

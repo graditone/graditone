@@ -267,12 +267,20 @@ export interface PluginManifest {
  */
 export interface PluginPracticeNoteEntry {
   /**
-   * Ordered MIDI pitch(es) at this score position.
+   * Ordered MIDI pitch(es) that START at this score position (onset notes).
    * For single notes: exactly one element.
-   * For chords: all pitches present at this tick on the target staff.
+   * For chords: all pitches whose onset is at this tick on the target staff.
    * Any match in this array (exact integer equality) counts as a correct press.
    */
   readonly midiPitches: ReadonlyArray<number>;
+  /**
+   * MIDI pitches sustained from a prior onset that are still sounding at this tick.
+   * These notes are already being held by the player and do NOT require a new
+   * key press. The practice engine should not treat them as chord notes to be
+   * pressed simultaneously — they only need to remain held.
+   * Empty array when no cross-voice sustained notes overlap this tick.
+   */
+  readonly sustainedPitches?: ReadonlyArray<number>;
   /**
    * Opaque note ID string(s) parallel to `midiPitches`.
    * Pass as `new Set(noteIds)` to ScoreRenderer.highlightedNoteIds to highlight target notes.

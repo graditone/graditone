@@ -85,15 +85,14 @@ const CATALOGUE: ReadonlyArray<PluginPreloadedScore> = PRELOADED_SCORES.map(
 
 /**
  * Extract all notes from a Score for use with usePlayback.
- * Mirrors ScoreViewer.tsx's allNotes useMemo — only voice-0 notes.
+ * Mirrors ScoreViewer.tsx's allNotes useMemo — collects notes from all voices.
  */
 function extractNotes(score: Score): Note[] {
   const notes: Note[] = [];
   for (const instrument of score.instruments) {
     for (const staff of instrument.staves) {
-      const firstVoice = staff.voices[0];
-      if (firstVoice) {
-        notes.push(...firstVoice.interval_events);
+      for (const voice of staff.voices) {
+        notes.push(...voice.interval_events);
       }
     }
   }
@@ -101,7 +100,7 @@ function extractNotes(score: Score): Note[] {
 }
 
 /**
- * Extract notes per staff from a Score (voice-0 only).
+ * Extract notes per staff from a Score (all voices merged).
  * Returns an array indexed by staff position across all instruments.
  * Used to build per-staff expanded note lists for practice mode.
  */
@@ -109,8 +108,11 @@ function extractNotesByStaff(score: Score): Note[][] {
   const byStaff: Note[][] = [];
   for (const instrument of score.instruments) {
     for (const staff of instrument.staves) {
-      const firstVoice = staff.voices[0];
-      byStaff.push(firstVoice ? [...firstVoice.interval_events] : []);
+      const allNotes: Note[] = [];
+      for (const voice of staff.voices) {
+        allNotes.push(...voice.interval_events);
+      }
+      byStaff.push(allNotes);
     }
   }
   return byStaff;
@@ -388,27 +390,51 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
 
       // Group by start_tick; collect ALL pitches + note IDs at each tick (full chord).
       // durationTicks: take the maximum across chord notes (v7, feature 042).
-      const tickMap = new Map<number, PluginPracticeNoteEntry>();
+      const tickMap = new Map<number, { midiPitches: number[]; noteIds: string[]; tick: number; durationTicks: number; sustainedPitches: number[]; sustainedNoteIds: string[] }>();
       for (const note of staffNotes) {
         const existing = tickMap.get(note.start_tick);
         if (existing) {
-          tickMap.set(note.start_tick, {
-            midiPitches: [...existing.midiPitches, note.pitch],
-            noteIds: [...existing.noteIds, note.id],
-            tick: note.start_tick,
-            durationTicks: Math.max(existing.durationTicks, note.duration_ticks),
-          });
+          existing.midiPitches.push(note.pitch);
+          existing.noteIds.push(note.id);
+          existing.durationTicks = Math.max(existing.durationTicks, note.duration_ticks);
         } else {
           tickMap.set(note.start_tick, {
             midiPitches: [note.pitch],
             noteIds: [note.id],
             tick: note.start_tick,
             durationTicks: note.duration_ticks,
+            sustainedPitches: [],
+            sustainedNoteIds: [],
           });
         }
       }
 
-      const allEntries = [...tickMap.values()].sort((a, b) => a.tick - b.tick);
+      // Multi-voice sustained-note pass: if a note's duration extends past a
+      // later onset tick, add its pitch to that onset's sustainedPitches so
+      // the practice engine knows it's already held (e.g. half-note G5 in
+      // voice 1 while eighth notes play in voice 2).
+      for (const note of staffNotes) {
+        if (note.duration_ticks <= 0) continue;
+        const noteEnd = note.start_tick + note.duration_ticks;
+        for (const [tick, entry] of tickMap) {
+          if (note.start_tick < tick && noteEnd > tick) {
+            if (!entry.midiPitches.includes(note.pitch) && !entry.sustainedPitches.includes(note.pitch)) {
+              entry.sustainedPitches.push(note.pitch);
+              entry.sustainedNoteIds.push(note.id);
+            }
+          }
+        }
+      }
+
+      const allEntries: PluginPracticeNoteEntry[] = [...tickMap.values()]
+        .sort((a, b) => a.tick - b.tick)
+        .map(e => ({
+          midiPitches: e.midiPitches,
+          sustainedPitches: e.sustainedPitches,
+          noteIds: e.noteIds,
+          tick: e.tick,
+          durationTicks: e.durationTicks,
+        }));
       const totalAvailable = allEntries.length;
       const notes = maxCount !== undefined ? allEntries.slice(0, maxCount) : allEntries;
 
