@@ -959,6 +959,7 @@ pub fn is_full_measure_rest(duration_ticks: u32, time_numerator: u8, time_denomi
 /// x-extent of all notes in that measure (falling back to `left_margin` when
 /// the measure contains no notes at all).
 /// Multi-voice rests are offset vertically from the standard rest position.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn position_rests_for_staff(
     staff_rests: &[super::RestLayoutEvent],
     tick_range_start: u32,

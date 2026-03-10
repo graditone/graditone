@@ -624,12 +624,12 @@ fn extract_measures(score: &serde_json::Value) -> Vec<(Vec<u32>, Vec<u32>)> {
                     }
 
                     if let Some(tick_durations) = all_notes_by_measure.get(&measure_index) {
-                        for (_tick, dur) in tick_durations {
+                        for dur in tick_durations.values() {
                             note_measures[measure_index].push(*dur);
                         }
                     }
                     if let Some(tick_durations) = all_rests_by_measure.get(&measure_index) {
-                        for (_tick, dur) in tick_durations {
+                        for dur in tick_durations.values() {
                             rest_measures[measure_index].push(*dur);
                         }
                     }
@@ -959,6 +959,7 @@ fn compute_unified_note_positions(
 /// * `staff_vertical_offset` - Vertical offset for this staff
 /// * `note_positions` - Pre-computed tick -> x_position map (unified across staves)
 /// * `left_margin` - Left margin (clef + key sig + time sig width) for rest fallback
+#[allow(clippy::too_many_arguments)]
 fn position_glyphs_for_staff(
     staff_data: &StaffData,
     tick_range: &TickRange,

@@ -407,7 +407,7 @@ impl MusicXMLConverter {
     /// Voice 1 rests go into voices[0], voice 2 rests into voices[1], etc.
     /// If the voice index exceeds the number of available voices, the rest
     /// falls back to voices[0] (last-resort).
-    fn distribute_rests(voices: &mut Vec<Voice>, rests: Vec<RestEvent>) {
+    fn distribute_rests(voices: &mut [Voice], rests: Vec<RestEvent>) {
         for rest in rests {
             let idx = if rest.voice > 0 {
                 (rest.voice - 1).min(voices.len().saturating_sub(1))
