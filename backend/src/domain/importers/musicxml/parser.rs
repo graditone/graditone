@@ -412,6 +412,7 @@ impl MusicXMLParser {
                                 duration: note.duration,
                                 voice: note.voice,
                                 staff: note.staff,
+                                note_type: note.note_type.clone(),
                             };
                             measure.elements.push(MeasureElement::Rest(rest));
                         }

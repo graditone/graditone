@@ -37,6 +37,13 @@ interface ConvertedScore {
           articulation: null;
           spelling?: { step: string; alter: number };
         }>;
+        rest_events?: Array<{
+          start_tick: number;
+          duration_ticks: number;
+          note_type?: string;
+          voice: number;
+          staff: number;
+        }>;
       }>;
     }>;
   }>;
@@ -110,9 +117,7 @@ function convertScoreToLayoutFormat(score: Score): ConvertedScore {
   const convertedInstruments = score.instruments.map(instrument => {
     // Process all staves from this instrument
     const convertedStaves = instrument.staves.map(staff => {
-      // Get first voice from this staff
-      const firstVoice = staff.voices[0];
-      if (!firstVoice) {
+      if (staff.voices.length === 0) {
         throw new Error('No voices in staff');
       }
 
@@ -146,8 +151,8 @@ function convertScoreToLayoutFormat(score: Score): ConvertedScore {
         clef: staff.active_clef,
         time_signature: timeSignature,
         key_signature: { sharps: keySharps },
-        voices: [{
-          notes: firstVoice.interval_events.map((note: Note) => ({
+        voices: staff.voices.map(voice => ({
+          notes: voice.interval_events.map((note: Note) => ({
             tick: note.start_tick,
             duration: note.duration_ticks,
             pitch: note.pitch,
@@ -155,8 +160,12 @@ function convertScoreToLayoutFormat(score: Score): ConvertedScore {
             spelling: note.spelling,
             // Forward MusicXML beam annotations to layout engine
             ...(note.beams && note.beams.length > 0 ? { beams: note.beams } : {}),
-          }))
-        }]
+          })),
+          // Forward rest events so the layout engine can produce rest glyphs
+          ...(voice.rest_events && voice.rest_events.length > 0
+            ? { rest_events: voice.rest_events }
+            : {}),
+        })),
       };
     });
 

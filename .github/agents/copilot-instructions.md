@@ -85,8 +85,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - N/A (no persistence; theme state is React component state) (039-landing-page-redesign)
 - Rust (edition 2024, stable toolchain), TypeScript 5, React 18 + quick-xml (MusicXML streaming parser), wasm-bindgen 0.2, serde-wasm-bindgen 0.6, serde 1.0, ToneJS (scheduling), Vitest (TS tests), cargo test (Rust tests) (041-repeat-barlines)
 - N/A — repeat barlines serialized as part of existing score JSON (no new persistence layer) (041-repeat-barlines)
-- TypeScript 5.x, React 18+ + React hooks (useState, useRef, useEffect, useCallback), Vitest + React Testing Library (tests), existing Plugin API v6 (042-practice-note-duration)
-- N/A — all session state lives in React memory; no persistence changes (042-practice-note-duration)
+- Rust 1.93 (edition 2024) + TypeScript 5.9 + wasm-bindgen 0.2, serde 1.0, serde_json 1.0, React 19, Vite 7 (043-score-rests)
+- N/A (stateless rendering pipeline) (043-score-rests)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -107,7 +107,7 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
-- 042-practice-note-duration: Added TypeScript 5.x, React 18+ + React hooks (useState, useRef, useEffect, useCallback), Vitest + React Testing Library (tests), existing Plugin API v6
+- 043-score-rests: Added Rust 1.93 (edition 2024) + TypeScript 5.9 + wasm-bindgen 0.2, serde 1.0, serde_json 1.0, React 19, Vite 7
 - 041-repeat-barlines: Added Rust (edition 2024, stable toolchain), TypeScript 5, React 18 + quick-xml (MusicXML streaming parser), wasm-bindgen 0.2, serde-wasm-bindgen 0.6, serde 1.0, ToneJS (scheduling), Vitest (TS tests), cargo test (Rust tests)
 - 040-android-app-pwa: Added Android TWA (Trusted Web Activity via Bubblewrap CLI), Kotlin/Gradle (Android App Bundle), Firebase Crashlytics (anonymous crash reporting), `android/` project directory, `frontend/public/.well-known/assetlinks.json` (Digital Asset Links), `.github/workflows/build-android.yml` (CI AAB build on release tag). No changes to backend Rust or frontend React/WASM.
 

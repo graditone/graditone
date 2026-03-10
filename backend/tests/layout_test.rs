@@ -422,7 +422,7 @@ mod spacing_tests {
 
         // Measure with 4 quarter notes (typical 4/4 measure)
         let durations = [960, 960, 960, 960];
-        let width = compute_measure_width(&durations, &config);
+        let width = compute_measure_width(&durations, &[], &config);
         assert!(
             width > 200.0,
             "4-quarter-note measure should have reasonable width: {}",
@@ -431,7 +431,7 @@ mod spacing_tests {
 
         // Measure with mixed durations
         let durations = [1920, 960, 480, 480]; // half + quarter + two eighths
-        let mixed_width = compute_measure_width(&durations, &config);
+        let mixed_width = compute_measure_width(&durations, &[], &config);
         assert!(
             mixed_width > 150.0,
             "Mixed duration measure should have reasonable width: {}",
@@ -439,7 +439,7 @@ mod spacing_tests {
         );
 
         // Empty measure
-        let empty_width = compute_measure_width(&[], &config);
+        let empty_width = compute_measure_width(&[], &[], &config);
         assert_eq!(
             empty_width, 200.0,
             "Empty measure should have default width"

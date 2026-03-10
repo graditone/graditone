@@ -92,8 +92,9 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
     let measure_infos: Vec<breaker::MeasureInfo> = measures
         .iter()
         .enumerate()
-        .map(|(i, note_durations)| {
-            let width = spacer::compute_measure_width(note_durations, &spacing_config);
+        .map(|(i, (note_durations, rest_durations))| {
+            let width =
+                spacer::compute_measure_width(note_durations, rest_durations, &spacing_config);
             let start_tick = i as u32 * 3840; // 4/4 measure = 3840 ticks
             let end_tick = start_tick + 3840;
             breaker::MeasureInfo {
@@ -264,6 +265,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     staff_index,
                     staff_vertical_offset,
                     &note_positions,
+                    unified_left_margin,
                 );
 
                 // Separate pseudo-glyphs (stems U+0000, beams U+0001) from text glyphs
@@ -516,8 +518,11 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
 /// Returns a Vec where each element is a Vec of note durations for that measure.
 /// For multi-staff instruments, notes at the same timing position are counted only once
 /// (e.g., treble + bass notes sounding together take one horizontal space).
-fn extract_measures(score: &serde_json::Value) -> Vec<Vec<u32>> {
-    let mut measures: Vec<Vec<u32>> = Vec::new();
+///
+/// Returns a Vec where each element is `(note_durations, rest_durations)` for that measure.
+fn extract_measures(score: &serde_json::Value) -> Vec<(Vec<u32>, Vec<u32>)> {
+    let mut note_measures: Vec<Vec<u32>> = Vec::new();
+    let mut rest_measures: Vec<Vec<u32>> = Vec::new();
 
     // Extract notes from all instruments
     if let Some(instruments) = score["instruments"].as_array() {
@@ -530,10 +535,15 @@ fn extract_measures(score: &serde_json::Value) -> Vec<Vec<u32>> {
                     usize,
                     std::collections::HashMap<u32, u32>,
                 > = std::collections::HashMap::new();
+                let mut all_rests_by_measure: std::collections::HashMap<
+                    usize,
+                    std::collections::HashMap<u32, u32>,
+                > = std::collections::HashMap::new();
 
                 for staff in staves {
                     if let Some(voices) = staff["voices"].as_array() {
                         for voice in voices {
+                            // --- Notes ---
                             // Try both "interval_events" (Score format) and "notes" (converted format)
                             let notes_array = voice["interval_events"]
                                 .as_array()
@@ -570,20 +580,58 @@ fn extract_measures(score: &serde_json::Value) -> Vec<Vec<u32>> {
                                     *entry = (*entry).max(duration);
                                 }
                             }
+
+                            // --- Rests ---
+                            if let Some(rest_events) = voice["rest_events"].as_array() {
+                                for rest in rest_events {
+                                    let start_tick = rest["start_tick"]
+                                        .as_u64()
+                                        .or_else(|| rest["start_tick"]["value"].as_u64())
+                                        .unwrap_or(0)
+                                        as u32;
+
+                                    let duration =
+                                        rest["duration_ticks"].as_u64().unwrap_or(960) as u32;
+
+                                    let measure_index = (start_tick / 3840) as usize;
+
+                                    let entry = all_rests_by_measure
+                                        .entry(measure_index)
+                                        .or_default()
+                                        .entry(start_tick)
+                                        .or_insert(0);
+                                    *entry = (*entry).max(duration);
+                                }
+                            }
                         }
                     }
                 }
 
-                // Convert tick→duration map to flat duration list for compute_measure_width
-                for (measure_index, tick_durations) in all_notes_by_measure {
-                    // Expand measures vector if needed
-                    while measures.len() <= measure_index {
-                        measures.push(Vec::new());
+                // Convert tick→duration maps to flat duration lists for compute_measure_width
+                let max_measure = all_notes_by_measure
+                    .keys()
+                    .chain(all_rests_by_measure.keys())
+                    .copied()
+                    .max()
+                    .unwrap_or(0);
+
+                for measure_index in 0..=max_measure {
+                    while note_measures.len() <= measure_index {
+                        note_measures.push(Vec::new());
+                    }
+                    while rest_measures.len() <= measure_index {
+                        rest_measures.push(Vec::new());
                     }
 
-                    // Add the actual note duration for each unique tick position
-                    for (_tick, dur) in tick_durations {
-                        measures[measure_index].push(dur);
+                    if let Some(tick_durations) = all_notes_by_measure.get(&measure_index) {
+                        for (_tick, dur) in tick_durations {
+                            note_measures[measure_index].push(*dur);
+                        }
+                    }
+                    if let Some(tick_durations) = all_rests_by_measure.get(&measure_index) {
+                        for (_tick, dur) in tick_durations {
+                            rest_measures[measure_index].push(*dur);
+                        }
                     }
                 }
             }
@@ -591,10 +639,14 @@ fn extract_measures(score: &serde_json::Value) -> Vec<Vec<u32>> {
     }
 
     // If no measures found, return empty default measures
-    if measures.is_empty() {
-        vec![vec![960; 4]; 10] // 10 measures with 4 quarter notes each
+    if note_measures.is_empty() && rest_measures.is_empty() {
+        // 10 measures with 4 quarter notes each (no rests)
+        (0..10).map(|_| (vec![960; 4], Vec::new())).collect()
     } else {
-        measures
+        let len = note_measures.len().max(rest_measures.len());
+        note_measures.resize(len, Vec::new());
+        rest_measures.resize(len, Vec::new());
+        note_measures.into_iter().zip(rest_measures).collect()
     }
 }
 
@@ -616,10 +668,21 @@ struct StaffData {
     key_sharps: i8,       // Positive for sharps, negative for flats, 0 for C major
 }
 
-/// Represents a voice with interval events (notes)
+/// Represents a voice with interval events (notes) and rest events
 #[derive(Debug, Clone)]
 struct VoiceData {
     notes: Vec<NoteEvent>,
+    rests: Vec<RestLayoutEvent>,
+}
+
+/// Rest event extracted from ScoreDto JSON for layout processing
+#[derive(Debug, Clone)]
+pub(super) struct RestLayoutEvent {
+    start_tick: u32,
+    duration_ticks: u32,
+    note_type: Option<String>,
+    /// MusicXML voice number (1-indexed): odd = Voice 1 (up), even = Voice 2 (down)
+    voice: usize,
 }
 
 /// Note data tuple: (pitch, start_tick, duration_ticks, spelling)
@@ -644,17 +707,7 @@ struct NoteEvent {
 fn extract_instruments(score: &serde_json::Value) -> Vec<InstrumentData> {
     let mut instruments = Vec::new();
 
-    // DEBUG: Log the entire input to see what we're receiving
-    eprintln!(
-        "[extract_instruments] Input score: {}",
-        serde_json::to_string_pretty(score).unwrap_or_else(|_| "cannot serialize".to_string())
-    );
-
     if let Some(instruments_array) = score["instruments"].as_array() {
-        eprintln!(
-            "[extract_instruments] Found {} instruments",
-            instruments_array.len()
-        );
         for instrument in instruments_array {
             let id = instrument["id"].as_str().unwrap_or("unknown").to_string();
             let name = instrument["name"]
@@ -676,29 +729,17 @@ fn extract_instruments(score: &serde_json::Value) -> Vec<InstrumentData> {
                     let key_sharps = staff["key_signature"]["sharps"].as_i64().unwrap_or(0) as i8;
 
                     if let Some(voices_array) = staff["voices"].as_array() {
-                        eprintln!(
-                            "[extract_instruments] Found {} voices in staff",
-                            voices_array.len()
-                        );
                         for voice in voices_array {
                             let mut notes = Vec::new();
 
                             // T008-T009: Support both "notes" (LayoutView format) and "interval_events" (CompiledScore format)
                             // Check "notes" first for frontend fixtures, fall back to "interval_events" for backward compatibility
-                            eprintln!(
-                                "[extract_instruments] Voice keys: {:?}",
-                                voice.as_object().map(|o| o.keys().collect::<Vec<_>>())
-                            );
 
                             let note_array = voice["notes"]
                                 .as_array()
                                 .or_else(|| voice["interval_events"].as_array());
 
                             if let Some(notes_data) = note_array {
-                                eprintln!(
-                                    "[extract_instruments] Found {} notes in voice",
-                                    notes_data.len()
-                                );
                                 for note_item in notes_data {
                                     // Handle both formats:
                                     // Format 1 (notes): {tick: 0, duration: 960, pitch: 60}
@@ -713,8 +754,11 @@ fn extract_instruments(score: &serde_json::Value) -> Vec<InstrumentData> {
                                     let start_tick = if let Some(t) = note_item["tick"].as_u64() {
                                         t as u32 // Format 1: "tick"
                                     } else {
-                                        note_item["start_tick"]["value"].as_u64().unwrap_or(0)
-                                            as u32 // Format 2: nested
+                                        note_item["start_tick"]
+                                            .as_u64()
+                                            .or_else(|| note_item["start_tick"]["value"].as_u64())
+                                            .unwrap_or(0)
+                                            as u32 // Format 2: plain int or nested
                                     };
 
                                     let duration_ticks = if let Some(d) =
@@ -759,17 +803,40 @@ fn extract_instruments(score: &serde_json::Value) -> Vec<InstrumentData> {
                                         },
                                     });
                                 }
-                                eprintln!(
-                                    "[extract_instruments] Extracted {} notes from voice",
-                                    notes.len()
-                                );
-                            } else {
-                                eprintln!(
-                                    "[extract_instruments] WARNING: No 'notes' or 'interval_events' array found in voice"
-                                );
                             }
 
-                            voices.push(VoiceData { notes });
+                            voices.push(VoiceData {
+                                notes,
+                                rests: {
+                                    let mut rests = Vec::new();
+                                    if let Some(rest_events) = voice["rest_events"].as_array() {
+                                        for rest_item in rest_events {
+                                            let start_tick = rest_item["start_tick"]
+                                                .as_u64()
+                                                .or_else(|| {
+                                                    rest_item["start_tick"]["value"].as_u64()
+                                                })
+                                                .unwrap_or(0)
+                                                as u32;
+                                            let duration_ticks =
+                                                rest_item["duration_ticks"].as_u64().unwrap_or(960)
+                                                    as u32;
+                                            let note_type = rest_item["note_type"]
+                                                .as_str()
+                                                .map(|s| s.to_string());
+                                            let voice_num =
+                                                rest_item["voice"].as_u64().unwrap_or(1) as usize;
+                                            rests.push(RestLayoutEvent {
+                                                start_tick,
+                                                duration_ticks,
+                                                note_type,
+                                                voice: voice_num,
+                                            });
+                                        }
+                                    }
+                                    rests
+                                },
+                            });
                         }
                     }
 
@@ -891,6 +958,7 @@ fn compute_unified_note_positions(
 /// * `staff_index` - Index of this staff within the instrument
 /// * `staff_vertical_offset` - Vertical offset for this staff
 /// * `note_positions` - Pre-computed tick -> x_position map (unified across staves)
+/// * `left_margin` - Left margin (clef + key sig + time sig width) for rest fallback
 fn position_glyphs_for_staff(
     staff_data: &StaffData,
     tick_range: &TickRange,
@@ -899,6 +967,7 @@ fn position_glyphs_for_staff(
     staff_index: usize,
     staff_vertical_offset: f32,
     note_positions: &HashMap<u32, f32>,
+    left_margin: f32,
 ) -> Vec<Glyph> {
     let mut all_glyphs = Vec::new();
 
@@ -1287,6 +1356,32 @@ fn position_glyphs_for_staff(
         }
 
         all_glyphs.extend(stem_glyphs);
+    }
+
+    // T015: Position rests for this staff (all voices combined)
+    let all_staff_rests: Vec<RestLayoutEvent> = staff_data
+        .voices
+        .iter()
+        .flat_map(|v| v.rests.iter().cloned())
+        .collect();
+
+    if !all_staff_rests.is_empty() {
+        let multi_voice = staff_data.voices.len() > 1;
+        let rest_glyphs = positioner::position_rests_for_staff(
+            &all_staff_rests,
+            tick_range.start_tick,
+            tick_range.end_tick,
+            note_positions,
+            staff_data.time_numerator,
+            staff_data.time_denominator,
+            multi_voice,
+            units_per_space,
+            staff_vertical_offset,
+            left_margin,
+            instrument_id,
+            staff_index,
+        );
+        all_glyphs.extend(rest_glyphs);
     }
 
     all_glyphs
@@ -2699,6 +2794,7 @@ mod tests {
                     spelling: None,
                     beam_info: vec![],
                 }],
+                rests: vec![],
             }],
         };
         let tick_range = TickRange {
@@ -2736,6 +2832,7 @@ mod tests {
                     spelling: None,
                     beam_info: vec![],
                 }],
+                rests: vec![],
             }],
         };
         let tick_range = TickRange {

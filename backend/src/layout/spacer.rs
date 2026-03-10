@@ -47,18 +47,23 @@ pub fn compute_note_spacing(duration_ticks: u32, config: &SpacingConfig) -> f32 
 
 /// Compute total width of a measure
 ///
-/// Sums spacing for all note events in the measure plus padding for clefs/accidentals.
+/// Sums spacing for all note and rest events in the measure plus padding for clefs/accidentals.
 /// Adds additional width for flagged notes to prevent flag overlap while maintaining
-/// time-proportional spacing between notes.
+/// time-proportional spacing between notes and rests.
 ///
 /// # Arguments
-/// * `note_durations` - Array of note durations in ticks for all events in measure
+/// * `note_durations` - Array of note durations in ticks for all note events in measure
+/// * `rest_durations` - Array of rest durations in ticks for all rest events in measure
 /// * `config` - Spacing configuration parameters
 ///
 /// # Returns
 /// Total measure width in logical units
-pub fn compute_measure_width(note_durations: &[u32], config: &SpacingConfig) -> f32 {
-    if note_durations.is_empty() {
+pub fn compute_measure_width(
+    note_durations: &[u32],
+    rest_durations: &[u32],
+    config: &SpacingConfig,
+) -> f32 {
+    if note_durations.is_empty() && rest_durations.is_empty() {
         // Empty measure: return default minimum width
         return 200.0;
     }
@@ -66,10 +71,11 @@ pub fn compute_measure_width(note_durations: &[u32], config: &SpacingConfig) -> 
     // Sum spacing for all notes (maintains time-proportional spacing)
     let total_note_spacing: f32 = note_durations
         .iter()
+        .chain(rest_durations.iter())
         .map(|&duration| compute_note_spacing(duration, config))
         .sum();
 
-    // Count flagged notes for visual density adjustment
+    // Count flagged notes for visual density adjustment (rests don't have flags)
     let flagged_note_count = note_durations
         .iter()
         .filter(|&&duration| duration < 960) // Eighth notes and shorter have flags

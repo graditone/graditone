@@ -130,3 +130,29 @@ impl fmt::Display for NoteId {
         write!(f, "{}", self.0)
     }
 }
+
+/// Unique identifier for a RestEvent
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct RestEventId(uuid::Uuid);
+
+impl RestEventId {
+    pub fn new() -> Self {
+        Self(uuid::Uuid::new_v4())
+    }
+
+    pub fn parse(s: &str) -> Result<Self, uuid::Error> {
+        Ok(Self(uuid::Uuid::parse_str(s)?))
+    }
+}
+
+impl Default for RestEventId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for RestEventId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}

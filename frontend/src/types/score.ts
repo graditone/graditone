@@ -118,6 +118,17 @@ export interface Note {
 export interface Voice {
   id: string; // UUID
   interval_events: Note[];
+  rest_events?: RestEvent[];
+}
+
+/** Rest event within a voice */
+export interface RestEvent {
+  id: string;
+  start_tick: number;
+  duration_ticks: number;
+  note_type?: string;
+  voice: number;
+  staff: number;
 }
 
 /** Staff contains voices and staff-scoped structural events */

@@ -4,6 +4,7 @@
 use crate::domain::events::clef::ClefEvent;
 use crate::domain::events::key_signature::KeySignatureEvent;
 use crate::domain::events::note::Note;
+use crate::domain::events::rest::RestEvent;
 use crate::domain::events::tempo::TempoEvent;
 use crate::domain::events::time_signature::TimeSignatureEvent;
 use crate::domain::instrument::Instrument;
@@ -336,8 +337,12 @@ impl MusicXMLConverter {
             }
 
             // Convert measures to voice, filtering by staff number
-            let notes = Self::collect_notes_for_staff(&part_data.measures, staff_num, context)?;
-            let voices = VoiceDistributor::assign_voices(notes, context)?;
+            let (notes, rests) =
+                Self::collect_notes_for_staff(&part_data.measures, staff_num, context)?;
+            let mut voices = VoiceDistributor::assign_voices(notes, context)?;
+
+            // Distribute rests into voices by MusicXML voice number
+            Self::distribute_rests(&mut voices, rests);
 
             // Add all voices to staff
             for voice in voices {
@@ -382,8 +387,12 @@ impl MusicXMLConverter {
         }
 
         // Convert measures to notes, then distribute across voices
-        let notes = Self::collect_notes(&part_data.measures, context)?;
-        let voices = VoiceDistributor::assign_voices(notes, context)?;
+        let (notes, rests) = Self::collect_notes(&part_data.measures, context)?;
+        let mut voices = VoiceDistributor::assign_voices(notes, context)?;
+
+        // Distribute rests into voices by MusicXML voice number.
+        // Voice 1 rests → voices[0]; voice 2 rests → voices[1]; etc.
+        Self::distribute_rests(&mut voices, rests);
 
         // Add all voices to staff
         for voice in voices {
@@ -393,12 +402,29 @@ impl MusicXMLConverter {
         Ok(staff)
     }
 
+    /// Distribute rests into voices by MusicXML voice number (1-indexed).
+    ///
+    /// Voice 1 rests go into voices[0], voice 2 rests into voices[1], etc.
+    /// If the voice index exceeds the number of available voices, the rest
+    /// falls back to voices[0] (last-resort).
+    fn distribute_rests(voices: &mut Vec<Voice>, rests: Vec<RestEvent>) {
+        for rest in rests {
+            let idx = if rest.voice > 0 {
+                (rest.voice - 1).min(voices.len().saturating_sub(1))
+            } else {
+                0
+            };
+            voices[idx].rest_events.push(rest);
+        }
+    }
+
     /// Collects all notes from measures without adding to voices (for voice distribution)
     fn collect_notes(
         measures: &[MeasureData],
         context: &mut ImportContext,
-    ) -> Result<Vec<Note>, ImportError> {
+    ) -> Result<(Vec<Note>, Vec<RestEvent>), ImportError> {
         let mut notes = Vec::new();
+        let mut rests = Vec::new();
         let mut timing_context = TimingContext::new();
 
         for measure in measures {
@@ -430,8 +456,19 @@ impl MusicXMLConverter {
                         }
                     }
                     MeasureElement::Rest(rest_data) => {
-                        // Advance timing without creating note (rests are implicit)
+                        let start_tick = timing_context.current_tick();
                         timing_context.advance_by_duration(rest_data.duration)?;
+                        let end_tick = timing_context.current_tick;
+                        let duration_ticks = end_tick - start_tick.value();
+                        if duration_ticks > 0 {
+                            rests.push(RestEvent::new(
+                                start_tick,
+                                duration_ticks,
+                                rest_data.note_type.clone(),
+                                rest_data.voice,
+                                rest_data.staff,
+                            ));
+                        }
                     }
                     MeasureElement::Backup(duration) => {
                         // Move timing cursor backward
@@ -449,7 +486,7 @@ impl MusicXMLConverter {
             }
         }
 
-        Ok(notes)
+        Ok((notes, rests))
     }
 
     /// Converts measures to Voice with all notes (for single-staff instruments) - DEPRECATED
@@ -504,8 +541,9 @@ impl MusicXMLConverter {
         measures: &[MeasureData],
         staff_num: usize,
         context: &mut ImportContext,
-    ) -> Result<Vec<Note>, ImportError> {
+    ) -> Result<(Vec<Note>, Vec<RestEvent>), ImportError> {
         let mut notes = Vec::new();
+        let mut rests = Vec::new();
         let mut timing_context = TimingContext::new();
 
         for measure in measures {
@@ -552,9 +590,20 @@ impl MusicXMLConverter {
                     MeasureElement::Rest(rest_data) => {
                         // Only process rests for this staff
                         if rest_data.staff == staff_num {
+                            let start_tick = timing_context.current_tick();
                             timing_context.advance_by_duration(rest_data.duration)?;
-                            max_tick_in_measure =
-                                max_tick_in_measure.max(timing_context.current_tick);
+                            let end_tick = timing_context.current_tick;
+                            let duration_ticks = end_tick - start_tick.value();
+                            max_tick_in_measure = max_tick_in_measure.max(end_tick);
+                            if duration_ticks > 0 {
+                                rests.push(RestEvent::new(
+                                    start_tick,
+                                    duration_ticks,
+                                    rest_data.note_type.clone(),
+                                    rest_data.voice,
+                                    rest_data.staff,
+                                ));
+                            }
                         }
                     }
                     MeasureElement::Backup(_duration) => {
@@ -579,7 +628,7 @@ impl MusicXMLConverter {
             timing_context.current_tick = max_tick_in_measure;
         }
 
-        Ok(notes)
+        Ok((notes, rests))
     }
 
     /// Converts measures to Voice with notes filtered by staff number (for multi-staff instruments) - DEPRECATED

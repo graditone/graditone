@@ -878,6 +878,168 @@ pub fn position_structural_glyphs() {
     // For MVP, we'll skip structural glyphs and implement this in future iterations
 }
 
+// ── REST GLYPH FUNCTIONS ──────────────────────────────────────────────────────
+
+/// Approximate visual width of a rest glyph in logical units (for x-centering).
+const REST_GLYPH_WIDTH: f32 = 20.0;
+
+/// Select the SMuFL rest glyph codepoint from a `note_type` string.
+///
+/// Falls back to duration-based selection when `note_type` is `None` or unrecognised.
+pub fn rest_glyph_codepoint(note_type: Option<&str>, duration_ticks: u32) -> char {
+    match note_type {
+        Some("whole") => '\u{E4E3}',
+        Some("half") => '\u{E4E4}',
+        Some("quarter") => '\u{E4E5}',
+        Some("eighth") => '\u{E4E6}',
+        Some("16th") => '\u{E4E7}',
+        Some("32nd") => '\u{E4E8}',
+        Some("64th") => '\u{E4E9}',
+        _ => {
+            if duration_ticks >= 3840 {
+                '\u{E4E3}'
+            } else if duration_ticks >= 1920 {
+                '\u{E4E4}'
+            } else if duration_ticks >= 960 {
+                '\u{E4E5}'
+            } else if duration_ticks >= 480 {
+                '\u{E4E6}'
+            } else if duration_ticks >= 240 {
+                '\u{E4E7}'
+            } else if duration_ticks >= 120 {
+                '\u{E4E8}'
+            } else {
+                '\u{E4E9}'
+            }
+        }
+    }
+}
+
+/// Compute the Y-position for a rest glyph (before adding `staff_vertical_offset`).
+///
+/// Base positions use the standard single-voice rest placement:
+/// - Whole rest (`duration_ticks ≥ 3840`): `1.0 × units_per_space` — hangs from the 2nd staff line.
+/// - All other rests: `2.0 × units_per_space` — centred on the middle staff line.
+///
+/// Multi-voice offset: voice 1 (odd) shifts up by one space; voice 2 (even) shifts down.
+pub fn rest_y(
+    duration_ticks: u32,
+    voice_number: usize,
+    multi_voice: bool,
+    units_per_space: f32,
+) -> f32 {
+    let base_y = if duration_ticks >= 3840 {
+        1.0 * units_per_space
+    } else {
+        2.0 * units_per_space
+    };
+    if multi_voice {
+        if voice_number % 2 == 1 {
+            base_y - units_per_space
+        } else {
+            base_y + units_per_space
+        }
+    } else {
+        base_y
+    }
+}
+
+/// Return `true` if `duration_ticks` spans a complete measure in the given time signature.
+///
+/// A full measure in 4/4 time = `4 × (3840 / 4)` = 3840 ticks.
+/// A full measure in 3/4 time = `3 × (3840 / 4)` = 2880 ticks.
+pub fn is_full_measure_rest(duration_ticks: u32, time_numerator: u8, time_denominator: u8) -> bool {
+    let full = (time_numerator as u32) * (3840 / (time_denominator as u32));
+    duration_ticks >= full
+}
+
+/// Position rest glyphs for a single staff within a system's tick range.
+///
+/// Full-measure rests are horizontally centred within their measure using the
+/// x-extent of all notes in that measure (falling back to `left_margin` when
+/// the measure contains no notes at all).
+/// Multi-voice rests are offset vertically from the standard rest position.
+pub(super) fn position_rests_for_staff(
+    staff_rests: &[super::RestLayoutEvent],
+    tick_range_start: u32,
+    tick_range_end: u32,
+    note_positions: &std::collections::HashMap<u32, f32>,
+    time_numerator: u8,
+    time_denominator: u8,
+    multi_voice: bool,
+    units_per_space: f32,
+    staff_vertical_offset: f32,
+    left_margin: f32,
+    instrument_id: &str,
+    staff_index: usize,
+) -> Vec<Glyph> {
+    let ticks_per_measure = (time_numerator as u32) * (3840 / (time_denominator as u32));
+
+    let rests_in_range: Vec<&super::RestLayoutEvent> = staff_rests
+        .iter()
+        .filter(|r| r.start_tick >= tick_range_start && r.start_tick < tick_range_end)
+        .collect();
+
+    let mut glyphs = Vec::with_capacity(rests_in_range.len());
+
+    for (event_index, rest) in rests_in_range.iter().enumerate() {
+        let codepoint = rest_glyph_codepoint(rest.note_type.as_deref(), rest.duration_ticks);
+        let y = rest_y(
+            rest.duration_ticks,
+            rest.voice,
+            multi_voice,
+            units_per_space,
+        ) + staff_vertical_offset;
+
+        let x = if is_full_measure_rest(rest.duration_ticks, time_numerator, time_denominator) {
+            let measure_start = (rest.start_tick / ticks_per_measure) * ticks_per_measure;
+            let measure_end = measure_start + ticks_per_measure;
+
+            let xs: Vec<f32> = note_positions
+                .iter()
+                .filter(|&(&t, _)| t >= measure_start && t < measure_end)
+                .map(|(_, &x)| x)
+                .collect();
+
+            if xs.is_empty() {
+                // No notes in this measure — place near left margin of the measure area
+                left_margin + 90.0
+            } else {
+                let start_x = xs.iter().cloned().fold(f32::MAX, f32::min);
+                let end_x = xs.iter().cloned().fold(f32::MIN, f32::max) + 30.0;
+                start_x + (end_x - start_x - REST_GLYPH_WIDTH) / 2.0
+            }
+        } else {
+            // Beat-aligned: use note position at or just before the rest's start_tick
+            note_positions
+                .iter()
+                .filter(|&(&t, _)| t <= rest.start_tick)
+                .max_by_key(|&(&t, _)| t)
+                .map(|(_, &x)| x)
+                .unwrap_or(left_margin)
+        };
+
+        glyphs.push(Glyph {
+            position: Point { x, y },
+            bounding_box: BoundingBox {
+                x,
+                y,
+                width: REST_GLYPH_WIDTH,
+                height: units_per_space,
+            },
+            codepoint: codepoint.to_string(),
+            source_reference: SourceReference {
+                instrument_id: instrument_id.to_string(),
+                staff_index,
+                voice_index: rest.voice.saturating_sub(1),
+                event_index,
+            },
+        });
+    }
+
+    glyphs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1370,5 +1532,112 @@ mod tests {
             String::from('\u{E1D5}'),
             "Quarter note should use stem-up combined glyph when below middle"
         );
+    }
+
+    // ── REST UNIT TESTS ──────────────────────────────────────────────────────
+
+    /// T-REST-01 / T-REST-02 / T-REST-03: All seven note_type strings map to correct codepoints.
+    #[test]
+    fn test_rest_glyph_codepoint_by_note_type() {
+        assert_eq!(rest_glyph_codepoint(Some("whole"), 0), '\u{E4E3}', "whole");
+        assert_eq!(rest_glyph_codepoint(Some("half"), 0), '\u{E4E4}', "half");
+        assert_eq!(
+            rest_glyph_codepoint(Some("quarter"), 0),
+            '\u{E4E5}',
+            "quarter"
+        );
+        assert_eq!(
+            rest_glyph_codepoint(Some("eighth"), 0),
+            '\u{E4E6}',
+            "eighth"
+        );
+        assert_eq!(rest_glyph_codepoint(Some("16th"), 0), '\u{E4E7}', "16th");
+        assert_eq!(rest_glyph_codepoint(Some("32nd"), 0), '\u{E4E8}', "32nd");
+        assert_eq!(rest_glyph_codepoint(Some("64th"), 0), '\u{E4E9}', "64th");
+    }
+
+    /// T-REST-04: None note_type falls back to duration_ticks.
+    #[test]
+    fn test_rest_glyph_codepoint_fallback() {
+        assert_eq!(
+            rest_glyph_codepoint(None, 3840),
+            '\u{E4E3}',
+            "whole via ticks"
+        );
+        assert_eq!(
+            rest_glyph_codepoint(None, 1920),
+            '\u{E4E4}',
+            "half via ticks"
+        );
+        assert_eq!(
+            rest_glyph_codepoint(None, 960),
+            '\u{E4E5}',
+            "quarter via ticks"
+        );
+        assert_eq!(
+            rest_glyph_codepoint(None, 480),
+            '\u{E4E6}',
+            "eighth via ticks"
+        );
+        assert_eq!(
+            rest_glyph_codepoint(None, 240),
+            '\u{E4E7}',
+            "16th via ticks"
+        );
+        assert_eq!(
+            rest_glyph_codepoint(None, 120),
+            '\u{E4E8}',
+            "32nd via ticks"
+        );
+        assert_eq!(rest_glyph_codepoint(None, 60), '\u{E4E9}', "64th via ticks");
+    }
+
+    /// T-REST-05: Full-measure detection in 4/4 (3840 ticks).
+    #[test]
+    fn test_is_full_measure_rest_4_4_true() {
+        assert!(is_full_measure_rest(3840, 4, 4));
+    }
+
+    /// T-REST-06: Non-full-measure in 4/4.
+    #[test]
+    fn test_is_full_measure_rest_4_4_false() {
+        assert!(!is_full_measure_rest(960, 4, 4));
+    }
+
+    /// T-REST-07: Full-measure detection in 3/4 (2880 ticks).
+    #[test]
+    fn test_is_full_measure_rest_3_4_true() {
+        assert!(is_full_measure_rest(2880, 3, 4));
+        assert!(!is_full_measure_rest(960, 3, 4));
+    }
+
+    /// T-REST-08: Whole rest Y in single-voice = 1.0 × units_per_space.
+    #[test]
+    fn test_rest_y_whole_single_voice() {
+        let ups = 20.0_f32;
+        assert_eq!(rest_y(3840, 1, false, ups), 1.0 * ups);
+    }
+
+    /// T-REST-09: Quarter rest Y in single-voice = 2.0 × units_per_space.
+    #[test]
+    fn test_rest_y_quarter_single_voice() {
+        let ups = 20.0_f32;
+        assert_eq!(rest_y(960, 1, false, ups), 2.0 * ups);
+    }
+
+    /// T-REST-10: Voice 1 in multi-voice shifted up by one space.
+    #[test]
+    fn test_rest_y_voice1_multi_voice() {
+        let ups = 20.0_f32;
+        // base = 2.0*ups, offset = -ups → result = ups
+        assert_eq!(rest_y(960, 1, true, ups), ups);
+    }
+
+    /// T-REST-11: Voice 2 in multi-voice shifted down by one space.
+    #[test]
+    fn test_rest_y_voice2_multi_voice() {
+        let ups = 20.0_f32;
+        // base = 2.0*ups, offset = +ups → result = 3.0*ups
+        assert_eq!(rest_y(960, 2, true, ups), 3.0 * ups);
     }
 }

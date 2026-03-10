@@ -214,6 +214,9 @@ pub struct RestData {
 
     /// Staff number
     pub staff: usize,
+
+    /// Note type string (e.g., "whole", "half", "quarter", "eighth", "16th", "32nd", "64th")
+    pub note_type: Option<String>,
 }
 
 impl Default for MusicXMLDocument {

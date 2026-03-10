@@ -69,7 +69,8 @@ impl From<&Instrument> for InstrumentDto {
 /// v2: active_clef added to StaffDto
 /// v3: WASM now returns ScoreDto instead of raw Score
 /// v4: repeat_barlines added to ScoreDto
-const SCORE_SCHEMA_VERSION: u32 = 4;
+/// v5: rest_events added to Voice (043-score-rests)
+const SCORE_SCHEMA_VERSION: u32 = 5;
 
 /// DTO for Score containing InstrumentDtos with schema versioning
 #[derive(Debug, Serialize, Deserialize)]
@@ -80,6 +81,7 @@ pub struct ScoreDto {
     /// v1: Original structure
     /// v2: Added active_clef to StaffDto
     /// v4: Added repeat_barlines
+    /// v5: Added rest_events to Voice
     pub schema_version: u32,
 
     pub global_structural_events: Vec<GlobalStructuralEvent>,

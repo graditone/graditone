@@ -1,11 +1,16 @@
-use crate::domain::{errors::DomainError, events::note::Note, ids::VoiceId};
+use crate::domain::{
+    errors::DomainError, events::note::Note, events::rest::RestEvent, ids::VoiceId,
+};
 use serde::{Deserialize, Serialize};
 
-/// Voice contains interval events (notes) within a staff
+/// Voice contains interval events (notes) and rest events within a staff
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Voice {
     pub id: VoiceId,
     pub interval_events: Vec<Note>,
+    /// Rest events parsed from MusicXML, ordered by start_tick.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rest_events: Vec<RestEvent>,
 }
 
 impl Voice {
@@ -13,6 +18,7 @@ impl Voice {
         Self {
             id: VoiceId::new(),
             interval_events: Vec::new(),
+            rest_events: Vec::new(),
         }
     }
 
