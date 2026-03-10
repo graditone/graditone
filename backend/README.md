@@ -35,6 +35,12 @@ Rust music engine for Musicore, a tablet-native app for interactive scores, impl
 - **Output Modes**: JSON to stdout or file, quiet/verbose flags
 - **Test Fixtures**: Sample files for simple melody, piano grand staff, quartet
 
+**Feature 044: Time Signature Support** ✅
+- **Generic time signatures**: Reads `<time>` from MusicXML, supports any standard meter (2/4, 3/4, 4/4, 6/8, 9/8, 12/8, etc.)
+- **Measure arithmetic**: `ticks_per_measure = (3840 × numerator) / denominator` — exact integer for all power-of-2 denominators
+- **Layout engine**: Measure boundaries, barlines, and note bucketing computed from actual time signature
+- **Scope limitation**: First-measure time signature only; mid-piece time signature changes are out of scope
+
 ### 🚧 Next Phase
 
 - **Feature 006**: MusicXML Import - API endpoint (User Story 1) and multi-staff support (User Story 2-3)

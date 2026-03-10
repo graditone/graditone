@@ -11,6 +11,7 @@ A tablet-native app for interactive scores, designed for practice and performanc
 ### 🎼 Score Display
 - **High-fidelity notation** rendering with SMuFL music font (Bravura)
 - **Multiple clefs** support (Treble, Bass, Alto, Tenor)
+- **Time signature support** - Generic support for all standard time signatures (2/4, 3/4, 4/4, 6/8, 9/8, 12/8); correct measure boundaries, barlines, and time signature glyphs derived from MusicXML import
 - **Stacked staves view** for piano and multi-staff instruments
 - **Accurate pitch positioning** with ledger lines
 - **Chord symbols** display above the staff

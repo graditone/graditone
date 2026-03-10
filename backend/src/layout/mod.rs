@@ -61,8 +61,22 @@ impl Default for LayoutConfig {
 /// Layout computation is deterministic - identical inputs always produce
 /// byte-identical outputs, enabling aggressive caching.
 pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> GlobalLayout {
-    // Extract measures from score (simplified - assumes 4/4 time)
-    let measures = extract_measures(score);
+    // Extract time signature from first staff (all staves share the same meter)
+    let (time_numerator, time_denominator) = score["instruments"]
+        .as_array()
+        .and_then(|insts| insts.first())
+        .and_then(|inst| inst["staves"].as_array())
+        .and_then(|s| s.first())
+        .map(|first| {
+            let n = first["time_signature"]["numerator"].as_u64().unwrap_or(4) as u32;
+            let d = first["time_signature"]["denominator"].as_u64().unwrap_or(4) as u32;
+            (n, d)
+        })
+        .unwrap_or((4, 4));
+    let ticks_per_measure: u32 = (3840 * time_numerator) / time_denominator;
+
+    // Extract measures from score using actual time signature
+    let measures = extract_measures(score, ticks_per_measure);
 
     // Extract repeat barline flags indexed by measure position (Feature 041)
     let mut start_repeat_set: std::collections::HashSet<u32> = std::collections::HashSet::new();
@@ -95,8 +109,8 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
         .map(|(i, (note_durations, rest_durations))| {
             let width =
                 spacer::compute_measure_width(note_durations, rest_durations, &spacing_config);
-            let start_tick = i as u32 * 3840; // 4/4 measure = 3840 ticks
-            let end_tick = start_tick + 3840;
+            let start_tick = i as u32 * ticks_per_measure;
+            let end_tick = start_tick + ticks_per_measure;
             breaker::MeasureInfo {
                 width,
                 start_tick,
@@ -474,8 +488,8 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
         system.bounding_box.height += total_collision_extra;
 
         // T010: Compute measure number for this system
-        // Derive measure number from the system's start tick (3840 ticks per measure in 4/4)
-        let measure_num = (system.tick_range.start_tick / 3840) + 1;
+        // Derive measure number from the system's start tick using actual ticks per measure
+        let measure_num = (system.tick_range.start_tick / ticks_per_measure) + 1;
         system.measure_number = Some(MeasureNumber {
             number: measure_num,
             position: Point {
@@ -520,7 +534,10 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
 /// (e.g., treble + bass notes sounding together take one horizontal space).
 ///
 /// Returns a Vec where each element is `(note_durations, rest_durations)` for that measure.
-fn extract_measures(score: &serde_json::Value) -> Vec<(Vec<u32>, Vec<u32>)> {
+fn extract_measures(
+    score: &serde_json::Value,
+    ticks_per_measure: u32,
+) -> Vec<(Vec<u32>, Vec<u32>)> {
     let mut note_measures: Vec<Vec<u32>> = Vec::new();
     let mut rest_measures: Vec<Vec<u32>> = Vec::new();
 
@@ -568,8 +585,8 @@ fn extract_measures(score: &serde_json::Value) -> Vec<(Vec<u32>, Vec<u32>)> {
                                         .unwrap_or(960)
                                         as u32;
 
-                                    // Determine which measure this note belongs to (4/4 = 3840 ticks per measure)
-                                    let measure_index = (start_tick / 3840) as usize;
+                                    // Determine which measure this note belongs to
+                                    let measure_index = (start_tick / ticks_per_measure) as usize;
 
                                     // Track tick → duration (keep max duration at each tick position)
                                     let entry = all_notes_by_measure
@@ -593,7 +610,7 @@ fn extract_measures(score: &serde_json::Value) -> Vec<(Vec<u32>, Vec<u32>)> {
                                     let duration =
                                         rest["duration_ticks"].as_u64().unwrap_or(960) as u32;
 
-                                    let measure_index = (start_tick / 3840) as usize;
+                                    let measure_index = (start_tick / ticks_per_measure) as usize;
 
                                     let entry = all_rests_by_measure
                                         .entry(measure_index)
@@ -2949,6 +2966,231 @@ mod tests {
             spacing, default_spacing,
             "Spacing should remain at default when no collision: got {} (expected {})",
             spacing, default_spacing
+        );
+    }
+
+    /// T011: 2/4 time signature produces measure boundaries at 0, 1920, 3840...
+    #[test]
+    fn test_layout_2_4_measure_boundaries() {
+        // 4 quarter notes at 960 ticks each → in 2/4 (1920 ticks/measure) = 2 measures
+        // In hardcoded 4/4 (3840 ticks/measure) this would be only 1 measure
+        let score = serde_json::json!({
+            "instruments": [{
+                "id": "piano",
+                "staves": [{
+                    "clef": "Treble",
+                    "time_signature": { "numerator": 2, "denominator": 4 },
+                    "key_signature": { "sharps": 0 },
+                    "voices": [{
+                        "notes": [
+                            { "pitch": 60, "tick": 0, "duration": 960 },
+                            { "pitch": 62, "tick": 960, "duration": 960 },
+                            { "pitch": 64, "tick": 1920, "duration": 960 },
+                            { "pitch": 65, "tick": 2880, "duration": 960 }
+                        ]
+                    }]
+                }]
+            }]
+        });
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&score, &config);
+
+        assert!(
+            !layout.systems.is_empty(),
+            "Should have at least one system"
+        );
+        let sys0 = &layout.systems[0];
+
+        // With 2 measures in 2/4, there should be at least 2 barlines on the first staff
+        // (one between measures + one at end). With wrong 3840, only 1 barline.
+        let staff = &sys0.staff_groups[0].staves[0];
+        assert!(
+            staff.bar_lines.len() >= 2,
+            "2/4 with 4 quarter notes should produce at least 2 barlines (got {})",
+            staff.bar_lines.len()
+        );
+    }
+
+    /// T012: 3/4 time signature produces measure boundaries at 0, 2880, 5760...
+    #[test]
+    fn test_layout_3_4_measure_boundaries() {
+        // 7 quarter notes: with 3/4 (2880 ticks/measure) = 3 measures (0,0,0 | 1,1,1 | 2)
+        // With hardcoded 3840 = 2 measures (0,0,0,0 | 1,1,1) → only 2 barlines
+        let score = serde_json::json!({
+            "instruments": [{
+                "id": "piano",
+                "staves": [{
+                    "clef": "Treble",
+                    "time_signature": { "numerator": 3, "denominator": 4 },
+                    "key_signature": { "sharps": 0 },
+                    "voices": [{
+                        "notes": [
+                            { "pitch": 60, "tick": 0, "duration": 960 },
+                            { "pitch": 62, "tick": 960, "duration": 960 },
+                            { "pitch": 64, "tick": 1920, "duration": 960 },
+                            { "pitch": 65, "tick": 2880, "duration": 960 },
+                            { "pitch": 67, "tick": 3840, "duration": 960 },
+                            { "pitch": 69, "tick": 4800, "duration": 960 },
+                            { "pitch": 71, "tick": 5760, "duration": 960 }
+                        ]
+                    }]
+                }]
+            }]
+        });
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&score, &config);
+
+        assert!(
+            !layout.systems.is_empty(),
+            "Should have at least one system"
+        );
+        let sys0 = &layout.systems[0];
+
+        // With 3/4 correct: 3 measures → at least 3 barlines
+        // With wrong 3840: 2 measures → only 2 barlines → fails
+        let staff = &sys0.staff_groups[0].staves[0];
+        assert!(
+            staff.bar_lines.len() >= 3,
+            "3/4 with 7 quarter notes should produce at least 3 barlines (got {})",
+            staff.bar_lines.len()
+        );
+    }
+
+    /// T013: 4/4 time signature preserves existing behavior (regression guard)
+    #[test]
+    fn test_layout_4_4_measure_boundaries_unchanged() {
+        // 8 quarter notes → in 4/4 = 2 measures → at least 2 barlines
+        let score = serde_json::json!({
+            "instruments": [{
+                "id": "piano",
+                "staves": [{
+                    "clef": "Treble",
+                    "time_signature": { "numerator": 4, "denominator": 4 },
+                    "key_signature": { "sharps": 0 },
+                    "voices": [{
+                        "notes": [
+                            { "pitch": 60, "tick": 0, "duration": 960 },
+                            { "pitch": 62, "tick": 960, "duration": 960 },
+                            { "pitch": 64, "tick": 1920, "duration": 960 },
+                            { "pitch": 65, "tick": 2880, "duration": 960 },
+                            { "pitch": 67, "tick": 3840, "duration": 960 },
+                            { "pitch": 69, "tick": 4800, "duration": 960 },
+                            { "pitch": 71, "tick": 5760, "duration": 960 },
+                            { "pitch": 72, "tick": 6720, "duration": 960 }
+                        ]
+                    }]
+                }]
+            }]
+        });
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&score, &config);
+
+        assert!(
+            !layout.systems.is_empty(),
+            "Should have at least one system"
+        );
+        let sys0 = &layout.systems[0];
+
+        // 4/4 is the existing behavior, so this should pass before and after the fix
+        let staff = &sys0.staff_groups[0].staves[0];
+        assert!(
+            staff.bar_lines.len() >= 2,
+            "4/4 with 8 quarter notes should produce at least 2 barlines (got {})",
+            staff.bar_lines.len()
+        );
+
+        // Measure number should be 1
+        assert_eq!(
+            sys0.measure_number.as_ref().unwrap().number,
+            1,
+            "First system measure number should be 1"
+        );
+    }
+
+    /// T020: Time signature glyph for 2/4 should show digits "2" and "4"
+    #[test]
+    fn test_time_signature_glyph_2_4() {
+        let score = serde_json::json!({
+            "instruments": [{
+                "id": "piano",
+                "staves": [{
+                    "clef": "Treble",
+                    "time_signature": { "numerator": 2, "denominator": 4 },
+                    "key_signature": { "sharps": 0 },
+                    "voices": [{
+                        "notes": [
+                            { "pitch": 60, "tick": 0, "duration": 960 }
+                        ]
+                    }]
+                }]
+            }]
+        });
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&score, &config);
+        let staff = &layout.systems[0].staff_groups[0].staves[0];
+
+        // SMuFL: U+E082 = "2", U+E084 = "4"
+        let ts_codepoints: Vec<&str> = staff
+            .structural_glyphs
+            .iter()
+            .map(|g| g.codepoint.as_str())
+            .collect();
+
+        assert!(
+            ts_codepoints.contains(&"\u{E082}"),
+            "Should contain time sig digit '2' (U+E082), got: {:?}",
+            ts_codepoints
+        );
+        assert!(
+            ts_codepoints.contains(&"\u{E084}"),
+            "Should contain time sig digit '4' (U+E084), got: {:?}",
+            ts_codepoints
+        );
+    }
+
+    /// T021: Time signature glyph for 6/8 should show digits "6" and "8"
+    #[test]
+    fn test_time_signature_glyph_6_8() {
+        let score = serde_json::json!({
+            "instruments": [{
+                "id": "piano",
+                "staves": [{
+                    "clef": "Treble",
+                    "time_signature": { "numerator": 6, "denominator": 8 },
+                    "key_signature": { "sharps": 0 },
+                    "voices": [{
+                        "notes": [
+                            { "pitch": 60, "tick": 0, "duration": 480 }
+                        ]
+                    }]
+                }]
+            }]
+        });
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&score, &config);
+        let staff = &layout.systems[0].staff_groups[0].staves[0];
+
+        // SMuFL: U+E086 = "6", U+E088 = "8"
+        let ts_codepoints: Vec<&str> = staff
+            .structural_glyphs
+            .iter()
+            .map(|g| g.codepoint.as_str())
+            .collect();
+
+        assert!(
+            ts_codepoints.contains(&"\u{E086}"),
+            "Should contain time sig digit '6' (U+E086), got: {:?}",
+            ts_codepoints
+        );
+        assert!(
+            ts_codepoints.contains(&"\u{E088}"),
+            "Should contain time sig digit '8' (U+E088), got: {:?}",
+            ts_codepoints
         );
     }
 }

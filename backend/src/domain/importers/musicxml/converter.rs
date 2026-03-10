@@ -2,6 +2,7 @@
 // Transforms MusicXML intermediate representation to domain entities
 
 use crate::domain::events::clef::ClefEvent;
+use crate::domain::events::global::GlobalStructuralEvent;
 use crate::domain::events::key_signature::KeySignatureEvent;
 use crate::domain::events::note::Note;
 use crate::domain::events::rest::RestEvent;
@@ -198,6 +199,16 @@ impl MusicXMLConverter {
         // Create Score with defaults (120 BPM, 4/4 time signature)
         let mut score = Score::new();
 
+        // Extract time signature from first measure of first part, fallback to 4/4
+        let (time_num, time_den) = doc
+            .parts
+            .first()
+            .and_then(|p| p.measures.first())
+            .and_then(|m| m.attributes.as_ref())
+            .and_then(|a| a.time.as_ref())
+            .map(|t| (t.beats as u8, t.beat_type as u8))
+            .unwrap_or((4, 4));
+
         // Set global tempo if specified in document
         if doc.default_tempo > 0.0 {
             let bpm =
@@ -210,16 +221,26 @@ impl MusicXMLConverter {
             score.global_structural_events.clear();
             score.add_tempo_event(tempo_event)?;
 
-            // Re-add default time signature
-            let time_sig = TimeSignatureEvent::new(Tick::new(0), 4, 4);
+            // Add time signature from document (or 4/4 fallback)
+            let time_sig = TimeSignatureEvent::new(Tick::new(0), time_num, time_den);
+            score.add_time_signature_event(time_sig)?;
+        } else if (time_num, time_den) != (4, 4) {
+            // Replace the default 4/4 from Score::new() with the actual time signature
+            score
+                .global_structural_events
+                .retain(|e| !matches!(e, GlobalStructuralEvent::TimeSignature(_)));
+            let time_sig = TimeSignatureEvent::new(Tick::new(0), time_num, time_den);
             score.add_time_signature_event(time_sig)?;
         }
 
         // Collect repeat barlines from the first part (repeat structure is score-wide)
+        let ticks_per_measure: u32 = (3840 * time_num as u32) / time_den as u32;
         let repeat_barlines = doc
             .parts
             .first()
-            .map(|first_part| Self::collect_repeat_barlines(&first_part.measures))
+            .map(|first_part| {
+                Self::collect_repeat_barlines(&first_part.measures, ticks_per_measure)
+            })
             .unwrap_or_default();
 
         // Convert each part to an Instrument
@@ -236,13 +257,15 @@ impl MusicXMLConverter {
     /// Collects repeat barlines from a slice of MeasureData.
     ///
     /// Each measure with `start_repeat` or `end_repeat` produces a `RepeatBarline` entry.
-    /// Tick positions assume 4/4 time at 960 PPQ (3840 ticks per measure).
-    fn collect_repeat_barlines(measures: &[MeasureData]) -> Vec<RepeatBarline> {
-        const TICKS_PER_MEASURE: u32 = 3840;
+    /// Tick positions use the provided ticks_per_measure derived from the time signature.
+    fn collect_repeat_barlines(
+        measures: &[MeasureData],
+        ticks_per_measure: u32,
+    ) -> Vec<RepeatBarline> {
         let mut result = Vec::new();
         for (i, measure) in measures.iter().enumerate() {
-            let start_tick = i as u32 * TICKS_PER_MEASURE;
-            let end_tick = start_tick + TICKS_PER_MEASURE;
+            let start_tick = i as u32 * ticks_per_measure;
+            let end_tick = start_tick + ticks_per_measure;
             match (measure.start_repeat, measure.end_repeat) {
                 (true, true) => result.push(RepeatBarline {
                     measure_index: i as u32,
@@ -1084,5 +1107,229 @@ mod tests {
             "Sequential note should start after chord duration"
         );
         assert_eq!(voice.interval_events[2].duration_ticks, 1920);
+    }
+
+    /// Helper: extract the first TimeSignatureEvent from a Score's global_structural_events
+    fn extract_time_signature(score: &crate::domain::score::Score) -> (u8, u8) {
+        use crate::domain::events::global::GlobalStructuralEvent;
+        for event in &score.global_structural_events {
+            if let GlobalStructuralEvent::TimeSignature(ts) = event {
+                return (ts.numerator, ts.denominator);
+            }
+        }
+        panic!("No TimeSignatureEvent found in score");
+    }
+
+    #[test]
+    fn test_import_2_4_time_signature() {
+        // T005: Import MusicXML with 2/4 time → score has TimeSignatureEvent(0, 2, 4)
+        let mut doc = MusicXMLDocument {
+            version: "3.1".to_string(),
+            ..Default::default()
+        };
+
+        let part = PartData {
+            id: "P1".to_string(),
+            name: "Piano".to_string(),
+            staff_count: 1,
+            measures: vec![MeasureData {
+                number: 1,
+                attributes: Some(AttributesData {
+                    divisions: Some(480),
+                    key: None,
+                    time: Some(TimeSignatureData {
+                        beats: 2,
+                        beat_type: 4,
+                    }),
+                    clefs: vec![ClefData {
+                        sign: "G".to_string(),
+                        line: 2,
+                        staff_number: 1,
+                    }],
+                    tempo: None,
+                }),
+                elements: vec![MeasureElement::Note(NoteData {
+                    pitch: Some(PitchData {
+                        step: 'C',
+                        octave: 4,
+                        alter: 0,
+                    }),
+                    duration: 480,
+                    voice: 1,
+                    staff: 1,
+                    note_type: Some("quarter".to_string()),
+                    is_chord: false,
+                    beams: Vec::new(),
+                })],
+                start_repeat: false,
+                end_repeat: false,
+            }],
+        };
+        doc.parts.push(part);
+
+        let mut context = ImportContext::new();
+        let score = MusicXMLConverter::convert(doc, &mut context).unwrap();
+        let (num, den) = extract_time_signature(&score);
+        assert_eq!(num, 2, "Expected numerator 2");
+        assert_eq!(den, 4, "Expected denominator 4");
+    }
+
+    #[test]
+    fn test_import_3_4_time_signature() {
+        // T006: Import MusicXML with 3/4 time → score has TimeSignatureEvent(0, 3, 4)
+        let mut doc = MusicXMLDocument {
+            version: "3.1".to_string(),
+            ..Default::default()
+        };
+
+        let part = PartData {
+            id: "P1".to_string(),
+            name: "Piano".to_string(),
+            staff_count: 1,
+            measures: vec![MeasureData {
+                number: 1,
+                attributes: Some(AttributesData {
+                    divisions: Some(480),
+                    key: None,
+                    time: Some(TimeSignatureData {
+                        beats: 3,
+                        beat_type: 4,
+                    }),
+                    clefs: vec![ClefData {
+                        sign: "G".to_string(),
+                        line: 2,
+                        staff_number: 1,
+                    }],
+                    tempo: None,
+                }),
+                elements: vec![MeasureElement::Note(NoteData {
+                    pitch: Some(PitchData {
+                        step: 'C',
+                        octave: 4,
+                        alter: 0,
+                    }),
+                    duration: 480,
+                    voice: 1,
+                    staff: 1,
+                    note_type: Some("quarter".to_string()),
+                    is_chord: false,
+                    beams: Vec::new(),
+                })],
+                start_repeat: false,
+                end_repeat: false,
+            }],
+        };
+        doc.parts.push(part);
+
+        let mut context = ImportContext::new();
+        let score = MusicXMLConverter::convert(doc, &mut context).unwrap();
+        let (num, den) = extract_time_signature(&score);
+        assert_eq!(num, 3, "Expected numerator 3");
+        assert_eq!(den, 4, "Expected denominator 4");
+    }
+
+    #[test]
+    fn test_import_6_8_time_signature() {
+        // T007: Import MusicXML with 6/8 time → score has TimeSignatureEvent(0, 6, 8)
+        let mut doc = MusicXMLDocument {
+            version: "3.1".to_string(),
+            ..Default::default()
+        };
+
+        let part = PartData {
+            id: "P1".to_string(),
+            name: "Piano".to_string(),
+            staff_count: 1,
+            measures: vec![MeasureData {
+                number: 1,
+                attributes: Some(AttributesData {
+                    divisions: Some(480),
+                    key: None,
+                    time: Some(TimeSignatureData {
+                        beats: 6,
+                        beat_type: 8,
+                    }),
+                    clefs: vec![ClefData {
+                        sign: "G".to_string(),
+                        line: 2,
+                        staff_number: 1,
+                    }],
+                    tempo: None,
+                }),
+                elements: vec![MeasureElement::Note(NoteData {
+                    pitch: Some(PitchData {
+                        step: 'C',
+                        octave: 4,
+                        alter: 0,
+                    }),
+                    duration: 240,
+                    voice: 1,
+                    staff: 1,
+                    note_type: Some("eighth".to_string()),
+                    is_chord: false,
+                    beams: Vec::new(),
+                })],
+                start_repeat: false,
+                end_repeat: false,
+            }],
+        };
+        doc.parts.push(part);
+
+        let mut context = ImportContext::new();
+        let score = MusicXMLConverter::convert(doc, &mut context).unwrap();
+        let (num, den) = extract_time_signature(&score);
+        assert_eq!(num, 6, "Expected numerator 6");
+        assert_eq!(den, 8, "Expected denominator 8");
+    }
+
+    #[test]
+    fn test_import_default_4_4_time_signature() {
+        // T008: Import MusicXML with NO <time> element → defaults to 4/4
+        let mut doc = MusicXMLDocument {
+            version: "3.1".to_string(),
+            ..Default::default()
+        };
+
+        let part = PartData {
+            id: "P1".to_string(),
+            name: "Piano".to_string(),
+            staff_count: 1,
+            measures: vec![MeasureData {
+                number: 1,
+                attributes: Some(AttributesData {
+                    divisions: Some(480),
+                    key: None,
+                    time: None, // No time signature specified
+                    clefs: vec![ClefData {
+                        sign: "G".to_string(),
+                        line: 2,
+                        staff_number: 1,
+                    }],
+                    tempo: None,
+                }),
+                elements: vec![MeasureElement::Note(NoteData {
+                    pitch: Some(PitchData {
+                        step: 'C',
+                        octave: 4,
+                        alter: 0,
+                    }),
+                    duration: 480,
+                    voice: 1,
+                    staff: 1,
+                    note_type: Some("quarter".to_string()),
+                    is_chord: false,
+                    beams: Vec::new(),
+                })],
+                start_repeat: false,
+                end_repeat: false,
+            }],
+        };
+        doc.parts.push(part);
+
+        let mut context = ImportContext::new();
+        let score = MusicXMLConverter::convert(doc, &mut context).unwrap();
+        let (num, den) = extract_time_signature(&score);
+        assert_eq!(num, 4, "Expected default numerator 4");
+        assert_eq!(den, 4, "Expected default denominator 4");
     }
 }
