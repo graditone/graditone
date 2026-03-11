@@ -112,7 +112,12 @@ export function ScoreViewer({
   })();
 
   const playbackState = usePlayback(allNotes, initialTempo);
-  const { tempoState } = useTempoState();
+  const { tempoState, setOriginalTempo } = useTempoState();
+
+  // Sync TempoStateContext.originalTempo when score changes (001-score-tempo)
+  useEffect(() => {
+    setOriginalTempo(initialTempo);
+  }, [initialTempo, setOriginalTempo]);
 
   // Pause when the browser tab is hidden.
   useEffect(() => {

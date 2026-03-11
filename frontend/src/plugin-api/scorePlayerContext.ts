@@ -182,7 +182,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
 
   // ─── Tempo context ───────────────────────────────────────────────────────
 
-  const { tempoState, setTempoMultiplier } = useTempoState();
+  const { tempoState, setTempoMultiplier, setOriginalTempo, resetTempo } = useTempoState();
 
   // ─── Note highlighting ────────────────────────────────────────────────────
 
@@ -312,6 +312,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       setRawNotes(extractedNotes);
       setExpandedNotesByStaff(parsedNotesByStaff);
       setScoreTempo(parsedTempo);
+      setOriginalTempo(parsedTempo);
       setScoreTimeSignature(parsedTimeSignature);
       setTitle(parsedTitle);
       setOverlayStatus(null); // reverts to playback-engine status ('stopped' → 'ready')
@@ -356,6 +357,10 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
   const setTempoMultiplierCb = useCallback((multiplier: number): void => {
     setTempoMultiplier(multiplier);
   }, [setTempoMultiplier]);
+
+  const snapToScoreTempoCb = useCallback((): void => {
+    resetTempo();
+  }, [resetTempo]);
 
   // ─── subscribe ────────────────────────────────────────────────────────────
 
@@ -461,6 +466,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     setPinnedStart,
     setLoopEnd,
     setTempoMultiplier: setTempoMultiplierCb,
+    snapToScoreTempo: snapToScoreTempoCb,
     subscribe,
     getCurrentTickLive,
     extractPracticeNotes,
@@ -474,6 +480,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     setPinnedStart,
     setLoopEnd,
     setTempoMultiplierCb,
+    snapToScoreTempoCb,
     subscribe,
     getCurrentTickLive,
     extractPracticeNotes,
@@ -540,6 +547,7 @@ export function createNoOpScorePlayer(): PluginScorePlayerContext {
     setPinnedStart: () => {},
     setLoopEnd: () => {},
     setTempoMultiplier: () => {},
+    snapToScoreTempo: () => {},
     subscribe: (handler) => {
       handler(idleState);
       return () => {};
@@ -576,6 +584,7 @@ export function createScorePlayerProxy(
     setPinnedStart: (...args) => proxyRef.current.setPinnedStart(...args),
     setLoopEnd: (...args) => proxyRef.current.setLoopEnd(...args),
     setTempoMultiplier: (...args) => proxyRef.current.setTempoMultiplier(...args),
+    snapToScoreTempo: () => proxyRef.current.snapToScoreTempo(),
     subscribe: (...args) => proxyRef.current.subscribe(...args),
     getCurrentTickLive: (...args) => proxyRef.current.getCurrentTickLive(...args),
     extractPracticeNotes: (...args) => proxyRef.current.extractPracticeNotes(...args),

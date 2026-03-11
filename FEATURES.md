@@ -32,6 +32,7 @@ A tablet-native app for interactive scores, designed for practice and performanc
 - **Auto-scroll** during playback
 - **Note highlighting** - Visual feedback showing current position
 - **Tempo control** - Adjust playback speed for practice
+- **Score-defined tempo** - Playback starts at the tempo marked in the score (e.g. 60 BPM for Chopin Nocturne) instead of a fixed 120 BPM default; snap-to-score-tempo action resets both BPM and multiplier to the score's marked tempo
 - **Repeat/navigation** - Jump to any point in the score
 - **Optimized playback rendering** - Zero audio glitches on mobile devices
   - **Incremental highlight updates** - CSS class toggling via rAF, no SVG DOM rebuild
@@ -106,7 +107,7 @@ The **Play Score** plugin is a built-in full-screen plugin that lets users load,
 - **Note seeking**: Short-tap a note to seek playback to that tick
 - **Pin & loop**: Long-press a note to set a loop start pin; long-press a second note to create a loop region; long-press inside the loop to clear it
 - **Return to start**: Dedicated button seeks to tick 0 (or to the pinned loop start if set)
-- **Tempo control**: Slider adjusts playback speed from 0.5× to 2.0×
+- **Tempo control**: Slider adjusts playback speed from 0.5× to 2.0×; snap-to-score-tempo resets to the score's marked BPM
 - **WASM loading state**: All controls are disabled while the audio engine initialises
 - **Audio teardown**: All audio stops automatically when the plugin is closed or the page navigates away (SC-005)
 

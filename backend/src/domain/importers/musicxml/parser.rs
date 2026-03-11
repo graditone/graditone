@@ -92,6 +92,24 @@ impl MusicXMLParser {
 
                         if let Some(part_id) = current_part_id.clone() {
                             let part_data = Self::parse_part(reader, &part_id, &doc.part_names)?;
+
+                            // Set doc.default_tempo from the first tempo found.
+                            // Prefer <metronome><per-minute> over <sound tempo> since
+                            // some editors leave <sound> at a default (e.g. 120) while
+                            // the metronome marking reflects the composer's intent.
+                            if doc.default_tempo == 120.0 {
+                                for measure in &part_data.measures {
+                                    if let Some(tempo) = measure.metronome_tempo {
+                                        doc.default_tempo = tempo;
+                                        break;
+                                    }
+                                    if let Some(tempo) = measure.sound_tempo {
+                                        doc.default_tempo = tempo;
+                                        break;
+                                    }
+                                }
+                            }
+
                             doc.parts.push(part_data);
                         }
                     }
@@ -393,9 +411,12 @@ impl MusicXMLParser {
             elements: Vec::new(),
             start_repeat: false,
             end_repeat: false,
+            sound_tempo: None,
+            metronome_tempo: None,
         };
 
         let mut buf = Vec::new();
+        let mut in_metronome = false;
 
         loop {
             match reader.read_event_into(&mut buf) {
@@ -443,16 +464,41 @@ impl MusicXMLParser {
                             measure.end_repeat = true;
                         }
                     }
+                    b"metronome" => {
+                        in_metronome = true;
+                    }
+                    b"per-minute" if in_metronome => {
+                        if let Ok(Event::Text(text)) = reader.read_event_into(&mut buf) {
+                            if let Ok(val) =
+                                text.unescape().unwrap_or_default().trim().parse::<f64>()
+                            {
+                                measure.metronome_tempo = Some(val);
+                            }
+                        }
+                    }
                     _ => {}
                 },
                 Ok(Event::Empty(e)) => {
                     if e.name().as_ref() == b"sound" {
-                        // Handle <sound tempo="120"/> as empty element
+                        // Extract tempo from <sound tempo="..."/> at measure level
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"tempo" {
+                                if let Ok(tempo_str) = std::str::from_utf8(&attr.value) {
+                                    if let Ok(tempo) = tempo_str.parse::<f64>() {
+                                        measure.sound_tempo = Some(tempo);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                Ok(Event::End(e)) if e.name().as_ref() == b"measure" => {
-                    break;
-                }
+                Ok(Event::End(e)) => match e.name().as_ref() {
+                    b"measure" => break,
+                    b"metronome" => {
+                        in_metronome = false;
+                    }
+                    _ => {}
+                },
                 Ok(Event::Eof) => {
                     return Err(ImportError::InvalidStructure {
                         reason: "Unexpected EOF in measure".to_string(),

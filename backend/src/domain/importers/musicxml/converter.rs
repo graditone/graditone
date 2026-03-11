@@ -237,10 +237,10 @@ impl MusicXMLConverter {
 
         // Set global tempo if specified in document
         if doc.default_tempo > 0.0 {
-            let bpm =
-                BPM::new(doc.default_tempo as u16).map_err(|e| ImportError::ValidationError {
-                    errors: vec![format!("Invalid tempo: {}", e)],
-                })?;
+            let clamped = doc.default_tempo.clamp(20.0, 400.0) as u16;
+            let bpm = BPM::new(clamped).map_err(|e| ImportError::ValidationError {
+                errors: vec![format!("Invalid tempo: {}", e)],
+            })?;
             let tempo_event = TempoEvent::new(Tick::new(0), bpm);
 
             // Clear default tempo and add document tempo
@@ -951,6 +951,8 @@ mod tests {
             })],
             start_repeat: false,
             end_repeat: false,
+            sound_tempo: None,
+            metronome_tempo: None,
         };
 
         part.measures.push(measure);
@@ -1074,6 +1076,8 @@ mod tests {
             ],
             start_repeat: false,
             end_repeat: false,
+            sound_tempo: None,
+            metronome_tempo: None,
         }];
 
         let result = MusicXMLConverter::convert_voice(&measures);
@@ -1153,6 +1157,8 @@ mod tests {
             ],
             start_repeat: false,
             end_repeat: false,
+            sound_tempo: None,
+            metronome_tempo: None,
         }];
 
         let result = MusicXMLConverter::convert_voice(&measures);
@@ -1247,6 +1253,8 @@ mod tests {
                 })],
                 start_repeat: false,
                 end_repeat: false,
+                sound_tempo: None,
+                metronome_tempo: None,
             }],
         };
         doc.parts.push(part);
@@ -1301,6 +1309,8 @@ mod tests {
                 })],
                 start_repeat: false,
                 end_repeat: false,
+                sound_tempo: None,
+                metronome_tempo: None,
             }],
         };
         doc.parts.push(part);
@@ -1355,6 +1365,8 @@ mod tests {
                 })],
                 start_repeat: false,
                 end_repeat: false,
+                sound_tempo: None,
+                metronome_tempo: None,
             }],
         };
         doc.parts.push(part);
@@ -1406,6 +1418,8 @@ mod tests {
                 })],
                 start_repeat: false,
                 end_repeat: false,
+                sound_tempo: None,
+                metronome_tempo: None,
             }],
         };
         doc.parts.push(part);
