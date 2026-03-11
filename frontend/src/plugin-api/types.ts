@@ -512,6 +512,13 @@ export interface PluginScorePlayerContext {
    */
   setTempoMultiplier(multiplier: number): void;
 
+  /**
+   * Reset playback tempo to the score's marked tempo.
+   * Sets tempoMultiplier to 1.0 so that effectiveBpm = score's base BPM.
+   * Has no effect if no score is currently loaded.
+   */
+  snapToScoreTempo(): void;
+
   // ─── State subscription ───────────────────────────────────────────────────
 
   /**

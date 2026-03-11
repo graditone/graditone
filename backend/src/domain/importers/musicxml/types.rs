@@ -102,6 +102,12 @@ pub struct MeasureData {
 
     /// True if this measure has an end-repeat barline (Feature 041)
     pub end_repeat: bool,
+
+    /// Tempo from <sound tempo="..."/> element at measure level (Feature 001-score-tempo)
+    pub sound_tempo: Option<f64>,
+
+    /// Tempo from <metronome><per-minute>...</per-minute></metronome> (Feature 001-score-tempo)
+    pub metronome_tempo: Option<f64>,
 }
 
 /// Timing and notation attributes from <attributes> element

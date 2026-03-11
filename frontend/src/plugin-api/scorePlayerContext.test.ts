@@ -765,6 +765,120 @@ describe('createNoOpScorePlayer() — v6', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Score-Defined Tempo (001-score-tempo)
+// ---------------------------------------------------------------------------
+
+describe('score-defined tempo', () => {
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockImportFile.mockResolvedValue(mockImportResult);
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: vi.fn().mockResolvedValue(new Blob(['fake-mxl-data'], { type: 'application/octet-stream' })),
+    } as unknown as Response);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // T008: score with 66 BPM marking → state.bpm === 66
+  it('state.bpm reflects the loaded score tempo (66 BPM)', async () => {
+    const score66 = {
+      ...mockScore,
+      global_structural_events: [
+        { Tempo: { tick: 0, bpm: 66 } },
+        { TimeSignature: { tick: 0, numerator: 4, denominator: 4 } },
+      ],
+    };
+    mockImportFile.mockResolvedValueOnce({
+      ...mockImportResult,
+      score: score66,
+    });
+
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+
+    await act(async () => {
+      await result.current.loadScore({
+        kind: 'catalogue',
+        catalogueId: 'bach-invention-1',
+      });
+    });
+
+    const state = getSubscribedState(result.current);
+    expect(state.bpm).toBe(66);
+  });
+
+  // T009: score with no tempo marking → state.bpm === 120 (fallback)
+  it('state.bpm defaults to 120 when score has no tempo event', async () => {
+    const scoreNoTempo = {
+      ...mockScore,
+      global_structural_events: [
+        { TimeSignature: { tick: 0, numerator: 4, denominator: 4 } },
+      ],
+    };
+    mockImportFile.mockResolvedValueOnce({
+      ...mockImportResult,
+      score: scoreNoTempo,
+    });
+
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+
+    await act(async () => {
+      await result.current.loadScore({
+        kind: 'catalogue',
+        catalogueId: 'bach-invention-1',
+      });
+    });
+
+    const state = getSubscribedState(result.current);
+    expect(state.bpm).toBe(120);
+  });
+
+  // T012: snapToScoreTempo resets BPM and multiplier after manual adjustment
+  it('snapToScoreTempo resets to score BPM after tempo multiplier change', async () => {
+    const score90 = {
+      ...mockScore,
+      global_structural_events: [
+        { Tempo: { tick: 0, bpm: 90 } },
+        { TimeSignature: { tick: 0, numerator: 4, denominator: 4 } },
+      ],
+    };
+    mockImportFile.mockResolvedValueOnce({
+      ...mockImportResult,
+      score: score90,
+    });
+
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+
+    await act(async () => {
+      await result.current.loadScore({
+        kind: 'catalogue',
+        catalogueId: 'bach-invention-1',
+      });
+    });
+
+    // Change multiplier to 0.5 → effective BPM = 90 * 0.5 = 45
+    act(() => {
+      result.current.setTempoMultiplier(0.5);
+    });
+
+    let state = getSubscribedState(result.current);
+    expect(state.bpm).toBe(45);
+
+    // Snap to score tempo → effective BPM = 90, multiplier = 1.0
+    act(() => {
+      result.current.snapToScoreTempo();
+    });
+
+    state = getSubscribedState(result.current);
+    expect(state.bpm).toBe(90);
+  });
+});
+
 /**
  * Get the current ScorePlayerState by calling subscribe and capturing the
  * immediate synchronous call.
