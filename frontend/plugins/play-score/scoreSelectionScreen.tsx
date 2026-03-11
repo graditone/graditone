@@ -14,12 +14,16 @@ import type { PluginPreloadedScore } from '../../src/plugin-api/index';
 
 export interface ScoreSelectionScreenProps {
   catalogue: readonly PluginPreloadedScore[];
+  /** Feature 045: User-uploaded scores to show under "My Scores" section. */
+  userScores: readonly PluginPreloadedScore[];
   onSelectScore: (catalogueId: string) => void;
+  /** Called when user selects a user-uploaded score by id. */
+  onSelectUserScore: (scoreId: string) => void;
   /** Called with the selected File when user picks a file (US6 / T025). */
   onLoadFile: (file: File) => void;
 }
 
-export function ScoreSelectionScreen({ catalogue, onSelectScore, onLoadFile }: ScoreSelectionScreenProps) {
+export function ScoreSelectionScreen({ catalogue, userScores, onSelectScore, onSelectUserScore, onLoadFile }: ScoreSelectionScreenProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,6 +70,25 @@ export function ScoreSelectionScreen({ catalogue, onSelectScore, onLoadFile }: S
           />
         </li>
       </ul>
+
+      {/* Feature 045: User-uploaded scores */}
+      {userScores.length > 0 && (
+        <>
+          <p className="play-score__section-label">MY SCORES</p>
+          <ul className="play-score__score-list" role="list">
+            {userScores.map(entry => (
+              <li key={entry.id}>
+                <button
+                  className="play-score__score-item"
+                  onClick={() => onSelectUserScore(entry.id)}
+                >
+                  {entry.displayName}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

@@ -7,8 +7,8 @@
   width: min(640px, 95vw);
   max-height: 80vh;
   overflow: hidden;
-  background: #1e1e2e;
-  color: #cdd6f4;
+  background: var(--dialog-bg);
+  color: var(--dialog-text);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
@@ -23,20 +23,20 @@
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--dialog-border);
 }
 
 .load-score-dialog__title {
   margin: 0;
   font-size: 1.125rem;
   font-weight: 700;
-  color: #cdd6f4;
+  color: var(--dialog-text);
 }
 
 .load-score-dialog__close-btn {
   background: none;
   border: none;
-  color: #6c7086;
+  color: var(--dialog-subtext);
   cursor: pointer;
   font-size: 1rem;
   padding: 0.25rem 0.5rem;
@@ -45,8 +45,8 @@
 }
 
 .load-score-dialog__close-btn:hover:not(:disabled) {
-  color: #cdd6f4;
-  background: #313244;
+  color: var(--dialog-text);
+  background: var(--dialog-surface);
 }
 
 /* Body — two-panel layout */
@@ -63,7 +63,7 @@
 
 .load-score-dialog__panel--left {
   flex: 1 1 60%;
-  border-right: 1px solid #313244;
+  border-right: 1px solid var(--dialog-border);
   min-width: 200px;
 }
 
@@ -86,7 +86,7 @@
 
   .load-score-dialog__panel--left {
     border-right: none;
-    border-bottom: 1px solid #313244;
+    border-bottom: 1px solid var(--dialog-border);
   }
 
   .load-score-dialog__panel--right {
@@ -102,7 +102,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6c7086;
+  color: var(--dialog-subtext);
 }
 
 /* Preloaded score list */
@@ -123,13 +123,13 @@
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   font-size: 0.875rem;
-  color: #cdd6f4;
+  color: var(--dialog-text);
   cursor: pointer;
   transition: background 0.12s;
 }
 
 .preloaded-score-item:hover:not(:disabled) {
-  background: #313244;
+  background: var(--dialog-surface);
 }
 
 .preloaded-score-item:disabled {
@@ -139,16 +139,16 @@
 
 .preloaded-score-item--selected,
 .preloaded-score-item[data-selected='true'] {
-  background: #45475a;
-  color: #cba6f7;
+  background: var(--dialog-selected-bg);
+  color: var(--dialog-selected-text);
   font-weight: 600;
 }
 
 /* Load from file button */
 .load-new-score-button {
-  background: #313244;
-  color: #cdd6f4;
-  border: 1px dashed #45475a;
+  background: var(--dialog-surface);
+  color: var(--dialog-text);
+  border: 1px dashed var(--dialog-surface-hover);
   border-radius: 8px;
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
@@ -158,8 +158,8 @@
 }
 
 .load-new-score-button:hover:not(:disabled) {
-  background: #45475a;
-  border-color: #6c7086;
+  background: var(--dialog-surface-hover);
+  border-color: var(--dialog-subtext);
 }
 
 .load-new-score-button:disabled {
@@ -171,8 +171,8 @@
 .load-score-dialog__status {
   padding: 0.5rem 1.25rem;
   font-size: 0.875rem;
-  color: #a6e3a1;
-  border-top: 1px solid #313244;
+  color: var(--dialog-success-text);
+  border-top: 1px solid var(--dialog-border);
 }
 
 .load-score-dialog__error {
@@ -180,17 +180,17 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1.25rem;
-  border-top: 1px solid #f38ba8;
-  background: rgba(243, 139, 168, 0.08);
+  border-top: 1px solid var(--dialog-error-text);
+  background: var(--dialog-error-bg);
   font-size: 0.875rem;
-  color: #f38ba8;
+  color: var(--dialog-error-text);
 }
 
 .load-score-dialog__retry-btn {
   background: none;
-  border: 1px solid #f38ba8;
+  border: 1px solid var(--dialog-error-text);
   border-radius: 4px;
-  color: #f38ba8;
+  color: var(--dialog-error-text);
   cursor: pointer;
   font-size: 0.8rem;
   padding: 0.25rem 0.6rem;
@@ -199,7 +199,7 @@
 }
 
 .load-score-dialog__retry-btn:hover {
-  background: rgba(243, 139, 168, 0.15);
+  background: var(--dialog-danger-bg);
 }
 
 /* Footer */
@@ -207,12 +207,12 @@
   display: flex;
   justify-content: flex-end;
   padding: 0.75rem 1.25rem;
-  border-top: 1px solid #313244;
+  border-top: 1px solid var(--dialog-border);
 }
 
 .load-score-dialog__cancel-btn {
-  background: #313244;
-  color: #cdd6f4;
+  background: var(--dialog-surface);
+  color: var(--dialog-text);
   border: none;
   border-radius: 6px;
   padding: 0.5rem 1rem;
@@ -222,7 +222,7 @@
 }
 
 .load-score-dialog__cancel-btn:hover:not(:disabled) {
-  background: #45475a;
+  background: var(--dialog-surface-hover);
 }
 
 .load-score-dialog__cancel-btn:disabled {

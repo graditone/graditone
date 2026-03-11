@@ -181,6 +181,28 @@ body[data-landing-theme] .plugin-manage-btn:hover {
   color: var(--ls-heading);
 }
 
+/* ── Dialog / overlay design tokens ───────────────────────────────────────── */
+/* Dark defaults (Catppuccin Mocha). Overridden per landing theme below.       */
+:root {
+  --dialog-bg:              #1e1e2e;
+  --dialog-text:            #cdd6f4;
+  --dialog-border:          #313244;
+  --dialog-surface:         #313244;
+  --dialog-surface-hover:   #45475a;
+  --dialog-surface-active:  #585b70;
+  --dialog-subtext:         #6c7086;
+  --dialog-selected-bg:     #45475a;
+  --dialog-selected-text:   #cba6f7;
+  --dialog-success-text:    #a6e3a1;
+  --dialog-error-bg:        rgba(243, 139, 168, 0.08);
+  --dialog-error-border:    rgba(243, 139, 168, 0.35);
+  --dialog-error-text:      #f38ba8;
+  --dialog-spinner-track:   #313244;
+  --dialog-spinner-head:    #b4befe;
+  --dialog-danger-text:     #f38ba8;
+  --dialog-danger-bg:       rgba(243, 139, 168, 0.12);
+}
+
 /* ── Feature 039: Bridge --color-* tokens for plugins that use them ───────── */
 /* The train-view plugin uses --color-* vars internally. Map them to --ls-*   */
 /* landing tokens so every theme update propagates without touching plugin CSS. */
@@ -209,6 +231,25 @@ body[data-landing-theme] {
   /* Warning / retry actions */
   --color-warning: color-mix(in srgb, var(--ls-accent) 80%, #fff);
   --color-warning-dark: var(--ls-accent);
+
+  /* Dialog tokens — remapped to landing theme palette */
+  --dialog-bg:              var(--ls-bg);
+  --dialog-text:            var(--ls-heading);
+  --dialog-border:          color-mix(in srgb, var(--ls-heading) 15%, transparent);
+  --dialog-surface:         color-mix(in srgb, var(--ls-heading) 8%, var(--ls-bg));
+  --dialog-surface-hover:   color-mix(in srgb, var(--ls-heading) 14%, var(--ls-bg));
+  --dialog-surface-active:  color-mix(in srgb, var(--ls-heading) 22%, var(--ls-bg));
+  --dialog-subtext:         var(--ls-body);
+  --dialog-selected-bg:     var(--ls-cta-bg);
+  --dialog-selected-text:   var(--ls-cta-text);
+  --dialog-success-text:    color-mix(in srgb, var(--ls-cta-bg) 80%, #000);
+  --dialog-error-bg:        color-mix(in srgb, var(--ls-accent) 10%, var(--ls-bg));
+  --dialog-error-border:    color-mix(in srgb, var(--ls-accent) 40%, transparent);
+  --dialog-error-text:      var(--ls-accent);
+  --dialog-spinner-track:   color-mix(in srgb, var(--ls-heading) 15%, transparent);
+  --dialog-spinner-head:    var(--ls-cta-bg);
+  --dialog-danger-text:     var(--ls-accent);
+  --dialog-danger-bg:       color-mix(in srgb, var(--ls-accent) 10%, var(--ls-bg));
 }
 
 main {

@@ -1101,6 +1101,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           onSelectScore={handleSelectScore}
           onLoadFile={handleLoadFile}
           onCancel={handleSelectorCancel}
+          onSelectUserScore={(scoreId) => {
+            context.scorePlayer.loadScore({ kind: 'userScore', scoreId });
+          }}
         />
       </div>
     );

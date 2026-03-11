@@ -25,6 +25,7 @@ A tablet-native app for interactive scores, designed for practice and performanc
   - **Validated with real-world files** - Successfully imports Moonlight Sonata, Bach Preludes, Mozart Sonatas, Chopin Préludes
 - **Demo score** on first launch for immediate exploration
 - **Offline storage** - Scores persist locally using IndexedDB
+- **My Scores** - Uploaded MusicXML files are saved to IndexedDB and appear in a "My Scores" section inside the score picker; scores survive page reloads; duplicate file names are auto-suffixed; each entry has a × delete button with a 5-second undo window
 - **View-only mode** - Focus on reading and performance (editing removed)
 
 ### ▶️ Performance Features

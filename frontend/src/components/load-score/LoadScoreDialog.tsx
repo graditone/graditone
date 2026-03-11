@@ -4,6 +4,8 @@ import type { PreloadedScore } from '../../data/preloadedScores';
 import type { ImportResult } from '../../services/import/MusicXMLImportService';
 import { useImportMusicXML } from '../../hooks/useImportMusicXML';
 import { PreloadedScoreList } from './PreloadedScoreList';
+import { UserScoreList } from './UserScoreList';
+import type { UserScore } from '../../services/userScoreIndex';
 import { LoadNewScoreButton } from './LoadNewScoreButton';
 import './LoadScoreDialog.css';
 
@@ -15,6 +17,12 @@ interface LoadScoreDialogProps {
    * before async work begins. Use this to call requestFullscreen() while still inside the
    * browser's user-gesture window (Safari / Firefox require this). */
   onWillLoad?: () => void;
+  /** Feature 045: User-uploaded scores to show under "My Scores" section. */
+  userScores?: ReadonlyArray<UserScore>;
+  /** Feature 045: Called when user selects one of their uploaded scores. */
+  onSelectUserScore?: (id: string) => void;
+  /** Feature 045: Called when user deletes one of their uploaded scores. */
+  onDeleteUserScore?: (id: string) => void;
 }
 
 /**
@@ -24,7 +32,15 @@ interface LoadScoreDialogProps {
  *
  * Feature 028: Load Score Dialog — User Stories 2–5.
  */
-export function LoadScoreDialog({ open, onClose, onImportComplete, onWillLoad }: LoadScoreDialogProps) {
+export function LoadScoreDialog({
+  open,
+  onClose,
+  onImportComplete,
+  onWillLoad,
+  userScores = [],
+  onSelectUserScore,
+  onDeleteUserScore,
+}: LoadScoreDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
@@ -134,6 +150,14 @@ export function LoadScoreDialog({ open, onClose, onImportComplete, onWillLoad }:
             selectedId={selectedId}
             disabled={isBusy}
             onSelect={loadPresetScore}
+          />
+          {/* Feature 045: User-uploaded scores below built-in catalogue */}
+          <UserScoreList
+            scores={userScores}
+            selectedId={selectedId}
+            disabled={isBusy}
+            onSelect={(score) => onSelectUserScore?.(score.id)}
+            onDelete={(id) => onDeleteUserScore?.(id)}
           />
         </section>
 

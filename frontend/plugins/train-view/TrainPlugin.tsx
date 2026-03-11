@@ -1686,6 +1686,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
               updateConfig({ preset: 'random' });
             }
           }}
+          onSelectUserScore={(scoreId) => {
+            context.scorePlayer.loadScore({ kind: 'userScore', scoreId });
+          }}
         />
       )}
     </div>
