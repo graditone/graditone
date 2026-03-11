@@ -1,10 +1,12 @@
 /**
  * ScoreSelectorPlugin.tsx — Host-provided ScoreSelector component (v4)
  * Feature 034: Practice from Score
+ * Feature 045: My Scores section parity in plugin overlay
  *
  * Implements PluginScoreSelectorProps.
  * Renders a score selection overlay with:
  *  - Preloaded catalogue list (tappable entries)
+ *  - "My Scores" section when userScores is non-empty (Feature 045)
  *  - "Load from file" button with <input type="file"> accepting .mxl .musicxml .xml
  *  - Loading spinner when isLoading === true
  *  - Error message when error is non-null
@@ -15,6 +17,9 @@
  */
 import { useRef } from 'react';
 import type { PluginScoreSelectorProps } from '../../plugin-api/types';
+import { UserScoreList } from '../load-score/UserScoreList';
+import { useUserScores } from '../../hooks/useUserScores';
+import { deleteScoreFromIndexedDB } from '../../services/storage/local-storage';
 import './ScoreSelectorPlugin.css';
 
 export function ScoreSelectorPlugin({
@@ -24,8 +29,10 @@ export function ScoreSelectorPlugin({
   onSelectScore,
   onLoadFile,
   onCancel,
+  onSelectUserScore,
 }: PluginScoreSelectorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { userScores, removeUserScore } = useUserScores();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,20 +79,36 @@ export function ScoreSelectorPlugin({
             Loading…
           </div>
         ) : (
-          <ul className="score-selector-list" role="listbox" aria-label="Preloaded scores">
-            {catalogue.map((entry) => (
-              <li key={entry.id} role="none" className="score-selector-item">
-                <button
-                  type="button"
-                  className="score-selector-item__btn"
-                  aria-label={entry.displayName}
-                  onClick={() => onSelectScore(entry.id)}
-                >
-                  {entry.displayName}
-                </button>
-              </li>
-            ))}
-          </ul>
+          <>
+            <div className="score-selector-scroll">
+              <ul className="score-selector-list" role="listbox" aria-label="Preloaded scores">
+                {catalogue.map((entry) => (
+                  <li key={entry.id} role="none" className="score-selector-item">
+                    <button
+                      type="button"
+                      className="score-selector-item__btn"
+                      aria-label={entry.displayName}
+                      onClick={() => onSelectScore(entry.id)}
+                    >
+                      {entry.displayName}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Feature 045: My Scores section */}
+              {userScores.length > 0 && (
+                <UserScoreList
+                  scores={userScores}
+                  onSelect={(score) => onSelectUserScore?.(score.id)}
+                  onDelete={(id) => {
+                    removeUserScore(id);
+                    deleteScoreFromIndexedDB(id).catch(() => {});
+                  }}
+                />
+              )}
+            </div>
+          </>
         )}
 
         {/* Load from file */}

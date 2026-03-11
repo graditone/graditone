@@ -6,7 +6,10 @@
  * and on GitHub Pages (/).
  *
  * Feature 028: Load Score Dialog
+ * Feature 045: Re-export UserScore so score-picker components import from one location.
  */
+export type { UserScore } from '../services/userScoreIndex';
+
 export interface PreloadedScore {
   id: string;
   displayName: string;

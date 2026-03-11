@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { Score, Note } from "../types/score";
 import { InstrumentList } from "./InstrumentList";
 import { useFileState } from "../services/state/FileStateContext";
 import type { ImportResult } from "../services/import/MusicXMLImportService";
 import { MusicXMLImportService } from "../services/import/MusicXMLImportService";
-import { loadScoreFromIndexedDB } from "../services/storage/local-storage";
+import { loadScoreFromIndexedDB, deleteScoreFromIndexedDB } from "../services/storage/local-storage";
+import { ScoreCache } from "../services/score-cache";
 import { LoadScoreDialog } from "./load-score/LoadScoreDialog";
 import { PRELOADED_SCORES } from "../data/preloadedScores";
 import { LandingScreen } from "./LandingScreen";
@@ -13,6 +14,8 @@ import { LANDING_THEMES, getThemeById } from "../themes/landing-themes";
 import { usePlayback } from "../services/playback/MusicTimeline";
 import { expandNotesWithRepeats } from "../services/playback/RepeatNoteExpander";
 import { useTempoState } from "../services/state/TempoStateContext";
+import { useUserScores } from "../hooks/useUserScores";
+import type { UserScore } from "../services/userScoreIndex";
 import "./ScoreViewer.css";
 
 interface ScoreViewerProps {
@@ -70,6 +73,11 @@ export function ScoreViewer({
   const [skipNextLoad, setSkipNextLoad] = useState(false);
   const [isFileSourced, setIsFileSourced] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Feature 045: User-uploaded scores (metadata index + reactive state)
+  const { userScores, addUserScore, removeUserScore } = useUserScores();
+  // Ref for pending deferred IndexedDB delete (used by undo mechanism)
+  const undoDeleteRef = useRef<{ id: string; entry: UserScore; timerId: ReturnType<typeof setTimeout> } | null>(null);
 
   // ── Feature 039: Theme handled by App.tsx — use provided prop ───────────
   const handleThemeChange = useCallback((themeId: string) => {
@@ -173,8 +181,9 @@ export function ScoreViewer({
   /**
    * Handle successful MusicXML import (Feature 006 / Feature 011).
    * WASM parsing creates an in-memory score (not persisted to the backend DB).
+   * Feature 045: Persist full Score to IndexedDB and add metadata to user index.
    */
-  const handleMusicXMLImport = (result: ImportResult) => {
+  const handleMusicXMLImport = async (result: ImportResult) => {
     setScore(result.score);
     setScoreId(result.score.id);
     setIsFileSourced(true);
@@ -183,7 +192,24 @@ export function ScoreViewer({
     // Feature 022: Set score title from metadata (work_title > filename fallback)
     const fileName = result.metadata.file_name;
     const strippedName = fileName ? fileName.replace(/\.[^.]+$/, '') : null;
-    setScoreTitle(result.metadata.work_title ?? strippedName ?? null);
+    const rawDisplayName = result.metadata.work_title ?? strippedName ?? null;
+    setScoreTitle(rawDisplayName ?? null);
+
+    // Feature 045: Persist score to IndexedDB; update metadata index.
+    try {
+      await ScoreCache.cache(result.score);
+      if (rawDisplayName) {
+        addUserScore(result.score.id, rawDisplayName);
+      }
+    } catch (err) {
+      // Handle storage quota exceeded (FR-007): warn but don't block current session.
+      if (err instanceof DOMException && err.name === 'QuotaExceededError') {
+        setSuccessMessage('Score could not be saved — storage is full');
+        setTimeout(() => setSuccessMessage(null), 5000);
+        return;
+      }
+      console.error('[ScoreViewer] Failed to persist score:', err);
+    }
 
     setSuccessMessage(
       `Imported ${result.statistics.note_count} notes from ${result.metadata.file_name || 'MusicXML file'}`
@@ -212,10 +238,66 @@ export function ScoreViewer({
   };
 
   /** Handle import completion from the Load Score dialog. */
-  const handleDialogImportComplete = (result: ImportResult) => {
-    handleMusicXMLImport(result);
+  const handleDialogImportComplete = async (result: ImportResult) => {
+    await handleMusicXMLImport(result);
     setDialogOpen(false);
   };
+
+  /**
+   * Feature 045: Load a persisted user score from IndexedDB.
+   * Resets isFileSourced so the loadScore useEffect fires.
+   */
+  const handleUserScoreSelect = useCallback((id: string) => {
+    setIsFileSourced(false);
+    setSkipNextLoad(false);
+    setScoreId(id);
+    setDialogOpen(false);
+  }, []);
+
+  /**
+   * Feature 045: Delete a user score with 5-second undo window.
+   * Metadata removed immediately; IndexedDB delete deferred for undo.
+   */
+  const handleUserScoreDelete = useCallback((id: string) => {
+    // Cancel any previous pending delete
+    if (undoDeleteRef.current) {
+      clearTimeout(undoDeleteRef.current.timerId);
+      undoDeleteRef.current = null;
+    }
+
+    // Find the entry before removing it (needed for undo)
+    const deletedEntry = userScores.find((s) => s.id === id);
+    if (!deletedEntry) return;
+
+    // Remove from metadata index immediately
+    removeUserScore(id);
+
+    // Schedule permanent IndexedDB deletion after 5 s
+    const timerId = setTimeout(() => {
+      deleteScoreFromIndexedDB(id).catch((err) => {
+        console.error('[ScoreViewer] Failed to delete score from IndexedDB:', err);
+      });
+      undoDeleteRef.current = null;
+      setSuccessMessage(null);
+    }, 5000);
+
+    undoDeleteRef.current = { id, entry: deletedEntry, timerId };
+
+    setSuccessMessage(`Removed "${deletedEntry.displayName}"`);
+  }, [userScores, removeUserScore]);
+
+  /**
+   * Feature 045: Undo a pending delete within the 5-second window.
+   */
+  const handleUndoDelete = useCallback(() => {
+    if (!undoDeleteRef.current) return;
+    clearTimeout(undoDeleteRef.current.timerId);
+    const { entry } = undoDeleteRef.current;
+    undoDeleteRef.current = null;
+    // Re-add the entry to the metadata index
+    addUserScore(entry.id, entry.displayName);
+    setSuccessMessage(null);
+  }, [addUserScore]);
 
   /** Get time signature string at tick 0 for display in the score header. */
   const getInitialTimeSignature = (): string => {
@@ -353,7 +435,20 @@ export function ScoreViewer({
       </div>
 
       {error && <div className="error">{error}</div>}
-      {successMessage && <div className="success-message">{successMessage}</div>}
+      {successMessage && (
+        <div className="success-message">
+          <span>{successMessage}</span>
+          {undoDeleteRef.current && (
+            <button
+              className="success-message__undo-btn"
+              onClick={handleUndoDelete}
+              type="button"
+            >
+              Undo
+            </button>
+          )}
+        </div>
+      )}
 
       {score.instruments.length === 0 ? (
         <div className="no-instruments">
@@ -385,6 +480,9 @@ export function ScoreViewer({
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onImportComplete={handleDialogImportComplete}
+        userScores={userScores}
+        onSelectUserScore={handleUserScoreSelect}
+        onDeleteUserScore={handleUserScoreDelete}
       />
     </div>
   );

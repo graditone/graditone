@@ -30,6 +30,9 @@ import { useTempoState } from '../services/state/TempoStateContext';
 import { useNoteHighlight } from '../services/highlight/useNoteHighlight';
 import { MusicXMLImportService } from '../services/import/MusicXMLImportService';
 import { PRELOADED_SCORES } from '../data/preloadedScores';
+import { loadScoreFromIndexedDB } from '../services/storage/local-storage';
+import { ScoreCache } from '../services/score-cache';
+import { addUserScore, getUserScore } from '../services/userScoreIndex';
 import type { Note, Score } from '../types/score';
 import { expandNotesWithRepeats } from '../services/playback/RepeatNoteExpander';
 
@@ -267,7 +270,8 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     setOverlayStatus('loading');
     setErrorMessage(null);
     try {
-      let file: File;
+      let scoreObject: Score | null = null;
+      let parsedTitle: string | null = null;
 
       if (source.kind === 'catalogue') {
         const preloaded = PRELOADED_SCORES.find(s => s.id === source.catalogueId);
@@ -280,34 +284,56 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
         }
         const blob = await response.blob();
         const fileName = preloaded.path.split('/').pop() ?? 'score.mxl';
-        file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+        const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+        const service = new MusicXMLImportService();
+        const result = await service.importFile(file);
+        scoreObject = result.score;
+        parsedTitle = result.metadata?.work_title ?? null;
+      } else if (source.kind === 'file') {
+        const service = new MusicXMLImportService();
+        const result = await service.importFile(source.file);
+        scoreObject = result.score;
+        parsedTitle = result.metadata?.work_title ?? null;
+
+        // Feature 045: Persist uploaded score to IndexedDB + metadata index
+        const fileName = result.metadata?.file_name;
+        const strippedName = fileName ? fileName.replace(/\.[^.]+$/, '') : null;
+        const rawDisplayName = parsedTitle ?? strippedName;
+        try {
+          await ScoreCache.cache(scoreObject);
+          if (rawDisplayName) {
+            addUserScore(scoreObject.id, rawDisplayName);
+          }
+        } catch {
+          // Quota exceeded or storage error — don't block playback
+        }
       } else {
-        file = source.file;
+        // Feature 045: Load user-uploaded score directly from IndexedDB (no WASM re-parse)
+        scoreObject = await loadScoreFromIndexedDB(source.scoreId);
+        if (!scoreObject) {
+          throw new Error(`User score not found in local storage: "${source.scoreId}"`);
+        }
+        // Retrieve title from user score metadata index
+        const userScoreMeta = getUserScore(source.scoreId);
+        parsedTitle = userScoreMeta?.displayName ?? null;
       }
 
-      const service = new MusicXMLImportService();
-      const result = await service.importFile(file);
-
-      const extractedNotes = extractNotes(result.score);
-      const parsedNotes = expandNotesWithRepeats(extractedNotes, result.score.repeat_barlines);
-      const parsedTempo = extractTempo(result.score);
-      const parsedTimeSignature = extractTimeSignature(result.score);
-      const parsedTitle =
-        result.metadata.work_title ??
-        result.metadata.file_name?.replace(/\.[^.]+$/, '') ??
-        null;
+      const extractedNotes = extractNotes(scoreObject);
+      const parsedNotes = expandNotesWithRepeats(extractedNotes, scoreObject.repeat_barlines);
+      const parsedTempo = extractTempo(scoreObject);
+      const parsedTimeSignature = extractTimeSignature(scoreObject);
 
       // Per-staff expanded notes — used by extractPracticeNotes so the
       // practice engine sees repeat-expanded ticks matching the playback engine.
-      const rawNotesByStaff = extractNotesByStaff(result.score);
+      const rawNotesByStaff = extractNotesByStaff(scoreObject);
       const parsedNotesByStaff = rawNotesByStaff.map(staffNotes =>
-        expandNotesWithRepeats(staffNotes, result.score.repeat_barlines)
+        expandNotesWithRepeats(staffNotes, scoreObject!.repeat_barlines)
       );
 
       // Reset playback state for the new score
       playbackState.resetPlayback();
 
-      setScore(result.score);
+      setScore(scoreObject);
       setNotes(parsedNotes);
       setRawNotes(extractedNotes);
       setExpandedNotesByStaff(parsedNotesByStaff);

@@ -20,7 +20,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { PluginContext, ScorePlayerState, PluginPlaybackStatus, MetronomeState, MetronomeSubdivision } from '../../src/plugin-api/index';
-import { ScoreSelectionScreen } from './scoreSelectionScreen';
+
 import { PlaybackToolbar } from './playbackToolbar';
 import './PlayScorePlugin.css';
 
@@ -141,6 +141,12 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
     context.scorePlayer.loadScore({ kind: 'file', file });
   }, [context.scorePlayer]);
 
+  // Feature 045: Load a user-uploaded score from IndexedDB
+  const handleSelectUserScore = useCallback((scoreId: string) => {
+    setScreen('player');
+    context.scorePlayer.loadScore({ kind: 'userScore', scoreId });
+  }, [context.scorePlayer]);
+
   const handleBack = useCallback(() => {
     context.close();
   }, [context]);
@@ -251,13 +257,19 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
   }, [context.scorePlayer, loopStart, loopRegion]);
 
   // ─── Selection screen ──────────────────────────────────────────────────────
+  const { ScoreSelector, ScoreRenderer: ScoreRendererComponent } = context.components;
+
   if (screen === 'selection') {
     return (
       <div className="play-score-plugin play-score-plugin--selection">
-        <ScoreSelectionScreen
+        <ScoreSelector
           catalogue={context.scorePlayer.getCatalogue()}
+          isLoading={playerState.status === 'loading'}
+          error={playerState.error}
           onSelectScore={handleSelectScore}
           onLoadFile={handleLoadFile}
+          onCancel={handleBack}
+          onSelectUserScore={handleSelectUserScore}
         />
       </div>
     );
@@ -265,7 +277,7 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
 
   // ─── Player view ──────────────────────────────────────────────────────────
   const { status, title, error, currentTick, totalDurationTicks, bpm, highlightedNoteIds } = playerState;
-  const ScoreRenderer = context.components.ScoreRenderer;
+  const ScoreRenderer = ScoreRendererComponent;
 
   return (
     <div className="play-score-plugin play-score-plugin--player">

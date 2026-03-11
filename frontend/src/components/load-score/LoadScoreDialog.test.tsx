@@ -119,6 +119,46 @@ describe('LoadScoreDialog — preloaded score selection', () => {
   });
 });
 
+// --- T027: regression guards --------------------------------------------------
+
+describe('LoadScoreDialog — regression guards', () => {
+  it('renders without error when userScores is an empty array', () => {
+    expect(() =>
+      render(
+        <LoadScoreDialog
+          open={true}
+          onClose={vi.fn()}
+          onImportComplete={makeOnImportComplete()}
+          userScores={[]}
+          onSelectUserScore={vi.fn()}
+          onDeleteUserScore={vi.fn()}
+        />,
+      ),
+    ).not.toThrow();
+
+    // "My Scores" section should NOT appear when list is empty
+    expect(screen.queryByText(/my scores/i)).not.toBeInTheDocument();
+  });
+
+  it('still renders ≥6 preloaded scores when userScores is provided', () => {
+    render(
+      <LoadScoreDialog
+        open={true}
+        onClose={vi.fn()}
+        onImportComplete={makeOnImportComplete()}
+        userScores={[]}
+        onSelectUserScore={vi.fn()}
+        onDeleteUserScore={vi.fn()}
+      />,
+    );
+    const items = screen.getAllByRole('button', {
+      name: /Bach|Beethoven|Burgm|Chopin|Pachelbel/i,
+      hidden: true,
+    });
+    expect(items.length).toBeGreaterThanOrEqual(6);
+  });
+});
+
 // --- T022: fetch-error tests --------------------------------------------------
 
 describe('LoadScoreDialog — fetch error handling', () => {

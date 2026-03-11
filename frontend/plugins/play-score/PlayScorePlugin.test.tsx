@@ -16,11 +16,44 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PlayScorePlugin } from './PlayScorePlugin';
-import type { PluginContext, ScorePlayerState, PluginPlaybackStatus, PluginScoreRendererProps } from '../../src/plugin-api/index';
+import type { PluginContext, ScorePlayerState, PluginPlaybackStatus, PluginScoreRendererProps, PluginScoreSelectorProps } from '../../src/plugin-api/index';
 
 // ---------------------------------------------------------------------------
 // Mock helpers
 // ---------------------------------------------------------------------------
+
+function MockScoreSelector({ catalogue, isLoading, error, onSelectScore, onLoadFile, onCancel }: PluginScoreSelectorProps) {
+  return (
+    <div data-testid="score-selector-dialog" role="dialog" aria-label="Select a Score">
+      {error && <div role="alert">{error}</div>}
+      {isLoading && <div role="status" aria-label="Loading score">Loading…</div>}
+      <ul role="listbox" aria-label="Preloaded scores">
+        {catalogue.map((e) => (
+          <li key={e.id} role="none">
+            <button type="button" aria-label={e.displayName} onClick={() => onSelectScore(e.id)}>
+              {e.displayName}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button type="button" onClick={() => {
+        const input = document.querySelector<HTMLInputElement>('input[data-testid="mock-file-input"]');
+        input?.click();
+      }}>📂 Load from file…</button>
+      <input
+        type="file"
+        accept=".mxl,.xml,.musicxml"
+        data-testid="mock-file-input"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onLoadFile(file);
+        }}
+      />
+      <button type="button" onClick={onCancel} aria-label="Cancel score selection">✕</button>
+    </div>
+  );
+}
 
 const MOCK_CATALOGUE = [
   { id: 'bach-invention-1', displayName: 'Bach — Invention No. 1' },
@@ -74,7 +107,7 @@ function createMockContext(stateOverride: Partial<ScorePlayerState> = {}, ScoreR
     components: {
       StaffViewer: () => null,
       ScoreRenderer: ScoreRendererOverride ?? (() => null),
-      ScoreSelector: () => null,
+      ScoreSelector: MockScoreSelector,
     },
     scorePlayer: {
       getCatalogue: () => MOCK_CATALOGUE,
@@ -613,7 +646,7 @@ describe('PlayScorePlugin — US6: Load from file', () => {
     ctx.mockLoadScore.mockResolvedValueOnce(undefined);
     render(<PlayScorePlugin context={ctx.context} />);
 
-    const fileInput = screen.getByTestId('file-input');
+    const fileInput = screen.getByTestId('mock-file-input');
     const mockFile = new File(['<score/>'], 'test.mxl', { type: 'application/octet-stream' });
 
     await act(async () => {
@@ -636,7 +669,7 @@ describe('PlayScorePlugin — US6: Load from file', () => {
     ctx.mockLoadScore.mockResolvedValueOnce(undefined);
     render(<PlayScorePlugin context={ctx.context} />);
 
-    const fileInput = screen.getByTestId('file-input');
+    const fileInput = screen.getByTestId('mock-file-input');
     const badFile = new File(['not xml'], 'bad.mxl', { type: 'application/octet-stream' });
 
     await act(async () => {

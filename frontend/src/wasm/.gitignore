@@ -1,7 +1,1 @@
-# Ignore everything by default
 *
-
-# But allow TypeScript source files (layout types, wrappers)
-!*.ts
-!*.md
-!.gitignore

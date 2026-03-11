@@ -379,6 +379,12 @@ export interface PluginScoreSelectorProps {
    * Plugin is responsible for reverting preset or keeping the existing score.
    */
   onCancel: () => void;
+  /**
+   * Feature 045: Called when the user selects one of their uploaded scores.
+   * Plugin should call context.scorePlayer.loadScore({ kind: 'userScore', scoreId: id }).
+   * User scores and delete are managed internally by the host component.
+   */
+  onSelectUserScore?: (id: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -405,7 +411,9 @@ export interface PluginPreloadedScore {
  */
 export type ScoreLoadSource =
   | { readonly kind: 'catalogue'; readonly catalogueId: string }
-  | { readonly kind: 'file';      readonly file: File };
+  | { readonly kind: 'file';      readonly file: File }
+  /** Feature 045: Load a user-uploaded score directly from IndexedDB by its UUID. */
+  | { readonly kind: 'userScore'; readonly scoreId: string };
 
 /**
  * Lifecycle states of the score player.

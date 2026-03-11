@@ -87,6 +87,12 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - N/A — repeat barlines serialized as part of existing score JSON (no new persistence layer) (041-repeat-barlines)
 - Rust 1.93 (edition 2024) + TypeScript 5.9 + wasm-bindgen 0.2, serde 1.0, serde_json 1.0, React 19, Vite 7 (043-score-rests)
 - N/A (stateless rendering pipeline) (043-score-rests)
+- Rust 1.93.0 (backend/WASM); TypeScript 5.9 / React 19 (frontend) + wasm-bindgen 0.2, serde-json 1.0, wasm-pack (WASM build); Vite 7 / Vitest 4 (frontend testing); Playwright 1.58 (E2E) (044-time-signatures)
+- N/A — WASM client-side processing, no persistence changes (044-time-signatures)
+- Rust (stable, 1.75+) — backend domain & importer; TypeScript 5 / React 18 — frontend + `quick-xml` (Rust MusicXML streaming parser); `usePlayback` / `MusicTimeline.ts` (Tone.js playback); `TempoStateContext` (React Context for multiplier); `useScorePlayerBridge` (plugin API bridge) (001-score-tempo)
+- N/A — no persistence changes; score data lives in WASM memory during session (001-score-tempo)
+- TypeScript 5.x, React 18+ + React, IndexedDB (`graditone-db` / `scores` store via existing `local-storage.ts`), `localStorage` (metadata index), WASM music engine (score parsing, no changes) (045-persist-uploaded-scores)
+- IndexedDB (full `Score` object) + `localStorage` key `graditone-user-scores-index` (lightweight `Array<{id, displayName, uploadedAt}>`) (045-persist-uploaded-scores)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -107,9 +113,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
-- 043-score-rests: Added Rust 1.93 (edition 2024) + TypeScript 5.9 + wasm-bindgen 0.2, serde 1.0, serde_json 1.0, React 19, Vite 7
-- 041-repeat-barlines: Added Rust (edition 2024, stable toolchain), TypeScript 5, React 18 + quick-xml (MusicXML streaming parser), wasm-bindgen 0.2, serde-wasm-bindgen 0.6, serde 1.0, ToneJS (scheduling), Vitest (TS tests), cargo test (Rust tests)
-- 040-android-app-pwa: Added Android TWA (Trusted Web Activity via Bubblewrap CLI), Kotlin/Gradle (Android App Bundle), Firebase Crashlytics (anonymous crash reporting), `android/` project directory, `frontend/public/.well-known/assetlinks.json` (Digital Asset Links), `.github/workflows/build-android.yml` (CI AAB build on release tag). No changes to backend Rust or frontend React/WASM.
+- 045-persist-uploaded-scores: Added TypeScript 5.x, React 18+ + React, IndexedDB (`graditone-db` / `scores` store via existing `local-storage.ts`), `localStorage` (metadata index), WASM music engine (score parsing, no changes)
+- 001-score-tempo: Added Rust (stable, 1.75+) — backend domain & importer; TypeScript 5 / React 18 — frontend + `quick-xml` (Rust MusicXML streaming parser); `usePlayback` / `MusicTimeline.ts` (Tone.js playback); `TempoStateContext` (React Context for multiplier); `useScorePlayerBridge` (plugin API bridge)
+- 044-time-signatures: Added Rust 1.93.0 (backend/WASM); TypeScript 5.9 / React 19 (frontend) + wasm-bindgen 0.2, serde-json 1.0, wasm-pack (WASM build); Vite 7 / Vitest 4 (frontend testing); Playwright 1.58 (E2E)
 
 
 <!-- MANUAL ADDITIONS START -->

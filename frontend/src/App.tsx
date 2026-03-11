@@ -64,6 +64,8 @@ function App() {
   // Easter-egg: only show the theme navbar when a theme hash is explicitly in the URL.
   const [showThemeNavbar, setShowThemeNavbar] = useState<boolean>(() => isThemeInHash())
 
+  // Feature 045: User-uploaded scores — managed internally by ScoreSelectorPlugin
+
   const handleThemeChange = useCallback((themeId: string) => {
     setActiveThemeId(themeId)
     window.location.hash = themeId
@@ -299,9 +301,13 @@ function App() {
             // ScoreRendererPlugin implementation is wired by V3PluginWrapper
             // after the bridge hook is called inside TempoStateProvider.
             ScoreRenderer: BoundScoreRenderer,
-            // Host-provided score selection dialog (v4 — Feature 034).
-            // Renders the preloaded catalogue + "Load from file" option.
-            ScoreSelector: ScoreSelectorPlugin,
+            // Host-provided score selection dialog (v4 — Feature 034/045).
+            // User scores and delete are managed internally by ScoreSelectorPlugin.
+            ScoreSelector: (props) => (
+              <ScoreSelectorPlugin
+                {...props}
+              />
+            ),
           },
           // v3 score player — proxy that delegates to hook-backed implementation
           // once V3PluginWrapper sets scorePlayerRef.current = bridge.api.

@@ -1,6 +1,7 @@
 /**
  * ScoreSelectorPlugin.css — Score Selector overlay styles
  * Feature 034: Practice from Score
+ * Uses --dialog-* tokens (App.css) so it adapts to all landing themes.
  */
 
 /* ── Overlay backdrop ───────────────────────────────────────────────────── */
@@ -11,15 +12,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
   padding: 1rem;
 }
 
 /* ── Panel ──────────────────────────────────────────────────────────────── */
 .score-selector-panel {
-  background: #fff;
+  background: var(--dialog-bg);
+  color: var(--dialog-text);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   width: 100%;
   max-width: 420px;
   max-height: 80vh;
@@ -34,42 +37,42 @@
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--dialog-border);
   flex-shrink: 0;
 }
 
 .score-selector-title {
   margin: 0;
   font-size: 1.125rem;
-  font-weight: 600;
-  color: #1a1a2e;
+  font-weight: 700;
+  color: var(--dialog-text);
 }
 
 .score-selector-cancel {
   background: none;
   border: none;
-  font-size: 1.25rem;
-  color: #666;
+  font-size: 1rem;
+  color: var(--dialog-subtext);
   cursor: pointer;
   padding: 0.25rem 0.5rem;
-  border-radius: 6px;
+  border-radius: 4px;
   line-height: 1;
   transition: background 0.15s, color 0.15s;
 }
 
 .score-selector-cancel:hover {
-  background: #f0f0f0;
-  color: #333;
+  background: var(--dialog-surface);
+  color: var(--dialog-text);
 }
 
 /* ── Error message ──────────────────────────────────────────────────────── */
 .score-selector-error {
   margin: 0.75rem 1.25rem 0;
   padding: 0.5rem 0.75rem;
-  background: #fff3f3;
-  border: 1px solid #ffcccc;
+  background: var(--dialog-error-bg);
+  border: 1px solid var(--dialog-error-border);
   border-radius: 6px;
-  color: #c62828;
+  color: var(--dialog-error-text);
   font-size: 0.875rem;
   flex-shrink: 0;
 }
@@ -80,7 +83,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 2rem 1.25rem;
-  color: #555;
+  color: var(--dialog-subtext);
   font-size: 0.95rem;
   flex: 1;
 }
@@ -89,8 +92,8 @@
   display: inline-block;
   width: 20px;
   height: 20px;
-  border: 3px solid #e0e0e0;
-  border-top-color: #1976d2;
+  border: 3px solid var(--dialog-spinner-track);
+  border-top-color: var(--dialog-spinner-head);
   border-radius: 50%;
   animation: score-selector-spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -101,58 +104,71 @@
 }
 
 /* ── Catalogue list ─────────────────────────────────────────────────────── */
+.score-selector-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 0.5rem;
+}
+
 .score-selector-list {
   list-style: none;
   margin: 0;
-  padding: 0.5rem 0;
-  overflow-y: auto;
-  flex: 1;
+  padding: 0.5rem 0 0;
 }
 
 .score-selector-item {
-  padding: 0.75rem 1.25rem;
-  font-size: 0.95rem;
-  color: #1a1a2e;
+  padding: 0.25rem 1rem;
+}
+
+.score-selector-item__btn {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: var(--dialog-text);
   cursor: pointer;
   transition: background 0.12s;
-  outline: none;
 }
 
-.score-selector-item:hover,
-.score-selector-item:focus {
-  background: #e8f0fe;
+.score-selector-item__btn:hover {
+  background: var(--dialog-surface);
 }
 
-.score-selector-item:active {
-  background: #c5d8fc;
+.score-selector-item__btn:active {
+  background: var(--dialog-surface-hover);
 }
 
 /* ── Load from file row ─────────────────────────────────────────────────── */
 .score-selector-file-row {
   padding: 0.75rem 1.25rem 1rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--dialog-border);
   flex-shrink: 0;
 }
 
 .score-selector-file-btn {
   width: 100%;
   padding: 0.6rem 1rem;
-  background: #f5f7ff;
-  border: 1.5px dashed #9ca8d6;
+  background: var(--dialog-surface);
+  border: 1.5px dashed var(--dialog-surface-hover);
   border-radius: 8px;
-  color: #1a3c8f;
-  font-size: 0.9rem;
+  color: var(--dialog-text);
+  font-size: 0.875rem;
   font-weight: 500;
+  font-family: inherit;
   cursor: pointer;
   text-align: center;
   transition: background 0.14s, border-color 0.14s;
 }
 
 .score-selector-file-btn:hover {
-  background: #eaefff;
-  border-color: #4a6cf7;
+  background: var(--dialog-surface-hover);
+  border-color: var(--dialog-subtext);
 }
 
 .score-selector-file-btn:active {
-  background: #d9e3ff;
+  background: var(--dialog-surface-active);
 }
