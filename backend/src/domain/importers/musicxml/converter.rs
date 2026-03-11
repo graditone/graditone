@@ -26,6 +26,32 @@ use std::collections::{BTreeMap, HashMap};
 #[cfg(target_arch = "wasm32")]
 use web_sys::console;
 
+/// Compute the start tick of a measure, accounting for pickup/anacrusis.
+fn measure_start_tick(measure_index: usize, pickup_ticks: u32, ticks_per_measure: u32) -> u32 {
+    if pickup_ticks == 0 || measure_index == 0 {
+        if pickup_ticks > 0 && measure_index == 0 {
+            0
+        } else {
+            measure_index as u32 * ticks_per_measure
+        }
+    } else {
+        pickup_ticks + (measure_index as u32 - 1) * ticks_per_measure
+    }
+}
+
+/// Compute the end tick of a measure, accounting for pickup/anacrusis.
+fn measure_end_tick(measure_index: usize, pickup_ticks: u32, ticks_per_measure: u32) -> u32 {
+    if pickup_ticks > 0 {
+        if measure_index == 0 {
+            pickup_ticks
+        } else {
+            pickup_ticks + measure_index as u32 * ticks_per_measure
+        }
+    } else {
+        (measure_index as u32 + 1) * ticks_per_measure
+    }
+}
+
 /// Voice distributor for resolving overlapping notes by splitting into multiple voices
 ///
 /// Uses deterministic algorithm: sort notes by (start_tick, pitch), then assign
@@ -235,11 +261,15 @@ impl MusicXMLConverter {
 
         // Collect repeat barlines from the first part (repeat structure is score-wide)
         let ticks_per_measure: u32 = (3840 * time_num as u32) / time_den as u32;
+
+        // Detect pickup/anacrusis measure: if first measure's duration < ticks_per_measure
+        let pickup_ticks = Self::detect_pickup_ticks(&doc.parts, ticks_per_measure);
+
         let repeat_barlines = doc
             .parts
             .first()
             .map(|first_part| {
-                Self::collect_repeat_barlines(&first_part.measures, ticks_per_measure)
+                Self::collect_repeat_barlines(&first_part.measures, ticks_per_measure, pickup_ticks)
             })
             .unwrap_or_default();
 
@@ -250,8 +280,61 @@ impl MusicXMLConverter {
         }
 
         score.repeat_barlines = repeat_barlines;
+        score.pickup_ticks = pickup_ticks;
 
         Ok(score)
+    }
+
+    /// Detects if the first measure is a pickup/anacrusis by computing its
+    /// actual tick duration and comparing to the expected ticks_per_measure.
+    fn detect_pickup_ticks(parts: &[PartData], ticks_per_measure: u32) -> u32 {
+        let first_measure = match parts.first().and_then(|p| p.measures.first()) {
+            Some(m) => m,
+            None => return 0,
+        };
+
+        let mut timing = TimingContext::new();
+        if let Some(attrs) = &first_measure.attributes {
+            if let Some(divisions) = attrs.divisions {
+                timing.set_divisions(divisions);
+            }
+        }
+
+        let mut max_tick: u32 = 0;
+        for element in &first_measure.elements {
+            match element {
+                MeasureElement::Note(note_data) => {
+                    if timing.advance_by_duration(note_data.duration).is_ok() {
+                        max_tick = max_tick.max(timing.current_tick);
+                    }
+                }
+                MeasureElement::Rest(rest_data) => {
+                    if timing.advance_by_duration(rest_data.duration).is_ok() {
+                        max_tick = max_tick.max(timing.current_tick);
+                    }
+                }
+                MeasureElement::Backup(duration) => {
+                    if let Ok(fraction) = Fraction::from_musicxml(*duration, timing.divisions)
+                        .to_ticks()
+                        .map(|t| t as u32)
+                    {
+                        if timing.current_tick >= fraction {
+                            timing.current_tick -= fraction;
+                        }
+                    }
+                }
+                MeasureElement::Forward(duration) => {
+                    let _ = timing.advance_by_duration(*duration);
+                    max_tick = max_tick.max(timing.current_tick);
+                }
+            }
+        }
+
+        if max_tick > 0 && max_tick < ticks_per_measure {
+            max_tick
+        } else {
+            0
+        }
     }
 
     /// Collects repeat barlines from a slice of MeasureData.
@@ -261,11 +344,12 @@ impl MusicXMLConverter {
     fn collect_repeat_barlines(
         measures: &[MeasureData],
         ticks_per_measure: u32,
+        pickup_ticks: u32,
     ) -> Vec<RepeatBarline> {
         let mut result = Vec::new();
         for (i, measure) in measures.iter().enumerate() {
-            let start_tick = i as u32 * ticks_per_measure;
-            let end_tick = start_tick + ticks_per_measure;
+            let start_tick = measure_start_tick(i, pickup_ticks, ticks_per_measure);
+            let end_tick = measure_end_tick(i, pickup_ticks, ticks_per_measure);
             match (measure.start_repeat, measure.end_repeat) {
                 (true, true) => result.push(RepeatBarline {
                     measure_index: i as u32,

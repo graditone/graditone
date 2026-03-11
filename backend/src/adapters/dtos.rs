@@ -70,7 +70,8 @@ impl From<&Instrument> for InstrumentDto {
 /// v3: WASM now returns ScoreDto instead of raw Score
 /// v4: repeat_barlines added to ScoreDto
 /// v5: rest_events added to Voice (043-score-rests)
-const SCORE_SCHEMA_VERSION: u32 = 5;
+/// v6: pickup_ticks added to ScoreDto (044-time-signatures)
+const SCORE_SCHEMA_VERSION: u32 = 6;
 
 /// DTO for Score containing InstrumentDtos with schema versioning
 #[derive(Debug, Serialize, Deserialize)]
@@ -82,12 +83,16 @@ pub struct ScoreDto {
     /// v2: Added active_clef to StaffDto
     /// v4: Added repeat_barlines
     /// v5: Added rest_events to Voice
+    /// v6: Added pickup_ticks for anacrusis/pickup measure support
     pub schema_version: u32,
 
     pub global_structural_events: Vec<GlobalStructuralEvent>,
     pub instruments: Vec<InstrumentDto>,
     #[serde(default)]
     pub repeat_barlines: Vec<RepeatBarline>,
+    /// Duration of pickup/anacrusis measure in ticks (0 = no pickup)
+    #[serde(default)]
+    pub pickup_ticks: u32,
 }
 
 impl From<&Score> for ScoreDto {
@@ -98,6 +103,7 @@ impl From<&Score> for ScoreDto {
             global_structural_events: score.global_structural_events.clone(),
             instruments: score.instruments.iter().map(InstrumentDto::from).collect(),
             repeat_barlines: score.repeat_barlines.clone(),
+            pickup_ticks: score.pickup_ticks,
         }
     }
 }

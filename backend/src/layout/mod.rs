@@ -51,6 +51,45 @@ impl Default for LayoutConfig {
     }
 }
 
+/// Compute the start tick of a measure, accounting for pickup/anacrusis.
+fn measure_start_tick(measure_index: usize, pickup_ticks: u32, ticks_per_measure: u32) -> u32 {
+    if pickup_ticks > 0 {
+        if measure_index == 0 {
+            0
+        } else {
+            pickup_ticks + (measure_index as u32 - 1) * ticks_per_measure
+        }
+    } else {
+        measure_index as u32 * ticks_per_measure
+    }
+}
+
+/// Compute the end tick of a measure, accounting for pickup/anacrusis.
+fn measure_end_tick(measure_index: usize, pickup_ticks: u32, ticks_per_measure: u32) -> u32 {
+    if pickup_ticks > 0 {
+        if measure_index == 0 {
+            pickup_ticks
+        } else {
+            pickup_ticks + measure_index as u32 * ticks_per_measure
+        }
+    } else {
+        (measure_index as u32 + 1) * ticks_per_measure
+    }
+}
+
+/// Map a tick position to its measure index, accounting for pickup/anacrusis.
+fn tick_to_measure_index(tick: u32, pickup_ticks: u32, ticks_per_measure: u32) -> usize {
+    if pickup_ticks > 0 {
+        if tick < pickup_ticks {
+            0
+        } else {
+            ((tick - pickup_ticks) / ticks_per_measure) as usize + 1
+        }
+    } else {
+        (tick / ticks_per_measure) as usize
+    }
+}
+
 /// Compute layout from a CompiledScore
 ///
 /// This is the main entry point for the layout engine. Returns a `GlobalLayout`
@@ -61,7 +100,10 @@ impl Default for LayoutConfig {
 /// Layout computation is deterministic - identical inputs always produce
 /// byte-identical outputs, enabling aggressive caching.
 pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> GlobalLayout {
-    // Extract time signature from global_structural_events (where the converter stores it)
+    // Extract time signature — check multiple JSON paths for compatibility:
+    // 1. global_structural_events[].TimeSignature (ScoreDto from musicore-import)
+    // 2. time_signature_changes[] (ConvertedScore from frontend LayoutView)
+    // 3. instruments[0].staves[0].time_signature (staff-level, set by frontend converter)
     let (time_numerator, time_denominator) = score["global_structural_events"]
         .as_array()
         .and_then(|events| {
@@ -77,11 +119,42 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                 }
             })
         })
+        .or_else(|| {
+            score["time_signature_changes"].as_array().and_then(|arr| {
+                arr.first().map(|ts| {
+                    (
+                        ts["numerator"].as_u64().unwrap_or(4) as u32,
+                        ts["denominator"].as_u64().unwrap_or(4) as u32,
+                    )
+                })
+            })
+        })
+        .or_else(|| {
+            score["instruments"]
+                .as_array()
+                .and_then(|insts| insts.first())
+                .and_then(|inst| inst["staves"].as_array())
+                .and_then(|s| s.first())
+                .and_then(|st| {
+                    let ts = &st["time_signature"];
+                    if ts.is_object() {
+                        Some((
+                            ts["numerator"].as_u64().unwrap_or(4) as u32,
+                            ts["denominator"].as_u64().unwrap_or(4) as u32,
+                        ))
+                    } else {
+                        None
+                    }
+                })
+        })
         .unwrap_or((4, 4));
     let ticks_per_measure: u32 = (3840 * time_numerator) / time_denominator;
 
+    // Read pickup_ticks for anacrusis/pickup measure support
+    let pickup_ticks = score["pickup_ticks"].as_u64().unwrap_or(0) as u32;
+
     // Extract measures from score using actual time signature
-    let measures = extract_measures(score, ticks_per_measure);
+    let measures = extract_measures(score, ticks_per_measure, pickup_ticks);
 
     // Extract repeat barline flags indexed by measure position (Feature 041)
     let mut start_repeat_set: std::collections::HashSet<u32> = std::collections::HashSet::new();
@@ -114,12 +187,12 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
         .map(|(i, (note_durations, rest_durations))| {
             let width =
                 spacer::compute_measure_width(note_durations, rest_durations, &spacing_config);
-            let start_tick = i as u32 * ticks_per_measure;
-            let end_tick = start_tick + ticks_per_measure;
+            let start = measure_start_tick(i, pickup_ticks, ticks_per_measure);
+            let end = measure_end_tick(i, pickup_ticks, ticks_per_measure);
             breaker::MeasureInfo {
                 width,
-                start_tick,
-                end_tick,
+                start_tick: start,
+                end_tick: end,
                 start_repeat: start_repeat_set.contains(&(i as u32)),
                 end_repeat: end_repeat_set.contains(&(i as u32)),
             }
@@ -215,7 +288,82 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
             system.bounding_box.width + unified_left_margin,
             unified_left_margin,
             &spacing_config,
+            ticks_per_measure,
         );
+
+        // Compute measure boundary x positions for this system.
+        // Content-bearing measures end where their last event is (+clearance).
+        // Empty measures (only whole-measure rests) share the remaining width equally.
+        let measure_x_bounds: HashMap<u32, (f32, f32)> = {
+            let measures_in_sys: Vec<&breaker::MeasureInfo> = measure_infos
+                .iter()
+                .filter(|m| {
+                    m.start_tick < system.tick_range.end_tick
+                        && m.end_tick > system.tick_range.start_tick
+                })
+                .collect();
+
+            // First pass: determine content width for measures that have events
+            let clearance = 30.0_f32;
+            let mut content_widths: Vec<Option<f32>> = Vec::with_capacity(measures_in_sys.len());
+            let mut total_content_width = 0.0_f32;
+            let mut empty_count = 0_usize;
+
+            for m in &measures_in_sys {
+                let last_event = note_positions
+                    .iter()
+                    .filter(|(tick, _)| **tick >= m.start_tick && **tick < m.end_tick)
+                    .max_by_key(|(tick, _)| *tick);
+
+                if let Some((_, &x)) = last_event {
+                    // Content measure: width = last event position + clearance - left edge
+                    // We'll compute the actual width relative to running_x below
+                    content_widths.push(Some(x + clearance));
+                } else {
+                    content_widths.push(None);
+                    empty_count += 1;
+                }
+            }
+
+            // Compute total system width from allocated measure widths
+            let total_system_width: f32 =
+                measures_in_sys.iter().map(|m| m.width).sum::<f32>() + unified_left_margin;
+
+            // Second pass: compute actual content width (relative to running_x)
+            let mut running_x = unified_left_margin;
+            for cw in &content_widths {
+                if let Some(abs_end) = cw {
+                    total_content_width += (*abs_end - running_x).max(0.0);
+                    running_x = *abs_end;
+                } else {
+                    // placeholder — will be computed below
+                    running_x += 0.0;
+                }
+            }
+
+            // Remaining width for empty measures
+            let remaining_width = (total_system_width - unified_left_margin - total_content_width)
+                .max(empty_count as f32 * 100.0); // minimum 100 per empty measure
+            let empty_measure_width = if empty_count > 0 {
+                remaining_width / empty_count as f32
+            } else {
+                0.0
+            };
+
+            // Third pass: assign bounds sequentially
+            let mut bounds = HashMap::new();
+            running_x = unified_left_margin;
+            for (i, m) in measures_in_sys.iter().enumerate() {
+                let start_x = running_x;
+                if let Some(abs_end) = content_widths[i] {
+                    running_x = abs_end;
+                } else {
+                    running_x += empty_measure_width;
+                }
+                bounds.insert(m.start_tick, (start_x, running_x));
+            }
+            bounds
+        };
 
         // --- Collision-aware spacing pre-scan ---
         // Compute note Y extents for each staff (relative to staff origin) to detect
@@ -286,6 +434,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     &note_positions,
                     unified_left_margin,
                     ticks_per_measure,
+                    &measure_x_bounds,
                 );
 
                 // Separate pseudo-glyphs (stems U+0000, beams U+0001) from text glyphs
@@ -329,18 +478,20 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                 );
                 structural_glyphs.extend(key_sig_glyphs);
 
-                // Position time signature after key signature
-                // Key sig takes ~15 units per accidental, so calculate dynamic x position
-                let key_sig_width = staff_data.key_sharps.abs() as f32 * 15.0;
-                let time_sig_x = 120.0 + key_sig_width + 20.0; // Add 20 unit gap
-                let time_sig_glyphs = positioner::position_time_signature(
-                    staff_data.time_numerator,
-                    staff_data.time_denominator,
-                    time_sig_x,
-                    config.units_per_space,
-                    staff_vertical_offset,
-                );
-                structural_glyphs.extend(time_sig_glyphs);
+                // Position time signature after key signature — only on the first system
+                // (standard engraving: repeat only when the time signature changes)
+                if system.index == 0 {
+                    let key_sig_width = staff_data.key_sharps.abs() as f32 * 15.0;
+                    let time_sig_x = 120.0 + key_sig_width + 20.0; // Add 20 unit gap
+                    let time_sig_glyphs = positioner::position_time_signature(
+                        staff_data.time_numerator,
+                        staff_data.time_denominator,
+                        time_sig_x,
+                        config.units_per_space,
+                        staff_vertical_offset,
+                    );
+                    structural_glyphs.extend(time_sig_glyphs);
+                }
 
                 // Create bar lines at measure boundaries
                 let bar_lines = create_bar_lines(
@@ -351,6 +502,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     system.bounding_box.width,
                     config.units_per_space,
                     &note_positions,
+                    &measure_x_bounds,
                 );
 
                 // Generate ledger lines for notes outside the 5-line staff
@@ -495,7 +647,12 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
 
         // T010: Compute measure number for this system
         // Derive measure number from the system's start tick using actual ticks per measure
-        let measure_num = (system.tick_range.start_tick / ticks_per_measure) + 1;
+        let measure_num = tick_to_measure_index(
+            system.tick_range.start_tick,
+            pickup_ticks,
+            ticks_per_measure,
+        ) as u32
+            + 1;
         system.measure_number = Some(MeasureNumber {
             number: measure_num,
             position: Point {
@@ -543,6 +700,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
 fn extract_measures(
     score: &serde_json::Value,
     ticks_per_measure: u32,
+    pickup_ticks: u32,
 ) -> Vec<(Vec<u32>, Vec<u32>)> {
     let mut note_measures: Vec<Vec<u32>> = Vec::new();
     let mut rest_measures: Vec<Vec<u32>> = Vec::new();
@@ -592,7 +750,11 @@ fn extract_measures(
                                         as u32;
 
                                     // Determine which measure this note belongs to
-                                    let measure_index = (start_tick / ticks_per_measure) as usize;
+                                    let measure_index = tick_to_measure_index(
+                                        start_tick,
+                                        pickup_ticks,
+                                        ticks_per_measure,
+                                    );
 
                                     // Track tick → duration (keep max duration at each tick position)
                                     let entry = all_notes_by_measure
@@ -616,7 +778,11 @@ fn extract_measures(
                                     let duration =
                                         rest["duration_ticks"].as_u64().unwrap_or(960) as u32;
 
-                                    let measure_index = (start_tick / ticks_per_measure) as usize;
+                                    let measure_index = tick_to_measure_index(
+                                        start_tick,
+                                        pickup_ticks,
+                                        ticks_per_measure,
+                                    );
 
                                     let entry = all_rests_by_measure
                                         .entry(measure_index)
@@ -921,8 +1087,11 @@ fn compute_unified_note_positions(
     system_width: f32,
     left_margin: f32,
     spacing_config: &spacer::SpacingConfig,
+    ticks_per_measure: u32,
 ) -> HashMap<u32, f32> {
-    // Collect all unique (tick, duration) pairs from all staves
+    // Collect all unique (tick, duration) pairs from all staves — notes AND
+    // sub-beat rests. Full-measure rests are excluded because they are centred
+    // within their measure via measure_x_bounds, not time-proportionally spaced.
     let mut tick_durations: Vec<(u32, u32)> = Vec::new();
 
     for staff_data in staves {
@@ -931,6 +1100,14 @@ fn compute_unified_note_positions(
                 if note.start_tick >= tick_range.start_tick && note.start_tick < tick_range.end_tick
                 {
                     tick_durations.push((note.start_tick, note.duration_ticks));
+                }
+            }
+            for rest in &voice.rests {
+                if rest.start_tick >= tick_range.start_tick
+                    && rest.start_tick < tick_range.end_tick
+                    && rest.duration_ticks < ticks_per_measure
+                {
+                    tick_durations.push((rest.start_tick, rest.duration_ticks));
                 }
             }
         }
@@ -1013,6 +1190,7 @@ fn position_glyphs_for_staff(
     note_positions: &HashMap<u32, f32>,
     left_margin: f32,
     ticks_per_measure: u32,
+    measure_x_bounds: &HashMap<u32, (f32, f32)>,
 ) -> Vec<Glyph> {
     let mut all_glyphs = Vec::new();
 
@@ -1426,6 +1604,7 @@ fn position_glyphs_for_staff(
             left_margin,
             instrument_id,
             staff_index,
+            measure_x_bounds,
         );
         all_glyphs.extend(rest_glyphs);
     }
@@ -1513,6 +1692,7 @@ fn create_bar_lines(
     _system_width: f32,
     units_per_space: f32,
     note_positions: &HashMap<u32, f32>,
+    measure_x_bounds: &HashMap<u32, (f32, f32)>,
 ) -> Vec<BarLine> {
     let mut bar_lines = Vec::new();
 
@@ -1530,25 +1710,31 @@ fn create_bar_lines(
         return bar_lines;
     }
 
-    // Add bar lines at the end of each measure using note positions
-    // This ensures barlines use the same scaling as notes
+    // Add bar lines at the end of each measure.
+    // For measures with note/rest content, place barline after last event.
+    // For empty measures (only whole-measure rests), use allocated boundary.
     for measure in measures_in_system.iter() {
         // Skip barline if measure extends beyond system
         if measure.end_tick > tick_range.end_tick {
             continue;
         }
 
-        // Find the x-position for the barline by looking for the last note IN this measure
-        // Notes at end_tick belong to NEXT measure (tick range is exclusive end)
-        let barline_x = note_positions
+        // Check if this measure has any events in the note_positions map
+        let last_event_in_measure = note_positions
             .iter()
             .filter(|(tick, _)| **tick >= measure.start_tick && **tick < measure.end_tick)
-            .max_by_key(|(tick, _)| *tick)
-            .map(|(_, x)| *x + 30.0) // Add clearance for notehead width + spacing
-            .unwrap_or_else(|| {
-                // No notes in this measure, use left_margin as fallback
-                left_margin + 30.0
-            });
+            .max_by_key(|(tick, _)| *tick);
+
+        let barline_x = if let Some((_, x)) = last_event_in_measure {
+            // Measure has content — place barline after the last event
+            *x + 30.0
+        } else {
+            // Empty measure — use allocated boundary for consistent spacing
+            measure_x_bounds
+                .get(&measure.start_tick)
+                .map(|(_, end_x)| *end_x - 5.0)
+                .unwrap_or(left_margin + 30.0)
+        };
 
         // Determine bar line type
         let bar_type = {

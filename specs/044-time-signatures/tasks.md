@@ -134,6 +134,34 @@
 
 ---
 
+## Phase 7: User Story 5 — Pickup Measure (Anacrusis) Barline Fix (Priority: P1) 🐛
+
+**Goal**: Scores that begin with an anacrusis (pickup measure shorter than a full measure) display barlines at the correct positions. Without this, every barline in such scores is shifted left by the length of the pickup, producing wrong measure boundaries for Für Elise, Chopin Nocturne Op.9 No.2, and any other score that starts with an anacrusis.
+
+**Root cause confirmed**: When US1 replaced hardcoded 3840 ticks with `ticks_per_measure`, it correctly uses the time signature — but the MusicXML first "measure" for anacrusis scores is shorter than a full measure. The layout engine had no `pickup_ticks` concept, so it treated every measure as starting at `(measure_index × ticks_per_measure)`, shifting all barlines after the pickup.
+
+**Additional root cause (DTO)**: The `Score` domain struct computed `pickup_ticks` correctly, but `ScoreDto` (the WASM serialization boundary in `dtos.rs`) did not include the field — so it was silently stripped before reaching the frontend and layout engine.
+
+**Independent Test**: Open Für Elise in Graditone and verify every barline is at the correct position. Compare with the reference sheet music — the 2-sixteenth-note pickup fits in one partial measure, then full 3/8 measures follow from measure 2 onwards.
+
+### Tests for User Story 5 — written before implementation
+
+- [X] T031 [US5] Write failing unit test `test_pickup_detection_fur_elise` in `backend/src/domain/importers/musicxml/converter.rs` — import `Beethoven_FurElise.mxl` (or a minimal fixture with 3/8 time and a 2-sixteenth pickup), assert `score.pickup_ticks == 480` (2 sixteenth notes at 960 PPQ)
+- [X] T032 [P] [US5] Write failing unit test `test_pickup_detection_no_pickup` in `backend/src/domain/importers/musicxml/converter.rs` — import `Bach_InventionNo1.mxl`, assert `score.pickup_ticks == 0` (no pickup → no shift)
+
+### Implementation for User Story 5
+
+- [X] T033 [US5] Add `pub pickup_ticks: u32` with `#[serde(default)]` to `Score` struct in `backend/src/domain/score.rs` and initialize to 0 in `Score::new()`
+- [X] T034 [US5] Add `detect_pickup_ticks()` method to `MusicXMLConverter` in `backend/src/domain/importers/musicxml/converter.rs`: iterate first measure events to accumulate actual tick duration, compare against `ticks_per_measure`; if shorter, `pickup_ticks = ticks_per_measure - actual`; else 0. Set `score.pickup_ticks` at end of `convert()`.
+- [X] T035 [US5] Add `pub pickup_ticks: u32` to `ScoreDto` in `backend/src/adapters/dtos.rs` and populate it from `score.pickup_ticks` in `ScoreDto::from(&Score)`. Bump `SCORE_SCHEMA_VERSION` to 6. This was the critical missing step — without DTO propagation, the domain value was silently stripped at the WASM boundary.
+- [X] T036 [US5] Add pickup-aware measure boundary helpers to `backend/src/layout/mod.rs`: `measure_start_tick(index, pickup_ticks, ticks_per_measure)`, `measure_end_tick(index, pickup_ticks, ticks_per_measure)`, and `tick_to_measure_index(tick, pickup_ticks, ticks_per_measure)`. Replace manual arithmetic in `extract_measures()`, `MeasureInfo` construction, and measure number calculation with these helpers. Read `pickup_ticks` from layout JSON input with `unwrap_or(0)` fallback.
+- [X] T037 [P] [US5] Add `pickup_ticks?: number` to `Score` interface in `frontend/src/types/score.ts`; update `ConvertedScore` in `frontend/src/components/layout/LayoutView.tsx` to include `pickup_ticks: number` and pass `score.pickup_ticks ?? 0` in `convertScoreToLayoutFormat()`.
+- [X] T038 [US5] Bump `CURRENT_SCHEMA_VERSION` from 4 to 6 in `frontend/src/services/storage/local-storage.ts` to match backend schema v6 (forces cache invalidation so stale scores without `pickup_ticks` are reloaded).
+- [X] T039 [US5] Rebuild WASM: run `wasm-pack build --target web` in `backend/`, copy `pkg/` output to `frontend/public/wasm/`. Verify `pickup_ticks: 480` is present in the JSON returned for Für Elise and `pickup_ticks: 0` for Bach/Arabesque/Pachelbel.
+- [X] T040 [US5] Run `cargo test` in `backend/` and confirm T031–T032 pass and all 328 previously passing tests still pass.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -145,6 +173,7 @@ Phase 1: Setup
         │     └─► Phase 4: US1 — Measure Layout (P1)   ← MVP gate 2
         │           └─► Phase 5: US4 — Glyph Display (P2, side effect of US1+US2)
         │           └─► Phase 6: US3 — Playback (P2, depends on correct layout output)
+        │           └─► Phase 7: US5 — Pickup Measure Fix (P1, depends on US1+US2)
         └─► Final Phase: Polish
 ```
 
@@ -188,4 +217,5 @@ Per Constitution Principle V: every test task must be done **before** the corres
 | Phase 5 | US4 — Glyph Display (P2) | 4 |
 | Phase 6 | US3 — Playback (P2) | 4 |
 | Final | Polish | 3 |
-| **Total** | | **30** |
+| Phase 7 | US5 — Pickup Measure Fix (P1) | 10 |
+| **Total** | | **40** |

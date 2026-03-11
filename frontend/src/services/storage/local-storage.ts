@@ -11,8 +11,9 @@ const SCORES_STORE = 'scores';
  * Current schema version - must match backend SCORE_SCHEMA_VERSION
  * Increment when data structure changes (e.g., v2 added active_clef)
  * v4: repeat_barlines added
+ * v6: pickup_ticks added for anacrusis/pickup measure support
  */
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 /**
  * Initialize IndexedDB database

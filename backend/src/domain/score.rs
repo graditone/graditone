@@ -19,6 +19,9 @@ pub struct Score {
     /// Repeat barlines parsed from the score source (Feature 041)
     #[serde(default)]
     pub repeat_barlines: Vec<RepeatBarline>,
+    /// Duration of pickup/anacrusis measure in ticks (0 = no pickup)
+    #[serde(default)]
+    pub pickup_ticks: u32,
 }
 
 impl Score {
@@ -29,6 +32,7 @@ impl Score {
             global_structural_events: Vec::new(),
             instruments: Vec::new(),
             repeat_barlines: Vec::new(),
+            pickup_ticks: 0,
         };
 
         // Add default tempo (120 BPM) at tick 0

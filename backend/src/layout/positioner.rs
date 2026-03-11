@@ -995,6 +995,7 @@ pub(super) fn position_rests_for_staff(
     left_margin: f32,
     instrument_id: &str,
     staff_index: usize,
+    measure_x_bounds: &std::collections::HashMap<u32, (f32, f32)>,
 ) -> Vec<Glyph> {
     let ticks_per_measure = (time_numerator as u32) * (3840 / (time_denominator as u32));
 
@@ -1025,8 +1026,11 @@ pub(super) fn position_rests_for_staff(
                 .collect();
 
             if xs.is_empty() {
-                // No notes in this measure — place near left margin of the measure area
-                left_margin + 90.0
+                // No notes in this measure — center rest within measure boundaries
+                measure_x_bounds
+                    .get(&measure_start)
+                    .map(|(start_x, end_x)| (start_x + end_x) / 2.0 - REST_GLYPH_WIDTH / 2.0)
+                    .unwrap_or(left_margin + 90.0)
             } else {
                 let start_x = xs.iter().cloned().fold(f32::MAX, f32::min);
                 let end_x = xs.iter().cloned().fold(f32::MIN, f32::max) + 30.0;

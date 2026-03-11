@@ -160,6 +160,9 @@ export interface Score {
 
   /** Repeat barlines parsed from the score source (Feature 041) */
   repeat_barlines?: RepeatBarline[];
+
+  /** Duration of pickup/anacrusis measure in ticks (0 = no pickup) */
+  pickup_ticks?: number;
 }
 
 /** Type of repeat barline (Feature 041) */

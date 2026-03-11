@@ -50,6 +50,7 @@ interface ConvertedScore {
   tempo_changes: unknown[];
   time_signature_changes: unknown[];
   repeat_barlines: unknown[];
+  pickup_ticks: number;
 }
 
 interface LayoutViewProps {
@@ -191,6 +192,7 @@ function convertScoreToLayoutFormat(score: Score): ConvertedScore {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((e: any) => e.TimeSignature),
     repeat_barlines: score.repeat_barlines ?? [],
+    pickup_ticks: score.pickup_ticks ?? 0,
   };
 }
 

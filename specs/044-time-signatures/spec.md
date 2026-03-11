@@ -79,12 +79,29 @@ When a score is rendered, the time signature symbol (e.g., "2/4", "3/4", "6/8") 
 
 ---
 
+### User Story 5 - Correct Barline Positioning in Scores with Pickup Measures (Priority: P1)
+
+A user opens Für Elise (3/8 time with a 2-sixteenth-note pickup measure / anacrusis) in Graditone. The score displays with barlines in the correct positions matching the original composition — every barline aligns with a full 3/8 measure boundary, not a shifted position caused by treating the pickup as a full measure.
+
+**Why this priority**: Without pickup-aware measure boundaries, every barline in a piece with an anacrusis is shifted by the length of the pickup. Für Elise, Chopin Nocturne Op.9 No.2, and any other score beginning with a pickup are all silently mis-rendered. This is a correctness regression introduced when time-signature-aware measure calculation was added — the first "measure" in MusicXML for anacrusis scores is shorter than a full measure, causing every subsequent measure boundary to be miscalculated.
+
+**Independent Test**: Open Für Elise in the score viewer and verify that the first barline appears after the pickup notes, and that all subsequent barlines fall at the correct 3/8 measure boundaries. Compare visually with the original sheet music.
+
+**Acceptance Scenarios**:
+
+1. **Given** a user opens Für Elise (3/8 with a 2-sixteenth pickup), **When** the score renders, **Then** barlines appear at correct 3/8 measure boundaries — the pickup occupies the partial first measure and full 3/8 measures follow.
+2. **Given** a user opens Chopin Nocturne Op.9 No.2 (12/8 with a 1-eighth pickup), **When** the score renders, **Then** barlines appear at correct 12/8 measure boundaries.
+3. **Given** a user opens Bach Invention No.1 (4/4, no pickup), **When** the score renders, **Then** behavior is identical to before — no regression for scores without pickup measures.
+4. **Given** a user opens Arabesque (2/4, no pickup), **When** the score renders, **Then** behavior is unchanged — `pickup_ticks = 0` causes no shift.
+
+---
+
 ### Edge Cases
 
 - What happens when a MusicXML file contains a time signature change mid-piece? Mid-piece time signature changes are fully out of scope. The system uses the time signature declared at the beginning of the piece for all measure boundaries, layout, display, and playback throughout the entire score. Any subsequent `<time>` elements in the MusicXML are ignored.
 - What happens when a MusicXML file has a compound time signature (e.g., 6/8)? The system should import and display it correctly — measure boundaries should span 6 eighth-note beats.
 - What happens when a MusicXML file has an unusual time signature (e.g., 5/4, 7/8)? The system should import the numerator and denominator as-is and calculate measure boundaries generically using the formula: ticks per measure = PPQ × (4 / denominator) × numerator.
-- What happens when a pickup measure (anacrusis) is present? The first measure may contain fewer beats than the time signature indicates. The anacrusis is counted as measure 1 (standard notation convention — consistent with Sibelius, Finale, and MuseScore); subsequent full measures are numbered 2, 3, 4, etc. Tick-to-measure calculations must account for the partial first measure without failing or producing an off-by-one error.
+- What happens when a pickup measure (anacrusis) is present? The first measure may contain fewer beats than the time signature indicates. The anacrusis is counted as measure 1 (standard notation convention — consistent with Sibelius, Finale, and MuseScore); subsequent full measures are numbered 2, 3, 4, etc. Tick-to-measure calculations must account for the partial first measure without failing or producing an off-by-one error. The system detects pickup measures automatically from MusicXML by computing the actual tick duration of the first measure and comparing it to the expected `ticks_per_measure`. If shorter, `pickup_ticks` is set to the difference and propagated through the score model to the layout engine.
 - What happens when multiple staves in a multi-instrument score have different time signatures? This is out of scope — all staves share the same global time signature.
 
 ## Requirements *(mandatory)*
@@ -101,6 +118,7 @@ When a score is rendered, the time signature symbol (e.g., "2/4", "3/4", "6/8") 
 - **FR-008**: System MUST support standard simple time signatures (2/4, 3/4, 4/4) and compound time signatures (3/8, 6/8, 9/8, 12/8) with correct measure boundary calculation.
 - **FR-009**: System MUST preserve correct behavior for all existing 4/4 scores — no regression in current functionality.
 - **FR-010**: System MUST correctly group beamed notes according to the time signature's beat structure. For compound time signatures, grouping follows dotted-beat divisions: 6/8 → 2 groups of 3 eighth notes; 9/8 → 3 groups of 3 eighth notes; 12/8 → 4 groups of 3 eighth notes.
+- **FR-011**: System MUST detect pickup measures (anacrusis) automatically during MusicXML import. When the first measure's actual tick duration is less than `ticks_per_measure`, the difference is stored as `pickup_ticks` on the score. The layout engine must use `pickup_ticks` to calculate correct measure start/end tick boundaries for all measures, so that barlines are placed at the correct positions regardless of whether the score begins with a full measure or a pickup measure.
 
 ### Key Entities
 
@@ -118,6 +136,8 @@ When a score is rendered, the time signature symbol (e.g., "2/4", "3/4", "6/8") 
 - **SC-004**: Playback of Arabesque advances through barlines at 2-beat intervals, with note highlighting and scrolling aligned to measure boundaries.
 - **SC-005**: Any standard time signature (2/4, 3/4, 4/4, 6/8) imported from MusicXML is correctly reflected in measure boundaries and display.
 - **SC-006**: Users can practice Arabesque with correct measure structure without any manual configuration or workarounds.
+- **SC-007**: Für Elise (3/8 with pickup) displays with all barlines at the correct positions, matching the original sheet music. No barline is shifted by the pickup length. Chopin Nocturne Op.9 No.2 (12/8 with pickup) displays identically correctly.
+- **SC-008**: Scores without pickup measures (Bach Invention No.1, Arabesque, Canon in D, etc.) display identically to before — `pickup_ticks = 0` has no effect on their rendering.
 
 ## Assumptions
 
