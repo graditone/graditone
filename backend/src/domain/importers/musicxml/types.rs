@@ -85,6 +85,25 @@ pub struct PartData {
     pub staff_count: usize,
 }
 
+// Intermediate types for <ending> element parsing (Feature 047)
+
+/// Classification of an <ending> element's type attribute
+#[derive(Debug, Clone, PartialEq)]
+pub enum EndingParseType {
+    Start,
+    Stop,
+    Discontinue,
+}
+
+/// Intermediate data from a single <ending> element during barline parsing
+#[derive(Debug, Clone)]
+pub struct RawEndingData {
+    /// From MusicXML `number` attribute (typically 1 or 2)
+    pub number: u8,
+    /// Parsed from MusicXML `type` attribute
+    pub end_type: EndingParseType,
+}
+
 /// Represents a <measure> element
 #[derive(Debug, Clone)]
 pub struct MeasureData {
@@ -102,6 +121,9 @@ pub struct MeasureData {
 
     /// True if this measure has an end-repeat barline (Feature 041)
     pub end_repeat: bool,
+
+    /// Ending elements (<ending>) parsed from barlines (Feature 047)
+    pub endings: Vec<RawEndingData>,
 
     /// Tempo from <sound tempo="..."/> element at measure level (Feature 001-score-tempo)
     pub sound_tempo: Option<f64>,

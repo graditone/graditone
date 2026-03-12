@@ -50,6 +50,7 @@ interface ConvertedScore {
   tempo_changes: unknown[];
   time_signature_changes: unknown[];
   repeat_barlines: unknown[];
+  volta_brackets: unknown[];
   pickup_ticks: number;
 }
 
@@ -176,6 +177,7 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((e: any) => e.TimeSignature),
     repeat_barlines: score.repeat_barlines ?? [],
+    volta_brackets: score.volta_brackets ?? [],
     pickup_ticks: score.pickup_ticks ?? 0,
   };
 }

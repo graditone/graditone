@@ -24,7 +24,7 @@ pub use breaker::MeasureInfo;
 pub use types::{
     BarLine, BarLineSegment, BarLineType, BoundingBox, BracketGlyph, BracketType, Color,
     GlobalLayout, Glyph, GlyphRun, LedgerLine, MeasureNumber, NameLabel, Point, RepeatDotPosition,
-    SourceReference, Staff, StaffGroup, StaffLine, System, TickRange,
+    SourceReference, Staff, StaffGroup, StaffLine, System, TickRange, VoltaBracketLayout,
 };
 
 /// Configuration for layout computation
@@ -175,6 +175,32 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     }
                     _ => {}
                 }
+            }
+        }
+    }
+
+    // Extract volta brackets for layout rendering (Feature 047)
+    struct VoltaBracketData {
+        number: u8,
+        start_measure_index: u32,
+        end_measure_index: u32,
+        end_type_is_stop: bool,
+    }
+    let mut volta_bracket_data: Vec<VoltaBracketData> = Vec::new();
+    if let Some(volta_brackets) = score["volta_brackets"].as_array() {
+        for vb in volta_brackets {
+            if let (Some(number), Some(start_mi), Some(end_mi)) = (
+                vb["number"].as_u64(),
+                vb["start_measure_index"].as_u64(),
+                vb["end_measure_index"].as_u64(),
+            ) {
+                let end_type = vb["end_type"].as_str().unwrap_or("Stop");
+                volta_bracket_data.push(VoltaBracketData {
+                    number: number as u8,
+                    start_measure_index: start_mi as u32,
+                    end_measure_index: end_mi as u32,
+                    end_type_is_stop: end_type == "Stop",
+                });
             }
         }
     }
@@ -660,6 +686,55 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                 y: system.bounding_box.y - 30.0, // Above topmost staff line
             },
         });
+
+        // Compute volta bracket layouts for this system (Feature 047)
+        for vbd in &volta_bracket_data {
+            // Get the tick range for the bracket's measures
+            let bracket_start_tick = measure_start_tick(
+                vbd.start_measure_index as usize,
+                pickup_ticks,
+                ticks_per_measure,
+            );
+            let bracket_end_tick = measure_end_tick(
+                vbd.end_measure_index as usize,
+                pickup_ticks,
+                ticks_per_measure,
+            );
+
+            // Check if this bracket overlaps with this system's tick range
+            if bracket_start_tick >= system.tick_range.end_tick
+                || bracket_end_tick <= system.tick_range.start_tick
+            {
+                continue;
+            }
+
+            // Clamp bracket to this system's tick range
+            let effective_start = bracket_start_tick.max(system.tick_range.start_tick);
+            let effective_end = bracket_end_tick.min(system.tick_range.end_tick);
+
+            // Find x coordinates from measure_x_bounds
+            let x_start = measure_x_bounds
+                .get(&effective_start)
+                .map(|(start, _)| *start)
+                .unwrap_or(0.0);
+            let x_end = measure_x_bounds
+                .get(&(effective_end - ticks_per_measure).max(effective_start))
+                .map(|(_, end)| *end)
+                .unwrap_or(x_start + 100.0);
+
+            // Only close the right end if this system contains the bracket's true end
+            let closed_right =
+                vbd.end_type_is_stop && bracket_end_tick <= system.tick_range.end_tick;
+
+            system.volta_bracket_layouts.push(VoltaBracketLayout {
+                number: vbd.number,
+                label: format!("{}.", vbd.number),
+                x_start,
+                x_end,
+                y: system.bounding_box.y - 20.0, // Above measure number
+                closed_right,
+            });
+        }
 
         // Advance running_y for the next system
         running_y = system.bounding_box.y + system.bounding_box.height + config.system_spacing;

@@ -48,6 +48,9 @@ pub struct System {
     pub tick_range: TickRange,
     /// Measure number displayed at start of system (1-based)
     pub measure_number: Option<MeasureNumber>,
+    /// Volta bracket layouts positioned over this system (Feature 047)
+    #[serde(default)]
+    pub volta_bracket_layouts: Vec<VoltaBracketLayout>,
 }
 
 /// Positioned measure number at the start of a system
@@ -60,6 +63,26 @@ pub struct MeasureNumber {
     pub number: u32,
     /// Absolute (x, y) coordinates for rendering
     pub position: Point,
+}
+
+/// A positioned volta bracket in layout coordinates (Feature 047)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoltaBracketLayout {
+    /// Ending number (1 or 2)
+    pub number: u8,
+    /// Display label ("1." or "2.")
+    pub label: String,
+    /// x-position of the left edge of the horizontal bracket line
+    #[serde(serialize_with = "round_f32")]
+    pub x_start: f32,
+    /// x-position of the right edge of the horizontal bracket line
+    #[serde(serialize_with = "round_f32")]
+    pub x_end: f32,
+    /// y-position above the topmost staff line
+    #[serde(serialize_with = "round_f32")]
+    pub y: f32,
+    /// true = vertical closing stroke at right end; false = open (discontinue)
+    pub closed_right: bool,
 }
 
 /// Groups related staves for multi-staff instruments

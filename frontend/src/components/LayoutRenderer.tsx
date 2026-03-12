@@ -578,6 +578,61 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       systemGroup.appendChild(text);
     }
 
+    // Render volta bracket layouts (Feature 047)
+    if (system.volta_bracket_layouts) {
+      for (const vbl of system.volta_bracket_layouts) {
+        const bracketGroup = createSVGGroup();
+        bracketGroup.setAttribute('data-volta-number', vbl.number.toString());
+        const strokeColor = this.props.config.staffLineColor;
+        const strokeWidth = '2';
+        const verticalStrokeHeight = 15;
+
+        // Horizontal line from x_start to x_end at y
+        const hLine = createSVGElement('line');
+        hLine.setAttribute('x1', vbl.x_start.toString());
+        hLine.setAttribute('y1', vbl.y.toString());
+        hLine.setAttribute('x2', vbl.x_end.toString());
+        hLine.setAttribute('y2', vbl.y.toString());
+        hLine.setAttribute('stroke', strokeColor);
+        hLine.setAttribute('stroke-width', strokeWidth);
+        bracketGroup.appendChild(hLine);
+
+        // Left vertical stroke (always present)
+        const leftStroke = createSVGElement('line');
+        leftStroke.setAttribute('x1', vbl.x_start.toString());
+        leftStroke.setAttribute('y1', vbl.y.toString());
+        leftStroke.setAttribute('x2', vbl.x_start.toString());
+        leftStroke.setAttribute('y2', (vbl.y + verticalStrokeHeight).toString());
+        leftStroke.setAttribute('stroke', strokeColor);
+        leftStroke.setAttribute('stroke-width', strokeWidth);
+        bracketGroup.appendChild(leftStroke);
+
+        // Right vertical stroke (only when closed_right)
+        if (vbl.closed_right) {
+          const rightStroke = createSVGElement('line');
+          rightStroke.setAttribute('x1', vbl.x_end.toString());
+          rightStroke.setAttribute('y1', vbl.y.toString());
+          rightStroke.setAttribute('x2', vbl.x_end.toString());
+          rightStroke.setAttribute('y2', (vbl.y + verticalStrokeHeight).toString());
+          rightStroke.setAttribute('stroke', strokeColor);
+          rightStroke.setAttribute('stroke-width', strokeWidth);
+          bracketGroup.appendChild(rightStroke);
+        }
+
+        // Number label ("1." or "2.") near the left end
+        const label = createSVGElement('text');
+        label.setAttribute('x', (vbl.x_start + 5).toString());
+        label.setAttribute('y', (vbl.y - 3).toString());
+        label.setAttribute('font-family', this.props.config.fontFamily);
+        label.setAttribute('font-size', '32');
+        label.setAttribute('fill', strokeColor);
+        label.textContent = vbl.label;
+        bracketGroup.appendChild(label);
+
+        systemGroup.appendChild(bracketGroup);
+      }
+    }
+
     // Render each staff group (Task T018)
     for (const staffGroup of system.staff_groups) {
       const staffGroupElement = this.renderStaffGroup(staffGroup, system.index, system.staff_groups.length);

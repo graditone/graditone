@@ -319,7 +319,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       }
 
       const extractedNotes = extractNotes(scoreObject);
-      const parsedNotes = expandNotesWithRepeats(extractedNotes, scoreObject.repeat_barlines);
+      const parsedNotes = expandNotesWithRepeats(extractedNotes, scoreObject.repeat_barlines, scoreObject.volta_brackets);
       const parsedTempo = extractTempo(scoreObject);
       const parsedTimeSignature = extractTimeSignature(scoreObject);
 
@@ -327,7 +327,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       // practice engine sees repeat-expanded ticks matching the playback engine.
       const rawNotesByStaff = extractNotesByStaff(scoreObject);
       const parsedNotesByStaff = rawNotesByStaff.map(staffNotes =>
-        expandNotesWithRepeats(staffNotes, scoreObject!.repeat_barlines)
+        expandNotesWithRepeats(staffNotes, scoreObject!.repeat_barlines, scoreObject!.volta_brackets)
       );
 
       // Reset playback state for the new score

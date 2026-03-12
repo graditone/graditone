@@ -9,6 +9,15 @@ use super::ImportContext;
 use super::errors::ImportError;
 use super::types::*;
 
+// Parser-private intermediate result type for parse_barline_content (Feature 047)
+
+/// Result of parsing a <barline> element's children
+struct ParsedBarlineResult {
+    start_repeat: bool,
+    end_repeat: bool,
+    ending: Option<RawEndingData>,
+}
+
 /// Parses MusicXML documents into intermediate data structures
 pub struct MusicXMLParser;
 
@@ -411,6 +420,7 @@ impl MusicXMLParser {
             elements: Vec::new(),
             start_repeat: false,
             end_repeat: false,
+            endings: Vec::new(),
             sound_tempo: None,
             metronome_tempo: None,
         };
@@ -456,12 +466,15 @@ impl MusicXMLParser {
                             .find(|a| a.key.as_ref() == b"location")
                             .and_then(|a| String::from_utf8(a.value.into_owned()).ok())
                             .unwrap_or_default();
-                        let (start_rep, end_rep) = Self::parse_barline_content(reader, &location)?;
-                        if start_rep {
+                        let result = Self::parse_barline_content(reader, &location)?;
+                        if result.start_repeat {
                             measure.start_repeat = true;
                         }
-                        if end_rep {
+                        if result.end_repeat {
                             measure.end_repeat = true;
+                        }
+                        if let Some(ending_data) = result.ending {
+                            measure.endings.push(ending_data);
                         }
                     }
                     b"metronome" => {
@@ -519,17 +532,16 @@ impl MusicXMLParser {
         Ok(measure)
     }
 
-    /// Parses children of a `<barline>` element to detect `<repeat>` markers.
+    /// Parses children of a `<barline>` element to detect `<repeat>` and `<ending>` markers.
     ///
-    /// Returns `(start_repeat, end_repeat)`:
-    /// - `start_repeat = true` when location="left" and `<repeat direction="forward"/>` found
-    /// - `end_repeat = true` when location="right" and `<repeat direction="backward"/>` found
+    /// Returns a `ParsedBarlineResult` with repeat flags and optional ending data.
     fn parse_barline_content<B: BufRead>(
         reader: &mut Reader<B>,
         location: &str,
-    ) -> Result<(bool, bool), ImportError> {
+    ) -> Result<ParsedBarlineResult, ImportError> {
         let mut start_repeat = false;
         let mut end_repeat = false;
+        let mut ending: Option<RawEndingData> = None;
         let mut buf = Vec::new();
 
         loop {
@@ -557,6 +569,45 @@ impl MusicXMLParser {
                         _ => {}
                     }
                 }
+                Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                    if e.name().as_ref() == b"ending" =>
+                {
+                    // Parse <ending number="1" type="start|stop|discontinue"/>
+                    let mut number: Option<u8> = None;
+                    let mut end_type: Option<EndingParseType> = None;
+                    for attr in e.attributes().flatten() {
+                        match attr.key.as_ref() {
+                            b"number" => {
+                                if let Ok(s) = std::str::from_utf8(&attr.value) {
+                                    // number can be "1", "2", or "1, 2" etc.
+                                    // Take just the first digit
+                                    if let Some(first_char) = s.chars().next() {
+                                        if let Some(n) = first_char.to_digit(10) {
+                                            number = Some(n as u8);
+                                        }
+                                    }
+                                }
+                            }
+                            b"type" => {
+                                if let Ok(s) = std::str::from_utf8(&attr.value) {
+                                    end_type = match s {
+                                        "start" => Some(EndingParseType::Start),
+                                        "stop" => Some(EndingParseType::Stop),
+                                        "discontinue" => Some(EndingParseType::Discontinue),
+                                        _ => None,
+                                    };
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    if let (Some(n), Some(et)) = (number, end_type) {
+                        ending = Some(RawEndingData {
+                            number: n,
+                            end_type: et,
+                        });
+                    }
+                }
                 Ok(Event::End(e)) if e.name().as_ref() == b"barline" => {
                     break;
                 }
@@ -570,7 +621,11 @@ impl MusicXMLParser {
             buf.clear();
         }
 
-        Ok((start_repeat, end_repeat))
+        Ok(ParsedBarlineResult {
+            start_repeat,
+            end_repeat,
+            ending,
+        })
     }
 
     /// Parses <attributes> element containing time signature, key, clef, divisions

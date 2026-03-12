@@ -9,7 +9,7 @@ use crate::domain::events::rest::RestEvent;
 use crate::domain::events::tempo::TempoEvent;
 use crate::domain::events::time_signature::TimeSignatureEvent;
 use crate::domain::instrument::Instrument;
-use crate::domain::repeat::{RepeatBarline, RepeatBarlineType};
+use crate::domain::repeat::{RepeatBarline, RepeatBarlineType, VoltaBracket, VoltaEndType};
 use crate::domain::score::Score;
 use crate::domain::staff::Staff;
 use crate::domain::value_objects::{BPM, Tick};
@@ -20,6 +20,7 @@ use super::errors::ImportError;
 use super::mapper::ElementMapper;
 use super::timing::Fraction;
 use super::types::BeamType;
+use super::types::EndingParseType;
 use super::types::{MeasureData, MeasureElement, MusicXMLDocument, NoteData, PartData};
 use std::collections::{BTreeMap, HashMap};
 
@@ -273,6 +274,15 @@ impl MusicXMLConverter {
             })
             .unwrap_or_default();
 
+        // Collect volta brackets from the first part (Feature 047)
+        let volta_brackets = doc
+            .parts
+            .first()
+            .map(|first_part| {
+                Self::collect_volta_brackets(&first_part.measures, ticks_per_measure, pickup_ticks)
+            })
+            .unwrap_or_default();
+
         // Convert each part to an Instrument
         for part_data in doc.parts {
             let instrument = Self::convert_part(part_data, context)?;
@@ -280,6 +290,8 @@ impl MusicXMLConverter {
         }
 
         score.repeat_barlines = repeat_barlines;
+        score.volta_brackets = volta_brackets;
+
         score.pickup_ticks = pickup_ticks;
 
         Ok(score)
@@ -372,6 +384,54 @@ impl MusicXMLConverter {
                 (false, false) => {}
             }
         }
+        result
+    }
+
+    /// Collects volta brackets from parsed ending data in measures.
+    ///
+    /// Pairs Start endings with their corresponding Stop/Discontinue endings
+    /// to produce VoltaBracket entries with full tick ranges.
+    fn collect_volta_brackets(
+        measures: &[MeasureData],
+        ticks_per_measure: u32,
+        pickup_ticks: u32,
+    ) -> Vec<VoltaBracket> {
+        use std::collections::HashMap;
+
+        let mut result = Vec::new();
+        // Track open brackets: number -> (start_measure_index, start_tick)
+        let mut open: HashMap<u8, (u32, u32)> = HashMap::new();
+
+        for (i, measure) in measures.iter().enumerate() {
+            let start_tick = measure_start_tick(i, pickup_ticks, ticks_per_measure);
+            let end_tick = measure_end_tick(i, pickup_ticks, ticks_per_measure);
+
+            for ending in &measure.endings {
+                match ending.end_type {
+                    EndingParseType::Start => {
+                        open.insert(ending.number, (i as u32, start_tick));
+                    }
+                    EndingParseType::Stop | EndingParseType::Discontinue => {
+                        if let Some((start_measure_index, s_tick)) = open.remove(&ending.number) {
+                            let end_type = match ending.end_type {
+                                EndingParseType::Stop => VoltaEndType::Stop,
+                                EndingParseType::Discontinue => VoltaEndType::Discontinue,
+                                _ => unreachable!(),
+                            };
+                            result.push(VoltaBracket {
+                                number: ending.number,
+                                start_measure_index,
+                                end_measure_index: i as u32,
+                                start_tick: s_tick,
+                                end_tick,
+                                end_type,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
         result
     }
 
@@ -951,6 +1011,7 @@ mod tests {
             })],
             start_repeat: false,
             end_repeat: false,
+            endings: vec![],
             sound_tempo: None,
             metronome_tempo: None,
         };
@@ -1076,6 +1137,7 @@ mod tests {
             ],
             start_repeat: false,
             end_repeat: false,
+            endings: vec![],
             sound_tempo: None,
             metronome_tempo: None,
         }];
@@ -1157,6 +1219,7 @@ mod tests {
             ],
             start_repeat: false,
             end_repeat: false,
+            endings: vec![],
             sound_tempo: None,
             metronome_tempo: None,
         }];
@@ -1253,6 +1316,7 @@ mod tests {
                 })],
                 start_repeat: false,
                 end_repeat: false,
+                endings: vec![],
                 sound_tempo: None,
                 metronome_tempo: None,
             }],
@@ -1309,6 +1373,7 @@ mod tests {
                 })],
                 start_repeat: false,
                 end_repeat: false,
+                endings: vec![],
                 sound_tempo: None,
                 metronome_tempo: None,
             }],
@@ -1365,6 +1430,7 @@ mod tests {
                 })],
                 start_repeat: false,
                 end_repeat: false,
+                endings: vec![],
                 sound_tempo: None,
                 metronome_tempo: None,
             }],
@@ -1418,6 +1484,7 @@ mod tests {
                 })],
                 start_repeat: false,
                 end_repeat: false,
+                endings: vec![],
                 sound_tempo: None,
                 metronome_tempo: None,
             }],

@@ -131,6 +131,9 @@ export interface Score {
   /** Repeat barlines parsed from the score source (Feature 041) */
   repeat_barlines?: RepeatBarline[];
 
+  /** Volta brackets / first-second endings (Feature 047) */
+  volta_brackets?: VoltaBracket[];
+
   /** Duration of pickup/anacrusis measure in ticks (0 = no pickup) */
   pickup_ticks?: number;
 }
@@ -148,6 +151,25 @@ export interface RepeatBarline {
   end_tick: number;
   /** Whether this is a start-repeat, end-repeat, or both */
   barline_type: RepeatBarlineType;
+}
+
+/** Right-end style of a volta bracket (Feature 047) */
+export type VoltaEndType = 'Stop' | 'Discontinue';
+
+/** A volta bracket (first or second ending) in the score (Feature 047) */
+export interface VoltaBracket {
+  /** 1 = first ending, 2 = second ending */
+  number: 1 | 2;
+  /** 0-based measure index of the first measure under the bracket */
+  start_measure_index: number;
+  /** 0-based measure index of the last measure under the bracket (inclusive) */
+  end_measure_index: number;
+  /** Tick position at the start of the bracket (inclusive) */
+  start_tick: number;
+  /** Tick position at the end of the bracket (exclusive) */
+  end_tick: number;
+  /** Whether the right end is closed (stop) or open (discontinue) */
+  end_type: VoltaEndType;
 }
 
 /**

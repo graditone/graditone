@@ -44,6 +44,8 @@ export interface System {
   tick_range: TickRange;
   /** Measure number displayed at start of system (1-based) */
   measure_number?: MeasureNumber;
+  /** Volta bracket layouts positioned over this system (Feature 047) */
+  volta_bracket_layouts?: VoltaBracketLayout[];
 }
 
 /**
@@ -57,6 +59,22 @@ export interface MeasureNumber {
   number: number;
   /** Absolute (x, y) coordinates for rendering */
   position: Point;
+}
+
+/** A positioned volta bracket in layout coordinates (Feature 047) */
+export interface VoltaBracketLayout {
+  /** Ending number (1 or 2) */
+  number: number;
+  /** Display label text, e.g. "1." */
+  label: string;
+  /** x-position of the left edge of the horizontal bracket line */
+  x_start: number;
+  /** x-position of the right edge of the horizontal bracket line */
+  x_end: number;
+  /** y-position above the topmost staff line */
+  y: number;
+  /** true = vertical closing stroke at right end; false = open (discontinue) */
+  closed_right: boolean;
 }
 
 /**

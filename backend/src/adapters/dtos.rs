@@ -4,7 +4,7 @@
 use crate::domain::{
     events::{global::GlobalStructuralEvent, staff::StaffStructuralEvent},
     instrument::Instrument,
-    repeat::RepeatBarline,
+    repeat::{RepeatBarline, VoltaBracket},
     score::Score,
     staff::Staff,
     value_objects::Clef,
@@ -71,7 +71,8 @@ impl From<&Instrument> for InstrumentDto {
 /// v4: repeat_barlines added to ScoreDto
 /// v5: rest_events added to Voice (043-score-rests)
 /// v6: pickup_ticks added to ScoreDto (044-time-signatures)
-const SCORE_SCHEMA_VERSION: u32 = 6;
+/// v7: volta_brackets added to ScoreDto (047-repeat-volta-playback)
+const SCORE_SCHEMA_VERSION: u32 = 7;
 
 /// DTO for Score containing InstrumentDtos with schema versioning
 #[derive(Debug, Serialize, Deserialize)]
@@ -84,12 +85,16 @@ pub struct ScoreDto {
     /// v4: Added repeat_barlines
     /// v5: Added rest_events to Voice
     /// v6: Added pickup_ticks for anacrusis/pickup measure support
+    /// v7: Added volta_brackets for volta bracket playback (Feature 047)
     pub schema_version: u32,
 
     pub global_structural_events: Vec<GlobalStructuralEvent>,
     pub instruments: Vec<InstrumentDto>,
     #[serde(default)]
     pub repeat_barlines: Vec<RepeatBarline>,
+    /// Volta brackets (first/second endings) (Feature 047); serde default = [] for pre-v7 scores
+    #[serde(default)]
+    pub volta_brackets: Vec<VoltaBracket>,
     /// Duration of pickup/anacrusis measure in ticks (0 = no pickup)
     #[serde(default)]
     pub pickup_ticks: u32,
@@ -103,6 +108,7 @@ impl From<&Score> for ScoreDto {
             global_structural_events: score.global_structural_events.clone(),
             instruments: score.instruments.iter().map(InstrumentDto::from).collect(),
             repeat_barlines: score.repeat_barlines.clone(),
+            volta_brackets: score.volta_brackets.clone(),
             pickup_ticks: score.pickup_ticks,
         }
     }

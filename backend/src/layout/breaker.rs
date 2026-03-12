@@ -127,5 +127,6 @@ fn create_system(
             end_tick,
         },
         measure_number: None, // Will be computed during layout computation
+        volta_bracket_layouts: vec![], // Will be populated during layout computation
     }
 }

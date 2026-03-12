@@ -4,7 +4,7 @@
 // All tick arithmetic uses integer operations (no floating point).
 // Constitution Principle VI: no layout coordinates — this is pure tick scheduling.
 
-import type { Note, RepeatBarline } from '../../types/score';
+import type { Note, RepeatBarline, VoltaBracket } from '../../types/score';
 
 interface RepeatSection {
   start_tick: number;
@@ -44,13 +44,18 @@ function buildSections(repeatBarlines: RepeatBarline[]): RepeatSection[] {
  * tick_offset applied. Notes outside any repeat section are passed through
  * unchanged (with the accumulated offset from earlier repeats).
  *
+ * When volta brackets are provided, first-ending (number=1) notes are skipped
+ * on the second pass, and tick offsets are compressed accordingly.
+ *
  * @param notes      - Flat sorted Note[] extracted from the score
  * @param repeatBarlines - Repeat barline data from Score.repeat_barlines
+ * @param voltaBrackets  - Volta bracket data from Score.volta_brackets (optional)
  * @returns Expanded Note[] ready to be passed to usePlayback()
  */
 export function expandNotesWithRepeats(
   notes: Note[],
   repeatBarlines: RepeatBarline[] | undefined,
+  voltaBrackets?: VoltaBracket[],
 ): Note[] {
   if (!repeatBarlines || repeatBarlines.length === 0) {
     return notes;
@@ -68,6 +73,17 @@ export function expandNotesWithRepeats(
   for (const section of sections) {
     const sectionDuration = section.end_tick - section.start_tick;
 
+    // Find the first-ending bracket for this section (if any)
+    const firstEnding = voltaBrackets?.find(
+      vb =>
+        vb.number === 1 &&
+        vb.start_tick >= section.start_tick &&
+        vb.end_tick <= section.end_tick
+    );
+    const feStart = firstEnding?.start_tick ?? null;
+    const feEnd = firstEnding?.end_tick ?? null;
+    const feDur = firstEnding ? (feEnd! - feStart!) : 0;
+
     // Pass through notes between the previous section end and this section start
     for (const note of notes) {
       const t = note.start_tick as number;
@@ -78,17 +94,23 @@ export function expandNotesWithRepeats(
 
     // Play the section twice
     for (let pass = 0; pass < 2; pass++) {
-      const passOffset = tickOffset + pass * sectionDuration;
       for (const note of notes) {
         const t = note.start_tick as number;
-        if (t >= section.start_tick && t < section.end_tick) {
-          const id = pass === 0 ? note.id : `${note.id}-r${pass}`;
-          expanded.push({ ...note, id, start_tick: t + passOffset });
-        }
+        if (t < section.start_tick || t >= section.end_tick) continue;
+
+        // On second pass, skip notes inside the first ending
+        if (pass === 1 && feStart !== null && t >= feStart && t < feEnd!) continue;
+
+        // On second pass, compress ticks for notes after the first ending
+        const compression = (pass === 1 && feEnd !== null && t >= feEnd) ? feDur : 0;
+        const passOffset = tickOffset + pass * sectionDuration - compression;
+        const id = pass === 0 ? note.id : `${note.id}-r${pass}`;
+        expanded.push({ ...note, id, start_tick: t + passOffset });
       }
     }
 
-    tickOffset += sectionDuration;
+    // Advance offset: second pass is shorter by the first-ending duration
+    tickOffset += sectionDuration - feDur;
     prevEnd = section.end_tick;
   }
 

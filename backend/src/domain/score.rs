@@ -5,7 +5,7 @@ use crate::domain::{
     },
     ids::ScoreId,
     instrument::Instrument,
-    repeat::RepeatBarline,
+    repeat::{RepeatBarline, VoltaBracket},
     value_objects::{BPM, Tick},
 };
 use serde::{Deserialize, Serialize};
@@ -19,6 +19,9 @@ pub struct Score {
     /// Repeat barlines parsed from the score source (Feature 041)
     #[serde(default)]
     pub repeat_barlines: Vec<RepeatBarline>,
+    /// Volta brackets (first/second endings) parsed from the score source (Feature 047)
+    #[serde(default)]
+    pub volta_brackets: Vec<VoltaBracket>,
     /// Duration of pickup/anacrusis measure in ticks (0 = no pickup)
     #[serde(default)]
     pub pickup_ticks: u32,
@@ -32,6 +35,7 @@ impl Score {
             global_structural_events: Vec::new(),
             instruments: Vec::new(),
             repeat_barlines: Vec::new(),
+            volta_brackets: Vec::new(),
             pickup_ticks: 0,
         };
 

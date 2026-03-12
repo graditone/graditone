@@ -108,7 +108,7 @@ export function ScoreViewer({
         if (firstVoice) rawNotes.push(...firstVoice.interval_events);
       }
     }
-    return expandNotesWithRepeats(rawNotes, score.repeat_barlines);
+    return expandNotesWithRepeats(rawNotes, score.repeat_barlines, score.volta_brackets);
   }, [score]);
 
   const initialTempo = (() => {
