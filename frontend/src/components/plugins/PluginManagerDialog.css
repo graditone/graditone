@@ -1,0 +1,259 @@
+/* ==========================================================================
+   PluginManagerDialog.css — T002 / Feature 048: Plugin Manager Dialog
+   Single-panel modal for viewing, importing, and removing user-imported plugins.
+   All colours use --ls-* tokens for theme cascade.
+   ========================================================================== */
+
+/* ── Backdrop overlay ───────────────────────────────────────────────────── */
+.plugin-manager-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+/* ── Dialog card ────────────────────────────────────────────────────────── */
+.plugin-manager-dialog__card {
+  background: var(--ls-bg, #fff);
+  color: var(--ls-heading, #1a1a1a);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  width: min(420px, 92vw);
+  max-height: min(520px, 80vh);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: var(--ls-font-body, system-ui, sans-serif);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.plugin-manager-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.plugin-manager-dialog__title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ls-heading, #1a1a1a);
+  font-family: var(--ls-font-heading, system-ui, sans-serif);
+}
+
+.plugin-manager-dialog__close {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ls-body, #666);
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.plugin-manager-dialog__close:hover {
+  background: color-mix(in srgb, var(--ls-heading, #222) 10%, transparent);
+  color: var(--ls-heading, #222);
+}
+
+/* ── Scrollable body ─────────────────────────────────────────────────────── */
+.plugin-manager-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── Plugin item row ────────────────────────────────────────────────────── */
+.plugin-manager-dialog__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--ls-heading, #222) 12%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ls-heading, #222) 4%, var(--ls-bg, #fff));
+}
+
+.plugin-manager-dialog__item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.plugin-manager-dialog__item-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--ls-heading, #1a1a1a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plugin-manager-dialog__item-meta {
+  font-size: 0.75rem;
+  color: var(--ls-body, #888);
+}
+
+/* ── Remove button (danger) ─────────────────────────────────────────────── */
+.plugin-manager-dialog__remove-btn {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--ls-accent, #e74c3c);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  font-family: var(--ls-font-body, system-ui, sans-serif);
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.plugin-manager-dialog__remove-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ls-accent, #e74c3c) 80%, #000);
+}
+
+.plugin-manager-dialog__remove-btn:disabled {
+  background: color-mix(in srgb, var(--ls-heading, #999) 20%, var(--ls-bg, #fff));
+  color: var(--ls-body, #888);
+  cursor: not-allowed;
+}
+
+/* ── Empty state ────────────────────────────────────────────────────────── */
+.plugin-manager-dialog__empty {
+  margin: 0;
+  padding: 16px 0;
+  color: var(--ls-body, #666);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* ── Error message ───────────────────────────────────────────────────────── */
+.plugin-manager-dialog__error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: color-mix(in srgb, var(--ls-accent, #e74c3c) 10%, var(--ls-bg, #fff));
+  border: 1px solid color-mix(in srgb, var(--ls-accent, #e74c3c) 35%, transparent);
+  color: var(--ls-accent, #c0392b);
+}
+
+/* ── Footer (import action area) ────────────────────────────────────────── */
+.plugin-manager-dialog__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plugin-manager-dialog__import-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.plugin-manager-dialog__import-btn {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--ls-cta-bg, #4a90e2);
+  color: var(--ls-cta-text, #fff);
+  font-weight: 600;
+  font-size: 0.875rem;
+  font-family: var(--ls-font-body, system-ui, sans-serif);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.plugin-manager-dialog__import-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ls-cta-bg, #4a90e2) 80%, #000);
+}
+
+.plugin-manager-dialog__import-btn:disabled {
+  background: color-mix(in srgb, var(--ls-heading, #999) 20%, var(--ls-bg, #fff));
+  color: var(--ls-body, #888);
+  cursor: not-allowed;
+}
+
+/* ── Hidden file input ───────────────────────────────────────────────────── */
+.plugin-manager-dialog__file-input--hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Filename badge ──────────────────────────────────────────────────────── */
+.plugin-manager-dialog__filename {
+  font-size: 0.8rem;
+  color: var(--ls-body, #555);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+  opacity: 0.85;
+}
+
+/* ── Status text (loading) ───────────────────────────────────────────────── */
+.plugin-manager-dialog__status {
+  margin: 0;
+  color: var(--ls-body, #555);
+  font-size: 0.9rem;
+}
+
+/* ── Duplicate confirm actions ───────────────────────────────────────────── */
+.plugin-manager-dialog__confirm-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.plugin-manager-dialog__confirm-text {
+  margin: 0;
+  color: var(--ls-heading, #333);
+  font-size: 0.9rem;
+}
+
+.plugin-manager-dialog__btn {
+  padding: 7px 16px;
+  border: 1px solid color-mix(in srgb, var(--ls-heading, #999) 25%, transparent);
+  border-radius: 6px;
+  background: var(--ls-bg, #fff);
+  color: var(--ls-body, #444);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-family: var(--ls-font-body, system-ui, sans-serif);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.plugin-manager-dialog__btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ls-heading, #222) 8%, var(--ls-bg, #fff));
+}
+
+.plugin-manager-dialog__btn--danger {
+  background: var(--ls-accent, #e74c3c);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+}
+
+.plugin-manager-dialog__btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ls-accent, #e74c3c) 80%, #000);
+}

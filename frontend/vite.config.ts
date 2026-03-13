@@ -129,7 +129,28 @@ export default defineConfig(({ command }) => {
   ],
   // Enable top-level await for WASM initialization
   build: {
-    target: 'esnext'
+    target: 'esnext',
+    // US3 (T026): Split vendor bundles so Tone.js (heavy) is a separate lazy chunk.
+    // tone-audio is deferred via dynamic import in App.tsx — not in the initial load.
+    chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Tone.js audio engine — lazy-loaded on first plugin navigation
+          if (id.includes('node_modules/tone')) return 'tone-audio';
+          // Workbox service-worker runtime — loaded at startup but rarely changes
+          if (id.includes('node_modules/workbox-')) return 'workbox';
+          // Core React + utility libraries — stable, cacheable independently
+          if (
+            id.includes('node_modules/react') ||
+            id.includes('node_modules/react-dom') ||
+            id.includes('node_modules/idb') ||
+            id.includes('node_modules/pitchy') ||
+            id.includes('node_modules/fflate')
+          ) return 'vendor-core';
+        },
+      },
+    },
   }
   };
 })

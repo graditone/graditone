@@ -11,10 +11,11 @@ Plugins extend Musicore with new UI views and interactive musical tools. They ru
 3. [Creating a builtin plugin](#creating-a-builtin-plugin)
 4. [Creating an importable plugin (ZIP package)](#creating-an-importable-plugin-zip-package)
 5. [API constraints and ESLint boundary](#api-constraints-and-eslint-boundary)
-6. [Testing your plugin](#testing-your-plugin)
-7. [Reference: Virtual Keyboard plugin](#reference-virtual-keyboard-plugin)
-8. [Reference: Train plugin](#reference-train-plugin)
-9. [Reference: Virtual Keyboard Pro (importable plugin)](#reference-virtual-keyboard-pro-importable-plugin)
+6. [Theming your plugin](#theming-your-plugin)
+7. [Testing your plugin](#testing-your-plugin)
+8. [Reference: Virtual Keyboard plugin](#reference-virtual-keyboard-plugin)
+9. [Reference: Train plugin](#reference-train-plugin)
+10. [Reference: Virtual Keyboard Pro (importable plugin)](#reference-virtual-keyboard-pro-importable-plugin)
 
 ---
 
@@ -346,6 +347,105 @@ Use `context.playNote()` instead. The host manages the audio engine (Tone.js + S
 ### Constitution Principle VI
 
 `PluginNoteEvent` carries **musical data only** (`midiNote`, `timestamp`, `velocity`). Never add coordinate or layout fields — the WASM engine is the sole authority over all spatial layout.
+
+---
+
+## Theming your plugin
+
+Graditone ships ten warm-colour landing themes (Ember, Saffron, Sienna, Terracotta, Paprika, Honey, Coral, Marigold, Blush, Rust). Whichever theme the user has selected is active as a `data-landing-theme` attribute on `<body>`, and a set of CSS custom properties (`--ls-*` tokens) cascades to **every descendant** — including plugin components.
+
+Plugins that use hard-coded colours (e.g. `rgba(0,0,0,0.2)`, `color: #333`, `opacity: 0.7`) will look broken on non-default themes: text becomes invisible, borders disappear, and "active" states lose contrast. Using the `--ls-*` tokens instead makes the plugin look correct on every theme automatically.
+
+### Available CSS tokens
+
+All tokens are declared on `body[data-landing-theme="*"]` and therefore cascade into your plugin's component tree with no extra setup.
+
+| Token | Usage | Example fallback |
+|---|---|---|
+| `--ls-bg` | Page / container background | `#ffffff` |
+| `--ls-heading` | Primary heading text | `#1a1a1a` |
+| `--ls-body` | Body / label text | `#333333` |
+| `--ls-cta-bg` | Primary action button background | `#2563eb` |
+| `--ls-cta-text` | Text on a CTA button (guaranteed contrast with `--ls-cta-bg`) | `#ffffff` |
+| `--ls-accent` | Hover highlights, active indicators | `#ff7043` |
+| `--ls-navbar-bg` | Nav bar strip background | `#f5f5f5` |
+| `--ls-font-heading` | Font-family stack for headings | `system-ui, sans-serif` |
+| `--ls-font-body` | Font-family stack for body text | `system-ui, sans-serif` |
+| `--ls-heading-weight` | Font-weight for headings | `700` |
+| `--ls-body-weight` | Font-weight for body text | `400` |
+
+All theme palettes are WCAG 2.1 AA verified: `--ls-body` on `--ls-bg` ≥ 4.5 : 1, `--ls-cta-text` on `--ls-cta-bg` ≥ 4.5 : 1.
+
+### Rules
+
+1. **Always set an explicit background and text color on your root element.**  
+   Relying on inherited `color` or `background` from a parent you don't control is fragile. Declare both explicitly on your component's outermost element.
+
+2. **Never use `rgba(0,0,0,N)` for borders or hover states.**  
+   Dark semi-transparent values look fine on white but disappear on a cream background. Use `color-mix()` against the theme token instead.
+
+3. **Never use `opacity` to mute text or icons.**  
+   Opacity is multiplicative: if the inherited text color is already a medium brown, reducing it by 30% makes it illegible. Compute an explicit muted color with `color-mix()` instead.
+
+4. **Use `--ls-cta-bg` / `--ls-cta-text` for active/selected states.**  
+   These two tokens are guaranteed to have sufficient contrast against each other on every theme. Hard-coded blue (`#1d4ed8`) may be invisible on some theme backgrounds.
+
+### CSS patterns
+
+```css
+/* Root element — own your colors, don't rely on inheritance */
+.my-plugin {
+  background: var(--ls-bg, #ffffff);
+  color: var(--ls-body, #333333);
+  font-family: var(--ls-font-body, inherit);
+}
+
+/* Heading */
+.my-plugin__title {
+  color: var(--ls-heading, #1a1a1a);
+  font-family: var(--ls-font-heading, inherit);
+  font-weight: var(--ls-heading-weight, 700);
+}
+
+/* Muted label — use color-mix, NOT opacity */
+.my-plugin__label {
+  color: color-mix(in srgb, var(--ls-body, #333) 65%, var(--ls-bg, #fff));
+}
+
+/* Button borders — use color-mix against the body token, NOT rgba(0,0,0,...) */
+.my-plugin__btn {
+  border: 1px solid color-mix(in srgb, var(--ls-body, #333) 30%, transparent);
+  color: var(--ls-body, #333);
+  background: transparent;
+}
+
+.my-plugin__btn:hover {
+  background: color-mix(in srgb, var(--ls-body, #333) 8%, transparent);
+  border-color: color-mix(in srgb, var(--ls-body, #333) 50%, transparent);
+}
+
+/* Active / selected state — guaranteed AA contrast on every theme */
+.my-plugin__btn--active {
+  background: var(--ls-cta-bg, #2563eb);
+  border-color: var(--ls-cta-bg, #2563eb);
+  color: var(--ls-cta-text, #ffffff);
+}
+
+/* Disabled — explicit muted color, NOT opacity */
+.my-plugin__btn:disabled {
+  color: color-mix(in srgb, var(--ls-body, #333) 30%, transparent);
+  border-color: color-mix(in srgb, var(--ls-body, #333) 15%, transparent);
+  cursor: not-allowed;
+}
+```
+
+### No-theme fallback
+
+When no landing theme is active (the default purple gradient header), the `--ls-*` tokens are **not set**. Your CSS fallback values (the second argument to `var()`) are what renders. Choose neutral, high-contrast fallbacks: light background (`#ffffff`), dark text (`#333333`), and a legible active color (`#2563eb`). This ensures your plugin still looks good in the default UI.
+
+### Importable plugin note
+
+Importable plugins (ZIP packages) run in the same document as the host and therefore receive the same `--ls-*` cascade automatically — no extra setup required. The tokens are read at CSS paint time, not at bundle time, so a plugin built once works correctly regardless of which theme the user has selected at runtime.
 
 ---
 

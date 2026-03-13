@@ -1,0 +1,141 @@
+/* ==========================================================================
+   ListDialog.css — T018 / Feature 048: Reusable List Dialog
+   Shared layout for PluginManagerDialog and third-party plugin dialogs.
+   All colours use --ls-* tokens for theme cascade.
+   ========================================================================== */
+
+/* ── Backdrop overlay ───────────────────────────────────────────────────── */
+.list-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+/* ── Dialog card ────────────────────────────────────────────────────────── */
+.list-dialog__card {
+  background: var(--ls-bg, #fff);
+  color: var(--ls-heading, #1a1a1a);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  width: min(420px, 92vw);
+  max-height: min(520px, 80vh);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: var(--ls-font-body, system-ui, sans-serif);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.list-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.list-dialog__title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ls-heading, #1a1a1a);
+  font-family: var(--ls-font-heading, system-ui, sans-serif);
+}
+
+.list-dialog__close {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ls-body, #666);
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.list-dialog__close:hover {
+  background: color-mix(in srgb, var(--ls-heading, #222) 10%, transparent);
+  color: var(--ls-heading, #222);
+}
+
+/* ── Scrollable body ─────────────────────────────────────────────────────── */
+.list-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── Item row ────────────────────────────────────────────────────────────── */
+.list-dialog__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--ls-heading, #222) 12%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ls-heading, #222) 4%, var(--ls-bg, #fff));
+}
+
+.list-dialog__item-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--ls-heading, #1a1a1a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.list-dialog__item-icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+
+/* ── Action button ──────────────────────────────────────────────────────── */
+.list-dialog__action-btn {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--ls-cta-bg, #4a90e2);
+  color: var(--ls-cta-text, #fff);
+  font-weight: 600;
+  font-size: 0.875rem;
+  font-family: var(--ls-font-body, system-ui, sans-serif);
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.list-dialog__action-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ls-cta-bg, #4a90e2) 80%, #000);
+}
+
+/* ── Empty state ────────────────────────────────────────────────────────── */
+.list-dialog__empty {
+  margin: 0;
+  padding: 16px 0;
+  color: var(--ls-body, #666);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.list-dialog__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

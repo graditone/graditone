@@ -13,10 +13,10 @@ import { sortPluginsByOrder } from './services/plugins/sortPlugins'
 import { pluginRegistry } from './services/plugins/PluginRegistry'
 import { PluginView, V3PluginWrapper, createBoundScoreRenderer, type V3ProxyRefs } from './components/plugins/PluginView'
 import { PluginNavEntry } from './components/plugins/PluginNavEntry'
-import { PluginImporterDialog } from './components/plugins/PluginImporterDialog'
-import { PluginRemoverDialog } from './components/plugins/PluginRemoverDialog'
+import { PluginManagerDialog } from './components/plugins/PluginManagerDialog'
+import { ListDialog } from './components/plugins/ListDialog'
 import { ScoreSelectorPlugin } from './components/plugins/ScoreSelectorPlugin'
-import type { PluginContext, PluginNoteEvent, GraditonePlugin } from './plugin-api/index'
+import type { PluginContext, PluginNoteEvent, GraditonePlugin, OpenListDialogOptions } from './plugin-api/index'
 import { PluginStaffViewer } from './plugin-api/PluginStaffViewer'
 import { createNoOpScorePlayer, createScorePlayerProxy } from './plugin-api/scorePlayerContext'
 import { createNoOpMetronome, createMetronomeProxy } from './plugin-api/metronomeContext'
@@ -46,6 +46,7 @@ import './App.css'
 // URL ESM modules can share it via their react-shim.js alias (avoids the
 // "Cannot read properties of null (reading 'useState')" dual-React error).
 ;(window as unknown as Record<string, unknown>).__GRADITON_REACT__ = _ReactNS
+;(window as unknown as Record<string, unknown>).__MUSICORE_REACT__ = _ReactNS
 
 /**
  * Graditone - Music Score Editor
@@ -68,9 +69,10 @@ function App() {
   // Feature 030: Plugin navigation state
   const [allPlugins, setAllPlugins] = useState<BuiltinPluginEntry[]>([])
   const [activePlugin, setActivePlugin] = useState<string | null>(null)
-  // T025: Show/hide plugin importer dialog
-  const [showImporter, setShowImporter] = useState(false)
-  const [showRemover, setShowRemover] = useState(false)
+  // Feature 048: Show/hide unified plugin manager dialog
+  const [showPluginManager, setShowPluginManager] = useState(false)
+  // Feature 048 / T020: Plugin-requested ListDialog state
+  const [pluginListDialog, setPluginListDialog] = useState<OpenListDialogOptions | null>(null)
   // Feature 030: Increment to re-run loadPlugins (e.g. after a new plugin is imported)
   const [pluginsVersion, setPluginsVersion] = useState(0)
 
@@ -349,6 +351,17 @@ function App() {
               return () => { midiPluginSubscribersRef.current.delete(handler) }
             },
           },
+          openListDialog: (options) => {
+            const wrappedOptions: OpenListDialogOptions = {
+              ...options,
+              onClose: () => {
+                setPluginListDialog(null)
+                options.onClose()
+              },
+            }
+            setPluginListDialog(wrappedOptions)
+            return () => setPluginListDialog(null)
+          },
           manifest,
         }
         plugin.init(context)
@@ -385,10 +398,8 @@ function App() {
     loadToneAdapter().then(adapter => adapter.init()).catch(() => {})
   }, [allPlugins])
 
-  // T024: Handle successful plugin import — close the dialog and re-run loadPlugins
-  // to dynamically load the newly installed module from IndexedDB.
+  // Feature 048: Plugin import/remove handlers — dialog stays open after both operations.
   const handleImportComplete = useCallback(() => {
-    setShowImporter(false)
     setPluginsVersion(v => v + 1)
   }, [])
 
@@ -603,42 +614,35 @@ function App() {
                 />
               ))}
             </nav>
-            {/* T025: Plugin management buttons — always at the right edge */}
-            <div className="plugin-manage-btns">
-              <button
-                type="button"
-                aria-label="Import Plugin"
-                title="Import Plugin"
-                onClick={() => setShowImporter(true)}
-                className="plugin-manage-btn"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                aria-label="Remove Plugin"
-                title="Remove Plugin"
-                onClick={() => setShowRemover(true)}
-                className="plugin-manage-btn"
-              >
-                −
-              </button>
-            </div>
+            {/* Feature 048: Single Plugins button — always visible (entry point for first plugin) */}
+            <button
+              type="button"
+              aria-label="Manage Plugins"
+              title="Manage Plugins"
+              onClick={() => setShowPluginManager(true)}
+              className="plugin-manage-btn"
+            >
+              Plugins
+            </button>
           </header>
-          {/* T024: Plugin importer dialog overlay */}
-          {showImporter && (
-            <PluginImporterDialog
-              onImportComplete={handleImportComplete}
-              onClose={() => setShowImporter(false)}
-            />
-          )}
-          {showRemover && (
-            <PluginRemoverDialog
+          {/* Feature 048: Unified plugin manager dialog */}
+          {showPluginManager && (
+            <PluginManagerDialog
               importedPlugins={allPlugins
                 .map(e => e.manifest)
                 .filter(m => m.origin === 'imported' && !m.hidden)}
-              onRemoveComplete={(id) => { handleRemoveComplete(id); setShowRemover(false); }}
-              onClose={() => setShowRemover(false)}
+              onRemoveComplete={handleRemoveComplete}
+              onImportComplete={handleImportComplete}
+              onClose={() => setShowPluginManager(false)}
+            />
+          )}
+          {/* Feature 048 / T020: Plugin-requested ListDialog */}
+          {pluginListDialog && (
+            <ListDialog
+              title={pluginListDialog.title}
+              items={pluginListDialog.items}
+              onAction={pluginListDialog.onAction}
+              onClose={pluginListDialog.onClose}
             />
           )}
           <main>

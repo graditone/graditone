@@ -695,6 +695,38 @@ export interface PluginMetronomeContext {
 }
 
 // ---------------------------------------------------------------------------
+// List dialog types (v7 — Feature 048)
+// ---------------------------------------------------------------------------
+
+/**
+ * Describes a single item in a plugin-opened list dialog.
+ */
+export interface ListDialogItem {
+  /** Unique identifier for this item (returned in onAction callback). */
+  id: string;
+  /** Display label for the item. */
+  label: string;
+  /** Optional icon character or emoji prefix. */
+  icon?: string;
+  /** Label shown on the per-item action button. */
+  actionLabel: string;
+}
+
+/**
+ * Options passed to `context.openListDialog()` to show a styled list dialog.
+ */
+export interface OpenListDialogOptions {
+  /** Dialog title shown in the header. */
+  title: string;
+  /** Items to display in the scrollable list. */
+  items: ReadonlyArray<ListDialogItem>;
+  /** Called when the user activates a per-item action button. */
+  onAction: (id: string) => void;
+  /** Called when the dialog is dismissed (Escape, backdrop click, or close button). */
+  onClose: () => void;
+}
+
+// ---------------------------------------------------------------------------
 // Plugin context
 // ---------------------------------------------------------------------------
 
@@ -830,6 +862,23 @@ export interface PluginContext {
    * All v1–v4 plugins receive a no-op stub for backward compatibility.
    */
   readonly metronome: PluginMetronomeContext;
+  /**
+   * Open a styled list dialog (v7 — Feature 048).
+   * Returns a close function the plugin can call to dismiss the dialog
+   * programmatically.
+   *
+   * @example
+   * ```ts
+   * const close = context.openListDialog({
+   *   title: 'Saved Recordings',
+   *   items: recordings.map(r => ({ id: r.id, label: r.name, actionLabel: 'Play' })),
+   *   onAction: id => playRecording(id),
+   *   onClose: () => {},
+   * });
+   * // later: close();
+   * ```
+   */
+  openListDialog(options: OpenListDialogOptions): () => void;
   /** Read-only manifest for this plugin instance. */
   readonly manifest: Readonly<PluginManifest>;
 }
@@ -866,4 +915,4 @@ export interface GraditonePlugin {
 // ---------------------------------------------------------------------------
 
 /** Major version of the currently running Graditone Plugin API. */
-export const PLUGIN_API_VERSION = '6' as const;
+export const PLUGIN_API_VERSION = '7' as const;

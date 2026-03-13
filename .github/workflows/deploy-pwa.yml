@@ -1,4 +1,4 @@
-name: Deploy PWA to GitHub Pages
+name: Deploy PWA to Cloudflare Pages
 
 on:
   push:
@@ -6,11 +6,8 @@ on:
       - main
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: write  # Needed to commit version bump and create tags
-  pages: write
-  id-token: write
 
 # Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
 # However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
@@ -118,45 +115,53 @@ jobs:
           cp backend/pkg/musicore_backend_bg.wasm frontend/public/wasm/
           cp backend/pkg/musicore_backend.js frontend/public/wasm/
 
+      - name: Install font subsetting tool
+        run: pip install fonttools
+
       - name: Build frontend with PWA
         working-directory: frontend
         run: npm run build
         env:
-          # Set base path for GitHub Pages deployment
-          # If deploying to https://<username>.github.io/<repo>/
-          # Uncomment and set VITE_BASE if needed:
           VITE_BASE: '/'
+          VITE_UMAMI_WEBSITE_ID: ${{ secrets.VITE_UMAMI_WEBSITE_ID }}
 
       # ========================================
-      # Stage 3: Deploy to GitHub Pages
+      # Stage 2b: Asset budget gate (CI fails if > 2 MB compressed)
       # ========================================
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - name: Check asset budget
+        working-directory: frontend
+        run: npm run check-budget
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: frontend/dist
-
-      - name: Deploy to GitHub Pages
+      # ========================================
+      # Stage 3: Deploy to Cloudflare Pages
+      # ========================================
+      - name: Deploy to Cloudflare Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: graditone
+          directory: frontend/dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
-      # ========================================
       # ========================================
       # Post-Deployment Verification
       # ========================================
       - name: Report deployment URL
         run: |
-          echo "✅ PWA deployed successfully!"
+          echo "✅ PWA deployed successfully to Cloudflare Pages!"
           echo "📦 Version: v${{ steps.version.outputs.version }}"
-          echo "🌐 URL: ${{ steps.deployment.outputs.page_url }}"
+          echo "🌐 URL: https://graditone.com"
           echo ""
           echo "📱 To test PWA installation:"
-          echo "1. Open the URL on a tablet (iPad, Android, Surface)"
+          echo "1. Open https://graditone.com on a tablet (iPad, Android, Surface)"
           echo "2. For iOS: Tap Share → Add to Home Screen"
           echo "3. For Android: Tap install prompt or menu → Install app"
           echo ""
           echo "🔍 Verify PWA assets:"
-          echo "- Manifest: ${{ steps.deployment.outputs.page_url }}manifest.webmanifest"
-          echo "- Service Worker: ${{ steps.deployment.outputs.page_url }}sw.js"
+          echo "- Manifest: https://graditone.com/manifest.webmanifest"
+          echo "- Service Worker: https://graditone.com/sw.js"
+          echo ""
+          echo "🔒 Verify security headers:"
+          echo "  curl -sI https://graditone.com | grep -i 'cross-origin'

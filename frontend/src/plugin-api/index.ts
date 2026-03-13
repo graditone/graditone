@@ -37,6 +37,9 @@ export type {
   MetronomeState,
   PluginMetronomeContext,
   MetronomeSubdivision,
+  // v7 additions (Feature 048)
+  ListDialogItem,
+  OpenListDialogOptions,
 } from './types';
 
 export { PLUGIN_API_VERSION } from './types';

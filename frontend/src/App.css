@@ -135,18 +135,27 @@ body[data-landing-theme] .app-slogan {
   opacity: 0.7;
 }
 
-/* +/- plugin management buttons (scaled to match entries) */
+/* Plugins management button — pinned to the top-right of the header */
 .plugin-manage-btn {
-  min-width: 24px;
+  position: absolute;
+  right: 8px;
+  top: 10px;
   min-height: 24px;
-  border: 1px dashed #666;
+  border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 4px;
-  background: transparent;
-  color: #999;
-  font-size: 0.85em;
+  background: rgba(255, 255, 255, 0.12);
+  color: #e0e0ff;
+  font-size: 0.75rem;
+  font-weight: 500;
   cursor: pointer;
-  padding: 3px 6px;
+  padding: 3px 8px;
+  white-space: nowrap;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.plugin-manage-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.55);
 }
 
 /* Theme overrides: plugin nav entries */
@@ -169,14 +178,16 @@ body[data-landing-theme] .plugin-nav-entry--active {
   font-weight: var(--ls-heading-weight, 700);
 }
 
-/* Theme overrides: +/- management buttons */
+/* Theme overrides: Plugins management button */
 body[data-landing-theme] .plugin-manage-btn {
-  border-color: color-mix(in srgb, var(--ls-heading) 30%, transparent);
   color: var(--ls-body);
+  background: color-mix(in srgb, var(--ls-heading) 8%, var(--ls-navbar-bg));
+  border-color: color-mix(in srgb, var(--ls-heading) 25%, transparent);
+  font-family: var(--ls-font-body);
 }
 
 body[data-landing-theme] .plugin-manage-btn:hover {
-  background: color-mix(in srgb, var(--ls-heading) 10%, var(--ls-navbar-bg));
+  background: color-mix(in srgb, var(--ls-heading) 16%, var(--ls-navbar-bg));
   border-color: var(--ls-heading);
   color: var(--ls-heading);
 }
