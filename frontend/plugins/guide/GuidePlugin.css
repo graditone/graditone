@@ -1,0 +1,112 @@
+/*
+ * GuidePlugin.css — Feature 001-docs-plugin: Graditone Documentation Plugin
+ *
+ * Uses --color-* CSS custom properties so the active landing theme cascades in
+ * automatically. The same token system is used by TrainPlugin.css and
+ * plugin-dialog.css. Fallback values apply when no theme is active.
+ *
+ * Token reference (defined on body[data-landing-theme] in App.css):
+ *   --color-surface          Page / panel background
+ *   --color-text             Heading / bold text colour
+ *   --color-text-secondary   Body / paragraph text colour
+ *   --color-border           Section divider line colour
+ *   --color-accent           Accent highlight (h2 underline)
+ */
+
+/* ── Root container (scroll host — fills the host flex column) ───────────── */
+
+.guide-plugin {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--color-surface, #fff);
+  /* Themed scrollbar — appears at viewport edge, not inside the content box */
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border, #ccc) transparent;
+}
+
+.guide-plugin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.guide-plugin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.guide-plugin::-webkit-scrollbar-thumb {
+  background: var(--color-border, #ccc);
+  border-radius: 3px;
+}
+
+.guide-plugin::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent, #4a90e2);
+}
+
+/* ── Inner content wrapper (centred, width-capped) ───────────────────────── */
+
+.guide-plugin__inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px;
+  box-sizing: border-box;
+  font-size: 1rem;
+  line-height: 1.6;
+  word-wrap: break-word;
+  color: var(--color-text-secondary, #555);
+}
+
+/* ── Sections ─────────────────────────────────────────────────────────────── */
+
+.guide-section {
+  margin-bottom: 2.5rem;
+}
+
+.guide-section h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text, #222);
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 2px solid var(--color-accent, #4a90e2);
+}
+
+/* ── Body text ────────────────────────────────────────────────────────────── */
+
+.guide-section p {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: var(--color-text-secondary, #555);
+}
+
+.guide-section li {
+  margin-bottom: 0.4rem;
+  color: var(--color-text-secondary, #555);
+}
+
+.guide-section ul,
+.guide-section ol {
+  padding-left: 1.5rem;
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+.guide-section strong {
+  color: var(--color-text, #222);
+}
+
+.guide-section code {
+  font-size: 0.875em;
+  color: var(--color-text, #222);
+  background: color-mix(in srgb, var(--color-border, #e0e0e0) 50%, transparent);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .guide-plugin__inner {
+    padding: 16px;
+  }
+}

@@ -563,3 +563,32 @@ useEffect(() => {
 // Empty staff on load — notes=[] renders clef + time signature only
 <context.components.StaffViewer notes={playedNotes} clef="Treble" bpm={120} ... />
 ```
+```
+
+---
+
+## Reference: Guide plugin (common)
+
+| Field | Value |
+|-------|-------|
+| **ID** | `guide` |
+| **Name** | Guide |
+| **Icon** | 📖 |
+| **Version** | 1.0.0 |
+| **Plugin API Version** | 1 |
+| **Type** | `common` |
+| **View** | `window` |
+| **Order** | 99 (rightmost nav bar entry) |
+| **Entry point** | `index.tsx` |
+
+#### Description
+
+Built-in documentation plugin. Single scrollable reference page with five sections: app overview, score playback gestures, practice mode, train mode (ear-training), and MusicXML loading. Fully static — works offline.
+
+#### Manifest placement
+
+`type: "common"` → top nav bar. `order: 99` → rightmost. `view: "window"` + `pluginApiVersion: "1"` → host renders "← Back" button.
+
+#### CSS theming
+
+All colours use `--color-*` CSS custom properties (the App.css bridge tokens), inheriting every landing theme automatically. No hard-coded colour values.
