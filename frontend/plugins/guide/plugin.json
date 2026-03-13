@@ -1,0 +1,12 @@
+{
+  "id": "guide",
+  "name": "Guide",
+  "version": "1.0.0",
+  "pluginApiVersion": "1",
+  "entryPoint": "index.tsx",
+  "description": "App guide and usage documentation for Graditone.",
+  "type": "common",
+  "view": "window",
+  "icon": "📖",
+  "order": 99
+}

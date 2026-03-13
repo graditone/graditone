@@ -149,3 +149,30 @@ The **Play Score** plugin is a built-in full-screen plugin that lets users load,
 
 **Spec**: `specs/039-landing-page-redesign/`  
 **Updated**: March 2026
+
+---
+
+## Help & Documentation — Feature 001-docs-plugin
+
+Built-in documentation plugin (📖 Guide) that appears as the rightmost entry in the top nav bar and provides a single scrollable reference page for all Graditone features.
+
+### Sections
+
+| # | Heading | Content summary |
+|---|---------|----------------|
+| 1 | What is Graditone? | App overview, offline capability |
+| 2 | Playing a Score | Tap/long-press gestures, loop regions, tempo slider |
+| 3 | Practice Mode | MIDI-driven step practice workflow |
+| 4 | Train | Complexity levels, Flow/Step modes, exercise presets, MIDI/mic input |
+| 5 | Loading a Score | MusicXML export from notation software, preloaded demo scores, browser persistence |
+
+### Capabilities
+
+- **Nav bar entry**: `type: common`, `order: 99` — always rightmost in the top nav bar
+- **Host back button**: `view: window` + `pluginApiVersion: 1` — host renders “← Back” automatically
+- **Fully static**: no fetch, no state, fully offline-capable
+- **Theme-aware**: all CSS uses `--color-*` custom property tokens; inherits every landing theme automatically
+- **Responsive**: readable on 375 px–1366 px screen widths without truncation
+
+**Spec**: `specs/001-docs-plugin/`  
+**Updated**: March 2026
