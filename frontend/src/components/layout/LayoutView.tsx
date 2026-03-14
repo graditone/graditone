@@ -30,6 +30,7 @@ interface ConvertedScore {
       clef: string;
       time_signature: { numerator: number; denominator: number };
       key_signature: { sharps: number };
+      key_signature_events?: Array<{ tick: number; sharps: number }>;
       voices: Array<{
         notes: Array<{
           tick: number;
@@ -134,10 +135,23 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
         keySharps = typeof keySig === 'number' ? keySig : 0;
       }
 
+      // Extract ALL key signature events for mid-piece key changes
+      const keySigEvents = staff.staff_structural_events
+        .filter((e: StaffStructuralEvent) => 'KeySignature' in e)
+        .map((e: StaffStructuralEvent) => {
+          const ks = (e as { KeySignature: { tick: number; key: number } }).KeySignature;
+          return {
+            tick: typeof ks.tick === 'number' ? ks.tick : 0,
+            sharps: typeof ks.key === 'number' ? ks.key : 0,
+          };
+        });
+
       return {
         clef: staff.active_clef,
         time_signature: timeSignature,
         key_signature: { sharps: keySharps },
+        // Pass all key change events so the layout engine can render mid-piece changes
+        ...(keySigEvents.length > 1 ? { key_signature_events: keySigEvents } : {}),
         voices: staff.voices.map(voice => ({
           notes: voice.interval_events.map((note: Note) => ({
             tick: note.start_tick,

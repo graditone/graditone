@@ -593,6 +593,7 @@ pub fn position_note_accidentals(
     staff_vertical_offset: f32,
     key_sharps: i8,
     ticks_per_measure: u32,
+    key_signature_events: &[(u32, i8)],
 ) -> Vec<Glyph> {
     use std::collections::HashMap;
 
@@ -602,17 +603,24 @@ pub fn position_note_accidentals(
     let sharp_order: [u8; 7] = [5, 0, 7, 2, 9, 4, 11]; // F, C, G, D, A, E, B
     let flat_order: [u8; 7] = [11, 4, 9, 2, 7, 0, 5]; // B, E, A, D, G, C, F
 
+    // Helper to build key_alterations from a key_sharps value
+    let build_key_alterations = |ks: i8| -> HashMap<u8, i8> {
+        let mut ka = HashMap::new();
+        if ks > 0 {
+            for &pc in sharp_order.iter().take(ks as usize) {
+                ka.insert(pc, 1);
+            }
+        } else if ks < 0 {
+            for &pc in flat_order.iter().take(ks.unsigned_abs() as usize) {
+                ka.insert(pc, -1);
+            }
+        }
+        ka
+    };
+
     // key_alterations maps pitch_class -> alteration (+1 = sharp, -1 = flat)
-    let mut key_alterations: HashMap<u8, i8> = HashMap::new();
-    if key_sharps > 0 {
-        for &pc in sharp_order.iter().take(key_sharps as usize) {
-            key_alterations.insert(pc, 1);
-        }
-    } else if key_sharps < 0 {
-        for &pc in flat_order.iter().take(key_sharps.unsigned_abs() as usize) {
-            key_alterations.insert(pc, -1);
-        }
-    }
+    let mut key_alterations = build_key_alterations(key_sharps);
+    let mut active_key_sharps = key_sharps;
 
     // Map pitch classes to their "natural" (white key) MIDI value
     // C=0, D=2, E=4, F=5, G=7, A=9, B=11
@@ -679,6 +687,24 @@ pub fn position_note_accidentals(
         if measure != current_measure {
             measure_accidental_state.clear();
             current_measure = measure;
+
+            // Check if key signature changed at this measure's tick
+            if !key_signature_events.is_empty() {
+                let measure_tick = measure * ticks_per_measure;
+                // Find the last key event at or before this measure's start
+                let mut new_key = key_sharps; // default to initial
+                for &(event_tick, sharps) in key_signature_events {
+                    if event_tick <= measure_tick {
+                        new_key = sharps;
+                    } else {
+                        break;
+                    }
+                }
+                if new_key != active_key_sharps {
+                    active_key_sharps = new_key;
+                    key_alterations = build_key_alterations(active_key_sharps);
+                }
+            }
         }
 
         // Determine the note's actual alteration
