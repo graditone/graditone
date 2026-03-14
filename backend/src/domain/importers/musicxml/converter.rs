@@ -285,7 +285,8 @@ impl MusicXMLConverter {
 
         // Convert each part to an Instrument
         for part_data in doc.parts {
-            let instrument = Self::convert_part(part_data, context)?;
+            let instrument =
+                Self::convert_part(part_data, context, ticks_per_measure, pickup_ticks)?;
             score.add_instrument(instrument);
         }
 
@@ -439,6 +440,8 @@ impl MusicXMLConverter {
     fn convert_part(
         part_data: PartData,
         context: &mut ImportContext,
+        ticks_per_measure: u32,
+        pickup_ticks: u32,
     ) -> Result<Instrument, ImportError> {
         let name = if part_data.name.is_empty() {
             format!("Instrument {}", part_data.id)
@@ -453,11 +456,17 @@ impl MusicXMLConverter {
         // Check staff count and route accordingly
         if part_data.staff_count <= 1 {
             // Single-staff instrument (US1)
-            let staff = Self::convert_staff_for_single_staff(&part_data, context)?;
+            let staff = Self::convert_staff_for_single_staff(
+                &part_data,
+                context,
+                ticks_per_measure,
+                pickup_ticks,
+            )?;
             instrument.add_staff(staff);
         } else {
             // Multi-staff instrument (US2) - e.g., piano grand staff
-            let staves = Self::convert_multi_staff(&part_data, context)?;
+            let staves =
+                Self::convert_multi_staff(&part_data, context, ticks_per_measure, pickup_ticks)?;
             for staff in staves {
                 instrument.add_staff(staff);
             }
@@ -470,6 +479,8 @@ impl MusicXMLConverter {
     fn convert_multi_staff(
         part_data: &PartData,
         context: &mut ImportContext,
+        ticks_per_measure: u32,
+        pickup_ticks: u32,
     ) -> Result<Vec<Staff>, ImportError> {
         let mut staves = Vec::new();
 
@@ -503,6 +514,14 @@ impl MusicXMLConverter {
                 }
             }
 
+            // Extract key signature changes from subsequent measures
+            Self::add_key_changes_from_measures(
+                &mut staff,
+                &part_data.measures,
+                ticks_per_measure,
+                pickup_ticks,
+            )?;
+
             // Convert measures to voice, filtering by staff number
             let (notes, rests) =
                 Self::collect_notes_for_staff(&part_data.measures, staff_num, context)?;
@@ -526,6 +545,8 @@ impl MusicXMLConverter {
     fn convert_staff_for_single_staff(
         part_data: &PartData,
         context: &mut ImportContext,
+        ticks_per_measure: u32,
+        pickup_ticks: u32,
     ) -> Result<Staff, ImportError> {
         // Create staff with defaults (Treble clef, C major, 1 voice)
         let mut staff = Staff::new();
@@ -553,6 +574,14 @@ impl MusicXMLConverter {
             }
         }
 
+        // Extract key signature changes from subsequent measures
+        Self::add_key_changes_from_measures(
+            &mut staff,
+            &part_data.measures,
+            ticks_per_measure,
+            pickup_ticks,
+        )?;
+
         // Convert measures to notes, then distribute across voices
         let (notes, rests) = Self::collect_notes(&part_data.measures, context)?;
         let mut voices = VoiceDistributor::assign_voices(notes, context)?;
@@ -567,6 +596,30 @@ impl MusicXMLConverter {
         }
 
         Ok(staff)
+    }
+
+    /// Extract key signature changes from all measures after the first.
+    ///
+    /// Iterates measures starting from index 1 and emits a KeySignatureEvent
+    /// whenever a measure's attributes contain a key change.
+    fn add_key_changes_from_measures(
+        staff: &mut Staff,
+        measures: &[MeasureData],
+        ticks_per_measure: u32,
+        pickup_ticks: u32,
+    ) -> Result<(), ImportError> {
+        for (i, measure) in measures.iter().enumerate().skip(1) {
+            if let Some(attrs) = &measure.attributes {
+                if let Some(key_data) = &attrs.key {
+                    let tick = measure_start_tick(i, pickup_ticks, ticks_per_measure);
+                    let key_sig = ElementMapper::map_key(key_data.fifths, Some(&key_data.mode))?;
+                    let key_event = KeySignatureEvent::new(Tick::new(tick), key_sig);
+                    // Ignore duplicate-tick errors (shouldn't happen, but be safe)
+                    let _ = staff.add_key_signature_event(key_event);
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Distribute rests into voices by MusicXML voice number (1-indexed).

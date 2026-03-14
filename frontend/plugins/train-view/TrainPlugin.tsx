@@ -1538,6 +1538,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
                 clef={config.clef}
                 highlightedNoteIndex={highlightedSlotIndex ?? undefined}
                 bpm={exercise.bpm}
+                keySignature={exercise.keySignature}
               />
             </div>
           </div>

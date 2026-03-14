@@ -65,46 +65,58 @@ ROOT_SEMITONES: dict[str, int] = {
     "Ab": 8, "A": 9, "As": 10, "Bb": 10, "B": 11,
 }
 
-# Semitone → (step, alter) for sharp keys (fifths >= 0)
-_SHARP_SPELLING = {
-    0:  ("C",  0),
-    1:  ("C",  1),   # C#
-    2:  ("D",  0),
-    3:  ("D",  1),   # D#
-    4:  ("E",  0),
-    5:  ("F",  0),
-    6:  ("F",  1),   # F#
-    7:  ("G",  0),
-    8:  ("G",  1),   # G#
-    9:  ("A",  0),
-    10: ("A",  1),   # A#
-    11: ("B",  0),
-}
+# Semitone → (step, alter) default sharp-biased spelling
+_DEFAULT_SPELLING: list[tuple[str, int]] = [
+    ("C",  0),  # 0
+    ("C",  1),  # 1  C#
+    ("D",  0),  # 2
+    ("D",  1),  # 3  D#
+    ("E",  0),  # 4
+    ("F",  0),  # 5
+    ("F",  1),  # 6  F#
+    ("G",  0),  # 7
+    ("G",  1),  # 8  G#
+    ("A",  0),  # 9
+    ("A",  1),  # 10 A#
+    ("B",  0),  # 11
+]
 
-# Semitone → (step, alter) for flat keys (fifths < 0)
-_FLAT_SPELLING = {
-    0:  ("C",  0),
-    1:  ("D", -1),   # Db
-    2:  ("D",  0),
-    3:  ("E", -1),   # Eb
-    4:  ("E",  0),
-    5:  ("F",  0),
-    6:  ("G", -1),   # Gb
-    7:  ("G",  0),
-    8:  ("A", -1),   # Ab
-    9:  ("A",  0),
-    10: ("B", -1),   # Bb
-    11: ("B",  0),
-}
+# Circle-of-fifths orders (diatonic pitch classes)
+_SHARP_ORDER = [5, 0, 7, 2, 9, 4, 11]  # F C G D A E B
+_FLAT_ORDER  = [11, 4, 9, 2, 7, 0, 5]  # B E A D G C F
+
+# Pitch class → step letter for white keys
+_PC_TO_STEP = {0: "C", 2: "D", 4: "E", 5: "F", 7: "G", 9: "A", 11: "B"}
+
+
+def build_spelling_table(fifths: int) -> list[tuple[str, int]]:
+    """Build a 12-element spelling lookup for a given key signature.
+
+    For sharp keys, re-spells colliding pitch classes with the correct
+    diatonic step (e.g. pc 5 → E# in F# major instead of F natural).
+    For flat keys, re-spells chromatic pitch classes as flats
+    (e.g. pc 10 → Bb instead of A#).
+    """
+    table = list(_DEFAULT_SPELLING)
+    if fifths > 0:
+        for i in range(min(fifths, 7)):
+            diatonic_pc = _SHARP_ORDER[i]
+            sounding_pc = (diatonic_pc + 1) % 12
+            table[sounding_pc] = (_PC_TO_STEP[diatonic_pc], 1)
+    elif fifths < 0:
+        for i in range(min(abs(fifths), 7)):
+            diatonic_pc = _FLAT_ORDER[i]
+            sounding_pc = (diatonic_pc + 11) % 12
+            table[sounding_pc] = (_PC_TO_STEP[diatonic_pc], -1)
+    return table
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def chromatic_step(semitone: int, fifths: int) -> tuple[str, int]:
-    """Return (step, alter) for a semitone (0-11) given the key fifths value."""
-    table = _FLAT_SPELLING if fifths < 0 else _SHARP_SPELLING
-    return table[semitone % 12]
+def chromatic_step(semitone: int, fifths: int, spelling_table: list[tuple[str, int]]) -> tuple[str, int]:
+    """Return (step, alter) for a semitone (0-11) using a prebuilt spelling table."""
+    return spelling_table[semitone % 12]
 
 
 def note_xml(step: str, octave: int, alter: int) -> str:
@@ -127,11 +139,20 @@ def build_scale_notes(root_midi: int, intervals: list[int], fifths: int) -> list
     ascending_midi = [root_midi + i for i in intervals]          # 8 notes incl. octave
     descending_midi = list(reversed(ascending_midi))             # 8 notes octave → root
 
+    spelling_table = build_spelling_table(fifths)
     notes = []
     for midi in ascending_midi + descending_midi:
-        octave = midi // 12 - 1
+        midi_octave = midi // 12 - 1
         semitone = midi % 12
-        step, alter = chromatic_step(semitone, fifths)
+        step, alter = chromatic_step(semitone, fifths, spelling_table)
+        # Adjust octave for cross-boundary spellings:
+        #   B# sounds as C (next octave up in MIDI) → subtract 1 from MIDI octave
+        #   Cb sounds as B (next octave down in MIDI) → add 1 to MIDI octave
+        octave = midi_octave
+        if step == "B" and semitone < 2:      # B# or B## — MIDI octave is one higher
+            octave = midi_octave - 1
+        elif step == "C" and semitone > 10:    # Cb — MIDI octave is one lower
+            octave = midi_octave + 1
         notes.append(note_xml(step, octave, alter))
     return notes
 

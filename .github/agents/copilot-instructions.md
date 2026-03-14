@@ -99,6 +99,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - `volta_brackets` field added to the `Score` JSON serialized via existing IndexedDB/LocalStorage persistence layer; missing field defaults to `[]` via serde `default` (047-repeat-volta-playback)
 - TypeScript 5.x / React 18+ (existing frontend stack) + React (existing), Vitest + Testing Library (existing test stack) (001-docs-plugin)
 - None — content is static inline JSX; no IndexedDB or network required (001-docs-plugin)
+- TypeScript ~5.9 (frontend), Python 3.x (generation script) + React 19, Vite 7, Vitest 4 (frontend); Python stdlib only — `zipfile`, `xml.etree.ElementTree` (generator) (001-scales-generation)
+- Static `.mxl` files committed to `scores/scales/` and served via existing `frontend/public/scores → ../../scores` symlink (001-scales-generation)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -119,9 +121,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 001-scales-generation: Added TypeScript ~5.9 (frontend), Python 3.x (generation script) + React 19, Vite 7, Vitest 4 (frontend); Python stdlib only — `zipfile`, `xml.etree.ElementTree` (generator)
 - 001-docs-plugin: Added TypeScript 5.x / React 18+ (existing frontend stack) + React (existing), Vitest + Testing Library (existing test stack)
 - 047-repeat-volta-playback: Added Rust 2024 edition (backend/WASM), TypeScript strict (frontend) + quick-xml 0.31 (MusicXML parsing), serde 1.0 with `default` feature (JSON serialization/deserialization), wasm-bindgen 0.2 (WASM bindings), Tone.js (frontend audio scheduling), Vitest (frontend unit tests)
-- 001-pwa-hosting-service: Added TypeScript (React 18, Vite 7), Rust 1.93 (WASM), GitHub Actions + `vite-plugin-pwa` (v1.x), Workbox 7, wasm-pack; hosting TBD (Cloudflare Pages / Netlify / GitHub Pages); analytics TBD (Umami Cloud / Plausible)
 
 
 <!-- MANUAL ADDITIONS START -->

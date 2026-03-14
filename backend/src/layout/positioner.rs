@@ -593,6 +593,7 @@ pub fn position_note_accidentals(
     staff_vertical_offset: f32,
     key_sharps: i8,
     ticks_per_measure: u32,
+    key_signature_events: &[(u32, i8)],
 ) -> Vec<Glyph> {
     use std::collections::HashMap;
 
@@ -602,17 +603,24 @@ pub fn position_note_accidentals(
     let sharp_order: [u8; 7] = [5, 0, 7, 2, 9, 4, 11]; // F, C, G, D, A, E, B
     let flat_order: [u8; 7] = [11, 4, 9, 2, 7, 0, 5]; // B, E, A, D, G, C, F
 
+    // Helper to build key_alterations from a key_sharps value
+    let build_key_alterations = |ks: i8| -> HashMap<u8, i8> {
+        let mut ka = HashMap::new();
+        if ks > 0 {
+            for &pc in sharp_order.iter().take(ks as usize) {
+                ka.insert(pc, 1);
+            }
+        } else if ks < 0 {
+            for &pc in flat_order.iter().take(ks.unsigned_abs() as usize) {
+                ka.insert(pc, -1);
+            }
+        }
+        ka
+    };
+
     // key_alterations maps pitch_class -> alteration (+1 = sharp, -1 = flat)
-    let mut key_alterations: HashMap<u8, i8> = HashMap::new();
-    if key_sharps > 0 {
-        for &pc in sharp_order.iter().take(key_sharps as usize) {
-            key_alterations.insert(pc, 1);
-        }
-    } else if key_sharps < 0 {
-        for &pc in flat_order.iter().take(key_sharps.unsigned_abs() as usize) {
-            key_alterations.insert(pc, -1);
-        }
-    }
+    let mut key_alterations = build_key_alterations(key_sharps);
+    let mut active_key_sharps = key_sharps;
 
     // Map pitch classes to their "natural" (white key) MIDI value
     // C=0, D=2, E=4, F=5, G=7, A=9, B=11
@@ -679,6 +687,24 @@ pub fn position_note_accidentals(
         if measure != current_measure {
             measure_accidental_state.clear();
             current_measure = measure;
+
+            // Check if key signature changed at this measure's tick
+            if !key_signature_events.is_empty() {
+                let measure_tick = measure * ticks_per_measure;
+                // Find the last key event at or before this measure's start
+                let mut new_key = key_sharps; // default to initial
+                for &(event_tick, sharps) in key_signature_events {
+                    if event_tick <= measure_tick {
+                        new_key = sharps;
+                    } else {
+                        break;
+                    }
+                }
+                if new_key != active_key_sharps {
+                    active_key_sharps = new_key;
+                    key_alterations = build_key_alterations(active_key_sharps);
+                }
+            }
         }
 
         // Determine the note's actual alteration
@@ -689,18 +715,26 @@ pub fn position_note_accidentals(
             chromatic_alteration[pitch_class as usize]
         };
 
-        // What does the key signature say about this pitch class's diatonic note?
-        let diatonic_pc = natural_pitch_classes[pitch_class as usize];
-        let _key_says = key_alterations.get(&diatonic_pc).copied().unwrap_or(0);
+        // Derive the diatonic (white-key) pitch class for this note.
+        // When explicit spelling is available, use the step letter directly;
+        // otherwise fall back to the sharp-biased natural_pitch_classes table.
+        let diatonic_pc = if let Some((step, _alter)) = spelling {
+            match step {
+                'C' => 0u8,
+                'D' => 2,
+                'E' => 4,
+                'F' => 5,
+                'G' => 7,
+                'A' => 9,
+                'B' => 11,
+                _ => natural_pitch_classes[pitch_class as usize],
+            }
+        } else {
+            natural_pitch_classes[pitch_class as usize]
+        };
 
-        // For flat keys: if the key says sharp on a diatonic note, that means the
-        // pitch class one semitone up is the default. But we deal with it differently:
-        // In flat keys, check if the key signature covers this specific pitch class.
-        // E.g. key of F (1 flat = Bb): diatonic B (pc=11) is flatted to Bb (pc=10)
-        // So for pc=10, key_says for diatonic_pc=9(A)? No...
-        //
-        // Let's simplify: determine if the note needs an accidental by checking
-        // whether the key signature already accounts for this note's sound.
+        // What does the key signature say about this diatonic note?
+        let key_says = key_alterations.get(&diatonic_pc).copied().unwrap_or(0);
 
         // A note needs an accidental if:
         // 1. It has an alteration not covered by the key signature, OR
@@ -709,90 +743,14 @@ pub fn position_note_accidentals(
         let needs_accidental;
         let accidental_type: i8; // +1=sharp, -1=flat, 0=natural
 
-        if key_sharps > 0 {
-            // Sharp key: key signature sharps certain diatonic notes
-            if key_alterations.contains_key(&pitch_class) {
-                // This pitch class IS a sharp in the key (e.g., F# in G major)
-                // The note should sound as this pitch naturally, no accidental needed
-                needs_accidental = false;
-                accidental_type = 0;
-            } else if note_alteration == 1 {
-                // Note is sharp but NOT in key signature → needs explicit sharp
-                needs_accidental = true;
-                accidental_type = 1; // sharp
-            } else if note_alteration == 0 {
-                // Natural note — check if key signature sharpens this diatonic note
-                if key_alterations.contains_key(&pitch_class) {
-                    // Already handled above (unreachable here)
-                    needs_accidental = false;
-                    accidental_type = 0;
-                } else {
-                    // Check if this diatonic note is sharped by key sig
-                    // e.g., in G major, F is sharped → natural F needs a natural sign
-                    // pitch_class is the diatonic (natural) pitch class
-                    // Check if key_alterations has an entry that would sharpen this note
-                    let is_sharped_by_key = key_alterations.contains_key(&pitch_class);
-                    if is_sharped_by_key {
-                        needs_accidental = true;
-                        accidental_type = 0; // natural
-                    } else {
-                        needs_accidental = false;
-                        accidental_type = 0;
-                    }
-                }
-            } else {
-                // Flat note in a sharp key → always needs accidental
-                needs_accidental = true;
-                accidental_type = -1;
-            }
-        } else if key_sharps < 0 {
-            // Flat key: key signature flats certain diatonic notes
-            // E.g., F major (1 flat): B is flatted to Bb
-            // In flat keys, the flattened pitch classes are:
-            // flat_order gives the diatonic notes that get flatted
-            // The SOUNDING pitch class of a flatted note = diatonic_pc - 1
-            let flatted_sounding: Vec<u8> = flat_order
-                .iter()
-                .take(key_sharps.unsigned_abs() as usize)
-                .map(|&pc| (pc + 12 - 1) % 12) // B(11)->Bb(10), E(4)->Eb(3), etc.
-                .collect();
-
-            if flatted_sounding.contains(&pitch_class) {
-                // This note is a flat that's in the key signature → no accidental
-                needs_accidental = false;
-                accidental_type = 0;
-            } else if note_alteration == 0 {
-                // Natural note — check if key would flat the diatonic version
-                let diatonic_is_flatted = flat_order
-                    .iter()
-                    .take(key_sharps.unsigned_abs() as usize)
-                    .any(|&pc| pc == pitch_class);
-                if diatonic_is_flatted {
-                    // e.g., B natural in key of F (where B is normally flatted) → needs natural
-                    needs_accidental = true;
-                    accidental_type = 0; // natural
-                } else {
-                    needs_accidental = false;
-                    accidental_type = 0;
-                }
-            } else if note_alteration == 1 {
-                // Sharp note in flat key → needs sharp accidental
-                needs_accidental = true;
-                accidental_type = 1;
-            } else {
-                // Flat note not in key signature → needs explicit flat
-                needs_accidental = true;
-                accidental_type = -1;
-            }
+        if note_alteration == key_says {
+            // Note matches what the key signature prescribes → no accidental
+            needs_accidental = false;
+            accidental_type = 0;
         } else {
-            // C major / A minor: no key signature accidentals
-            if note_alteration != 0 {
-                needs_accidental = true;
-                accidental_type = note_alteration;
-            } else {
-                needs_accidental = false;
-                accidental_type = 0;
-            }
+            // Note differs from key signature → show accidental
+            needs_accidental = true;
+            accidental_type = note_alteration;
         }
 
         if !needs_accidental {

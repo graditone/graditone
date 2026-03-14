@@ -285,12 +285,22 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
 
         // Compute a single unified left margin across ALL instruments so that
         // note positions are consistent (same available width for all staves).
+        // For multi-key pieces, use the maximum key sig width across all key events.
         let max_key_sig_width: f32 = instruments
             .iter()
             .map(|inst| {
                 inst.staves
                     .first()
-                    .map(|s| s.key_sharps.abs() as f32 * 15.0)
+                    .map(|s| {
+                        if s.key_signature_events.is_empty() {
+                            s.key_sharps.abs() as f32 * 15.0
+                        } else {
+                            s.key_signature_events
+                                .iter()
+                                .map(|&(_, k)| k.abs() as f32 * 15.0)
+                                .fold(0.0_f32, f32::max)
+                        }
+                    })
                     .unwrap_or(0.0)
             })
             .fold(0.0_f32, f32::max);
@@ -485,6 +495,9 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                 // T036-T037: Generate structural glyphs (clef, time sig, key sig) at system start
                 let mut structural_glyphs = Vec::new();
 
+                // Determine the active key signature at this system's start tick
+                let system_key_sharps = staff_data.get_key_at_tick(system.tick_range.start_tick);
+
                 // Position clef at x=60 (left margin with room for brace and glyph extent)
                 let clef_glyph = positioner::position_clef(
                     &staff_data.clef,
@@ -496,7 +509,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
 
                 // Position key signature after clef (x=120)
                 let key_sig_glyphs = positioner::position_key_signature(
-                    staff_data.key_sharps,
+                    system_key_sharps,
                     &staff_data.clef,
                     120.0,
                     config.units_per_space,
@@ -507,7 +520,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                 // Position time signature after key signature — only on the first system
                 // (standard engraving: repeat only when the time signature changes)
                 if system.index == 0 {
-                    let key_sig_width = staff_data.key_sharps.abs() as f32 * 15.0;
+                    let key_sig_width = system_key_sharps.abs() as f32 * 15.0;
                     let time_sig_x = 120.0 + key_sig_width + 20.0; // Add 20 unit gap
                     let time_sig_glyphs = positioner::position_time_signature(
                         staff_data.time_numerator,
@@ -517,6 +530,32 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                         staff_vertical_offset,
                     );
                     structural_glyphs.extend(time_sig_glyphs);
+                }
+
+                // Render key signature changes at mid-system measure boundaries
+                if !staff_data.key_signature_events.is_empty() {
+                    for &(event_tick, event_sharps) in &staff_data.key_signature_events {
+                        // Skip if event is outside this system's tick range
+                        if event_tick <= system.tick_range.start_tick
+                            || event_tick >= system.tick_range.end_tick
+                        {
+                            continue;
+                        }
+                        // Look up the x position for this tick from measure bounds
+                        if let Some(&(measure_x_start, _)) = measure_x_bounds.get(&event_tick) {
+                            // Position the key signature glyphs at the measure start
+                            // Shift slightly right to leave room after the barline
+                            let key_x = measure_x_start + 10.0;
+                            let mid_key_glyphs = positioner::position_key_signature(
+                                event_sharps,
+                                &staff_data.clef,
+                                key_x,
+                                config.units_per_space,
+                                staff_vertical_offset,
+                            );
+                            structural_glyphs.extend(mid_key_glyphs);
+                        }
+                    }
                 }
 
                 // Create bar lines at measure boundaries
@@ -929,7 +968,28 @@ struct StaffData {
     clef: String,         // e.g., "Treble", "Bass", "Alto", "Tenor"
     time_numerator: u8,   // e.g., 4 for 4/4 time
     time_denominator: u8, // e.g., 4 for 4/4 time
-    key_sharps: i8,       // Positive for sharps, negative for flats, 0 for C major
+    key_sharps: i8,       // Initial key: positive for sharps, negative for flats, 0 for C major
+    /// Key signature changes sorted by tick. Empty if no mid-piece changes.
+    key_signature_events: Vec<(u32, i8)>,
+}
+
+impl StaffData {
+    /// Get the active key signature (sharps count) at a given tick.
+    fn get_key_at_tick(&self, tick: u32) -> i8 {
+        if self.key_signature_events.is_empty() {
+            return self.key_sharps;
+        }
+        // Find the last event whose tick <= the query tick
+        let mut result = self.key_sharps;
+        for &(event_tick, sharps) in &self.key_signature_events {
+            if event_tick <= tick {
+                result = sharps;
+            } else {
+                break;
+            }
+        }
+        result
+    }
 }
 
 /// Represents a voice with interval events (notes) and rest events
@@ -1124,12 +1184,24 @@ fn extract_instruments(
                         }
                     }
 
+                    // Parse key signature change events (for mid-piece key changes)
+                    let mut key_signature_events: Vec<(u32, i8)> = Vec::new();
+                    if let Some(events_array) = staff["key_signature_events"].as_array() {
+                        for ev in events_array {
+                            let tick = ev["tick"].as_u64().unwrap_or(0) as u32;
+                            let sharps = ev["sharps"].as_i64().unwrap_or(0) as i8;
+                            key_signature_events.push((tick, sharps));
+                        }
+                        key_signature_events.sort_by_key(|&(t, _)| t);
+                    }
+
                     staves.push(StaffData {
                         voices,
                         clef,
                         time_numerator,
                         time_denominator,
                         key_sharps,
+                        key_signature_events,
                     });
                 }
             }
@@ -1422,6 +1494,7 @@ fn position_glyphs_for_staff(
             staff_vertical_offset,
             staff_data.key_sharps,
             ticks_per_measure,
+            &staff_data.key_signature_events,
         );
 
         all_glyphs.extend(accidental_glyphs);
@@ -3093,6 +3166,7 @@ mod tests {
             time_numerator: 4,
             time_denominator: 4,
             key_sharps: 0,
+            key_signature_events: vec![],
             voices: vec![VoiceData {
                 notes: vec![NoteEvent {
                     pitch: 67, // G4 — on the second line of treble staff
@@ -3131,6 +3205,7 @@ mod tests {
             time_numerator: 4,
             time_denominator: 4,
             key_sharps: 0,
+            key_signature_events: vec![],
             voices: vec![VoiceData {
                 notes: vec![NoteEvent {
                     pitch: 60, // C4 (middle C) — below treble staff, needs ledger line

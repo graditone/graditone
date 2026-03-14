@@ -33,6 +33,7 @@ import { computeLayout } from '../wasm/layout';
 import { initWasm } from '../services/wasm/loader';
 import { ScoreViewer, LABEL_MARGIN } from '../pages/ScoreViewer';
 import type { GlobalLayout } from '../wasm/layout';
+import { buildSpellingTable } from './pitchSpelling';
 
 // ---------------------------------------------------------------------------
 // MIDI-event → Note conversion
@@ -98,9 +99,10 @@ const WASM_QUARTER_TICKS = 960;
  * Note timestamps are treated as ms-from-exercise-start; with the given BPM they
  * are converted to 960 PPQ tick positions for tick-accurate layout.
  */
-function toConvertedScore(events: readonly PluginNoteEvent[], clef: string, bpm: number, timestampOffset = 0) {
+function toConvertedScore(events: readonly PluginNoteEvent[], clef: string, bpm: number, timestampOffset = 0, keySignature = 0) {
   const msPerBeat = 60_000 / bpm;
   const attacks = events.filter(e => !e.type || e.type === 'attack');
+  const spellingTable = buildSpellingTable(keySignature);
   return {
     instruments: [{
       id: 'practice',
@@ -108,14 +110,18 @@ function toConvertedScore(events: readonly PluginNoteEvent[], clef: string, bpm:
       staves: [{
         clef,
         time_signature: { numerator: 4, denominator: 4 },
-        key_signature: { sharps: 0 },
+        key_signature: { sharps: keySignature },
         voices: [{
-          notes: attacks.map((e) => ({
-            tick: Math.max(0, Math.round(((e.timestamp - timestampOffset) / msPerBeat) * WASM_QUARTER_TICKS)),
-            duration: Math.max(1, Math.round(((e.durationMs ?? msPerBeat) / msPerBeat) * WASM_QUARTER_TICKS)),
-            pitch: e.midiNote,
-            articulation: null,
-          })),
+          notes: attacks.map((e) => {
+            const sp = spellingTable[e.midiNote % 12];
+            return {
+              tick: Math.max(0, Math.round(((e.timestamp - timestampOffset) / msPerBeat) * WASM_QUARTER_TICKS)),
+              duration: Math.max(1, Math.round(((e.durationMs ?? msPerBeat) / msPerBeat) * WASM_QUARTER_TICKS)),
+              pitch: e.midiNote,
+              articulation: null,
+              spelling: { step: sp.step, alter: sp.alter },
+            };
+          }),
         }],
       }],
     }],
@@ -190,6 +196,7 @@ export const PluginStaffViewer: React.FC<PluginStaffViewerProps> = ({
   bpm,
   timestampOffset = 0,
   highlightedNoteIndex,
+  keySignature = 0,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -220,7 +227,7 @@ export const PluginStaffViewer: React.FC<PluginStaffViewerProps> = ({
       }
       try {
         await initWasm();
-        const score = toConvertedScore(notes, clef, bpm, timestampOffset);
+        const score = toConvertedScore(notes, clef, bpm, timestampOffset, keySignature);
         // Convert CSS px width to layout units (BASE_SCALE = 0.5, so layout units = px * 2)
         // Subtract LABEL_MARGIN so the rendered content fits the container exactly.
         const maxSystemWidth = Math.max(400, wasmContainerWidth * 2 - LABEL_MARGIN);
@@ -236,7 +243,7 @@ export const PluginStaffViewer: React.FC<PluginStaffViewerProps> = ({
       }
     })();
     return () => { cancelled = true; };
-  }, [notes, clef, bpm, timestampOffset, wasmContainerWidth]);
+  }, [notes, clef, bpm, timestampOffset, keySignature, wasmContainerWidth]);
 
   // Build source map + pitch→noteId index for highlighting (WASM path)
   const { sourceToNoteIdMap: pluginSourceMap } = useMemo(() => {
