@@ -82,6 +82,12 @@ export interface PluginStaffViewerProps {
    * avoiding false-positives when the same pitch appears multiple times.
    */
   readonly highlightedNoteIndex?: number;
+  /**
+   * Key signature expressed as the number of sharps (positive) or flats (negative)
+   * in MusicXML `<fifths>` convention.  E.g. 2 = D Major / B minor, -3 = Eb Major.
+   * Defaults to 0 (C Major / no accidentals).
+   */
+  readonly keySignature?: number;
 }
 
 // ---------------------------------------------------------------------------

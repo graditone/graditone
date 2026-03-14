@@ -62,6 +62,11 @@ export interface TrainExercise {
   notes: ExerciseNote[];
   /** Beats per minute used to compute onset times */
   bpm: number;
+  /**
+   * Key signature expressed as MusicXML fifths: positive = sharps, negative = flats, 0 = C major.
+   * Omitted (treated as 0) for random and score-based exercises.
+   */
+  keySignature?: number;
 }
 
 // ─── Response ─────────────────────────────────────────────────────────────────
