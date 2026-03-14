@@ -15,9 +15,11 @@
  * Constitution Principle II: This component is host-owned and injected into plugins
  * via context.components.ScoreSelector. The plugin never imports host internals.
  */
-import { useRef } from 'react';
+import { useRef, useMemo } from 'react';
 import type { PluginScoreSelectorProps } from '../../plugin-api/types';
 import { UserScoreList } from '../load-score/UserScoreList';
+import { ScoreGroupList } from '../load-score/ScoreGroupList';
+import { PRELOADED_CATALOG } from '../../data/preloadedScores';
 import { useUserScores } from '../../hooks/useUserScores';
 import { deleteScoreFromIndexedDB } from '../../services/storage/local-storage';
 import './ScoreSelectorPlugin.css';
@@ -33,6 +35,13 @@ export function ScoreSelectorPlugin({
 }: PluginScoreSelectorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { userScores, removeUserScore } = useUserScores();
+
+  // Exclude from the flat list any scores already rendered in a collapsible group
+  const groupedIds = useMemo(
+    () => new Set(PRELOADED_CATALOG.groups.flatMap((g) => g.scores.map((s) => s.id))),
+    []
+  );
+  const ungroupedCatalogue = catalogue.filter((e) => !groupedIds.has(e.id));
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -82,7 +91,7 @@ export function ScoreSelectorPlugin({
           <>
             <div className="score-selector-scroll">
               <ul className="score-selector-list" role="listbox" aria-label="Preloaded scores">
-                {catalogue.map((entry) => (
+                {ungroupedCatalogue.map((entry) => (
                   <li key={entry.id} role="none" className="score-selector-item">
                     <button
                       type="button"
@@ -95,6 +104,15 @@ export function ScoreSelectorPlugin({
                   </li>
                 ))}
               </ul>
+
+              {/* Feature 001: Scales subfolder groups — collapsible */}
+              {PRELOADED_CATALOG.groups.map((group) => (
+                <ScoreGroupList
+                  key={group.id}
+                  group={group}
+                  onSelect={(score) => onSelectScore(score.id)}
+                />
+              ))}
 
               {/* Feature 045: My Scores section */}
               {userScores.length > 0 && (

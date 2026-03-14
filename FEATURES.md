@@ -26,6 +26,7 @@ A tablet-native app for interactive scores, designed for practice and performanc
 - **Demo score** on first launch for immediate exploration
 - **Offline storage** - Scores persist locally using IndexedDB
 - **My Scores** - Uploaded MusicXML files are saved to IndexedDB and appear in a "My Scores" section inside the score picker; scores survive page reloads; duplicate file names are auto-suffixed; each entry has a × delete button with a 5-second undo window
+- **Scales library** - 48 preloaded scale scores (24 major + 24 natural minor, octaves 4 & 5) in circle of fifths order, accessible via a collapsible "Scales" group in the load score dialog
 - **View-only mode** - Focus on reading and performance (editing removed)
 
 ### ▶️ Performance Features

@@ -22,7 +22,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import React, { type ReactNode } from 'react';
 import { TempoStateProvider } from '../services/state/TempoStateContext';
 import { useScorePlayerContext, createNoOpScorePlayer } from './scorePlayerContext';
-import { PRELOADED_SCORES } from '../data/preloadedScores';
+import { PRELOADED_SCORES, PRELOADED_CATALOG } from '../data/preloadedScores';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -149,12 +149,15 @@ describe('useScorePlayerContext', () => {
   // ─── getCatalogue ─────────────────────────────────────────────────────────
 
   describe('getCatalogue()', () => {
-    it('returns all 6 PRELOADED_SCORES entries with id and displayName', () => {
+    it('returns all preloaded scores (ungrouped + all groups) with id and displayName', () => {
       const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
 
       const catalogue = result.current.getCatalogue();
+      const expectedCount =
+        PRELOADED_CATALOG.ungrouped.length +
+        PRELOADED_CATALOG.groups.reduce((sum, g) => sum + g.scores.length, 0);
 
-      expect(catalogue).toHaveLength(6);
+      expect(catalogue).toHaveLength(expectedCount);
       // Verify each entry has id + displayName but NOT path (FR-013)
       catalogue.forEach((entry) => {
         expect(entry).toHaveProperty('id');
@@ -163,24 +166,24 @@ describe('useScorePlayerContext', () => {
       });
     });
 
-    it('matches the ids from PRELOADED_SCORES', () => {
+    it('starts with the ids from PRELOADED_SCORES (ungrouped)', () => {
       const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
 
       const catalogue = result.current.getCatalogue();
       const catalogueIds = catalogue.map(e => e.id);
       const expectedIds = PRELOADED_SCORES.map(s => s.id);
 
-      expect(catalogueIds).toEqual(expectedIds);
+      expect(catalogueIds.slice(0, expectedIds.length)).toEqual(expectedIds);
     });
 
-    it('matches the displayNames from PRELOADED_SCORES', () => {
+    it('starts with the displayNames from PRELOADED_SCORES (ungrouped)', () => {
       const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
 
       const catalogue = result.current.getCatalogue();
       const names = catalogue.map(e => e.displayName);
       const expectedNames = PRELOADED_SCORES.map(s => s.displayName);
 
-      expect(names).toEqual(expectedNames);
+      expect(names.slice(0, expectedNames.length)).toEqual(expectedNames);
     });
 
     it('returns a stable reference across renders', () => {

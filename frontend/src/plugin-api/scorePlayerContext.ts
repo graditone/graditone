@@ -29,7 +29,8 @@ import type { PlaybackStatus, ITickSource } from '../types/playback';
 import { useTempoState } from '../services/state/TempoStateContext';
 import { useNoteHighlight } from '../services/highlight/useNoteHighlight';
 import { MusicXMLImportService } from '../services/import/MusicXMLImportService';
-import { PRELOADED_SCORES } from '../data/preloadedScores';
+import { PRELOADED_CATALOG } from '../data/preloadedScores';
+import type { PreloadedScore } from '../data/preloadedScores';
 import { loadScoreFromIndexedDB } from '../services/storage/local-storage';
 import { ScoreCache } from '../services/score-cache';
 import { addUserScore, getUserScore } from '../services/userScoreIndex';
@@ -78,7 +79,13 @@ type OverlayStatus = 'idle' | 'loading' | 'error' | null;
 // getCatalogue — stable reference, created once per module load
 // ---------------------------------------------------------------------------
 
-const CATALOGUE: ReadonlyArray<PluginPreloadedScore> = PRELOADED_SCORES.map(
+/** All preloaded scores across ungrouped list and subfolder groups. */
+const ALL_PRELOADED_SCORES: ReadonlyArray<PreloadedScore> = [
+  ...PRELOADED_CATALOG.ungrouped,
+  ...PRELOADED_CATALOG.groups.flatMap((g) => g.scores),
+];
+
+const CATALOGUE: ReadonlyArray<PluginPreloadedScore> = ALL_PRELOADED_SCORES.map(
   ({ id, displayName }) => ({ id, displayName } as const)
 );
 
@@ -274,7 +281,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       let parsedTitle: string | null = null;
 
       if (source.kind === 'catalogue') {
-        const preloaded = PRELOADED_SCORES.find(s => s.id === source.catalogueId);
+        const preloaded = ALL_PRELOADED_SCORES.find(s => s.id === source.catalogueId);
         if (!preloaded) {
           throw new Error(`Unknown catalogue ID: "${source.catalogueId}"`);
         }

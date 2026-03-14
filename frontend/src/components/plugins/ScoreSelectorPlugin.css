@@ -142,6 +142,41 @@
   background: var(--dialog-surface-hover);
 }
 
+/* ── Score group (scales) within the plugin selector ───────────────────── */
+/* Match the left alignment of .score-selector-item (padding: 0.25rem 1rem) */
+.score-selector-scroll .score-group {
+  padding: 0 1rem;
+}
+
+/* score-group__summary already has padding-left:1rem from ScoreGroupList.css; */
+/* reset it here so the 1rem comes from the parent .score-group instead       */
+.score-selector-scroll .score-group__summary {
+  padding-left: 0;
+}
+
+/* Items inside the group: style like .score-selector-item__btn */
+.score-selector-scroll .score-group__list .preloaded-score-item {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: var(--dialog-text);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.score-selector-scroll .score-group__list .preloaded-score-item:hover {
+  background: var(--dialog-surface);
+}
+
+.score-selector-scroll .score-group__list .preloaded-score-item:active {
+  background: var(--dialog-surface-hover);
+}
+
 /* ── Load from file row ─────────────────────────────────────────────────── */
 .score-selector-file-row {
   padding: 0.75rem 1.25rem 1rem;

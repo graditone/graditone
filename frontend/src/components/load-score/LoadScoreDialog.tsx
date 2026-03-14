@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { PRELOADED_SCORES } from '../../data/preloadedScores';
+import { PRELOADED_SCORES, PRELOADED_CATALOG } from '../../data/preloadedScores';
 import type { PreloadedScore } from '../../data/preloadedScores';
 import type { ImportResult } from '../../services/import/MusicXMLImportService';
 import { useImportMusicXML } from '../../hooks/useImportMusicXML';
 import { PreloadedScoreList } from './PreloadedScoreList';
+import { ScoreGroupList } from './ScoreGroupList';
 import { UserScoreList } from './UserScoreList';
 import type { UserScore } from '../../services/userScoreIndex';
 import { LoadNewScoreButton } from './LoadNewScoreButton';
@@ -151,6 +152,16 @@ export function LoadScoreDialog({
             disabled={isBusy}
             onSelect={loadPresetScore}
           />
+          {/* Feature 001: Scales group — collapsible subfolder group */}
+          {PRELOADED_CATALOG.groups.map((group) => (
+            <ScoreGroupList
+              key={group.id}
+              group={group}
+              selectedId={selectedId}
+              disabled={isBusy}
+              onSelect={loadPresetScore}
+            />
+          ))}
           {/* Feature 045: User-uploaded scores below built-in catalogue */}
           <UserScoreList
             scores={userScores}
