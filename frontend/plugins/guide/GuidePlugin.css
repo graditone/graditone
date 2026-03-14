@@ -103,6 +103,19 @@
   padding: 0.1em 0.35em;
 }
 
+/* ── Links ───────────────────────────────────────────────────────────────── */
+
+.guide-section a {
+  color: var(--color-accent, #4a90e2);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.guide-section a:hover {
+  opacity: 0.8;
+}
+
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 480px) {

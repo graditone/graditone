@@ -107,7 +107,12 @@ export function GuidePlugin() {
           <li>Select the <code>.mxl</code> or <code>.musicxml</code> file from your device.</li>
           <li>The score loads immediately and is saved in the browser — it will be available next time you open Graditone, even offline.</li>
         </ol>
-        <p>Free MusicXML scores are available at <strong>musescore.com</strong>, <strong>imslp.org</strong>, and <strong>kern.humdrum.org</strong>.</p>
+        <p>
+          Free MusicXML scores are available at{' '}
+          <a href="https://musescore.com" target="_blank" rel="noopener noreferrer">musescore.com</a>,{' '}
+          <a href="https://imslp.org" target="_blank" rel="noopener noreferrer">imslp.org</a>, and{' '}
+          <a href="https://kern.humdrum.org" target="_blank" rel="noopener noreferrer">kern.humdrum.org</a>.
+        </p>
       </section>
 
       </div>
