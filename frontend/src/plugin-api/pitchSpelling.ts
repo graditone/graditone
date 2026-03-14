@@ -6,6 +6,9 @@
 /** Flat order (reverse circle): B E A D G C F — pitch classes */
 const FLAT_ORDER = [11, 4, 9, 2, 7, 0, 5] as const;
 
+/** Sharp order (circle of fifths): F C G D A E B — pitch classes */
+const SHARP_ORDER = [5, 0, 7, 2, 9, 4, 11] as const;
+
 /** Diatonic step names indexed by white-key pitch class (0=C … 11=B). */
 const PC_TO_STEP: Record<number, string> = {
   0: 'C', 2: 'D', 4: 'E', 5: 'F', 7: 'G', 9: 'A', 11: 'B',
@@ -25,13 +28,25 @@ const DEFAULT_SHARP_SPELLING: [string, number][] = [
  * Returns a 12-element array mapping pitch class → { step, alter }.
  *
  * For flat keys, re-spells the relevant chromatic pitch classes as flats
- * (e.g. pc 10 → B♭ instead of A♯). Sharp keys use the default sharp
- * spelling which already matches the engine's expectations.
+ * (e.g. pc 10 → B♭ instead of A♯). For sharp keys, re-spells colliding
+ * pitch classes (e.g. pc 5 → E♯ instead of F natural in F♯ major).
  */
 export function buildSpellingTable(fifths: number): { step: string; alter: number }[] {
   const table = DEFAULT_SHARP_SPELLING.map(([step, alter]) => ({ step, alter }));
 
-  if (fifths < 0) {
+  if (fifths > 0) {
+    // Sharp key: for each sharped diatonic note, remap the sounding pitch class.
+    // For 1–5 sharps (F#, C#, G#, D#, A#) the default table already has the
+    // correct spelling so the writes are no-ops. For 6+ sharps the sounding pc
+    // collides with a natural note (E#=pc5 collides with F, B#=pc0 with C) and
+    // the remap is essential.
+    const numSharps = Math.min(fifths, 7);
+    for (let i = 0; i < numSharps; i++) {
+      const diatonicPc = SHARP_ORDER[i];
+      const soundingPc = (diatonicPc + 1) % 12;
+      table[soundingPc] = { step: PC_TO_STEP[diatonicPc], alter: 1 };
+    }
+  } else if (fifths < 0) {
     const numFlats = Math.min(Math.abs(fifths), 7);
     for (let i = 0; i < numFlats; i++) {
       const diatonicPc = FLAT_ORDER[i]; // the natural pitch class being flatted

@@ -93,18 +93,23 @@ describe('buildSpellingTable', () => {
   });
 
   // ── F# major (6♯) ──────────────────────────────────────────────────────
-  it('F# major (6♯): all 6 sharped notes spelled correctly', () => {
+  it('F# major (6♯): E# spelled correctly (pc 5 = E# not F)', () => {
     const t = buildSpellingTable(6);
-    // F C G D A E are the sharped notes — their sharp pitch classes:
+    // F C G D A E are the sharped notes — their sounding pitch classes:
     // F#(6), C#(1), G#(8), D#(3), A#(10), E#(5≡F but spelled E#)
-    // The default table already has all chromatic notes as sharps, so no change
     expect(t[6]).toEqual({ step: 'F', alter: 1 });   // F#
     expect(t[1]).toEqual({ step: 'C', alter: 1 });   // C#
     expect(t[8]).toEqual({ step: 'G', alter: 1 });   // G#
     expect(t[3]).toEqual({ step: 'D', alter: 1 });   // D#
     expect(t[10]).toEqual({ step: 'A', alter: 1 });  // A#
-    // pc 5 (F natural) is E# in F# major context — but buildSpellingTable doesn't
-    // remap natural notes; the key sig handles the display. So F stays F natural.
-    expect(t[5]).toEqual({ step: 'F', alter: 0 });
+    // pc 5 is E# in F# major — NOT F natural
+    expect(t[5]).toEqual({ step: 'E', alter: 1 });   // E# (was F natural before fix)
+  });
+
+  // ── C# major (7♯) ──────────────────────────────────────────────────────
+  it('C# major (7♯): B# spelled correctly (pc 0 = B# not C)', () => {
+    const t = buildSpellingTable(7);
+    expect(t[5]).toEqual({ step: 'E', alter: 1 });   // E#
+    expect(t[0]).toEqual({ step: 'B', alter: 1 });   // B# (was C natural)
   });
 });
