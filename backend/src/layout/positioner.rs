@@ -689,18 +689,26 @@ pub fn position_note_accidentals(
             chromatic_alteration[pitch_class as usize]
         };
 
-        // What does the key signature say about this pitch class's diatonic note?
-        let diatonic_pc = natural_pitch_classes[pitch_class as usize];
-        let _key_says = key_alterations.get(&diatonic_pc).copied().unwrap_or(0);
+        // Derive the diatonic (white-key) pitch class for this note.
+        // When explicit spelling is available, use the step letter directly;
+        // otherwise fall back to the sharp-biased natural_pitch_classes table.
+        let diatonic_pc = if let Some((step, _alter)) = spelling {
+            match step {
+                'C' => 0u8,
+                'D' => 2,
+                'E' => 4,
+                'F' => 5,
+                'G' => 7,
+                'A' => 9,
+                'B' => 11,
+                _ => natural_pitch_classes[pitch_class as usize],
+            }
+        } else {
+            natural_pitch_classes[pitch_class as usize]
+        };
 
-        // For flat keys: if the key says sharp on a diatonic note, that means the
-        // pitch class one semitone up is the default. But we deal with it differently:
-        // In flat keys, check if the key signature covers this specific pitch class.
-        // E.g. key of F (1 flat = Bb): diatonic B (pc=11) is flatted to Bb (pc=10)
-        // So for pc=10, key_says for diatonic_pc=9(A)? No...
-        //
-        // Let's simplify: determine if the note needs an accidental by checking
-        // whether the key signature already accounts for this note's sound.
+        // What does the key signature say about this diatonic note?
+        let key_says = key_alterations.get(&diatonic_pc).copied().unwrap_or(0);
 
         // A note needs an accidental if:
         // 1. It has an alteration not covered by the key signature, OR
@@ -710,40 +718,17 @@ pub fn position_note_accidentals(
         let accidental_type: i8; // +1=sharp, -1=flat, 0=natural
 
         if key_sharps > 0 {
-            // Sharp key: key signature sharps certain diatonic notes
-            if key_alterations.contains_key(&pitch_class) {
-                // This pitch class IS a sharp in the key (e.g., F# in G major)
-                // The note should sound as this pitch naturally, no accidental needed
+            // Sharp key: key signature sharps certain diatonic notes.
+            // Compare note_alteration with what the key signature says about
+            // the note's diatonic pitch class.
+            if note_alteration == key_says {
+                // Note matches what the key signature prescribes → no accidental
                 needs_accidental = false;
                 accidental_type = 0;
-            } else if note_alteration == 1 {
-                // Note is sharp but NOT in key signature → needs explicit sharp
-                needs_accidental = true;
-                accidental_type = 1; // sharp
-            } else if note_alteration == 0 {
-                // Natural note — check if key signature sharpens this diatonic note
-                if key_alterations.contains_key(&pitch_class) {
-                    // Already handled above (unreachable here)
-                    needs_accidental = false;
-                    accidental_type = 0;
-                } else {
-                    // Check if this diatonic note is sharped by key sig
-                    // e.g., in G major, F is sharped → natural F needs a natural sign
-                    // pitch_class is the diatonic (natural) pitch class
-                    // Check if key_alterations has an entry that would sharpen this note
-                    let is_sharped_by_key = key_alterations.contains_key(&pitch_class);
-                    if is_sharped_by_key {
-                        needs_accidental = true;
-                        accidental_type = 0; // natural
-                    } else {
-                        needs_accidental = false;
-                        accidental_type = 0;
-                    }
-                }
             } else {
-                // Flat note in a sharp key → always needs accidental
+                // Note differs from key signature → show accidental
                 needs_accidental = true;
-                accidental_type = -1;
+                accidental_type = note_alteration;
             }
         } else if key_sharps < 0 {
             // Flat key: key signature flats certain diatonic notes
