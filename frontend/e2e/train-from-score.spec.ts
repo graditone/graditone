@@ -25,7 +25,7 @@ import { test, expect, type Page } from '@playwright/test';
 const TRAIN_BTN   = /train/i;
 const SCORE_RADIO = /score/i;
 const RANDOM_RADIO  = /random/i;
-const C4_RADIO      = /c4 scale/i;
+const SCALES_RADIO  = /scales/i;
 // Exact displayName from preloadedScores.ts (\u2014 is em-dash, \u00fc is u-umlaut)
 const BEETHOVEN_TXT = 'Beethoven \u2014 F\u00fcr Elise';
 const CHANGE_SCORE  = /change score/i;
@@ -114,14 +114,14 @@ test.describe('SC-003: Existing preset regressions', () => {
     await expect(page.locator(STOP_BTN)).toBeVisible({ timeout: 30_000 });
   });
 
-  test('C4 Scale preset exercise starts normally', async ({ page }) => {
+  test('Scales preset exercise starts normally', async ({ page }) => {
     await openTrain(page);
     // Open config panel via Custom to access preset selector
     await page.getByLabel(/complexity level/i).selectOption('custom');
-    await page.getByRole('radio', { name: C4_RADIO }).click();
+    await page.getByRole('radio', { name: SCALES_RADIO }).click();
 
     await page.locator(PLAY_BTN).click();
-    // C4 Scale uses step mode -- no countdown, goes straight to playing
+    // Scales uses step mode -- no countdown, goes straight to playing
     await expect(page.locator(PLAY_BTN)).not.toBeVisible({ timeout: 10_000 });
     await expect(page.locator(STOP_BTN)).toBeVisible({ timeout: 30_000 });
   });
