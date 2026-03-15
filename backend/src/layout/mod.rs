@@ -328,6 +328,14 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
         // as system_width lets compute_unified_note_positions use
         //   available_width = max_system_width - unified_left_margin
         // and notes are placed from unified_left_margin to max_system_width.
+        // Collect all mid-system clef change ticks so the spacing
+        // algorithm can insert extra space for the clef glyph.
+        let clef_change_ticks: std::collections::HashSet<u32> = all_staves
+            .iter()
+            .flat_map(|s| s.clef_events.iter())
+            .filter(|(t, _)| *t > system.tick_range.start_tick && *t < system.tick_range.end_tick)
+            .map(|(t, _)| *t)
+            .collect();
         let note_positions = compute_unified_note_positions(
             &all_staves,
             &system.tick_range,
@@ -335,6 +343,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
             unified_left_margin,
             &spacing_config,
             ticks_per_measure,
+            &clef_change_ticks,
         );
 
         // Compute measure boundary x positions for this system.
@@ -619,8 +628,9 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                 // before it.  Fall back to the measure start if no
                                 // note exists at the exact tick.
                                 if let Some(&note_x) = note_positions.get(event_tick) {
-                                    // Place clef 30 logical units before the note
-                                    note_x - 30.0
+                                    // Place clef well before the note (extra 50 units
+                                    // reserved in spacing + clef glyph width ~30)
+                                    note_x - 45.0
                                 } else {
                                     // No note at this exact tick — find the nearest
                                     // note after the event tick within this system.
@@ -632,7 +642,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                         .min_by_key(|(t, _)| *t)
                                         .map(|(_, &x)| x);
                                     if let Some(nx) = next_note_x {
-                                        nx - 30.0
+                                        nx - 45.0
                                     } else {
                                         measure_x_start + 10.0
                                     }
@@ -799,26 +809,115 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
         // Ensure bounding box matches the justified width
         system.bounding_box.width = content_width;
 
-        // Add a system-end barline that joins all staves in each staff group.
-        // This is the standard vertical line at the right edge of every system
-        // connecting the top of the first staff to the bottom of the last staff.
+        // Join measure barlines within each multi-staff group.
+        // Standard engraving: internal barlines span from the top line of the
+        // first staff to the bottom line of the last staff in the group.
+        // We adjust the y_start/y_end of each barline segment on staves[0] to
+        // cover the full group height, collect repeat dots from all staves onto
+        // staves[0], then clear barlines from staves[1..].
         for staff_group in &mut system.staff_groups {
             if staff_group.staves.len() >= 2 {
-                let top_y = staff_group.staves.first().unwrap().staff_lines[0].y_position;
+                let top_y = staff_group.staves[0].staff_lines[0].y_position;
                 let bottom_y = staff_group.staves.last().unwrap().staff_lines[4].y_position;
-                let end_barline = BarLine {
-                    segments: vec![BarLineSegment {
-                        x_position: content_width,
-                        y_start: top_y,
-                        y_end: bottom_y,
-                        stroke_width: 1.5,
-                    }],
-                    bar_type: BarLineType::Single,
-                    dots: Vec::new(),
-                };
-                // Append to the first staff so the renderer draws it
-                staff_group.staves[0].bar_lines.push(end_barline);
+
+                // Collect repeat dots from subsequent staves, keyed by barline X
+                // so they can be merged onto the matching barline on staves[0].
+                let mut extra_dots: std::collections::HashMap<i32, Vec<RepeatDotPosition>> =
+                    std::collections::HashMap::new();
+                for staff in staff_group.staves[1..].iter() {
+                    for bar_line in &staff.bar_lines {
+                        if bar_line.dots.is_empty() {
+                            continue;
+                        }
+                        let x_key = bar_line
+                            .segments
+                            .first()
+                            .map(|s| (s.x_position * 10.0) as i32)
+                            .unwrap_or(0);
+                        extra_dots
+                            .entry(x_key)
+                            .or_default()
+                            .extend_from_slice(&bar_line.dots);
+                    }
+                }
+
+                // Extend staves[0] barlines to span the full group height.
+                for bar_line in &mut staff_group.staves[0].bar_lines {
+                    for segment in &mut bar_line.segments {
+                        segment.y_start = top_y;
+                        segment.y_end = bottom_y;
+                    }
+                    let x_key = bar_line
+                        .segments
+                        .first()
+                        .map(|s| (s.x_position * 10.0) as i32)
+                        .unwrap_or(0);
+                    if let Some(more_dots) = extra_dots.remove(&x_key) {
+                        bar_line.dots.extend(more_dots);
+                    }
+                }
+
+                // Remove barlines from subsequent staves (merged into staves[0]).
+                for staff in staff_group.staves[1..].iter_mut() {
+                    staff.bar_lines.clear();
+                }
             }
+        }
+
+        // Add a system-end barline at the justified right edge for every
+        // staff group.  For multi-staff groups the barline spans the full
+        // group height; for single-staff groups it spans that staff.
+        // The barline type reflects the last measure in this system (Final
+        // for the score's last measure, repeat types if applicable, Single
+        // otherwise).
+        let end_bar_type = {
+            let last_measure = measure_infos
+                .iter()
+                .filter(|m| m.end_tick == system.tick_range.end_tick)
+                .last();
+            match last_measure {
+                Some(m) => {
+                    let next_start_repeat = measure_infos
+                        .iter()
+                        .find(|mi| mi.start_tick == m.end_tick)
+                        .map(|mi| mi.start_repeat)
+                        .unwrap_or(false);
+                    if m.end_repeat && next_start_repeat {
+                        BarLineType::RepeatBoth
+                    } else if m.end_repeat {
+                        BarLineType::RepeatEnd
+                    } else if next_start_repeat {
+                        BarLineType::RepeatStart
+                    } else {
+                        let is_last = measure_infos.last().map(|mi| mi.end_tick)
+                            == Some(m.end_tick);
+                        if is_last { BarLineType::Final } else { BarLineType::Single }
+                    }
+                }
+                None => BarLineType::Single,
+            }
+        };
+        for staff_group in &mut system.staff_groups {
+            let top_y = staff_group.staves.first().unwrap().staff_lines[0].y_position;
+            let bottom_y = staff_group.staves.last().unwrap().staff_lines[4].y_position;
+            let segments = create_bar_line_segments(content_width, top_y, bottom_y, &end_bar_type);
+            let dots = compute_repeat_dots(content_width, top_y, config.units_per_space, &end_bar_type);
+            // For multi-staff groups, also add repeat dots for lower staves.
+            let mut all_dots = dots;
+            if staff_group.staves.len() >= 2 {
+                for staff in &staff_group.staves[1..] {
+                    let staff_top = staff.staff_lines[0].y_position;
+                    all_dots.extend(compute_repeat_dots(
+                        content_width, staff_top, config.units_per_space, &end_bar_type,
+                    ));
+                }
+            }
+            let end_barline = BarLine {
+                segments,
+                bar_type: end_bar_type.clone(),
+                dots: all_dots,
+            };
+            staff_group.staves[0].bar_lines.push(end_barline);
         }
 
         // Update system height to include collision-avoidance extra spacing
@@ -1355,19 +1454,53 @@ fn extract_instruments(
                             let sharps = ev["sharps"].as_i64().unwrap_or(0) as i8;
                             key_signature_events.push((tick, sharps));
                         }
-                        key_signature_events.sort_by_key(|&(t, _)| t);
                     }
+                    // Also extract from staff_structural_events (DTO path)
+                    if let Some(events_array) = staff["staff_structural_events"].as_array() {
+                        for ev in events_array {
+                            if let Some(ks_obj) = ev.get("KeySignature") {
+                                let tick = ks_obj["tick"].as_u64()
+                                    .or_else(|| ks_obj["tick"]["value"].as_u64())
+                                    .unwrap_or(0) as u32;
+                                let sharps = ks_obj["sharps"].as_i64().unwrap_or(0) as i8;
+                                key_signature_events.push((tick, sharps));
+                            }
+                        }
+                    }
+                    key_signature_events.sort_by_key(|&(t, _)| t);
+                    key_signature_events.dedup_by_key(|&mut (t, _)| t);
 
                     // Parse clef change events (for mid-piece clef changes)
+                    // Clef events may be stored in two places:
+                    //  1. A flat "clef_events" array (legacy path)
+                    //  2. Inside "staff_structural_events" as {"Clef": {"tick":..,"clef":..}}
                     let mut clef_events: Vec<(u32, String)> = Vec::new();
                     if let Some(events_array) = staff["clef_events"].as_array() {
                         for ev in events_array {
-                            let tick = ev["tick"].as_u64().unwrap_or(0) as u32;
+                            let tick = ev["tick"].as_u64()
+                                .or_else(|| ev["tick"]["value"].as_u64())
+                                .unwrap_or(0) as u32;
                             let clef_name = ev["clef"].as_str().unwrap_or("Treble").to_string();
                             clef_events.push((tick, clef_name));
                         }
-                        clef_events.sort_by_key(|(t, _)| *t);
                     }
+                    // Also extract from staff_structural_events (DTO path)
+                    if let Some(events_array) = staff["staff_structural_events"].as_array() {
+                        for ev in events_array {
+                            if let Some(clef_obj) = ev.get("Clef") {
+                                let tick = clef_obj["tick"].as_u64()
+                                    .or_else(|| clef_obj["tick"]["value"].as_u64())
+                                    .unwrap_or(0) as u32;
+                                let clef_name = clef_obj["clef"]
+                                    .as_str()
+                                    .unwrap_or("Treble")
+                                    .to_string();
+                                clef_events.push((tick, clef_name));
+                            }
+                        }
+                    }
+                    clef_events.sort_by_key(|(t, _)| *t);
+                    clef_events.dedup_by_key(|(t, _)| *t);
 
                     staves.push(StaffData {
                         voices,
@@ -1410,6 +1543,7 @@ fn compute_unified_note_positions(
     left_margin: f32,
     spacing_config: &spacer::SpacingConfig,
     ticks_per_measure: u32,
+    clef_change_ticks: &std::collections::HashSet<u32>,
 ) -> HashMap<u32, f32> {
     // Collect all unique (tick, duration) pairs from all staves — notes AND
     // sub-beat rests. Full-measure rests are excluded because they are centred
@@ -1460,6 +1594,11 @@ fn compute_unified_note_positions(
                 && *start_tick % ticks_per_measure == 0
             {
                 gap += 25.0;
+            }
+            // Add extra space for clef changes so the clef glyph
+            // doesn't collide with the notes that follow it.
+            if clef_change_ticks.contains(start_tick) {
+                gap += 50.0;
             }
             current_position += gap;
         }
@@ -2072,8 +2211,11 @@ fn create_bar_lines(
     // justified/aligned) so barlines appear at the correct position between
     // the last note of one measure and the first note of the next.
     for measure in measures_in_system.iter() {
-        // Skip barline if measure extends beyond system
-        if measure.end_tick > tick_range.end_tick {
+        // Skip barline if measure ends at or beyond the system boundary.
+        // The system-end barline post-processing step handles the closing
+        // barline at the justified edge, so we must not create a duplicate
+        // that would leave an empty gap before the system edge.
+        if measure.end_tick >= tick_range.end_tick {
             continue;
         }
 

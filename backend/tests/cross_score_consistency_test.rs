@@ -280,3 +280,77 @@ fn bounding_boxes_contain_all_glyphs_across_scores() {
         );
     }
 }
+
+/// Grand-staff (multi-stave) instruments must have joined measure barlines.
+/// The first staff of each group carries one barline spanning from the top line
+/// of staves[0] to the bottom line of the last staff.  Subsequent staves must
+/// have no barlines of their own (they are merged into staves[0]).
+#[test]
+fn grand_staff_measure_barlines_are_joined() {
+    // Use three piano scores to cover this property.
+    let scores = [
+        ("La Candeur", "../scores/Burgmuller_LaCandeur.mxl"),
+        ("Arabesque", "../scores/Burgmuller_Arabesque.mxl"),
+        ("Für Elise", "../scores/Beethoven_FurElise.mxl"),
+    ];
+
+    for (name, path) in &scores {
+        let layout = layout_score(path);
+        let systems = layout["systems"].as_array().unwrap();
+        let mut violations = Vec::new();
+
+        for (sys_idx, system) in systems.iter().enumerate() {
+            for sg in system["staff_groups"].as_array().unwrap() {
+                let staves = sg["staves"].as_array().unwrap();
+                if staves.len() < 2 {
+                    continue;
+                }
+
+                let bottom_y = staves
+                    .last()
+                    .unwrap()["staff_lines"]
+                    .as_array()
+                    .unwrap()
+                    .last()
+                    .unwrap()["y_position"]
+                    .as_f64()
+                    .unwrap();
+
+                // staves[0] barlines must span to bottom_y
+                let empty_barlines = vec![];
+                let first_staves_barlines = staves[0]["bar_lines"].as_array().unwrap_or(&empty_barlines);
+                for bl in first_staves_barlines {
+                    if let Some(segments) = bl["segments"].as_array() {
+                        for seg in segments {
+                            let seg_y_end = seg["y_end"].as_f64().unwrap_or(0.0);
+                            if (seg_y_end - bottom_y).abs() > 0.5 {
+                                violations.push(format!(
+                                    "{} sys{}: barline y_end={:.1} but group bottom_y={:.1}",
+                                    name, sys_idx, seg_y_end, bottom_y
+                                ));
+                            }
+                        }
+                    }
+                }
+
+                // staves[1..] must have no barlines
+                for (staff_idx, staff) in staves.iter().enumerate().skip(1) {
+                    let empty_bls = vec![];
+                    let bls = staff["bar_lines"].as_array().unwrap_or(&empty_bls);
+                    if !bls.is_empty() {
+                        violations.push(format!(
+                            "{} sys{} staff{}: expected no barlines after merge, found {}",
+                            name, sys_idx, staff_idx, bls.len()
+                        ));
+                    }
+                }
+            }
+        }
+
+        assert!(
+            violations.is_empty(),
+            "Grand-staff barline join violations:\n{}",
+            violations.join("\n")
+        );
+    }
+}
