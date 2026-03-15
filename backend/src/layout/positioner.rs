@@ -904,10 +904,17 @@ pub fn position_ledger_lines(
         let note_y = pitch_to_y_with_spelling(*pitch, clef_type, units_per_space, *spelling)
             + staff_vertical_offset;
 
+        // pitch_to_y_with_spelling applies a -0.5 staff-space rendering offset
+        // for SMuFL baseline positioning.  This shifts every note up by half a
+        // space, causing notes in spaces (B5, D6 …) to land exactly on ledger
+        // line positions and produce one spurious extra ledger line.  Undo the
+        // offset for the ledger-line count comparison only.
+        let note_y_corrected = note_y + 0.5 * units_per_space;
+
         if note_y < top_line_y {
             // Note is above the staff — draw ledger lines at every 1*units_per_space above top line
             let mut y = top_line_y - units_per_space;
-            while y >= note_y - units_per_space * 0.25 {
+            while y >= note_y_corrected - units_per_space * 0.25 {
                 let key = (notehead_x as i32, (y * 10.0) as i32);
                 if seen.insert(key) {
                     ledger_lines.push(LedgerLine {
@@ -921,7 +928,7 @@ pub fn position_ledger_lines(
         } else if note_y > bottom_line_y {
             // Note is below the staff — draw ledger lines at every 1*units_per_space below bottom line
             let mut y = bottom_line_y + units_per_space;
-            while y <= note_y + units_per_space * 0.25 {
+            while y <= note_y_corrected + units_per_space * 0.25 {
                 let key = (notehead_x as i32, (y * 10.0) as i32);
                 if seen.insert(key) {
                     ledger_lines.push(LedgerLine {
