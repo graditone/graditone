@@ -264,13 +264,46 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
         config.system_height
     };
 
+    // Compute a single unified left margin across ALL instruments so that
+    // note positions are consistent (same available width for all staves).
+    // For multi-key pieces, use the maximum key sig width across all key events.
+    let max_key_sig_width: f32 = instruments
+        .iter()
+        .map(|inst| {
+            inst.staves
+                .first()
+                .map(|s| {
+                    if s.key_signature_events.is_empty() {
+                        s.key_sharps.abs() as f32 * 15.0
+                    } else {
+                        s.key_signature_events
+                            .iter()
+                            .map(|&(_, k)| k.abs() as f32 * 15.0)
+                            .fold(0.0_f32, f32::max)
+                    }
+                })
+                .unwrap_or(0.0)
+        })
+        .fold(0.0_f32, f32::max);
+    let unified_left_margin = 210.0 + max_key_sig_width;
+
+    // Subtract the left margin from the breaking budget so that
+    // measure content + left margin = max_system_width (no overflow).
+    let breaking_width = (config.max_system_width - unified_left_margin).max(200.0);
+
     // Break into systems using effective height that accommodates all staves
     let mut systems = breaker::break_into_systems(
         &measure_infos,
-        config.max_system_width,
+        breaking_width,
         effective_system_height,
         config.system_spacing,
     );
+
+    // After breaking, set every system's bounding box to max_system_width
+    // so all systems render at equal width (justified).
+    for system in &mut systems {
+        system.bounding_box.width = config.max_system_width;
+    }
 
     // Populate staff_groups for each system with positioned and batched glyphs
     let mut running_y: f32 = 0.0; // Track cumulative y position across systems (collision-aware)
@@ -283,29 +316,6 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
         let mut global_staff_offset: usize = 0;
         let mut cumulative_inter_gap: f32 = 0.0;
 
-        // Compute a single unified left margin across ALL instruments so that
-        // note positions are consistent (same available width for all staves).
-        // For multi-key pieces, use the maximum key sig width across all key events.
-        let max_key_sig_width: f32 = instruments
-            .iter()
-            .map(|inst| {
-                inst.staves
-                    .first()
-                    .map(|s| {
-                        if s.key_signature_events.is_empty() {
-                            s.key_sharps.abs() as f32 * 15.0
-                        } else {
-                            s.key_signature_events
-                                .iter()
-                                .map(|&(_, k)| k.abs() as f32 * 15.0)
-                                .fold(0.0_f32, f32::max)
-                        }
-                    })
-                    .unwrap_or(0.0)
-            })
-            .fold(0.0_f32, f32::max);
-        let unified_left_margin = 210.0 + max_key_sig_width;
-
         // Compute unified note positions across ALL instruments in this system.
         // This ensures measures and notes at the same tick align horizontally
         // across every staff group (e.g., violin beat 2 lines up with cello beat 2).
@@ -313,15 +323,15 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
             .iter()
             .flat_map(|inst| inst.staves.iter())
             .collect();
-        // `system.bounding_box.width` is the sum of measure widths from compute_measure_width,
-        // which does NOT include the left margin (clef + key/time sigs = ~210 units).
-        // compute_unified_note_positions subtracts unified_left_margin to get available_width,
-        // so we must add it back here — otherwise notes are compressed by a factor of
-        // (measure_width - 210) / measure_width, getting worse as note count decreases.
+        // system.bounding_box.width = max_system_width (set above), which is
+        // the TOTAL system width including the left margin.  Passing it directly
+        // as system_width lets compute_unified_note_positions use
+        //   available_width = max_system_width - unified_left_margin
+        // and notes are placed from unified_left_margin to max_system_width.
         let note_positions = compute_unified_note_positions(
             &all_staves,
             &system.tick_range,
-            system.bounding_box.width + unified_left_margin,
+            system.bounding_box.width,
             unified_left_margin,
             &spacing_config,
             ticks_per_measure,
@@ -361,9 +371,8 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                 }
             }
 
-            // Compute total system width from allocated measure widths
-            let total_system_width: f32 =
-                measures_in_sys.iter().map(|m| m.width).sum::<f32>() + unified_left_margin;
+            // bounding_box.width already equals max_system_width (includes left margin).
+            let total_system_width: f32 = system.bounding_box.width;
 
             // Second pass: compute actual content width (relative to running_x)
             let mut running_x = unified_left_margin;
@@ -760,7 +769,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
 
         // Find the rightmost barline x position across all staves.
         // This is the end-of-system barline (every system must end with one).
-        let max_barline_x = system
+        let _max_barline_x = system
             .staff_groups
             .iter()
             .flat_map(|sg| sg.staves.iter())
@@ -773,15 +782,12 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
             })
             .fold(0.0_f32, f32::max);
 
-        // Staff lines end exactly at the rightmost barline — no extra margin.
-        let content_width = if max_barline_x > 0.0 {
-            max_barline_x
-        } else {
-            // Fallback: use original system width if no barlines were generated
-            system.bounding_box.width
-        };
+        // All systems are justified to max_system_width.  Use that as the
+        // authoritative content width so staff lines, barlines, and bounding
+        // boxes are identical across systems.
+        let content_width = config.max_system_width;
 
-        // Update all staff lines to end at the final barline
+        // Update all staff lines to end at the justified width
         for staff_group in &mut system.staff_groups {
             for staff in &mut staff_group.staves {
                 for line in &mut staff.staff_lines {
@@ -790,8 +796,30 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
             }
         }
 
-        // Update system bounding box width to match actual content
+        // Ensure bounding box matches the justified width
         system.bounding_box.width = content_width;
+
+        // Add a system-end barline that joins all staves in each staff group.
+        // This is the standard vertical line at the right edge of every system
+        // connecting the top of the first staff to the bottom of the last staff.
+        for staff_group in &mut system.staff_groups {
+            if staff_group.staves.len() >= 2 {
+                let top_y = staff_group.staves.first().unwrap().staff_lines[0].y_position;
+                let bottom_y = staff_group.staves.last().unwrap().staff_lines[4].y_position;
+                let end_barline = BarLine {
+                    segments: vec![BarLineSegment {
+                        x_position: content_width,
+                        y_start: top_y,
+                        y_end: bottom_y,
+                        stroke_width: 1.5,
+                    }],
+                    bar_type: BarLineType::Single,
+                    dots: Vec::new(),
+                };
+                // Append to the first staff so the renderer draws it
+                staff_group.staves[0].bar_lines.push(end_barline);
+            }
+        }
 
         // Update system height to include collision-avoidance extra spacing
         system.bounding_box.height += total_collision_extra;
@@ -1392,7 +1420,17 @@ fn compute_unified_note_positions(
     for (start_tick, duration_ticks) in &tick_durations {
         if *start_tick > last_tick {
             let gap_duration = (*start_tick - last_tick).min(*duration_ticks);
-            current_position += spacer::compute_note_spacing(gap_duration, spacing_config);
+            let mut gap = spacer::compute_note_spacing(gap_duration, spacing_config);
+            // Add extra visual space at measure boundaries so barlines have
+            // breathing room on both sides. Skip the very first note in the
+            // system (no preceding barline) but boost every other measure start.
+            if *start_tick > tick_range.start_tick
+                && ticks_per_measure > 0
+                && *start_tick % ticks_per_measure == 0
+            {
+                gap += 25.0;
+            }
+            current_position += gap;
         }
         cumulative_spacing.push(current_position);
         last_tick = *start_tick;
@@ -1409,10 +1447,10 @@ fn compute_unified_note_positions(
         spacing_config.minimum_spacing + end_clearance
     };
 
-    // Scale positions to fit available width — but only compress if content
-    // exceeds the system width. Never stretch notes to fill extra space.
+    // Scale positions to fill available width (system justification).
+    // This ensures all systems have equal width and measures are evenly distributed.
     let available_width = system_width - left_margin;
-    let scale_factor = if total_natural_width > available_width {
+    let scale_factor = if total_natural_width > 0.0 {
         available_width / total_natural_width
     } else {
         1.0
@@ -1984,29 +2022,36 @@ fn create_bar_lines(
     }
 
     // Add bar lines at the end of each measure.
-    // For measures with note/rest content, place barline after last event.
-    // For empty measures (only whole-measure rests), use allocated boundary.
+    // Use the measure's end boundary from measure_x_bounds (which are already
+    // justified/aligned) so barlines appear at the correct position between
+    // the last note of one measure and the first note of the next.
     for measure in measures_in_system.iter() {
         // Skip barline if measure extends beyond system
         if measure.end_tick > tick_range.end_tick {
             continue;
         }
 
-        // Check if this measure has any events in the note_positions map
-        let last_event_in_measure = note_positions
+        // Place barline at the midpoint between the last note of this measure
+        // and the first note of the next, ensuring equal visual clearance on
+        // both sides.  Fall back to a fixed offset when a side has no notes
+        // (empty measures or last measure in the system).
+        let last_x_in_measure = note_positions
             .iter()
             .filter(|(tick, _)| **tick >= measure.start_tick && **tick < measure.end_tick)
-            .max_by_key(|(tick, _)| *tick);
-
-        let barline_x = if let Some((_, x)) = last_event_in_measure {
-            // Measure has content — place barline after the last event
-            *x + 30.0
-        } else {
-            // Empty measure — use allocated boundary for consistent spacing
-            measure_x_bounds
+            .max_by_key(|(tick, _)| *tick)
+            .map(|(_, &x)| x);
+        let first_x_in_next = note_positions
+            .iter()
+            .filter(|(tick, _)| **tick >= measure.end_tick && **tick < tick_range.end_tick)
+            .min_by_key(|(tick, _)| *tick)
+            .map(|(_, &x)| x);
+        let barline_x = match (last_x_in_measure, first_x_in_next) {
+            (Some(last_x), Some(next_x)) if next_x > last_x => (last_x + next_x) * 0.5,
+            (Some(last_x), _) => last_x + 30.0,
+            _ => measure_x_bounds
                 .get(&measure.start_tick)
-                .map(|(_, end_x)| *end_x - 5.0)
-                .unwrap_or(left_margin + 30.0)
+                .map(|(_, end_x)| *end_x)
+                .unwrap_or(left_margin + 30.0),
         };
 
         // Determine bar line type

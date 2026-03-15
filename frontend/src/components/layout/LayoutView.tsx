@@ -295,7 +295,7 @@ export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playba
         const result = await computeLayout(layoutInput, {
           max_system_width: maxSystemWidth,
           system_height: 200,
-          system_spacing: 100,
+          system_spacing: 200,
           units_per_space: 20, // 20 logical units = 1 staff space
         });
 

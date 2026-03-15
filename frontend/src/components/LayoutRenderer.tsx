@@ -27,6 +27,12 @@ import { detectDeviceProfile } from '../utils/deviceDetection';
 import type { ITickSource } from '../types/playback';
 import './LayoutRenderer.css';
 
+/** T022/T023: Staff line stroke width in SVG units. Standard: ~0.12 sp = 2.4 units at ups=20. */
+export const STAFF_LINE_STROKE_WIDTH = 1.5;
+
+/** T024: Ledger line stroke width — slightly heavier than staff lines for visibility. */
+export const LEDGER_LINE_STROKE_WIDTH = 2.0;
+
 /**
  * Props for LayoutRenderer component
  */
@@ -949,7 +955,7 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       line.setAttribute('x2', staffLine.end_x.toString());
       line.setAttribute('y2', staffLine.y_position.toString());
       line.setAttribute('stroke', config.staffLineColor);
-      line.setAttribute('stroke-width', '1');
+      line.setAttribute('stroke-width', STAFF_LINE_STROKE_WIDTH.toString());
       staffElement.appendChild(line);
     }
 
@@ -970,7 +976,7 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
         line.setAttribute('x2', ledgerLine.end_x.toString());
         line.setAttribute('y2', ledgerLine.y_position.toString());
         line.setAttribute('stroke', config.staffLineColor);
-        line.setAttribute('stroke-width', '1.5');
+        line.setAttribute('stroke-width', LEDGER_LINE_STROKE_WIDTH.toString());
         staffElement.appendChild(line);
       }
     }

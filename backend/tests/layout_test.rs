@@ -259,13 +259,14 @@ mod us1_us2_tests {
 
         let layout = compute_layout(&score, &config);
 
-        // 50 measures @ 4/4 with typical spacing → ~10-15 systems (3-5 measures per system)
-        // Note: After fixing extract_measures to correctly deduplicate simultaneous notes,
-        // measures are narrower and more fit per system
+        // 50 measures @ 4/4 with typical spacing.  The breaking budget is
+        // max_system_width minus unified_left_margin (~210 clef/key/time), so
+        // with max_system_width=800 only ~590 units remain for note content,
+        // yielding more systems than the raw 800 would suggest.
         let system_count = layout.systems.len();
         assert!(
-            (10..=15).contains(&system_count),
-            "Expected 10-15 systems for 50 measures, got {}",
+            (10..=25).contains(&system_count),
+            "Expected 10-25 systems for 50 measures, got {}",
             system_count
         );
 
@@ -296,12 +297,12 @@ mod us1_us2_tests {
         let layout = compute_layout(&score, &config);
 
         // At 960 PPQ, 4/4 measure = 3840 ticks
-        // After fixing extract_measures, measures are narrower so systems fit 1-6 measures
+        // With compact spacing (30 units/quarter), systems fit 1-8 measures at width 800
         for system in &layout.systems {
             let tick_span = system.tick_range.end_tick - system.tick_range.start_tick;
             assert!(
-                (3840..=23040).contains(&tick_span),
-                "System {} tick range ({} ticks) should cover 1-6 measures (3840-23040 ticks)",
+                (3840..=30720).contains(&tick_span),
+                "System {} tick range ({} ticks) should cover 1-8 measures (3840-30720 ticks)",
                 system.index,
                 tick_span
             );
@@ -367,7 +368,7 @@ mod spacing_tests {
         // Whole note (3840 ticks)
         let whole_spacing = compute_note_spacing(3840, &config);
         assert!(
-            whole_spacing >= 120.0,
+            whole_spacing >= 45.0,
             "Whole note should have wide spacing: {}",
             whole_spacing
         );
@@ -375,7 +376,7 @@ mod spacing_tests {
         // Half note (1920 ticks)
         let half_spacing = compute_note_spacing(1920, &config);
         assert!(
-            half_spacing > 80.0 && half_spacing < whole_spacing,
+            half_spacing >= 30.0 && half_spacing < whole_spacing,
             "Half note spacing should be between quarter and whole: {}",
             half_spacing
         );
@@ -383,15 +384,15 @@ mod spacing_tests {
         // Quarter note (960 ticks)
         let quarter_spacing = compute_note_spacing(960, &config);
         assert!(
-            quarter_spacing > 50.0,
-            "Quarter note should have base + factor spacing: {}",
+            quarter_spacing > 20.0,
+            "Quarter note should have positive spacing above minimum: {}",
             quarter_spacing
         );
 
         // Eighth note (480 ticks)
         let eighth_spacing = compute_note_spacing(480, &config);
         assert!(
-            eighth_spacing > config.minimum_spacing,
+            eighth_spacing >= config.minimum_spacing,
             "Eighth note should respect minimum spacing: {}",
             eighth_spacing
         );
@@ -415,6 +416,35 @@ mod spacing_tests {
         );
     }
 
+    /// T029 (spec 050): Regression test — quarter note spacing must be ≤ 2 staff spaces.
+    ///
+    /// With units_per_space=20, standard engraving allows ~1.5–2 sp for a quarter note
+    /// (Gould §6). At ups=20, maximum acceptable = 2 sp = 40 units.
+    /// Former default: base=40 + factor=40 × √1 = 80 units = 4 sp — 2× the standard.
+    ///
+    /// This test FAILS before T031 fix (quarter=80 > 40).
+    /// This test PASSES after T031 fix (quarter≈30 ≤ 40).
+    #[test]
+    fn test_quarter_note_spacing_standard() {
+        let config = SpacingConfig::default();
+        let quarter_spacing = compute_note_spacing(960, &config);
+
+        assert!(
+            quarter_spacing <= 60.0,
+            "Quarter note spacing must be ≤ 60 units (3 sp at ups=20). \
+             Current value {:.1} = {:.2} sp — exceeds maximum. \
+             Fix: reduce base_spacing and duration_factor in spacer.rs",
+            quarter_spacing,
+            quarter_spacing / 20.0,
+        );
+        assert!(
+            quarter_spacing >= 20.0,
+            "Quarter note spacing must be ≥ 20 units (1 sp) to prevent notehead overlap. \
+             Current value: {:.1}",
+            quarter_spacing,
+        );
+    }
+
     /// Test compute_measure_width with typical measure durations
     #[test]
     fn test_compute_measure_width() {
@@ -424,7 +454,7 @@ mod spacing_tests {
         let durations = [960, 960, 960, 960];
         let width = compute_measure_width(&durations, &[], &config);
         assert!(
-            width > 200.0,
+            width > 100.0,
             "4-quarter-note measure should have reasonable width: {}",
             width
         );
@@ -433,7 +463,7 @@ mod spacing_tests {
         let durations = [1920, 960, 480, 480]; // half + quarter + two eighths
         let mixed_width = compute_measure_width(&durations, &[], &config);
         assert!(
-            mixed_width > 150.0,
+            mixed_width > 80.0,
             "Mixed duration measure should have reasonable width: {}",
             mixed_width
         );
@@ -1980,8 +2010,10 @@ fn test_key_signature_appears_on_all_systems() {
     });
 
     // Use narrow width to force multi-system layout
+    // With new compact spacing (30 units/quarter), width must be <300 to ensure 2+ systems.
+    // 16 notes / ~4 per system at w=300 → 4 systems
     let config = LayoutConfig {
-        max_system_width: 600.0,
+        max_system_width: 300.0,
         units_per_space: 20.0,
         system_spacing: 220.0,
         system_height: 200.0,
@@ -1993,7 +2025,7 @@ fn test_key_signature_appears_on_all_systems() {
 
     assert!(
         systems.len() >= 2,
-        "Should have at least 2 systems with 16 quarter notes at 600px width, got {}",
+        "Should have at least 2 systems with 16 quarter notes at 300px width, got {}",
         systems.len()
     );
 

@@ -7,8 +7,10 @@
  * T002: shouldComponentUpdate must return true when selectedNoteId changes
  * T029: .layout-glyph.highlighted fill must be #F5A340, not #4A90E2
  * T033: bracket glyph text element must have dominant-baseline="hanging"
+ * T022: STAFF_LINE_STROKE_WIDTH must be ≥ 1.5 for tablet readability
  *
  * @see specs/027-demo-flow-ux/tasks.md T002, T029, T033
+ * @see specs/050-fix-layout-preloaded-scores/tasks.md T022
  */
 
 import { describe, it, expect } from 'vitest';
@@ -534,3 +536,30 @@ describe('[T014] US2: hit-rect overlay width/height must be >= MIN_TOUCH_PX / re
     expect(height).toBeGreaterThanOrEqual(44);
   });
 });
+
+// ============================================================================
+// T022 [BUG]: Staff line stroke-width must be ≥ 1.5 (readable on tablet)
+//
+// Root cause: renderStaff() hardcodes stroke-width='1' for staff lines.
+// At units_per_space=20, this is 0.05 sp — approximately half the Musescore
+// standard of ~0.12 sp (~2.4 units). On tablet screens this produces hairline
+// staff lines. Minimum acceptable value for tablet readability is 1.5.
+//
+// This test FAILS before T023 (STAFF_LINE_STROKE_WIDTH=1 < 1.5).
+// This test PASSES after T023 (STAFF_LINE_STROKE_WIDTH=1.5 ≥ 1.5).
+//
+// @see specs/050-fix-layout-preloaded-scores/research.md M-004
+// ============================================================================
+
+describe('[T022] BUG: STAFF_LINE_STROKE_WIDTH must be ≥ 1.5 for tablet readability', () => {
+  it('STAFF_LINE_STROKE_WIDTH is at least 1.5 SVG units', async () => {
+    const { STAFF_LINE_STROKE_WIDTH } = await import('./LayoutRenderer');
+    expect(STAFF_LINE_STROKE_WIDTH).toBeGreaterThanOrEqual(1.5);
+  });
+
+  it('LEDGER_LINE_STROKE_WIDTH is at least as wide as STAFF_LINE_STROKE_WIDTH', async () => {
+    const { STAFF_LINE_STROKE_WIDTH, LEDGER_LINE_STROKE_WIDTH } = await import('./LayoutRenderer');
+    expect(LEDGER_LINE_STROKE_WIDTH).toBeGreaterThanOrEqual(STAFF_LINE_STROKE_WIDTH);
+  });
+});
+

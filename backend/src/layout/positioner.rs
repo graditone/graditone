@@ -723,12 +723,9 @@ pub fn position_note_accidentals(
     let mut current_measure: u32 = u32::MAX; // Force reset on first note
 
     // Position accidental to the left of notehead.
-    // Both accidental and notehead use text-anchor:middle in SVG rendering,
-    // so the offset must account for half-widths of both glyphs plus a gap.
-    // At font-size 80: notehead ~23.6 units wide (half=11.8),
-    // sharp ~23.6 units wide (half=11.8), standard gap ~5 units.
-    // Total center-to-center offset: -(11.8 + 5 + 11.8) ≈ -29
-    let accidental_x_offset = -29.0;
+    // At font-size 80: notehead half-width ~12 units, accidental half-width ~10 units,
+    // standard gap ~3 units.  Total center-to-center offset: -(12 + 3 + 10) = -25.
+    let accidental_x_offset = -25.0;
 
     for (i, ((pitch, start_tick, _duration, spelling), &notehead_x)) in
         notes.iter().zip(horizontal_offsets.iter()).enumerate()
@@ -891,9 +888,10 @@ pub fn position_ledger_lines(
     let top_line_y = staff_vertical_offset;
     let bottom_line_y = staff_vertical_offset + 4.0 * units_per_space;
 
-    // Ledger line width: ~1.4 staff spaces (notehead width ~1.18 + small overhang),
-    // centered on note x. This matches engraving convention.
-    let ledger_half_width = 0.7 * units_per_space;
+    // Ledger line half-width: notehead is ~1.18 staff spaces wide (half = 0.59),
+    // plus a standard 0.5 staff-space overhang on each side = 1.1 total.
+    // This ensures the line visibly extends beyond the notehead on both sides.
+    let ledger_half_width = 1.1 * units_per_space;
 
     // Use a set to deduplicate ledger lines at the same (x, y) position
     // (multiple notes at the same tick/pitch shouldn't duplicate ledger lines)

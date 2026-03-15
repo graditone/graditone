@@ -1,7 +1,7 @@
 //! Stem Module
 //!
 //! Handles stem direction calculation and stem geometry generation for noteheads.
-//! Stems extend 35 logical units (3.5 staff spaces) from the notehead.
+//! Stems extend 70 logical units (3.5 staff spaces) from the notehead.
 //!
 //! Direction rules:
 //! - Notes on or above middle line (B4 for treble): stem down
@@ -28,7 +28,7 @@ pub struct Stem {
     pub x: f32,
     /// Y position of stem start (at notehead)
     pub y_start: f32,
-    /// Y position of stem end (35 units away)
+    /// Y position of stem end (70 units away)
     pub y_end: f32,
     /// Stem direction (Up or Down)
     pub direction: StemDirection,
@@ -37,8 +37,8 @@ pub struct Stem {
 }
 
 impl Stem {
-    /// Standard stem length in logical units (3.5 staff spaces)
-    pub const STEM_LENGTH: f32 = 35.0;
+    /// Standard stem length in logical units (3.5 staff spaces = 70 units at ups=20)
+    pub const STEM_LENGTH: f32 = 70.0;
 
     /// Standard stem thickness in logical units
     pub const STEM_THICKNESS: f32 = 1.5;
@@ -95,7 +95,7 @@ pub fn compute_stem_direction(notehead_y: f32, staff_middle_y: f32) -> StemDirec
 /// SMuFL noteheads have their origin at the left edge of the glyph.
 /// - Stems up: attach to right edge of notehead (x + width)
 /// - Stems down: attach to left edge of notehead (x)
-/// - Stem extends 35 logical units (3.5 staff spaces) from notehead
+/// - Stem extends 70 logical units (3.5 staff spaces) from notehead
 pub fn create_stem(
     notehead_x: f32,
     notehead_y: f32,
@@ -188,9 +188,12 @@ mod tests {
             stem.x
         );
 
-        // Verify stem extends 35 units upward (negative y direction)
+        // Verify stem extends 70 units upward (negative y direction)
         assert_eq!(stem.y_start, 60.0, "Stem should start at notehead y");
-        assert_eq!(stem.y_end, 25.0, "Stem should extend 35 units up (60 - 35)");
+        assert_eq!(
+            stem.y_end, -10.0,
+            "Stem should extend 70 units up (60 - 70)"
+        );
 
         assert_eq!(stem.direction, StemDirection::Up);
         assert_eq!(stem.thickness, Stem::STEM_THICKNESS);
@@ -212,11 +215,11 @@ mod tests {
             stem.x
         );
 
-        // Verify stem extends 35 units downward (positive y direction)
+        // Verify stem extends 70 units downward (positive y direction)
         assert_eq!(stem.y_start, 100.0, "Stem should start at notehead y");
         assert_eq!(
-            stem.y_end, 135.0,
-            "Stem should extend 35 units down (100 + 35)"
+            stem.y_end, 170.0,
+            "Stem should extend 70 units down (100 + 70)"
         );
 
         assert_eq!(stem.direction, StemDirection::Down);
@@ -227,8 +230,27 @@ mod tests {
     fn test_stem_length_constant() {
         assert_eq!(
             Stem::STEM_LENGTH,
-            35.0,
-            "Stem length should be 35 logical units (3.5 staff spaces)"
+            70.0,
+            "Stem length should be 70 logical units (3.5 staff spaces at ups=20)"
+        );
+    }
+
+    /// T020: Regression test — stem length must meet the 3.5 staff space standard.
+    ///
+    /// At units_per_space=20, standard engraving requires stems of 3.5 sp = 70 logical units
+    /// (Gould §3; Musescore default behaviour). STEM_LENGTH=35 is 1.75 sp — half the standard.
+    ///
+    /// This test FAILS before T021 (STEM_LENGTH=35.0 < 70.0).
+    /// This test PASSES after T021 (STEM_LENGTH=70.0 ≥ 70.0).
+    #[test]
+    fn test_stem_length_standard_note() {
+        assert!(
+            Stem::STEM_LENGTH >= 70.0,
+            "STEM_LENGTH must be ≥ 70.0 units (3.5 sp at ups=20). \
+             Current value {} is {} staff spaces — half the engraving standard. \
+             Fix: change STEM_LENGTH to 70.0 in stems.rs",
+            Stem::STEM_LENGTH,
+            Stem::STEM_LENGTH / 20.0,
         );
     }
 }

@@ -51,11 +51,11 @@ pub fn break_into_systems(
             !current_system_measures.is_empty() && current_width + measure.width > max_width;
 
         if would_exceed {
-            // Finish current system
+            // Finish current system — justify to max_width so all systems are equal width
             systems.push(create_system(
                 systems.len(),
                 &current_system_measures,
-                current_width,
+                max_width,
                 system_height,
                 system_spacing,
             ));
@@ -84,12 +84,12 @@ pub fn break_into_systems(
         }
     }
 
-    // Add final system if measures remain
+    // Add final system if measures remain — justify to max_width for equal-width systems
     if !current_system_measures.is_empty() {
         systems.push(create_system(
             systems.len(),
             &current_system_measures,
-            current_width,
+            max_width,
             system_height,
             system_spacing,
         ));
