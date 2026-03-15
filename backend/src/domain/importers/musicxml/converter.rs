@@ -340,6 +340,7 @@ impl MusicXMLConverter {
                     let _ = timing.advance_by_duration(*duration);
                     max_tick = max_tick.max(timing.current_tick);
                 }
+                MeasureElement::Attributes(_) => {}
             }
         }
 
@@ -522,6 +523,15 @@ impl MusicXMLConverter {
                 pickup_ticks,
             )?;
 
+            // Extract clef changes from subsequent measures (for this staff number)
+            Self::add_clef_changes_from_measures(
+                &mut staff,
+                &part_data.measures,
+                ticks_per_measure,
+                pickup_ticks,
+                Some(staff_num),
+            )?;
+
             // Convert measures to voice, filtering by staff number
             let (notes, rests) =
                 Self::collect_notes_for_staff(&part_data.measures, staff_num, context)?;
@@ -582,6 +592,15 @@ impl MusicXMLConverter {
             pickup_ticks,
         )?;
 
+        // Extract clef changes from subsequent measures
+        Self::add_clef_changes_from_measures(
+            &mut staff,
+            &part_data.measures,
+            ticks_per_measure,
+            pickup_ticks,
+            None,
+        )?;
+
         // Convert measures to notes, then distribute across voices
         let (notes, rests) = Self::collect_notes(&part_data.measures, context)?;
         let mut voices = VoiceDistributor::assign_voices(notes, context)?;
@@ -616,6 +635,93 @@ impl MusicXMLConverter {
                     let key_event = KeySignatureEvent::new(Tick::new(tick), key_sig);
                     // Ignore duplicate-tick errors (shouldn't happen, but be safe)
                     let _ = staff.add_key_signature_event(key_event);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Extract clef changes from all measures after the first.
+    ///
+    /// Walks through each measure's elements to find mid-measure clef
+    /// changes at the correct tick offset.  The timing position is
+    /// computed by accumulating note/rest/backup/forward durations,
+    /// so a clef change that appears partway through a measure is
+    /// placed at the right tick instead of at the measure start.
+    fn add_clef_changes_from_measures(
+        staff: &mut Staff,
+        measures: &[MeasureData],
+        ticks_per_measure: u32,
+        pickup_ticks: u32,
+        staff_number: Option<usize>,
+    ) -> Result<(), ImportError> {
+        // Track divisions across measures (inherited from previous measures)
+        let mut divisions: i32 = measures
+            .first()
+            .and_then(|m| m.attributes.as_ref())
+            .and_then(|a| a.divisions)
+            .unwrap_or(1);
+
+        for (i, measure) in measures.iter().enumerate() {
+            // Update divisions from measure-level attributes (if present)
+            if let Some(attrs) = &measure.attributes {
+                if let Some(d) = attrs.divisions {
+                    divisions = d;
+                }
+            }
+
+            let measure_start = measure_start_tick(i, pickup_ticks, ticks_per_measure);
+            // Current timing offset within measure (in 960 PPQ ticks)
+            let mut offset: u32 = 0;
+
+            for element in &measure.elements {
+                match element {
+                    MeasureElement::Note(note_data) => {
+                        if !note_data.is_chord {
+                            if let Ok(ticks) =
+                                Fraction::from_musicxml(note_data.duration, divisions).to_ticks()
+                            {
+                                offset += ticks as u32;
+                            }
+                        }
+                    }
+                    MeasureElement::Rest(rest_data) => {
+                        if let Ok(ticks) =
+                            Fraction::from_musicxml(rest_data.duration, divisions).to_ticks()
+                        {
+                            offset += ticks as u32;
+                        }
+                    }
+                    MeasureElement::Backup(duration) => {
+                        if let Ok(ticks) = Fraction::from_musicxml(*duration, divisions).to_ticks()
+                        {
+                            offset = offset.saturating_sub(ticks as u32);
+                        }
+                    }
+                    MeasureElement::Forward(duration) => {
+                        if let Ok(ticks) = Fraction::from_musicxml(*duration, divisions).to_ticks()
+                        {
+                            offset += ticks as u32;
+                        }
+                    }
+                    MeasureElement::Attributes(attrs) => {
+                        // Update divisions if changed mid-measure
+                        if let Some(d) = attrs.divisions {
+                            divisions = d;
+                        }
+                        let clef_data = if let Some(num) = staff_number {
+                            attrs.clefs.iter().find(|c| c.staff_number == num)
+                        } else {
+                            attrs.clefs.first()
+                        };
+                        if let Some(cd) = clef_data {
+                            let tick = measure_start + offset;
+                            let clef = ElementMapper::map_clef(&cd.sign, cd.line)?;
+                            let clef_event = ClefEvent::new(Tick::new(tick), clef);
+                            // Silently ignores duplicates (e.g., tick-0 clef already added from initial attributes)
+                            let _ = staff.add_clef_event(clef_event);
+                        }
+                    }
                 }
             }
         }
@@ -702,6 +808,7 @@ impl MusicXMLConverter {
                         // Move timing cursor forward
                         timing_context.advance_by_duration(*duration)?;
                     }
+                    MeasureElement::Attributes(_) => {}
                 }
             }
         }
@@ -749,6 +856,7 @@ impl MusicXMLConverter {
                         // Move timing cursor forward
                         timing_context.advance_by_duration(*duration)?;
                     }
+                    MeasureElement::Attributes(_) => {}
                 }
             }
         }
@@ -840,6 +948,7 @@ impl MusicXMLConverter {
                         timing_context.advance_by_duration(*duration)?;
                         max_tick_in_measure = max_tick_in_measure.max(timing_context.current_tick);
                     }
+                    MeasureElement::Attributes(_) => {}
                 }
             }
 
@@ -911,6 +1020,7 @@ impl MusicXMLConverter {
                         timing_context.advance_by_duration(*duration)?;
                         max_tick_in_measure = max_tick_in_measure.max(timing_context.current_tick);
                     }
+                    MeasureElement::Attributes(_) => {}
                 }
             }
 

@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import React from 'react';
-import type { Score, GlobalStructuralEvent, StaffStructuralEvent, Note } from '../../types/score';
+import type { Score, GlobalStructuralEvent, StaffStructuralEvent, ClefEvent, Note } from '../../types/score';
 import type { PlaybackStatus, ITickSource } from '../../types/playback';
 import { ScoreViewer, LABEL_MARGIN } from '../../pages/ScoreViewer';
 import type { GlobalLayout } from '../../wasm/layout';
@@ -31,6 +31,7 @@ interface ConvertedScore {
       time_signature: { numerator: number; denominator: number };
       key_signature: { sharps: number };
       key_signature_events?: Array<{ tick: number; sharps: number }>;
+      clef_events?: Array<{ tick: number; clef: string }>;
       voices: Array<{
         notes: Array<{
           tick: number;
@@ -146,12 +147,27 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
           };
         });
 
+      // Extract ALL clef events for mid-piece clef changes
+      const clefEvents = staff.staff_structural_events
+        .filter((e: StaffStructuralEvent) => 'Clef' in e)
+        .map((e: StaffStructuralEvent) => {
+          const ce = (e as { Clef: ClefEvent }).Clef;
+          // Support both Rust serialization ("clef") and TS fixtures ("clef_type")
+          const clefValue = ce.clef_type ?? (ce as unknown as { clef: string }).clef ?? 'Treble';
+          return {
+            tick: typeof ce.tick === 'number' ? ce.tick : 0,
+            clef: clefValue,
+          };
+        });
+
       return {
         clef: staff.active_clef,
         time_signature: timeSignature,
         key_signature: { sharps: keySharps },
         // Pass all key change events so the layout engine can render mid-piece changes
         ...(keySigEvents.length > 1 ? { key_signature_events: keySigEvents } : {}),
+        // Pass all clef change events so the layout engine can render mid-piece clef changes
+        ...(clefEvents.length > 1 ? { clef_events: clefEvents } : {}),
         voices: staff.voices.map(voice => ({
           notes: voice.interval_events.map((note: Note) => ({
             tick: note.start_tick,

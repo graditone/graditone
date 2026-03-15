@@ -958,6 +958,7 @@ mod batching_tests {
                     voice_index: 0,
                     event_index: i,
                 },
+                font_size: None,
             });
         }
 
@@ -1026,6 +1027,7 @@ mod batching_tests {
                     voice_index: 0,
                     event_index: i,
                 },
+                font_size: None,
             });
         }
 
@@ -1049,6 +1051,7 @@ mod batching_tests {
                     voice_index: 0,
                     event_index: i,
                 },
+                font_size: None,
             });
         }
 
@@ -1072,6 +1075,7 @@ mod batching_tests {
                     voice_index: 0,
                     event_index: i,
                 },
+                font_size: None,
             });
         }
 

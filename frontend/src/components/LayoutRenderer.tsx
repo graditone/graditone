@@ -984,7 +984,9 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
     // Render structural glyphs (clefs, key signatures, time signatures)
     for (const glyph of staff.structural_glyphs) {
       // Structural glyphs use SMuFL standard: fontSize 80 = 4 staff spaces = 1em
-      const glyphElement = this.renderGlyph(glyph, config.fontFamily, 80, config.glyphColor);
+      // Respect per-glyph font_size override (e.g., smaller courtesy clefs)
+      const fontSize = glyph.font_size ?? 80;
+      const glyphElement = this.renderGlyph(glyph, config.fontFamily, fontSize, config.glyphColor);
       staffElement.appendChild(glyphElement);
     }
 

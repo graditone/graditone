@@ -432,7 +432,17 @@ impl MusicXMLParser {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => match e.name().as_ref() {
                     b"attributes" => {
-                        measure.attributes = Some(Self::parse_attributes(reader)?);
+                        let attrs = Self::parse_attributes(reader)?;
+                        // Store in elements to track mid-measure position for clef/key changes
+                        measure
+                            .elements
+                            .push(MeasureElement::Attributes(attrs.clone()));
+                        // Only set measure-level attributes from the first <attributes> block.
+                        // Subsequent blocks (mid-measure clef/key changes) are already tracked
+                        // in measure.elements and must not overwrite the initial attributes.
+                        if measure.attributes.is_none() {
+                            measure.attributes = Some(attrs);
+                        }
                     }
                     b"note" => {
                         let note = Self::parse_note(reader)?;

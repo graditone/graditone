@@ -189,8 +189,9 @@ pub struct ClefData {
 pub enum MeasureElement {
     Note(NoteData),
     Rest(RestData),
-    Backup(i32),  // Move timing backward by N duration units
-    Forward(i32), // Move timing forward by N duration units (rest in voice)
+    Backup(i32),                // Move timing backward by N duration units
+    Forward(i32),               // Move timing forward by N duration units (rest in voice)
+    Attributes(AttributesData), // Mid-measure attribute changes (clef, key, etc.)
 }
 
 /// Note from <note> element

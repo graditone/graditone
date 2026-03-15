@@ -241,6 +241,8 @@ export interface Glyph {
   codepoint: string;
   /** Link back to CompiledScore element for interaction */
   source_reference: SourceReference;
+  /** Optional font size override (e.g., smaller courtesy clefs) */
+  font_size?: number;
 }
 
 /**

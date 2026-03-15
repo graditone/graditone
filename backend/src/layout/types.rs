@@ -266,6 +266,9 @@ pub struct Glyph {
     pub codepoint: String,
     /// Link back to CompiledScore element for interaction
     pub source_reference: SourceReference,
+    /// Optional font size override for this glyph (e.g., smaller courtesy clefs)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font_size: Option<f32>,
 }
 
 /// 2D coordinate in logical units

@@ -162,7 +162,7 @@ fn test_parse_note_with_pitch() {
     assert_eq!(doc.parts.len(), 1);
     let measure = &doc.parts[0].measures[0];
 
-    match &measure.elements[0] {
+    match &measure.elements[1] {
         musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) => {
             assert!(note.pitch.is_some());
             let pitch = note.pitch.as_ref().unwrap();
@@ -201,7 +201,7 @@ fn test_parse_rest() {
     let doc = MusicXMLParser::parse(xml, &mut context).expect("Failed to parse");
 
     let measure = &doc.parts[0].measures[0];
-    match &measure.elements[0] {
+    match &measure.elements[1] {
         musicore_backend::domain::importers::musicxml::MeasureElement::Rest(rest) => {
             assert_eq!(rest.duration, 480);
             assert_eq!(rest.voice, 1);
@@ -271,8 +271,8 @@ fn test_parse_beam_single_level() {
 
     use musicore_backend::domain::importers::musicxml::types::{BeamData, BeamType};
 
-    // First note: beam begin
-    if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[0]
+    // First note: beam begin (index 1, after Attributes element)
+    if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[1]
     {
         assert_eq!(
             note.beams.len(),
@@ -286,15 +286,6 @@ fn test_parse_beam_single_level() {
     }
 
     // Second note: beam continue
-    if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[1]
-    {
-        assert_eq!(note.beams.len(), 1);
-        assert_eq!(note.beams[0].beam_type, BeamType::Continue);
-    } else {
-        panic!("Expected Note element");
-    }
-
-    // Third note: beam continue
     if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[2]
     {
         assert_eq!(note.beams.len(), 1);
@@ -303,8 +294,17 @@ fn test_parse_beam_single_level() {
         panic!("Expected Note element");
     }
 
-    // Fourth note: beam end
+    // Third note: beam continue
     if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[3]
+    {
+        assert_eq!(note.beams.len(), 1);
+        assert_eq!(note.beams[0].beam_type, BeamType::Continue);
+    } else {
+        panic!("Expected Note element");
+    }
+
+    // Fourth note: beam end
+    if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[4]
     {
         assert_eq!(note.beams.len(), 1);
         assert_eq!(note.beams[0].beam_type, BeamType::End);
@@ -352,8 +352,8 @@ fn test_parse_beam_multi_level() {
 
     use musicore_backend::domain::importers::musicxml::types::BeamType;
 
-    // First note: beam level 1 begin, beam level 2 begin
-    if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[0]
+    // First note: beam level 1 begin, beam level 2 begin (index 1, after Attributes)
+    if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[1]
     {
         assert_eq!(
             note.beams.len(),
@@ -369,7 +369,7 @@ fn test_parse_beam_multi_level() {
     }
 
     // Second note: beam level 1 continue, beam level 2 end
-    if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[1]
+    if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[2]
     {
         assert_eq!(note.beams.len(), 2);
         assert_eq!(note.beams[0].number, 1);
@@ -419,8 +419,8 @@ fn test_parse_beam_hooks() {
 
     use musicore_backend::domain::importers::musicxml::types::BeamType;
 
-    // Second note should have backward hook at level 2
-    if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[1]
+    // Second note should have backward hook at level 2 (index 2, after Attributes)
+    if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[2]
     {
         assert_eq!(note.beams.len(), 2);
         assert_eq!(note.beams[0].number, 1);
@@ -459,7 +459,7 @@ fn test_parse_note_without_beams() {
     let doc = MusicXMLParser::parse(xml, &mut context).expect("Failed to parse");
     let elements = &doc.parts[0].measures[0].elements;
 
-    if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[0]
+    if let musicore_backend::domain::importers::musicxml::MeasureElement::Note(note) = &elements[1]
     {
         assert!(
             note.beams.is_empty(),
@@ -1246,4 +1246,53 @@ fn test_no_title_metadata() {
     assert_eq!(doc.work_title, None);
     assert_eq!(doc.movement_title, None);
     assert_eq!(doc.composer, None);
+}
+
+#[test]
+fn test_lacandeur_staff2_clef_events_debug() {
+    use musicore_backend::domain::events::staff::StaffStructuralEvent;
+
+    let importer = MusicXMLImporter::new();
+    let result = importer
+        .import_file(Path::new("../scores/Burgmuller_LaCandeur.mxl"))
+        .expect("Failed to import LaCandeur");
+
+    let score = result.score;
+    let instrument = &score.instruments[0];
+    // Staff 2 = left hand
+    let staff2 = &instrument.staves[1];
+
+    let clef_events: Vec<_> = staff2
+        .staff_structural_events
+        .iter()
+        .filter_map(|e| {
+            if let StaffStructuralEvent::Clef(ce) = e {
+                Some((ce.tick.value(), format!("{:?}", ce.clef)))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    println!("Staff 2 clef events: {:?}", clef_events);
+
+    // Measure 21 starts at tick = 20 * 3840 = 76800
+    // The clef change should be mid-measure at 76800 + 1920 = 78720
+    // NOT at 76800 (measure start)
+    assert!(
+        clef_events.len() >= 2,
+        "Should have at least 2 clef events (initial + mid-measure change)"
+    );
+
+    // Find the Bass clef event
+    let bass_event = clef_events.iter().find(|(_, c)| c.contains("Bass"));
+    assert!(bass_event.is_some(), "Should have a Bass clef event");
+    let (bass_tick, _) = bass_event.unwrap();
+    println!("Bass clef at tick: {}", bass_tick);
+
+    // Should NOT be at measure start (76800) - should be mid-measure
+    assert_ne!(
+        *bass_tick, 76800,
+        "Bass clef should not be at measure 21 start"
+    );
 }

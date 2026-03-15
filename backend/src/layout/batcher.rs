@@ -226,6 +226,7 @@ mod tests {
                 voice_index: 0,
                 event_index: 0,
             },
+            font_size: None,
         };
 
         let runs = batch_glyphs(vec![glyph]);
@@ -250,6 +251,7 @@ mod tests {
                 voice_index: 0,
                 event_index: 2,
             },
+            font_size: None,
         };
 
         let glyph2 = Glyph {
@@ -267,6 +269,7 @@ mod tests {
                 voice_index: 0,
                 event_index: 0,
             },
+            font_size: None,
         };
 
         let glyph3 = Glyph {
@@ -284,6 +287,7 @@ mod tests {
                 voice_index: 0,
                 event_index: 1,
             },
+            font_size: None,
         };
 
         // Input glyphs out of order (300, 100, 200)
