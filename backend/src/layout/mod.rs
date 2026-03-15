@@ -597,29 +597,37 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                             .filter(|(tick, _)| **tick <= *event_tick)
                             .max_by_key(|(tick, _)| *tick);
 
-                        if let Some((&_m_tick, &(measure_x_start, measure_x_end))) = enclosing {
+                        if let Some((&_m_tick, &(measure_x_start, _measure_x_end))) = enclosing {
                             // Place the courtesy clef near the start of the
-                            // measure (for measure-start changes) or offset
-                            // proportionally for mid-measure changes.
+                            // measure (for measure-start changes) or just before
+                            // the first note at the clef change tick for
+                            // mid-measure changes.
                             let clef_x = if *event_tick == _m_tick {
                                 measure_x_start + 10.0
                             } else {
-                                // Mid-measure: position at a fraction of the
-                                // measure width based on tick offset.
-                                let measure_width = measure_x_end - measure_x_start;
-                                let ticks_per_meas = system
-                                    .tick_range
-                                    .end_tick
-                                    .saturating_sub(system.tick_range.start_tick);
-                                let measures_count = measure_x_bounds.len().max(1) as u32;
-                                let avg_ticks = ticks_per_meas / measures_count;
-                                let offset_ticks = event_tick - _m_tick;
-                                let frac = if avg_ticks > 0 {
-                                    (offset_ticks as f32 / avg_ticks as f32).min(0.9)
+                                // Mid-measure: use the pre-computed note position
+                                // at the clef change tick and place the clef just
+                                // before it.  Fall back to the measure start if no
+                                // note exists at the exact tick.
+                                if let Some(&note_x) = note_positions.get(event_tick) {
+                                    // Place clef 30 logical units before the note
+                                    note_x - 30.0
                                 } else {
-                                    0.5
-                                };
-                                measure_x_start + measure_width * frac
+                                    // No note at this exact tick — find the nearest
+                                    // note after the event tick within this system.
+                                    let next_note_x = note_positions
+                                        .iter()
+                                        .filter(|(t, _)| {
+                                            **t > *event_tick && **t < system.tick_range.end_tick
+                                        })
+                                        .min_by_key(|(t, _)| *t)
+                                        .map(|(_, &x)| x);
+                                    if let Some(nx) = next_note_x {
+                                        nx - 30.0
+                                    } else {
+                                        measure_x_start + 10.0
+                                    }
+                                }
                             };
                             let mid_clef_glyph = positioner::position_courtesy_clef(
                                 event_clef,
