@@ -667,10 +667,14 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                         .iter()
                         .map(|(_, tick, _, _)| *note_positions.get(tick).unwrap_or(&0.0))
                         .collect();
+                    let ledger_clefs: Vec<&str> = notes_in_range
+                        .iter()
+                        .map(|(_, tick, _, _)| staff_data.get_clef_at_tick(*tick))
+                        .collect();
                     ledger_lines.extend(positioner::position_ledger_lines(
                         &notes_in_range,
                         &offsets,
-                        &staff_data.clef,
+                        &ledger_clefs,
                         config.units_per_space,
                         staff_vertical_offset,
                     ));
@@ -1483,6 +1487,12 @@ fn position_glyphs_for_staff(
             })
             .collect();
 
+        // Compute per-note clef types based on active clef at each note's tick
+        let note_clefs: Vec<&str> = notes_in_range
+            .iter()
+            .map(|(_, start_tick, _, _)| staff_data.get_clef_at_tick(*start_tick))
+            .collect();
+
         // Build beamable notes with beam info for beam group analysis
         let beamable_for_analysis_raw: Vec<beams::BeamableNote> = voice_notes_in_range
             .iter()
@@ -1490,9 +1500,8 @@ fn position_glyphs_for_staff(
             .filter(|(_, note)| note.duration_ticks <= 480) // Only eighth notes and shorter
             .map(|(i, note)| {
                 let notehead_x = horizontal_offsets[i];
-                let notehead_y =
-                    positioner::pitch_to_y(note.pitch, &staff_data.clef, units_per_space)
-                        + staff_vertical_offset;
+                let notehead_y = positioner::pitch_to_y(note.pitch, note_clefs[i], units_per_space)
+                    + staff_vertical_offset;
 
                 // Convert beam_info from (number, type_string) to beam_types list
                 let beam_types: Vec<String> =
@@ -1575,7 +1584,7 @@ fn position_glyphs_for_staff(
         let glyphs = positioner::position_noteheads(
             &notes_in_range,
             &horizontal_offsets,
-            &staff_data.clef, // Pass clef type for correct pitch positioning
+            &note_clefs,
             units_per_space,
             instrument_id,
             staff_index,
@@ -1590,7 +1599,7 @@ fn position_glyphs_for_staff(
         let accidental_glyphs = positioner::position_note_accidentals(
             &notes_in_range,
             &horizontal_offsets,
-            &staff_data.clef,
+            &note_clefs,
             units_per_space,
             instrument_id,
             staff_index,
@@ -1884,9 +1893,10 @@ fn compute_staff_note_extents(
     for voice in &staff_data.voices {
         for note in &voice.notes {
             if note.start_tick >= tick_range.start_tick && note.start_tick < tick_range.end_tick {
+                let active_clef = staff_data.get_clef_at_tick(note.start_tick);
                 let y = positioner::pitch_to_y_with_spelling(
                     note.pitch,
-                    &staff_data.clef,
+                    active_clef,
                     units_per_space,
                     note.spelling,
                 );

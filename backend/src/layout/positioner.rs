@@ -210,7 +210,7 @@ pub fn compute_glyph_bounding_box(
 pub fn position_noteheads(
     notes: &[super::NoteData], // (pitch, start_tick, duration, spelling)
     horizontal_offsets: &[f32],
-    clef_type: &str,
+    clef_types: &[&str],
     units_per_space: f32,
     instrument_id: &str,
     staff_index: usize,
@@ -224,6 +224,7 @@ pub fn position_noteheads(
         .enumerate()
         .map(|(i, ((pitch, _start, duration, spelling), &x))| {
             // Use explicit spelling for Y position when available (e.g., Eb vs D#)
+            let clef_type = clef_types[i];
             let y = pitch_to_y_with_spelling(*pitch, clef_type, units_per_space, *spelling)
                 + staff_vertical_offset;
             let position = Point { x, y };
@@ -639,7 +640,7 @@ pub fn position_key_signature(
 pub fn position_note_accidentals(
     notes: &[super::NoteData],
     horizontal_offsets: &[f32],
-    clef_type: &str,
+    clef_types: &[&str],
     units_per_space: f32,
     instrument_id: &str,
     staff_index: usize,
@@ -829,6 +830,7 @@ pub fn position_note_accidentals(
         };
 
         // Position accidental at same Y as notehead, offset to the left
+        let clef_type = clef_types[i];
         let y = pitch_to_y_with_spelling(pitch, clef_type, units_per_space, *spelling)
             + staff_vertical_offset;
         let position = Point {
@@ -877,7 +879,7 @@ pub fn position_note_accidentals(
 pub fn position_ledger_lines(
     notes: &[super::NoteData],
     horizontal_offsets: &[f32],
-    clef_type: &str,
+    clef_types: &[&str],
     units_per_space: f32,
     staff_vertical_offset: f32,
 ) -> Vec<LedgerLine> {
@@ -897,9 +899,10 @@ pub fn position_ledger_lines(
     // (multiple notes at the same tick/pitch shouldn't duplicate ledger lines)
     let mut seen: std::collections::HashSet<(i32, i32)> = std::collections::HashSet::new();
 
-    for ((pitch, _start_tick, _duration, spelling), &notehead_x) in
-        notes.iter().zip(horizontal_offsets.iter())
+    for (i, ((pitch, _start_tick, _duration, spelling), &notehead_x)) in
+        notes.iter().zip(horizontal_offsets.iter()).enumerate()
     {
+        let clef_type = clef_types[i];
         let note_y = pitch_to_y_with_spelling(*pitch, clef_type, units_per_space, *spelling)
             + staff_vertical_offset;
 
@@ -1243,7 +1246,7 @@ mod tests {
         let glyphs = position_noteheads(
             &notes,
             &horizontal_offsets,
-            "Treble",
+            &vec!["Treble"; notes.len()],
             units_per_space,
             "test-instrument",
             0,
@@ -1580,7 +1583,7 @@ mod tests {
         let glyphs = position_noteheads(
             &notes,
             &offsets,
-            "Treble",
+            &vec!["Treble"; notes.len()],
             units_per_space,
             "inst",
             0,
@@ -1616,7 +1619,7 @@ mod tests {
         let glyphs = position_noteheads(
             &notes,
             &offsets,
-            "Treble",
+            &vec!["Treble"; notes.len()],
             units_per_space,
             "inst",
             0,
@@ -1648,7 +1651,7 @@ mod tests {
         let glyphs = position_noteheads(
             &notes,
             &offsets,
-            "Treble",
+            &vec!["Treble"; notes.len()],
             units_per_space,
             "inst",
             0,
