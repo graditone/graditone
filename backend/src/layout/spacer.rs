@@ -20,7 +20,7 @@ impl Default for SpacingConfig {
         Self {
             base_spacing: 15.0,
             duration_factor: 25.0,
-            minimum_spacing: 45.0,
+            minimum_spacing: 38.0,
         }
     }
 }

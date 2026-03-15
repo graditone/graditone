@@ -891,6 +891,37 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
 
         // Advance running_y for the next system
         running_y = system.bounding_box.y + system.bounding_box.height + config.system_spacing;
+
+        // Expand system bounding box to cover all stem and beam extents.
+        // Stems (U+0000) and beams (U+0001) can extend well beyond the staff area
+        // (up to 70+ units). The bounding box must include them so the frontend's
+        // viewport-based virtualization (getVisibleSystems) renders these elements
+        // instead of clipping them at the viewBox edge.
+        let mut glyph_min_y = system.bounding_box.y;
+        let mut glyph_max_y = system.bounding_box.y + system.bounding_box.height;
+        for staff_group in &system.staff_groups {
+            for staff in &staff_group.staves {
+                for glyph_run in &staff.glyph_runs {
+                    for glyph in &glyph_run.glyphs {
+                        if glyph.codepoint == "\u{0000}" || glyph.codepoint == "\u{0001}" {
+                            let y_top = glyph.position.y.min(glyph.bounding_box.y);
+                            let y_bottom = (glyph.position.y + glyph.bounding_box.height)
+                                .max(glyph.bounding_box.y + glyph.bounding_box.height);
+                            glyph_min_y = glyph_min_y.min(y_top);
+                            glyph_max_y = glyph_max_y.max(y_bottom);
+                        }
+                    }
+                }
+            }
+        }
+        if glyph_min_y < system.bounding_box.y {
+            let extension = system.bounding_box.y - glyph_min_y;
+            system.bounding_box.y = glyph_min_y;
+            system.bounding_box.height += extension;
+        }
+        if glyph_max_y > system.bounding_box.y + system.bounding_box.height {
+            system.bounding_box.height = glyph_max_y - system.bounding_box.y;
+        }
     }
 
     // Compute GlobalLayout dimensions
