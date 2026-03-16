@@ -1,7 +1,7 @@
 //! Integration test: verify augmentation dots and staccato dots appear in layout output.
 
 use musicore_backend::domain::importers::musicxml::MusicXMLImporter;
-use musicore_backend::layout::{compute_layout, LayoutConfig};
+use musicore_backend::layout::{LayoutConfig, compute_layout};
 use musicore_backend::ports::importers::IMusicXMLImporter;
 use std::path::Path;
 
@@ -53,7 +53,8 @@ fn debug_notation_dots_output() {
         for staff in inst["staves"].as_array().unwrap() {
             for voice in staff["voices"].as_array().unwrap() {
                 // Notes are in "interval_events", not "notes"
-                let notes_arr = voice["notes"].as_array()
+                let notes_arr = voice["notes"]
+                    .as_array()
                     .or_else(|| voice["interval_events"].as_array());
                 if let Some(notes) = notes_arr {
                     for note in notes {
@@ -75,12 +76,18 @@ fn debug_notation_dots_output() {
             if let Some(voices) = staff["voices"].as_array() {
                 eprintln!("  voices count: {}", voices.len());
                 for (vi, voice) in voices.iter().enumerate() {
-                    let keys: Vec<_> = voice.as_object().map(|o| o.keys().collect::<Vec<_>>()).unwrap_or_default();
+                    let keys: Vec<_> = voice
+                        .as_object()
+                        .map(|o| o.keys().collect::<Vec<_>>())
+                        .unwrap_or_default();
                     eprintln!("  voice[{vi}] keys: {keys:?}");
                     if let Some(notes) = voice["notes"].as_array() {
                         eprintln!("  voice[{vi}] notes count: {}", notes.len());
                         for (i, note) in notes.iter().enumerate().take(3) {
-                            let nkeys: Vec<_> = note.as_object().map(|o| o.keys().collect::<Vec<_>>()).unwrap_or_default();
+                            let nkeys: Vec<_> = note
+                                .as_object()
+                                .map(|o| o.keys().collect::<Vec<_>>())
+                                .unwrap_or_default();
                             eprintln!("    note[{i}] keys: {nkeys:?}");
                         }
                     }
@@ -101,10 +108,8 @@ fn debug_notation_dots_output() {
                     for d in dots {
                         total_dots += 1;
                         if sample_dots.len() < 5 {
-                            sample_dots.push(format!(
-                                "x={}, y={}, r={}",
-                                d["x"], d["y"], d["radius"]
-                            ));
+                            sample_dots
+                                .push(format!("x={}, y={}, r={}", d["x"], d["y"], d["radius"]));
                         }
                     }
                 }
@@ -126,6 +131,9 @@ fn debug_notation_dots_output() {
             }
         }
     }
-    assert!(staccato_in_dto > 0 || dotted_in_dto > 0, "No staccato or dots in DTO");
+    assert!(
+        staccato_in_dto > 0 || dotted_in_dto > 0,
+        "No staccato or dots in DTO"
+    );
     assert!(total_dots > 0, "No notation dots in layout output");
 }

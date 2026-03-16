@@ -2205,7 +2205,11 @@ fn position_glyphs_for_staff(
             // T033: Compute uniform stem direction for the group.
             // Multi-voice override takes priority; otherwise use majority rule.
             let group_direction = if let Some(forced) = forced_stem_down {
-                if forced { stems::StemDirection::Down } else { stems::StemDirection::Up }
+                if forced {
+                    stems::StemDirection::Down
+                } else {
+                    stems::StemDirection::Up
+                }
             } else {
                 beams::compute_group_stem_direction(&group.notes, staff_middle_y)
             };
