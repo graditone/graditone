@@ -80,6 +80,10 @@ export interface Note {
   beams?: NoteBeamData[];
   staccato?: boolean;
   dot_count?: number;
+  /** ID of the next note in this tie chain. Present only on tie-start notes. */
+  tie_next?: string;
+  /** True if this note is a tied continuation (no new attack). */
+  is_tie_continuation?: boolean;
 }
 
 // ============================================================================

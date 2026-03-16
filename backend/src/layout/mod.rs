@@ -831,6 +831,156 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     }
                 }
 
+                // Compute tie arcs for tied notes
+                let mut tie_arcs: Vec<types::TieArc> = Vec::new();
+                let notehead_half_w = stems::Stem::NOTEHEAD_WIDTH;
+                {
+                    // Build a lookup: note_id → (x, visual_y, pitch, start_tick)
+                    let mut note_lookup: std::collections::HashMap<&str, (f32, f32, u8, u32)> =
+                        std::collections::HashMap::new();
+
+                    for voice in &staff_data.voices {
+                        for n in &voice.notes {
+                            if n.note_id.is_empty() {
+                                continue;
+                            }
+                            let in_range = n.start_tick >= system.tick_range.start_tick
+                                && n.start_tick < system.tick_range.end_tick;
+                            if !in_range {
+                                continue;
+                            }
+                            let clef = staff_data.get_clef_at_tick(n.start_tick);
+                            let y_raw = positioner::pitch_to_y_with_spelling(
+                                n.pitch,
+                                clef,
+                                config.units_per_space,
+                                n.spelling,
+                            ) + staff_vertical_offset;
+                            let visual_y = y_raw + 0.5 * config.units_per_space;
+                            let note_x = *note_positions.get(&n.start_tick).unwrap_or(&0.0);
+                            note_lookup
+                                .insert(&n.note_id, (note_x, visual_y, n.pitch, n.start_tick));
+                        }
+                    }
+
+                    // Collect tied note pitches per tick for chord tie detection
+                    let mut tied_pitches_per_tick: std::collections::HashMap<u32, Vec<u8>> =
+                        std::collections::HashMap::new();
+                    for voice in &staff_data.voices {
+                        for n in &voice.notes {
+                            if n.tie_next.is_some() && !n.note_id.is_empty() {
+                                let in_range = n.start_tick >= system.tick_range.start_tick
+                                    && n.start_tick < system.tick_range.end_tick;
+                                if in_range {
+                                    tied_pitches_per_tick
+                                        .entry(n.start_tick)
+                                        .or_default()
+                                        .push(n.pitch);
+                                }
+                            }
+                        }
+                    }
+
+                    // For each note with tie_next, find the target and compute arc
+                    for voice in &staff_data.voices {
+                        for n in &voice.notes {
+                            let tie_target_id = match &n.tie_next {
+                                Some(id) => id.as_str(),
+                                None => continue,
+                            };
+                            if n.note_id.is_empty() {
+                                continue;
+                            }
+                            let in_range = n.start_tick >= system.tick_range.start_tick
+                                && n.start_tick < system.tick_range.end_tick;
+                            if !in_range {
+                                continue;
+                            }
+
+                            let start_info = match note_lookup.get(n.note_id.as_str()) {
+                                Some(info) => *info,
+                                None => continue,
+                            };
+                            let end_info = match note_lookup.get(tie_target_id) {
+                                Some(info) => *info,
+                                None => continue, // Target in a different system — skip for now
+                            };
+
+                            let (start_x, start_y, _start_pitch, start_tick) = start_info;
+                            let (end_x, end_y, _end_pitch, _end_tick) = end_info;
+
+                            // Determine arc direction
+                            let above = if let Some(pitches) = tied_pitches_per_tick.get(&start_tick) {
+                                if pitches.len() > 1 {
+                                    // Chord tie: top note above, bottom note below
+                                    let max_pitch = pitches.iter().copied().max().unwrap_or(0);
+                                    let min_pitch = pitches.iter().copied().min().unwrap_or(0);
+                                    if n.pitch == max_pitch {
+                                        true
+                                    } else if n.pitch == min_pitch {
+                                        false
+                                    } else {
+                                        // Middle note: use stem direction
+                                        let clef = staff_data.get_clef_at_tick(start_tick);
+                                        let y_raw = positioner::pitch_to_y_with_spelling(
+                                            n.pitch, clef, config.units_per_space, n.spelling,
+                                        ) + staff_vertical_offset;
+                                        y_raw <= staff_middle_y
+                                    }
+                                } else {
+                                    // Single tie: use stem direction (opposite to stem)
+                                    let clef = staff_data.get_clef_at_tick(start_tick);
+                                    let y_raw = positioner::pitch_to_y_with_spelling(
+                                        n.pitch, clef, config.units_per_space, n.spelling,
+                                    ) + staff_vertical_offset;
+                                    y_raw <= staff_middle_y
+                                }
+                            } else {
+                                // Fallback: stem direction
+                                let clef = staff_data.get_clef_at_tick(start_tick);
+                                let y_raw = positioner::pitch_to_y_with_spelling(
+                                    n.pitch, clef, config.units_per_space, n.spelling,
+                                ) + staff_vertical_offset;
+                                y_raw <= staff_middle_y
+                            };
+
+                            // Arc geometry
+                            let arc_start_x = start_x + notehead_half_w;
+                            let arc_end_x = end_x - notehead_half_w;
+                            let arc_start_y = start_y;
+                            let arc_end_y = end_y;
+
+                            let span_x = (arc_end_x - arc_start_x).abs();
+                            let arc_height = span_x.mul_add(0.15, 0.0).clamp(4.0, 30.0);
+
+                            let y_offset = if above { -arc_height } else { arc_height };
+                            let mid_y = (arc_start_y + arc_end_y) / 2.0 + y_offset;
+
+                            tie_arcs.push(types::TieArc {
+                                start: types::Point {
+                                    x: arc_start_x,
+                                    y: arc_start_y,
+                                },
+                                end: types::Point {
+                                    x: arc_end_x,
+                                    y: arc_end_y,
+                                },
+                                cp1: types::Point {
+                                    x: arc_start_x + span_x * 0.2,
+                                    y: mid_y,
+                                },
+                                cp2: types::Point {
+                                    x: arc_end_x - span_x * 0.2,
+                                    y: mid_y,
+                                },
+                                above,
+                                note_id_start: n.note_id.clone(),
+                                note_id_end: tie_target_id.to_string(),
+                            });
+                        }
+                    }
+                }
+
                 // Create staff with batched glyphs and structural glyphs
                 let staff = Staff {
                     staff_lines,
@@ -839,6 +989,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     bar_lines,
                     ledger_lines,
                     notation_dots,
+                    tie_arcs,
                 };
 
                 staves.push(staff);
@@ -1423,6 +1574,12 @@ struct NoteEvent {
     staccato: bool,
     /// Number of augmentation dots (0, 1, or 2)
     dot_count: u8,
+    /// Domain Note ID (UUID string) for tie arc linking
+    note_id: String,
+    /// If this note starts/continues a tie, the ID of the next tied note
+    tie_next: Option<String>,
+    /// True if this note is a tie continuation (no new attack)
+    is_tie_continuation: bool,
 }
 
 /// Extract instruments from CompiledScore JSON
@@ -1546,6 +1703,13 @@ fn extract_instruments(
                                         staccato: note_item["staccato"].as_bool().unwrap_or(false),
                                         dot_count: note_item["dot_count"].as_u64().unwrap_or(0)
                                             as u8,
+                                        note_id: note_item["id"].as_str().unwrap_or("").to_string(),
+                                        tie_next: note_item["tie_next"]
+                                            .as_str()
+                                            .map(|s| s.to_string()),
+                                        is_tie_continuation: note_item["is_tie_continuation"]
+                                            .as_bool()
+                                            .unwrap_or(false),
                                     });
                                 }
                             }
@@ -3158,6 +3322,7 @@ mod tests {
             bar_lines: vec![],
             ledger_lines: vec![],
             notation_dots: vec![],
+            tie_arcs: vec![],
         };
 
         let staff_1 = Staff {
@@ -3167,6 +3332,7 @@ mod tests {
             bar_lines: vec![],
             ledger_lines: vec![],
             notation_dots: vec![],
+            tie_arcs: vec![],
         };
 
         let staves = vec![staff_0, staff_1];
@@ -3220,6 +3386,7 @@ mod tests {
             bar_lines: vec![],
             ledger_lines: vec![],
             notation_dots: vec![],
+            tie_arcs: vec![],
         };
 
         let staff_1 = Staff {
@@ -3229,6 +3396,7 @@ mod tests {
             bar_lines: vec![],
             ledger_lines: vec![],
             notation_dots: vec![],
+            tie_arcs: vec![],
         };
 
         let staves = vec![staff_0, staff_1];
@@ -3925,6 +4093,9 @@ mod tests {
                     beam_info: vec![],
                     staccato: false,
                     dot_count: 0,
+                    note_id: String::new(),
+                    tie_next: None,
+                    is_tie_continuation: false,
                 }],
                 rests: vec![],
             }],
@@ -3968,6 +4139,9 @@ mod tests {
                     beam_info: vec![],
                     staccato: false,
                     dot_count: 0,
+                    note_id: String::new(),
+                    tie_next: None,
+                    is_tie_continuation: false,
                 }],
                 rests: vec![],
             }],

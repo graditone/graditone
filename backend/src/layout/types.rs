@@ -151,6 +151,9 @@ pub struct Staff {
     /// Notation dots: augmentation dots (right of notehead) and staccato dots (above/below)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub notation_dots: Vec<NotationDot>,
+    /// Tie arcs: cubic Bézier curves connecting tied notes
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tie_arcs: Vec<TieArc>,
 }
 
 /// Short horizontal line for notes outside the 5-line staff range
@@ -180,6 +183,25 @@ pub struct NotationDot {
     /// Dot radius in logical units
     #[serde(serialize_with = "round_f32")]
     pub radius: f32,
+}
+
+/// A cubic Bézier curve connecting two tied notes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TieArc {
+    /// Start point (right edge of first notehead)
+    pub start: Point,
+    /// End point (left edge of second notehead)
+    pub end: Point,
+    /// First Bézier control point
+    pub cp1: Point,
+    /// Second Bézier control point
+    pub cp2: Point,
+    /// True = arc curves above the notes, false = below
+    pub above: bool,
+    /// ID of the note that starts the tie
+    pub note_id_start: String,
+    /// ID of the note that ends the tie
+    pub note_id_end: String,
 }
 
 /// Single horizontal line in a staff

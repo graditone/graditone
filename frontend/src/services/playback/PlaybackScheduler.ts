@@ -1,4 +1,5 @@
 import { ToneAdapter } from './ToneAdapter';
+import { resolveTiedNotes } from './TieResolver';
 import type { Note } from '../../types/score';
 
 /**
@@ -234,8 +235,17 @@ export class PlaybackScheduler {
     this.scheduleTempoMultiplier = tempoMultiplier;
     this.scheduleStartTick = currentTick;
 
+    // Feature 051: Resolve tied notes — merge tie chains and skip continuations
+    const resolved = resolveTiedNotes(notes);
+    const resolvedAsNotes: Note[] = resolved.map(r => ({
+      id: r.id,
+      pitch: r.pitch,
+      start_tick: r.start_tick,
+      duration_ticks: r.combinedDurationTicks,
+    }));
+
     // Filter out notes already past, then sort by start_tick
-    this.pendingNotes = notes
+    this.pendingNotes = resolvedAsNotes
       .filter(note => note.start_tick >= currentTick)
       .sort((a, b) => a.start_tick - b.start_tick);
     this.pendingIndex = 0;

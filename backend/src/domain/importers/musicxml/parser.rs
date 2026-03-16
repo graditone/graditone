@@ -864,6 +864,8 @@ impl MusicXMLParser {
             beams: Vec::new(),
             staccato: false,
             dot_count: 0,
+            tie_type: None,
+            tie_placement: None,
         };
 
         let mut buf = Vec::new();
@@ -906,6 +908,33 @@ impl MusicXMLParser {
                     b"dot" => {
                         // <dot/> — augmentation dot (may appear multiple times)
                         note.dot_count += 1;
+                    }
+                    b"tie" => {
+                        // <tie type="start|stop"/> — playback tie semantics
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"type" {
+                                let val = attr.value.as_ref();
+                                match val {
+                                    b"start" => {
+                                        // If we already have a Stop, this is a Continue (stop+start)
+                                        if note.tie_type == Some(TieType::Stop) {
+                                            note.tie_type = Some(TieType::Continue);
+                                        } else {
+                                            note.tie_type = Some(TieType::Start);
+                                        }
+                                    }
+                                    b"stop" => {
+                                        // If we already have a Start, this is a Continue (start+stop)
+                                        if note.tie_type == Some(TieType::Start) {
+                                            note.tie_type = Some(TieType::Continue);
+                                        } else {
+                                            note.tie_type = Some(TieType::Stop);
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
                     }
                     b"notations" => {
                         // Parse <notations> container for articulations, etc.
@@ -980,6 +1009,19 @@ impl MusicXMLParser {
                     b"staccato" => {
                         // <staccato/> can also appear directly under <notations>
                         note.staccato = true;
+                    }
+                    b"tied" => {
+                        // <tied type="start|stop" placement="above|below"/> — visual tie arc
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"placement" {
+                                let val = attr.value.as_ref();
+                                match val {
+                                    b"above" => note.tie_placement = Some(TiePlacement::Above),
+                                    b"below" => note.tie_placement = Some(TiePlacement::Below),
+                                    _ => {}
+                                }
+                            }
+                        }
                     }
                     _ => {}
                 },

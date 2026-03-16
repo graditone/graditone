@@ -426,10 +426,14 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       // expanded ticks that match the playback engine tick space.
       const staffNotes = expandedNotesByStaff[staffIndex] ?? expandedNotesByStaff[0] ?? [];
 
+      // Feature 051: Exclude tie continuation notes — only independently-attacked notes
+      // should appear as practice steps.
+      const attackNotes = staffNotes.filter(n => !n.is_tie_continuation);
+
       // Group by start_tick; collect ALL pitches + note IDs at each tick (full chord).
       // durationTicks: take the maximum across chord notes (v7, feature 042).
       const tickMap = new Map<number, { midiPitches: number[]; noteIds: string[]; tick: number; durationTicks: number; sustainedPitches: number[]; sustainedNoteIds: string[] }>();
-      for (const note of staffNotes) {
+      for (const note of attackNotes) {
         const existing = tickMap.get(note.start_tick);
         if (existing) {
           existing.midiPitches.push(note.pitch);

@@ -143,6 +143,29 @@ export interface Staff {
   ledger_lines: LedgerLine[];
   /** Augmentation and staccato dots */
   notation_dots?: NotationDot[];
+  /** Tie arcs between tied noteheads */
+  tie_arcs?: TieArc[];
+}
+
+/**
+ * Precomputed Bézier geometry for a single tie arc between two noteheads.
+ * Emitted by the Rust layout engine — the frontend MUST NOT modify these coordinates.
+ */
+export interface TieArc {
+  /** Starting point: right edge of the first notehead */
+  start: Point;
+  /** Ending point: left edge of the second notehead */
+  end: Point;
+  /** First cubic Bézier control point */
+  cp1: Point;
+  /** Second cubic Bézier control point */
+  cp2: Point;
+  /** True = arc curves above noteheads; false = below */
+  above: boolean;
+  /** ID of the note at the start of this arc */
+  note_id_start: string;
+  /** ID of the note at the end of this arc */
+  note_id_end: string;
 }
 
 /**

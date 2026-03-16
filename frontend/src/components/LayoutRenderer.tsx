@@ -1006,6 +1006,18 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       staffElement.appendChild(circle);
     }
 
+    // Render tie arcs as cubic Bézier curves
+    for (const arc of staff.tie_arcs ?? []) {
+      const path = createSVGElement('path');
+      const d = `M ${arc.start.x},${arc.start.y} C ${arc.cp1.x},${arc.cp1.y} ${arc.cp2.x},${arc.cp2.y} ${arc.end.x},${arc.end.y}`;
+      path.setAttribute('d', d);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', config.glyphColor);
+      path.setAttribute('stroke-width', '1.5');
+      path.classList.add('tie-arc');
+      staffElement.appendChild(path);
+    }
+
     return staffElement;
   }
 

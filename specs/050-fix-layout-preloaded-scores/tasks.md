@@ -175,6 +175,22 @@ professional" for all 6.
 
 ---
 
+## Unplanned Fixes (discovered during review cycles)
+
+Fixes surfaced during Phase 3–5 review cycles that were not in the original plan.
+
+- [x] T077 Add `staccato: bool` and `dot_count: u8` fields to domain `Note` struct (`backend/src/domain/events/note.rs`) with serde skip-if-default attributes
+- [x] T078 [P] Parse `<staccato/>` and `<dot/>` elements in `backend/src/domain/importers/musicxml/parser.rs`; propagate through `NoteData` in `types.rs` and `convert_note` in `converter.rs`
+- [x] T079 [P] Extend layout engine `NoteEvent` / `NoteData` tuple and `position_glyphs_for_staff` in `backend/src/layout/mod.rs` to generate `notation_dots` output; add `NotationDot` to `backend/src/layout/types.rs` and `Staff` struct
+- [x] T080 Add `NotationDot` interface and `notation_dots` field to `Staff` interface in `frontend/src/wasm/layout.ts`; render dots as SVG circles after glyphs in `frontend/src/components/LayoutRenderer.tsx`
+- [x] T081 Fix notation dots not appearing: `convertScoreToLayoutFormat` in `frontend/src/components/layout/LayoutView.tsx` was not forwarding `staccato` / `dot_count` fields to the WASM layout engine; add fields to `Note` interface in `frontend/src/types/score.ts` and forward in conversion
+- [x] T082 Fix staccato dot positioning: dots were placed on stem side instead of notehead side; swap anchor-note selection and offset direction in `backend/src/layout/mod.rs`
+- [x] T083 Fix multi-voice stem direction: `collect_notes()` and `collect_notes_for_staff()` in `backend/src/domain/importers/musicxml/converter.rs` were discarding MusicXML `<voice>` numbers, merging all notes into one flat list; `VoiceDistributor` only split on overlap so `num_voices` was always 1 and `forced_stem_down` never activated; group notes by voice number so multi-voice staves produce separate `Voice` structs
+- [x] T084 Add `forced_stem_down: Option<bool>` parameter to `position_noteheads` in `backend/src/layout/positioner.rs`; apply override in chord stem, beam-group direction, and staccato dot placement code paths in `backend/src/layout/mod.rs`; voice 0 → stems up, voice 1+ → stems down
+- [x] T085 [P] Add `NotesByVoice` type alias in `backend/src/domain/importers/musicxml/converter.rs` to resolve `clippy::type_complexity` CI error on Rust 1.93.0 (`-D warnings` denies it)
+
+---
+
 ## Dependencies
 
 ```

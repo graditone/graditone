@@ -21,7 +21,7 @@ use super::mapper::ElementMapper;
 use super::timing::Fraction;
 use super::types::BeamType;
 use super::types::EndingParseType;
-use super::types::{MeasureData, MeasureElement, MusicXMLDocument, NoteData, PartData};
+use super::types::{MeasureData, MeasureElement, MusicXMLDocument, NoteData, PartData, TieType};
 use std::collections::{BTreeMap, HashMap};
 
 #[cfg(target_arch = "wasm32")]
@@ -792,6 +792,7 @@ impl MusicXMLConverter {
         context: &mut ImportContext,
     ) -> Result<NotesByVoice, ImportError> {
         let mut notes_by_voice: HashMap<usize, Vec<Note>> = HashMap::new();
+        let mut tie_info_by_voice: HashMap<usize, Vec<Option<TieType>>> = HashMap::new();
         let mut rests = Vec::new();
         let mut timing_context = TimingContext::new();
 
@@ -801,8 +802,6 @@ impl MusicXMLConverter {
                 if let Some(divisions) = attrs.divisions {
                     timing_context.set_divisions(divisions);
                 }
-                // Note: Tempo, time sig, clef, key are handled at Score/Staff level
-                // They are not added to Voice - Voice only contains Notes
             }
 
             // Process musical elements (notes, rests, backup/forward)
@@ -812,10 +811,12 @@ impl MusicXMLConverter {
                         // Try to convert note, skip if invalid (e.g., zero duration)
                         match Self::convert_note(note_data, &mut timing_context) {
                             Ok(note) => {
-                                notes_by_voice
-                                    .entry(note_data.voice)
+                                let voice = note_data.voice;
+                                tie_info_by_voice
+                                    .entry(voice)
                                     .or_default()
-                                    .push(note);
+                                    .push(note_data.tie_type.clone());
+                                notes_by_voice.entry(voice).or_default().push(note);
                             }
                             Err(e) => {
                                 // Skip malformed note with warning
@@ -857,6 +858,13 @@ impl MusicXMLConverter {
                     }
                     MeasureElement::Attributes(_) => {}
                 }
+            }
+        }
+
+        // Resolve tie chains within each voice
+        for (voice_num, notes) in notes_by_voice.iter_mut() {
+            if let Some(tie_types) = tie_info_by_voice.get(voice_num) {
+                Self::resolve_tie_chains(notes, tie_types);
             }
         }
 
@@ -918,6 +926,7 @@ impl MusicXMLConverter {
         context: &mut ImportContext,
     ) -> Result<NotesByVoice, ImportError> {
         let mut notes_by_voice: HashMap<usize, Vec<Note>> = HashMap::new();
+        let mut tie_info_by_voice: HashMap<usize, Vec<Option<TieType>>> = HashMap::new();
         let mut rests = Vec::new();
         let mut timing_context = TimingContext::new();
 
@@ -944,10 +953,12 @@ impl MusicXMLConverter {
                             // Try to convert note, skip if invalid (e.g., zero duration)
                             match Self::convert_note(note_data, &mut timing_context) {
                                 Ok(note) => {
-                                    notes_by_voice
-                                        .entry(note_data.voice)
+                                    let voice = note_data.voice;
+                                    tie_info_by_voice
+                                        .entry(voice)
                                         .or_default()
-                                        .push(note);
+                                        .push(note_data.tie_type.clone());
+                                    notes_by_voice.entry(voice).or_default().push(note);
                                     // Track the maximum tick reached for this staff in this measure
                                     max_tick_in_measure =
                                         max_tick_in_measure.max(timing_context.current_tick);
@@ -985,16 +996,9 @@ impl MusicXMLConverter {
                         }
                     }
                     MeasureElement::Backup(_duration) => {
-                        // In multi-staff notation, backup is used to go back and write
-                        // notes for the next staff. We ignore it since each staff tracks
-                        // timing independently. Backup typically happens after all notes
-                        // for staff 1, resetting to measure start to write staff 2.
-                        // Reset to measure start ONLY within this measure
                         timing_context.current_tick = measure_start_tick;
                     }
                     MeasureElement::Forward(duration) => {
-                        // Forward advances time (e.g., for multi-voice within same staff)
-                        // Only apply if it's relevant to this staff's timing
                         timing_context.advance_by_duration(*duration)?;
                         max_tick_in_measure = max_tick_in_measure.max(timing_context.current_tick);
                     }
@@ -1003,8 +1007,14 @@ impl MusicXMLConverter {
             }
 
             // After processing the measure, ensure timing advances to the end of the measure
-            // This prevents backup from affecting the next measure's start position
             timing_context.current_tick = max_tick_in_measure;
+        }
+
+        // Resolve tie chains within each voice
+        for (voice_num, notes) in notes_by_voice.iter_mut() {
+            if let Some(tie_types) = tie_info_by_voice.get(voice_num) {
+                Self::resolve_tie_chains(notes, tie_types);
+            }
         }
 
         Ok((notes_by_voice, rests))
@@ -1080,6 +1090,64 @@ impl MusicXMLConverter {
         }
 
         Ok(voice)
+    }
+
+    /// Resolves tie chains within a voice's note list.
+    ///
+    /// For each note with tie_type Start or Continue, finds the next note with
+    /// the same pitch and sets tie_next / is_tie_continuation links.
+    fn resolve_tie_chains(notes: &mut [Note], tie_types: &[Option<TieType>]) {
+        if notes.len() != tie_types.len() {
+            return;
+        }
+        let len = notes.len();
+
+        // Build a list of (index, note_id, pitch, start_tick, end_tick, tie_type)
+        // for efficient matching
+        let info: Vec<(
+            usize,
+            crate::domain::ids::NoteId,
+            u8,
+            u32,
+            u32,
+            Option<TieType>,
+        )> = notes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| {
+                (
+                    i,
+                    n.id,
+                    n.pitch.value(),
+                    n.start_tick.value(),
+                    n.start_tick.value() + n.duration_ticks,
+                    tie_types[i].clone(),
+                )
+            })
+            .collect();
+
+        for i in 0..len {
+            let tt = &info[i].5;
+            if matches!(tt, Some(TieType::Start) | Some(TieType::Continue)) {
+                let pitch = info[i].2;
+                let end_tick = info[i].4;
+
+                // Find the next note with the same pitch that starts at this note's end_tick
+                // and has tie_type Stop or Continue
+                if let Some(target) = info.iter().find(|t| {
+                    t.0 > i
+                        && t.2 == pitch
+                        && t.3 == end_tick
+                        && matches!(t.5, Some(TieType::Stop) | Some(TieType::Continue))
+                }) {
+                    let target_idx = target.0;
+                    let target_id = target.1;
+
+                    notes[i].tie_next = Some(target_id);
+                    notes[target_idx].is_tie_continuation = true;
+                }
+            }
+        }
     }
 
     /// Converts NoteData to Note
@@ -1235,6 +1303,8 @@ mod tests {
                 beams: Vec::new(),
                 staccato: false,
                 dot_count: 0,
+                tie_type: None,
+                tie_placement: None,
             })],
             start_repeat: false,
             end_repeat: false,
@@ -1306,6 +1376,8 @@ mod tests {
             beams: Vec::new(),
             staccato: false,
             dot_count: 0,
+            tie_type: None,
+            tie_placement: None,
         };
 
         let result = MusicXMLConverter::convert_note(&note_data, &mut timing_ctx);
@@ -1351,6 +1423,8 @@ mod tests {
                     beams: Vec::new(),
                     staccato: false,
                     dot_count: 0,
+                    tie_type: None,
+                    tie_placement: None,
                 }),
                 MeasureElement::Note(NoteData {
                     pitch: Some(PitchData {
@@ -1366,6 +1440,8 @@ mod tests {
                     beams: Vec::new(),
                     staccato: false,
                     dot_count: 0,
+                    tie_type: None,
+                    tie_placement: None,
                 }),
             ],
             start_repeat: false,
@@ -1422,6 +1498,8 @@ mod tests {
                     beams: Vec::new(),
                     staccato: false,
                     dot_count: 0,
+                    tie_type: None,
+                    tie_placement: None,
                 }),
                 // Second note of chord: F#5 (should start at same tick)
                 MeasureElement::Note(NoteData {
@@ -1438,6 +1516,8 @@ mod tests {
                     beams: Vec::new(),
                     staccato: false,
                     dot_count: 0,
+                    tie_type: None,
+                    tie_placement: None,
                 }),
                 // Third note: C#5 (sequential, after the chord)
                 MeasureElement::Note(NoteData {
@@ -1454,6 +1534,8 @@ mod tests {
                     beams: Vec::new(),
                     staccato: false,
                     dot_count: 0,
+                    tie_type: None,
+                    tie_placement: None,
                 }),
             ],
             start_repeat: false,
@@ -1554,6 +1636,8 @@ mod tests {
                     beams: Vec::new(),
                     staccato: false,
                     dot_count: 0,
+                    tie_type: None,
+                    tie_placement: None,
                 })],
                 start_repeat: false,
                 end_repeat: false,
@@ -1613,6 +1697,8 @@ mod tests {
                     beams: Vec::new(),
                     staccato: false,
                     dot_count: 0,
+                    tie_type: None,
+                    tie_placement: None,
                 })],
                 start_repeat: false,
                 end_repeat: false,
@@ -1672,6 +1758,8 @@ mod tests {
                     beams: Vec::new(),
                     staccato: false,
                     dot_count: 0,
+                    tie_type: None,
+                    tie_placement: None,
                 })],
                 start_repeat: false,
                 end_repeat: false,
@@ -1728,6 +1816,8 @@ mod tests {
                     beams: Vec::new(),
                     staccato: false,
                     dot_count: 0,
+                    tie_type: None,
+                    tie_placement: None,
                 })],
                 start_repeat: false,
                 end_repeat: false,

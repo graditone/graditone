@@ -1132,4 +1132,112 @@ describe('LayoutRenderer Component', () => {
       expect(bracket).toBeNull();
     });
   });
+
+  // ==========================================================================
+  // T010: Tie Arc Rendering
+  // ==========================================================================
+
+  describe('Tie Arc Rendering (T010)', () => {
+    it('should render a tie arc path when staff has tie_arcs', () => {
+      const layoutWithTieArc: GlobalLayout = {
+        systems: [
+          {
+            index: 0,
+            bounding_box: { x: 0, y: 0, width: 1200, height: 200 },
+            staff_groups: [
+              {
+                instrument_id: 'test-instrument',
+                staves: [
+                  {
+                    staff_lines: [
+                      { y_position: 0, start_x: 0, end_x: 1200 },
+                      { y_position: 5, start_x: 0, end_x: 1200 },
+                      { y_position: 10, start_x: 0, end_x: 1200 },
+                      { y_position: 15, start_x: 0, end_x: 1200 },
+                      { y_position: 20, start_x: 0, end_x: 1200 },
+                    ],
+                    glyph_runs: [],
+                    structural_glyphs: [],
+                    tie_arcs: [
+                      {
+                        start: { x: 100, y: 50 },
+                        end: { x: 200, y: 50 },
+                        cp1: { x: 130, y: 35 },
+                        cp2: { x: 170, y: 35 },
+                        above: true,
+                        note_id_start: 'note-1',
+                        note_id_end: 'note-2',
+                      },
+                    ],
+                  } as Staff,
+                ],
+                bracket_type: 'None',
+              },
+            ],
+            tick_range: { start_tick: 0, end_tick: 960 },
+          } as System,
+        ],
+        total_width: 1200,
+        total_height: 200,
+        units_per_space: 20.0,
+      };
+
+      const { container } = render(
+        <LayoutRenderer
+          layout={layoutWithTieArc}
+          config={validConfig}
+          viewport={validViewport}
+        />
+      );
+
+      const tieArc = container.querySelector('.tie-arc');
+      expect(tieArc).not.toBeNull();
+      expect(tieArc?.tagName.toLowerCase()).toBe('path');
+
+      const d = tieArc?.getAttribute('d');
+      expect(d).toContain('M 100,50');
+      expect(d).toContain('C 130,35 170,35 200,50');
+    });
+
+    it('should not render tie arcs when staff has no tie_arcs', () => {
+      const layoutNoTieArcs: GlobalLayout = {
+        systems: [
+          {
+            index: 0,
+            bounding_box: { x: 0, y: 0, width: 1200, height: 200 },
+            staff_groups: [
+              {
+                instrument_id: 'test-instrument',
+                staves: [
+                  {
+                    staff_lines: [
+                      { y_position: 0, start_x: 0, end_x: 1200 },
+                    ],
+                    glyph_runs: [],
+                    structural_glyphs: [],
+                  } as Staff,
+                ],
+                bracket_type: 'None',
+              },
+            ],
+            tick_range: { start_tick: 0, end_tick: 960 },
+          } as System,
+        ],
+        total_width: 1200,
+        total_height: 200,
+        units_per_space: 20.0,
+      };
+
+      const { container } = render(
+        <LayoutRenderer
+          layout={layoutNoTieArcs}
+          config={validConfig}
+          viewport={validViewport}
+        />
+      );
+
+      const tieArc = container.querySelector('.tie-arc');
+      expect(tieArc).toBeNull();
+    });
+  });
 });

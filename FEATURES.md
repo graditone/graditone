@@ -16,6 +16,7 @@ A tablet-native app for interactive scores, designed for practice and performanc
 - **Accurate pitch positioning** with ledger lines
 - **Chord symbols** display above the staff
 - **Proportional spacing** based on musical timing
+- **Tied notes** — Curved arcs (ties) connect same-pitch noteheads across same-measure, cross-barline, and multi-note chain scenarios; chords with partial ties show arcs only on the tied pitches
 
 ### 🎵 Score Management
 - **MusicXML import** - Load industry-standard MusicXML files with resilient error handling
@@ -36,6 +37,7 @@ A tablet-native app for interactive scores, designed for practice and performanc
 - **Tempo control** - Adjust playback speed for practice
 - **Score-defined tempo** - Playback starts at the tempo marked in the score (e.g. 60 BPM for Chopin Nocturne) instead of a fixed 120 BPM default; snap-to-score-tempo action resets both BPM and multiplier to the score's marked tempo
 - **Repeat/navigation** - Jump to any point in the score
+- **Tied note playback** - Tied notes sound as a single sustained note with combined duration, no re-attack at tie boundaries; chords with partial ties sustain only the tied pitch
 - **Optimized playback rendering** - Zero audio glitches on mobile devices
   - **Incremental highlight updates** - CSS class toggling via rAF, no SVG DOM rebuild
   - **O(log n) note lookup** - Binary search index for real-time highlight computation
@@ -67,6 +69,7 @@ A tablet-native app for interactive scores, designed for practice and performanc
   - **Score preset** (Feature 034) - Practice from any loaded score; clef and octave determined automatically from score data; "Change score" button; cached pitches preserved across preset switches
   - **Complexity levels** (Feature 001) - One-click Low / Mid / High presets configure the exercise automatically: Low = C major scale, 8 notes, Treble, 40 BPM; Mid = random, 16 notes, Treble, 80 BPM; High = random, 20 notes, Bass, 100 BPM; selection persists across sessions via localStorage; Advanced parameters can still be adjusted manually (clears the level badge)
   - **Note-duration checking** (Feature 042) - Score-preset sessions enforce written note durations; a whole/half note must be held for ≥90% of its notated duration before the session advances; releasing early records an `early-release` result; a progress bar is shown while holding notes longer than a quarter note; early-release outcomes score at 0.5× credit; quarter notes and shorter advance immediately as before
+  - **Tied note handling** (Feature 051) - Tied note groups are treated as a single practice event; continuation notes are skipped so the user only presses a key once per independently-attacked note
 - **Importable plugins** - Third-party plugins distributed as ZIP packages
 
 ---

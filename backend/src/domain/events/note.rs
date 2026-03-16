@@ -4,6 +4,14 @@ use crate::domain::{
 };
 use serde::{Deserialize, Serialize};
 
+/// The role this note plays in a tie relationship (domain-level).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TieType {
+    Start,
+    Continue,
+    Stop,
+}
+
 /// Beam state for serialization through the layout pipeline
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NoteBeamType {
@@ -42,6 +50,12 @@ pub struct Note {
     /// Number of augmentation dots (0 = none, 1 = dotted, 2 = double-dotted)
     #[serde(default, skip_serializing_if = "is_zero_u8")]
     pub dot_count: u8,
+    /// If this note starts or continues a tie, the ID of the next tied note.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tie_next: Option<NoteId>,
+    /// True if this note is a continuation (no new attack in playback/practice).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_tie_continuation: bool,
 }
 
 fn is_zero_u8(v: &u8) -> bool {
@@ -63,6 +77,8 @@ impl Note {
             beams: Vec::new(),
             staccato: false,
             dot_count: 0,
+            tie_next: None,
+            is_tie_continuation: false,
         })
     }
 
@@ -87,6 +103,18 @@ impl Note {
     /// Set augmentation dot count (builder pattern)
     pub fn with_dot_count(mut self, count: u8) -> Self {
         self.dot_count = count;
+        self
+    }
+
+    /// Set tie_next (builder pattern)
+    pub fn with_tie_next(mut self, next_id: NoteId) -> Self {
+        self.tie_next = Some(next_id);
+        self
+    }
+
+    /// Mark as tie continuation (builder pattern)
+    pub fn with_tie_continuation(mut self) -> Self {
+        self.is_tie_continuation = true;
         self
     }
 

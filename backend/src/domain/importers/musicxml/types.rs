@@ -194,6 +194,24 @@ pub enum MeasureElement {
     Attributes(AttributesData), // Mid-measure attribute changes (clef, key, etc.)
 }
 
+/// The role this note plays in a tie relationship.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TieType {
+    /// This note is the start of a tie.
+    Start,
+    /// This note is both the end of one tie and the start of the next (chain).
+    Continue,
+    /// This note is the end of a tie.
+    Stop,
+}
+
+/// Visual arc placement for a tie, sourced from <notations><tied placement="..."/>.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TiePlacement {
+    Above,
+    Below,
+}
+
 /// Note from <note> element
 #[derive(Debug, Clone)]
 pub struct NoteData {
@@ -223,6 +241,12 @@ pub struct NoteData {
 
     /// Number of augmentation dots from `<dot/>` elements
     pub dot_count: u8,
+
+    /// Tie directive from the <tie> element — drives playback duration merging.
+    pub tie_type: Option<TieType>,
+
+    /// Arc placement hint from <notations><tied placement="above|below">.
+    pub tie_placement: Option<TiePlacement>,
 }
 
 /// Pitch from <pitch> element
