@@ -470,8 +470,16 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         const sustained = (entry.sustainedPitches ?? []) as number[];
         // Require both onset and sustained pitches for chord completion
         chordDetectorRef.current.reset([...onset, ...sustained]);
-        // Pin sustained pitches that the user is already holding so they
-        // are always counted as collected (immune to the 80 ms window).
+        // Pin pitches that carry over from the previous entry (sustained
+        // across voice boundaries) and that the user is already holding,
+        // so they count as collected without a new press.
+        const prevEntry = ps.currentIndex > 0 ? ps.notes[ps.currentIndex - 1] : null;
+        const prevPitches = prevEntry ? (prevEntry.midiPitches as number[]) : [];
+        for (const pitch of onset) {
+          if (prevPitches.includes(pitch) && heldMidiKeysRef.current.has(pitch)) {
+            chordDetectorRef.current.pin(pitch);
+          }
+        }
         for (const pitch of sustained) {
           if (heldMidiKeysRef.current.has(pitch)) {
             chordDetectorRef.current.pin(pitch);

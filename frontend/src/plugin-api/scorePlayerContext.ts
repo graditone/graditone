@@ -452,31 +452,42 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       }
 
       // Multi-voice sustained-note pass: if a note's duration extends past a
-      // later onset tick, add its pitch to that onset's sustainedPitches so
-      // the practice engine knows it's already held (e.g. half-note G5 in
-      // voice 1 while eighth notes play in voice 2).
+      // later onset tick, merge its pitch into that onset's midiPitches so
+      // the practice engine requires the sustained note to be held (e.g.
+      // half-note G5 in voice 1 while eighth notes play in voice 2 →
+      // G5 must be held alongside each eighth-note step).
       for (const note of staffNotes) {
         if (note.duration_ticks <= 0) continue;
         const noteEnd = note.start_tick + note.duration_ticks;
         for (const [tick, entry] of tickMap) {
           if (note.start_tick < tick && noteEnd > tick) {
-            if (!entry.midiPitches.includes(note.pitch) && !entry.sustainedPitches.includes(note.pitch)) {
-              entry.sustainedPitches.push(note.pitch);
-              entry.sustainedNoteIds.push(note.id);
+            if (!entry.midiPitches.includes(note.pitch)) {
+              entry.midiPitches.push(note.pitch);
+              entry.noteIds.push(note.id);
             }
           }
         }
       }
 
-      const allEntries: PluginPracticeNoteEntry[] = [...tickMap.values()]
-        .sort((a, b) => a.tick - b.tick)
-        .map(e => ({
-          midiPitches: e.midiPitches,
-          sustainedPitches: e.sustainedPitches,
-          noteIds: e.noteIds,
-          tick: e.tick,
-          durationTicks: e.durationTicks,
-        }));
+      // Sort entries by tick, then truncate each entry's durationTicks to
+      // the gap before the next entry so sustained notes don't block
+      // advancement (e.g. G5 half alone should last 1/8 when E5 starts
+      // after 1/8 in another voice).
+      const sorted = [...tickMap.values()].sort((a, b) => a.tick - b.tick);
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const gap = sorted[i + 1].tick - sorted[i].tick;
+        if (gap > 0 && gap < sorted[i].durationTicks) {
+          sorted[i].durationTicks = gap;
+        }
+      }
+
+      const allEntries: PluginPracticeNoteEntry[] = sorted.map(e => ({
+        midiPitches: e.midiPitches,
+        sustainedPitches: e.sustainedPitches,
+        noteIds: e.noteIds,
+        tick: e.tick,
+        durationTicks: e.durationTicks,
+      }));
       const totalAvailable = allEntries.length;
       const notes = maxCount !== undefined ? allEntries.slice(0, maxCount) : allEntries;
 

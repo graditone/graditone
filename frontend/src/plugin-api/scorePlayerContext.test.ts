@@ -734,25 +734,25 @@ describe('useScorePlayerContext', () => {
       // 4 onset ticks: 0, 240, 480, 720
       expect(notes).toHaveLength(4);
 
-      // tick 0: G5 alone (voice 2 has a rest here)
+      // tick 0: G5 alone (voice 2 has a rest here), duration truncated to gap (240)
       expect(notes[0].tick).toBe(0);
       expect(notes[0].midiPitches).toEqual([79]);
-      expect(notes[0].sustainedPitches ?? []).toEqual([]);
+      expect(notes[0].durationTicks).toBe(240);
 
-      // tick 240: Eb5 onset, G5 sustained (held from tick 0)
+      // tick 240: Eb5 onset + G5 sustained (both required)
       expect(notes[1].tick).toBe(240);
-      expect(notes[1].midiPitches).toEqual([75]); // only onset
-      expect(notes[1].sustainedPitches).toContain(79); // G5 held
+      expect(notes[1].midiPitches).toContain(75); // Eb5
+      expect(notes[1].midiPitches).toContain(79); // G5 required (sustained)
 
-      // tick 480: D5 onset, G5 sustained
+      // tick 480: D5 onset + G5 sustained (both required)
       expect(notes[2].tick).toBe(480);
-      expect(notes[2].midiPitches).toEqual([74]); // only onset
-      expect(notes[2].sustainedPitches).toContain(79); // G5 held
+      expect(notes[2].midiPitches).toContain(74); // D5
+      expect(notes[2].midiPitches).toContain(79); // G5 required (sustained)
 
-      // tick 720: C5 onset, G5 sustained
+      // tick 720: C5 onset + G5 sustained (both required)
       expect(notes[3].tick).toBe(720);
-      expect(notes[3].midiPitches).toEqual([72]); // only onset
-      expect(notes[3].sustainedPitches).toContain(79); // G5 held
+      expect(notes[3].midiPitches).toContain(72); // C5
+      expect(notes[3].midiPitches).toContain(79); // G5 required (sustained)
     });
   });
 });
