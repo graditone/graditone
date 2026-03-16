@@ -910,39 +910,49 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                             let (end_x, end_y, _end_pitch, _end_tick) = end_info;
 
                             // Determine arc direction
-                            let above = if let Some(pitches) = tied_pitches_per_tick.get(&start_tick) {
-                                if pitches.len() > 1 {
-                                    // Chord tie: top note above, bottom note below
-                                    let max_pitch = pitches.iter().copied().max().unwrap_or(0);
-                                    let min_pitch = pitches.iter().copied().min().unwrap_or(0);
-                                    if n.pitch == max_pitch {
-                                        true
-                                    } else if n.pitch == min_pitch {
-                                        false
+                            let above =
+                                if let Some(pitches) = tied_pitches_per_tick.get(&start_tick) {
+                                    if pitches.len() > 1 {
+                                        // Chord tie: top note above, bottom note below
+                                        let max_pitch = pitches.iter().copied().max().unwrap_or(0);
+                                        let min_pitch = pitches.iter().copied().min().unwrap_or(0);
+                                        if n.pitch == max_pitch {
+                                            true
+                                        } else if n.pitch == min_pitch {
+                                            false
+                                        } else {
+                                            // Middle note: use stem direction
+                                            let clef = staff_data.get_clef_at_tick(start_tick);
+                                            let y_raw = positioner::pitch_to_y_with_spelling(
+                                                n.pitch,
+                                                clef,
+                                                config.units_per_space,
+                                                n.spelling,
+                                            ) + staff_vertical_offset;
+                                            y_raw <= staff_middle_y
+                                        }
                                     } else {
-                                        // Middle note: use stem direction
+                                        // Single tie: use stem direction (opposite to stem)
                                         let clef = staff_data.get_clef_at_tick(start_tick);
                                         let y_raw = positioner::pitch_to_y_with_spelling(
-                                            n.pitch, clef, config.units_per_space, n.spelling,
+                                            n.pitch,
+                                            clef,
+                                            config.units_per_space,
+                                            n.spelling,
                                         ) + staff_vertical_offset;
                                         y_raw <= staff_middle_y
                                     }
                                 } else {
-                                    // Single tie: use stem direction (opposite to stem)
+                                    // Fallback: stem direction
                                     let clef = staff_data.get_clef_at_tick(start_tick);
                                     let y_raw = positioner::pitch_to_y_with_spelling(
-                                        n.pitch, clef, config.units_per_space, n.spelling,
+                                        n.pitch,
+                                        clef,
+                                        config.units_per_space,
+                                        n.spelling,
                                     ) + staff_vertical_offset;
                                     y_raw <= staff_middle_y
-                                }
-                            } else {
-                                // Fallback: stem direction
-                                let clef = staff_data.get_clef_at_tick(start_tick);
-                                let y_raw = positioner::pitch_to_y_with_spelling(
-                                    n.pitch, clef, config.units_per_space, n.spelling,
-                                ) + staff_vertical_offset;
-                                y_raw <= staff_middle_y
-                            };
+                                };
 
                             // Arc geometry
                             let arc_start_x = start_x + notehead_half_w;
