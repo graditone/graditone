@@ -115,9 +115,20 @@ fn collect_metrics(layout: &serde_json::Value) -> ScoreMetrics {
     }
 }
 
-/// All 6 preloaded scores must use the same glyph font_size (80.0).
+/// All 6 preloaded scores must only use recognised glyph font sizes.
+/// Standard noteheads and other glyphs use 80.0.
+/// Chord noteheads (bare glyphs scaled to match combined-glyph notehead widths) use:
+///   ~90.03  = 80.0 × (332/295)  for noteheadBlack in chords
+///    92.0   = 80.0 × (345/300)  for noteheadHalf  in chords
 #[test]
 fn consistent_font_size_across_scores() {
+    // Allowed render font sizes (with ±0.1 tolerance).
+    let allowed: &[(f64, &str)] = &[
+        (80.0, "standard"),
+        (80.0 * 332.0 / 295.0, "chord-black-notehead"),
+        (80.0 * 345.0 / 300.0, "chord-half-notehead"),
+    ];
+
     let scores = [
         ("La Candeur", "../scores/Burgmuller_LaCandeur.mxl"),
         ("Arabesque", "../scores/Burgmuller_Arabesque.mxl"),
@@ -131,13 +142,19 @@ fn consistent_font_size_across_scores() {
         let layout = layout_score(path);
         let metrics = collect_metrics(&layout);
 
-        // All font_sizes should be 80.0
         for fs in &metrics.font_sizes {
+            let recognised = allowed
+                .iter()
+                .any(|(expected, _)| (fs - expected).abs() < 0.1);
             assert!(
-                (*fs - 80.0).abs() < 0.01,
-                "{}: unexpected font_size {:.1}, expected 80.0",
+                recognised,
+                "{}: unrecognised font_size {:.4} — expected one of {:?}",
                 name,
-                fs
+                fs,
+                allowed
+                    .iter()
+                    .map(|(v, l)| format!("{:.2} ({})", v, l))
+                    .collect::<Vec<_>>()
             );
         }
         assert!(

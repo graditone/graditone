@@ -217,10 +217,11 @@ pub fn position_noteheads(
     voice_index: usize,
     staff_vertical_offset: f32,
     beamed_note_indices: &std::collections::HashSet<usize>,
-    // Secondary chord members that should render as a bare notehead without a stem.
-    // The "source" note of each chord retains its combined note+stem glyph; all other
-    // non-beamed chord members go into this set so only one stem appears per chord.
-    chord_secondary_indices: &std::collections::HashSet<usize>,
+    // Chord notehead overrides: maps note index → rendering font_size.
+    // Notes in this map use a duration-appropriate bare notehead (noteheadBlack /
+    // noteheadHalf / noteheadWhole) at the given font_size, scaled so their visual
+    // size matches the notehead in the corresponding combined glyph (e.g. noteHalfDown).
+    chord_scale_map: &std::collections::HashMap<usize, f32>,
 ) -> Vec<Glyph> {
     notes
         .iter()
@@ -235,10 +236,14 @@ pub fn position_noteheads(
 
             // T021-T022: Choose notehead codepoint based on duration_ticks.
             // Beamed notes (in beamed_note_indices) use bare noteheadBlack (U+E0A4).
-            // Secondary chord members (chord_secondary_indices) also use a bare notehead
-            // so that only the "source" note of the chord carries the combined stem glyph.
+            // Chord notes (chord_scale_map) use a bare notehead at a scaled font_size so
+            // their visual diameter matches the notehead embedded in combined glyphs.
             let is_beamed = beamed_note_indices.contains(&i) && *duration < 960;
-            let is_chord_secondary = chord_secondary_indices.contains(&i) && !is_beamed;
+            let chord_font_size = if is_beamed {
+                None
+            } else {
+                chord_scale_map.get(&i).copied()
+            };
 
             // Determine stem direction based on note position relative to staff middle line.
             // Middle line (3rd line, 0-indexed 2) is at staff_vertical_offset + 2.0*ups, but
@@ -248,7 +253,7 @@ pub fn position_noteheads(
 
             let (codepoint, glyph_name) = if is_beamed {
                 ('\u{E0A4}', "noteheadBlack")
-            } else if is_chord_secondary {
+            } else if chord_font_size.is_some() {
                 // Bare notehead — style matches the note duration but without a stem.
                 if *duration >= 3840 {
                     ('\u{E0A2}', "noteheadWhole")
@@ -283,12 +288,12 @@ pub fn position_noteheads(
                 ('\u{E1D9}', "note16thUp")
             };
 
-            let bounding_box = compute_glyph_bounding_box(
-                glyph_name,
-                &position,
-                40.0, // Standard font size
-                units_per_space,
-            );
+            // Use scaled font_size for chord noteheads; standard 80.0 for everything else.
+            // The bounding box uses half the rendering font-size (40.0 baseline → scale by same ratio).
+            let render_font_size = chord_font_size.unwrap_or(80.0);
+            let bbox_font_size = 40.0 * (render_font_size / 80.0);
+            let bounding_box =
+                compute_glyph_bounding_box(glyph_name, &position, bbox_font_size, units_per_space);
 
             Glyph {
                 position,
@@ -300,7 +305,7 @@ pub fn position_noteheads(
                     voice_index,
                     event_index: i,
                 },
-                font_size: None,
+                font_size: chord_font_size,
             }
         })
         .collect()
@@ -1273,7 +1278,7 @@ mod tests {
             0,
             0.0,                               // staff_vertical_offset
             &std::collections::HashSet::new(), // no beamed notes
-            &std::collections::HashSet::new(), // no chord secondary
+            &std::collections::HashMap::new(), // no chord scale overrides
         );
 
         // Verify correct number of glyphs
@@ -1611,7 +1616,7 @@ mod tests {
             0,
             0.0,
             &beamed,
-            &std::collections::HashSet::new(), // no chord secondary
+            &std::collections::HashMap::new(), // no chord scale overrides
         );
 
         assert_eq!(glyphs.len(), 2);
@@ -1648,7 +1653,7 @@ mod tests {
             0,
             0.0,
             &beamed,
-            &std::collections::HashSet::new(), // no chord secondary
+            &std::collections::HashMap::new(), // no chord scale overrides
         );
 
         assert_eq!(glyphs.len(), 1);
@@ -1681,7 +1686,7 @@ mod tests {
             0,
             0.0,
             &beamed,
-            &std::collections::HashSet::new(), // no chord secondary
+            &std::collections::HashMap::new(), // no chord scale overrides
         );
 
         assert_eq!(glyphs.len(), 1);

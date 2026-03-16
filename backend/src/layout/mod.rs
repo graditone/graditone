@@ -1833,8 +1833,6 @@ fn position_glyphs_for_staff(
         // A diatonic second spans 0.5 * units_per_space in our coordinate system.
         // Add a small epsilon to handle floating-point rounding.
         let chord_adjacent_threshold = 0.5 * units_per_space + 0.01;
-        let chord_notehead_displacement = stems::Stem::NOTEHEAD_WIDTH * 2.0;
-
         // Build tick → note-index map for ALL notes (not just beamed).
         let mut chord_tick_to_indices: std::collections::HashMap<u32, Vec<usize>> =
             std::collections::HashMap::new();
@@ -1846,8 +1844,14 @@ fn position_glyphs_for_staff(
         }
 
         let mut chord_x_offsets: Vec<f32> = vec![0.0; notes_in_range.len()];
-        let mut chord_secondary_indices: std::collections::HashSet<usize> =
-            std::collections::HashSet::new();
+        // Maps note index → render font_size override for chord noteheads.
+        // Bare noteheads (noteheadBlack/noteheadHalf) are scaled up to visually match
+        // the notehead size inside Bravura's combined glyphs (noteQuarterDown, noteHalfDown).
+        // Scale factors derived from Bravura 1000-upem font metrics:
+        //   noteheadBlack advance=295  vs noteQuarterDown xMax=332 → ×(332/295)≈1.125
+        //   noteheadHalf  advance=300  vs noteHalfDown    xMax=345 → ×(345/300)≈1.150
+        let mut chord_scale_map: std::collections::HashMap<usize, f32> =
+            std::collections::HashMap::new();
         // Chord stems for non-beamed chords: (x, y_top, y_bottom, event_index)
         let mut chord_stem_data: Vec<(f32, f32, f32, usize)> = Vec::new();
 
@@ -1891,21 +1895,30 @@ fn position_glyphs_for_staff(
             let needs_explicit_stem = (960..3840).contains(&chord_duration);
             let any_beamed = sorted.iter().any(|idx| beamed_note_indices.contains(idx));
 
+            // Scale factor to make bare noteheads match combined-glyph notehead widths.
+            let notehead_scale: f32 = if chord_duration >= 1920 {
+                345.0 / 300.0 // noteheadHalf → matches noteHalfDown notehead width
+            } else {
+                332.0 / 295.0 // noteheadBlack → matches noteQuarterDown notehead width
+            };
+            let chord_font_size = 80.0 * notehead_scale;
+            let scaled_half_width = stems::Stem::NOTEHEAD_WIDTH * notehead_scale;
+            let chord_displacement = scaled_half_width * 2.0;
+
             if needs_explicit_stem && !any_beamed {
-                // ALL chord members use bare noteheads so every head is the same size.
+                // ALL chord members use scaled bare noteheads + one shared explicit stem.
                 for &idx in &sorted {
-                    chord_secondary_indices.insert(idx);
+                    chord_scale_map.insert(idx, chord_font_size);
                 }
 
-                // Compute stem geometry
+                // Compute stem geometry using scaled notehead half-width.
                 let visual_y_offset = 0.5 * units_per_space;
-                let notehead_width = stems::Stem::NOTEHEAD_WIDTH;
                 let bottom_y = chord_note_y_positions[sorted[0]] + visual_y_offset;
                 let top_y = chord_note_y_positions[*sorted.last().unwrap()] + visual_y_offset;
 
                 if chord_stem_down {
                     // Stem on left side of highest (anchor) note, extends below lowest note
-                    let stem_x = horizontal_offsets[anchor_idx] - notehead_width;
+                    let stem_x = horizontal_offsets[anchor_idx] - scaled_half_width;
                     chord_stem_data.push((
                         stem_x,
                         top_y,
@@ -1914,7 +1927,7 @@ fn position_glyphs_for_staff(
                     ));
                 } else {
                     // Stem on right side of lowest (anchor) note, extends above highest note
-                    let stem_x = horizontal_offsets[anchor_idx] + notehead_width;
+                    let stem_x = horizontal_offsets[anchor_idx] + scaled_half_width;
                     chord_stem_data.push((
                         stem_x,
                         top_y - stems::Stem::STEM_LENGTH,
@@ -1927,7 +1940,7 @@ fn position_glyphs_for_staff(
                 // become secondary (anchor keeps its combined note+stem glyph).
                 for &idx in &sorted {
                     if idx != anchor_idx && !beamed_note_indices.contains(&idx) {
-                        chord_secondary_indices.insert(idx);
+                        chord_scale_map.insert(idx, chord_font_size);
                     }
                 }
             }
@@ -1945,7 +1958,7 @@ fn position_glyphs_for_staff(
 
                 if y_diff <= chord_adjacent_threshold {
                     if next_should_displace {
-                        chord_x_offsets[sorted[i]] += chord_notehead_displacement;
+                        chord_x_offsets[sorted[i]] += chord_displacement;
                         next_should_displace = false;
                     } else {
                         next_should_displace = true;
@@ -1974,7 +1987,7 @@ fn position_glyphs_for_staff(
             voice_index,
             staff_vertical_offset,
             &beamed_note_indices,
-            &chord_secondary_indices,
+            &chord_scale_map,
         );
 
         all_glyphs.extend(glyphs);
