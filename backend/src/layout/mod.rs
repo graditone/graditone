@@ -1805,9 +1805,127 @@ fn position_glyphs_for_staff(
             }
         }
 
+        // === CHORD DISPLACEMENT ===
+        // Detect chords (multiple notes at the same tick) and:
+        //   1. Compute per-note x offsets for adjacent pairs (one notehead shifts right
+        //      by one full notehead width so the two heads are no longer overlapping).
+        //      Pattern follows standard engraving (Gould "Behind Bars"): from the bottom
+        //      note of a chord upward, alternate left/right positions — the 2nd note in
+        //      each cluster of seconds displaces, the 3rd stays, the 4th displaces, etc.
+        //   2. Mark secondary (non-source) chord members as bare noteheads so only one
+        //      combined note+stem glyph appears per chord.
+
+        // Pre-compute Y positions in the same coordinate space used for adjacency checks.
+        let chord_note_y_positions: Vec<f32> = notes_in_range
+            .iter()
+            .enumerate()
+            .map(|(i, (pitch, _, _, spelling))| {
+                positioner::pitch_to_y_with_spelling(
+                    *pitch,
+                    note_clefs[i],
+                    units_per_space,
+                    *spelling,
+                ) + staff_vertical_offset
+            })
+            .collect();
+
+        let chord_stem_middle_y = staff_vertical_offset + 1.5 * units_per_space;
+        // A diatonic second spans 0.5 * units_per_space in our coordinate system.
+        // Add a small epsilon to handle floating-point rounding.
+        let chord_adjacent_threshold = 0.5 * units_per_space + 0.01;
+        let chord_notehead_displacement = stems::Stem::NOTEHEAD_WIDTH * 2.0;
+
+        // Build tick → note-index map for ALL notes (not just beamed).
+        let mut chord_tick_to_indices: std::collections::HashMap<u32, Vec<usize>> =
+            std::collections::HashMap::new();
+        for (idx, (_, start_tick, _, _)) in notes_in_range.iter().enumerate() {
+            chord_tick_to_indices
+                .entry(*start_tick)
+                .or_default()
+                .push(idx);
+        }
+
+        let mut chord_x_offsets: Vec<f32> = vec![0.0; notes_in_range.len()];
+        let mut chord_secondary_indices: std::collections::HashSet<usize> =
+            std::collections::HashSet::new();
+
+        for indices in chord_tick_to_indices.values() {
+            if indices.len() < 2 {
+                continue;
+            }
+
+            // Sort by y descending: sorted[0] = highest y = lowest pitch (bottom of chord),
+            // sorted.last() = lowest y = highest pitch (top of chord).
+            let mut sorted: Vec<usize> = indices.clone();
+            sorted.sort_by(|&a, &b| {
+                chord_note_y_positions[b]
+                    .partial_cmp(&chord_note_y_positions[a])
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            // Chord stem direction: based on whichever note is furthest from the middle line.
+            let most_extreme = *sorted
+                .iter()
+                .max_by(|&&a, &&b| {
+                    let da = (chord_note_y_positions[a] - chord_stem_middle_y).abs();
+                    let db = (chord_note_y_positions[b] - chord_stem_middle_y).abs();
+                    da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .unwrap();
+            let chord_stem_down =
+                chord_note_y_positions[most_extreme] <= chord_stem_middle_y;
+
+            // Designate the source note (keeps the combined note+stem glyph):
+            //   Stem-up  → lowest note (highest y) = sorted[0]
+            //   Stem-down → highest note (lowest y) = sorted.last()
+            let source_idx = if chord_stem_down {
+                *sorted.last().unwrap()
+            } else {
+                sorted[0]
+            };
+
+            // Non-source, non-beamed notes become secondary (bare notehead only).
+            for &idx in &sorted {
+                if idx != source_idx && !beamed_note_indices.contains(&idx) {
+                    chord_secondary_indices.insert(idx);
+                }
+            }
+
+            // Displacement for adjacent pairs — alternating L/R pattern from the bottom:
+            //   sorted[0] stays (L), sorted[1] displaces if adjacent (R),
+            //   sorted[2] stays if adjacent to sorted[1] (L), and so on.
+            // This ensures the upper note of each adjacent pair moves to the right,
+            // matching standard engraving convention.
+            let mut next_should_displace = true;
+            for i in 1..sorted.len() {
+                let y_lower = chord_note_y_positions[sorted[i - 1]]; // lower pitch (higher y)
+                let y_upper = chord_note_y_positions[sorted[i]]; // higher pitch (lower y)
+                let y_diff = y_lower - y_upper; // positive
+
+                if y_diff <= chord_adjacent_threshold {
+                    if next_should_displace {
+                        chord_x_offsets[sorted[i]] += chord_notehead_displacement;
+                        next_should_displace = false;
+                    } else {
+                        next_should_displace = true;
+                    }
+                } else {
+                    // Non-adjacent break: reset so the next adjacent pair starts fresh.
+                    next_should_displace = true;
+                }
+            }
+        }
+
+        // Merge chord x-offsets into horizontal offsets for both noteheads and accidentals.
+        let adjusted_horizontal_offsets: Vec<f32> = horizontal_offsets
+            .iter()
+            .zip(chord_x_offsets.iter())
+            .map(|(x, dx)| x + dx)
+            .collect();
+
         let glyphs = positioner::position_noteheads(
             &notes_in_range,
-            &horizontal_offsets,
+            &adjusted_horizontal_offsets,
             &note_clefs,
             units_per_space,
             instrument_id,
@@ -1815,6 +1933,7 @@ fn position_glyphs_for_staff(
             voice_index,
             staff_vertical_offset,
             &beamed_note_indices,
+            &chord_secondary_indices,
         );
 
         all_glyphs.extend(glyphs);
@@ -1822,7 +1941,7 @@ fn position_glyphs_for_staff(
         // Position accidentals based on key signature and measure context
         let accidental_glyphs = positioner::position_note_accidentals(
             &notes_in_range,
-            &horizontal_offsets,
+            &adjusted_horizontal_offsets,
             &note_clefs,
             units_per_space,
             instrument_id,

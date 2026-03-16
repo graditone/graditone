@@ -217,6 +217,10 @@ pub fn position_noteheads(
     voice_index: usize,
     staff_vertical_offset: f32,
     beamed_note_indices: &std::collections::HashSet<usize>,
+    // Secondary chord members that should render as a bare notehead without a stem.
+    // The "source" note of each chord retains its combined note+stem glyph; all other
+    // non-beamed chord members go into this set so only one stem appears per chord.
+    chord_secondary_indices: &std::collections::HashSet<usize>,
 ) -> Vec<Glyph> {
     notes
         .iter()
@@ -229,10 +233,12 @@ pub fn position_noteheads(
                 + staff_vertical_offset;
             let position = Point { x, y };
 
-            // T021-T022: Choose notehead codepoint based on duration_ticks
-            // For beamed notes (in beamed_note_indices), use bare noteheadBlack (U+E0A4)
-            // instead of combined head+stem+flag glyphs
+            // T021-T022: Choose notehead codepoint based on duration_ticks.
+            // Beamed notes (in beamed_note_indices) use bare noteheadBlack (U+E0A4).
+            // Secondary chord members (chord_secondary_indices) also use a bare notehead
+            // so that only the "source" note of the chord carries the combined stem glyph.
             let is_beamed = beamed_note_indices.contains(&i) && *duration < 960;
+            let is_chord_secondary = chord_secondary_indices.contains(&i) && !is_beamed;
 
             // Determine stem direction based on note position relative to staff middle line.
             // Middle line (3rd line, 0-indexed 2) is at staff_vertical_offset + 2.0*ups, but
@@ -242,6 +248,15 @@ pub fn position_noteheads(
 
             let (codepoint, glyph_name) = if is_beamed {
                 ('\u{E0A4}', "noteheadBlack")
+            } else if is_chord_secondary {
+                // Bare notehead — style matches the note duration but without a stem.
+                if *duration >= 3840 {
+                    ('\u{E0A2}', "noteheadWhole")
+                } else if *duration >= 1920 {
+                    ('\u{E0A3}', "noteheadHalf")
+                } else {
+                    ('\u{E0A4}', "noteheadBlack")
+                }
             } else if *duration >= 3840 {
                 ('\u{E0A2}', "noteheadWhole")
             } else if *duration >= 1920 {
@@ -1258,6 +1273,7 @@ mod tests {
             0,
             0.0,                               // staff_vertical_offset
             &std::collections::HashSet::new(), // no beamed notes
+            &std::collections::HashSet::new(), // no chord secondary
         );
 
         // Verify correct number of glyphs
@@ -1595,6 +1611,7 @@ mod tests {
             0,
             0.0,
             &beamed,
+            &std::collections::HashSet::new(), // no chord secondary
         );
 
         assert_eq!(glyphs.len(), 2);
@@ -1631,6 +1648,7 @@ mod tests {
             0,
             0.0,
             &beamed,
+            &std::collections::HashSet::new(), // no chord secondary
         );
 
         assert_eq!(glyphs.len(), 1);
@@ -1663,6 +1681,7 @@ mod tests {
             0,
             0.0,
             &beamed,
+            &std::collections::HashSet::new(), // no chord secondary
         );
 
         assert_eq!(glyphs.len(), 1);
