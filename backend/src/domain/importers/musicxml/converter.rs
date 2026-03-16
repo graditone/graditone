@@ -53,10 +53,15 @@ fn measure_end_tick(measure_index: usize, pickup_ticks: u32, ticks_per_measure: 
     }
 }
 
+/// Notes grouped by MusicXML voice number, paired with rest events.
+/// Used as the return type of `collect_notes` / `collect_notes_for_staff`.
+type NotesByVoice = (HashMap<usize, Vec<Note>>, Vec<RestEvent>);
+
 /// Voice distributor for resolving overlapping notes by splitting into multiple voices
 ///
 /// Uses deterministic algorithm: sort notes by (start_tick, pitch), then assign
 /// to first available voice that doesn't have overlapping notes. Maximum 4 voices.
+#[allow(dead_code)]
 struct VoiceDistributor {
     /// Voices being built, keyed by voice number (1-4)
     voices: HashMap<usize, Voice>,
@@ -64,6 +69,7 @@ struct VoiceDistributor {
     max_voices: usize,
 }
 
+#[allow(dead_code)]
 impl VoiceDistributor {
     /// Create a new voice distributor with maximum 4 voices
     fn new() -> Self {
@@ -532,10 +538,28 @@ impl MusicXMLConverter {
                 Some(staff_num),
             )?;
 
-            // Convert measures to voice, filtering by staff number
-            let (notes, rests) =
+            // Convert measures to notes grouped by MusicXML voice number, filtering by staff
+            let (notes_by_voice, rests) =
                 Self::collect_notes_for_staff(&part_data.measures, staff_num, context)?;
-            let mut voices = VoiceDistributor::assign_voices(notes, context)?;
+
+            // Create Voice structs from MusicXML voice groups (sorted by voice number)
+            let mut voice_keys: Vec<usize> = notes_by_voice.keys().copied().collect();
+            voice_keys.sort();
+            let mut voices: Vec<Voice> = Vec::new();
+            for voice_num in &voice_keys {
+                let mut voice = Voice::new();
+                for note in notes_by_voice.get(voice_num).unwrap() {
+                    if voice.can_add_note(note) {
+                        let _ = voice.add_note(note.clone());
+                    } else {
+                        voice.interval_events.push(note.clone());
+                    }
+                }
+                voices.push(voice);
+            }
+            if voices.is_empty() {
+                voices.push(Voice::new());
+            }
 
             // Distribute rests into voices by MusicXML voice number
             Self::distribute_rests(&mut voices, rests);
@@ -601,12 +625,30 @@ impl MusicXMLConverter {
             None,
         )?;
 
-        // Convert measures to notes, then distribute across voices
-        let (notes, rests) = Self::collect_notes(&part_data.measures, context)?;
-        let mut voices = VoiceDistributor::assign_voices(notes, context)?;
+        // Convert measures to notes grouped by MusicXML voice number
+        let (notes_by_voice, rests) = Self::collect_notes(&part_data.measures, context)?;
 
-        // Distribute rests into voices by MusicXML voice number.
-        // Voice 1 rests → voices[0]; voice 2 rests → voices[1]; etc.
+        // Create Voice structs from MusicXML voice groups (sorted by voice number)
+        let mut voice_keys: Vec<usize> = notes_by_voice.keys().copied().collect();
+        voice_keys.sort();
+        let mut voices: Vec<Voice> = Vec::new();
+        for voice_num in &voice_keys {
+            let mut voice = Voice::new();
+            for note in notes_by_voice.get(voice_num).unwrap() {
+                // Use add_note which validates overlaps; fall back to direct push
+                if voice.can_add_note(note) {
+                    let _ = voice.add_note(note.clone());
+                } else {
+                    voice.interval_events.push(note.clone());
+                }
+            }
+            voices.push(voice);
+        }
+        if voices.is_empty() {
+            voices.push(Voice::new());
+        }
+
+        // Distribute rests into voices by MusicXML voice number
         Self::distribute_rests(&mut voices, rests);
 
         // Add all voices to staff
@@ -748,8 +790,8 @@ impl MusicXMLConverter {
     fn collect_notes(
         measures: &[MeasureData],
         context: &mut ImportContext,
-    ) -> Result<(Vec<Note>, Vec<RestEvent>), ImportError> {
-        let mut notes = Vec::new();
+    ) -> Result<NotesByVoice, ImportError> {
+        let mut notes_by_voice: HashMap<usize, Vec<Note>> = HashMap::new();
         let mut rests = Vec::new();
         let mut timing_context = TimingContext::new();
 
@@ -769,7 +811,12 @@ impl MusicXMLConverter {
                     MeasureElement::Note(note_data) => {
                         // Try to convert note, skip if invalid (e.g., zero duration)
                         match Self::convert_note(note_data, &mut timing_context) {
-                            Ok(note) => notes.push(note),
+                            Ok(note) => {
+                                notes_by_voice
+                                    .entry(note_data.voice)
+                                    .or_default()
+                                    .push(note);
+                            }
                             Err(e) => {
                                 // Skip malformed note with warning
                                 context.warn(
@@ -813,7 +860,7 @@ impl MusicXMLConverter {
             }
         }
 
-        Ok((notes, rests))
+        Ok((notes_by_voice, rests))
     }
 
     /// Converts measures to Voice with all notes (for single-staff instruments) - DEPRECATED
@@ -869,8 +916,8 @@ impl MusicXMLConverter {
         measures: &[MeasureData],
         staff_num: usize,
         context: &mut ImportContext,
-    ) -> Result<(Vec<Note>, Vec<RestEvent>), ImportError> {
-        let mut notes = Vec::new();
+    ) -> Result<NotesByVoice, ImportError> {
+        let mut notes_by_voice: HashMap<usize, Vec<Note>> = HashMap::new();
         let mut rests = Vec::new();
         let mut timing_context = TimingContext::new();
 
@@ -897,7 +944,10 @@ impl MusicXMLConverter {
                             // Try to convert note, skip if invalid (e.g., zero duration)
                             match Self::convert_note(note_data, &mut timing_context) {
                                 Ok(note) => {
-                                    notes.push(note);
+                                    notes_by_voice
+                                        .entry(note_data.voice)
+                                        .or_default()
+                                        .push(note);
                                     // Track the maximum tick reached for this staff in this measure
                                     max_tick_in_measure =
                                         max_tick_in_measure.max(timing_context.current_tick);
@@ -957,7 +1007,7 @@ impl MusicXMLConverter {
             timing_context.current_tick = max_tick_in_measure;
         }
 
-        Ok((notes, rests))
+        Ok((notes_by_voice, rests))
     }
 
     /// Converts measures to Voice with notes filtered by staff number (for multi-staff instruments) - DEPRECATED
@@ -1114,6 +1164,18 @@ impl MusicXMLConverter {
             note.with_beams(beams)
         };
 
+        // Preserve staccato and augmentation dots from MusicXML
+        let note = if note_data.staccato {
+            note.with_staccato()
+        } else {
+            note
+        };
+        let note = if note_data.dot_count > 0 {
+            note.with_dot_count(note_data.dot_count)
+        } else {
+            note
+        };
+
         Ok(note)
     }
 }
@@ -1171,6 +1233,8 @@ mod tests {
                 note_type: Some("quarter".to_string()),
                 is_chord: false,
                 beams: Vec::new(),
+                staccato: false,
+                dot_count: 0,
             })],
             start_repeat: false,
             end_repeat: false,
@@ -1240,6 +1304,8 @@ mod tests {
             note_type: Some("quarter".to_string()),
             is_chord: false,
             beams: Vec::new(),
+            staccato: false,
+            dot_count: 0,
         };
 
         let result = MusicXMLConverter::convert_note(&note_data, &mut timing_ctx);
@@ -1283,6 +1349,8 @@ mod tests {
                     note_type: Some("quarter".to_string()),
                     is_chord: false,
                     beams: Vec::new(),
+                    staccato: false,
+                    dot_count: 0,
                 }),
                 MeasureElement::Note(NoteData {
                     pitch: Some(PitchData {
@@ -1296,6 +1364,8 @@ mod tests {
                     note_type: Some("quarter".to_string()),
                     is_chord: false,
                     beams: Vec::new(),
+                    staccato: false,
+                    dot_count: 0,
                 }),
             ],
             start_repeat: false,
@@ -1350,6 +1420,8 @@ mod tests {
                     note_type: Some("half".to_string()),
                     is_chord: false, // First note in chord
                     beams: Vec::new(),
+                    staccato: false,
+                    dot_count: 0,
                 }),
                 // Second note of chord: F#5 (should start at same tick)
                 MeasureElement::Note(NoteData {
@@ -1364,6 +1436,8 @@ mod tests {
                     note_type: Some("half".to_string()),
                     is_chord: true, // Chord note - starts at same time
                     beams: Vec::new(),
+                    staccato: false,
+                    dot_count: 0,
                 }),
                 // Third note: C#5 (sequential, after the chord)
                 MeasureElement::Note(NoteData {
@@ -1378,6 +1452,8 @@ mod tests {
                     note_type: Some("half".to_string()),
                     is_chord: false, // Not a chord - starts after previous chord
                     beams: Vec::new(),
+                    staccato: false,
+                    dot_count: 0,
                 }),
             ],
             start_repeat: false,
@@ -1476,6 +1552,8 @@ mod tests {
                     note_type: Some("quarter".to_string()),
                     is_chord: false,
                     beams: Vec::new(),
+                    staccato: false,
+                    dot_count: 0,
                 })],
                 start_repeat: false,
                 end_repeat: false,
@@ -1533,6 +1611,8 @@ mod tests {
                     note_type: Some("quarter".to_string()),
                     is_chord: false,
                     beams: Vec::new(),
+                    staccato: false,
+                    dot_count: 0,
                 })],
                 start_repeat: false,
                 end_repeat: false,
@@ -1590,6 +1670,8 @@ mod tests {
                     note_type: Some("eighth".to_string()),
                     is_chord: false,
                     beams: Vec::new(),
+                    staccato: false,
+                    dot_count: 0,
                 })],
                 start_repeat: false,
                 end_repeat: false,
@@ -1644,6 +1726,8 @@ mod tests {
                     note_type: Some("quarter".to_string()),
                     is_chord: false,
                     beams: Vec::new(),
+                    staccato: false,
+                    dot_count: 0,
                 })],
                 start_repeat: false,
                 end_repeat: false,

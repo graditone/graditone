@@ -862,6 +862,8 @@ impl MusicXMLParser {
             note_type: None,
             is_chord: false,
             beams: Vec::new(),
+            staccato: false,
+            dot_count: 0,
         };
 
         let mut buf = Vec::new();
@@ -900,6 +902,14 @@ impl MusicXMLParser {
                     }
                     b"chord" => {
                         note.is_chord = true;
+                    }
+                    b"dot" => {
+                        // <dot/> — augmentation dot (may appear multiple times)
+                        note.dot_count += 1;
+                    }
+                    b"notations" => {
+                        // Parse <notations> container for articulations, etc.
+                        Self::parse_notations(reader, &mut note)?;
                     }
                     b"beam" => {
                         // Parse <beam number="N">type</beam>
@@ -953,6 +963,55 @@ impl MusicXMLParser {
         }
 
         Ok(note)
+    }
+
+    /// Parses `<notations>` element for articulations (staccato, etc.)
+    fn parse_notations<B: BufRead>(
+        reader: &mut Reader<B>,
+        note: &mut NoteData,
+    ) -> Result<(), ImportError> {
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                    b"articulations" => {
+                        Self::parse_articulations(reader, note)?;
+                    }
+                    b"staccato" => {
+                        // <staccato/> can also appear directly under <notations>
+                        note.staccato = true;
+                    }
+                    _ => {}
+                },
+                Ok(Event::End(e)) if e.name().as_ref() == b"notations" => break,
+                Ok(Event::Eof) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+        Ok(())
+    }
+
+    /// Parses `<articulations>` element for staccato, etc.
+    fn parse_articulations<B: BufRead>(
+        reader: &mut Reader<B>,
+        note: &mut NoteData,
+    ) -> Result<(), ImportError> {
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+                    if e.name().as_ref() == b"staccato" {
+                        note.staccato = true;
+                    }
+                }
+                Ok(Event::End(e)) if e.name().as_ref() == b"articulations" => break,
+                Ok(Event::Eof) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+        Ok(())
     }
 
     /// Parses <pitch> element

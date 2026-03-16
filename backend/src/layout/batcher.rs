@@ -84,10 +84,11 @@ struct GlyphProperties {
 /// At this font size, noteheads render at their designed 2 staff-space height.
 fn extract_glyph_properties(glyph: &Glyph) -> GlyphProperties {
     // SMuFL standard: 1em = 4 staff spaces = 4 × 20 = 80 logical units
-    // Noteheads are designed to be 2 staff spaces at this font size
+    // Noteheads are designed to be 2 staff spaces at this font size.
+    // Per-glyph font_size override (e.g., scaled chord noteheads) is respected.
     GlyphProperties {
         font_family: "Bravura".to_string(),
-        font_size: 80.0, // SMuFL standard: 1em = 4 staff spaces = 4 × 20 = 80 logical units
+        font_size: glyph.font_size.unwrap_or(80.0),
         color: Color {
             r: 0,
             g: 0,

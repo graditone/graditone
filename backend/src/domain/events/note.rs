@@ -36,6 +36,16 @@ pub struct Note {
     /// Beam annotations from MusicXML import (empty if no beams)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub beams: Vec<NoteBeamData>,
+    /// Staccato articulation (dot above/below note)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub staccato: bool,
+    /// Number of augmentation dots (0 = none, 1 = dotted, 2 = double-dotted)
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub dot_count: u8,
+}
+
+fn is_zero_u8(v: &u8) -> bool {
+    *v == 0
 }
 
 impl Note {
@@ -51,6 +61,8 @@ impl Note {
             pitch,
             spelling: None,
             beams: Vec::new(),
+            staccato: false,
+            dot_count: 0,
         })
     }
 
@@ -63,6 +75,18 @@ impl Note {
     /// Set beam annotations for this note (builder pattern)
     pub fn with_beams(mut self, beams: Vec<NoteBeamData>) -> Self {
         self.beams = beams;
+        self
+    }
+
+    /// Set staccato flag (builder pattern)
+    pub fn with_staccato(mut self) -> Self {
+        self.staccato = true;
+        self
+    }
+
+    /// Set augmentation dot count (builder pattern)
+    pub fn with_dot_count(mut self, count: u8) -> Self {
+        self.dot_count = count;
         self
     }
 

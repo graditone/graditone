@@ -325,19 +325,15 @@ mod us1_us2_tests {
         for system in &layout.systems {
             let bbox = &system.bounding_box;
 
-            // Check for non-negative coordinates
+            // Check for non-negative x (system starts at or after left edge)
             assert!(
                 bbox.x >= 0.0,
                 "System {} x-coordinate should not be negative: {}",
                 system.index,
                 bbox.x
             );
-            assert!(
-                bbox.y >= 0.0,
-                "System {} y-coordinate should not be negative: {}",
-                system.index,
-                bbox.y
-            );
+            // y can be negative when stems/notes extend above the first staff line
+            // (e.g., multi-voice forcing stems up for high notes)
 
             // Check for positive dimensions
             assert!(

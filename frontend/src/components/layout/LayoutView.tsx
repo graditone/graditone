@@ -182,6 +182,9 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
             spelling: note.spelling,
             // Forward MusicXML beam annotations to layout engine
             ...(note.beams && note.beams.length > 0 ? { beams: note.beams } : {}),
+            // Forward staccato and dot_count for notation dot rendering
+            ...(note.staccato ? { staccato: true } : {}),
+            ...(note.dot_count && note.dot_count > 0 ? { dot_count: note.dot_count } : {}),
           })),
           // Forward rest events so the layout engine can produce rest glyphs
           ...(voice.rest_events && voice.rest_events.length > 0

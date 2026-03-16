@@ -141,6 +141,17 @@ export interface Staff {
   bar_lines: BarLine[];
   /** Ledger lines for notes above/below staff */
   ledger_lines: LedgerLine[];
+  /** Augmentation and staccato dots */
+  notation_dots?: NotationDot[];
+}
+
+/**
+ * A dot rendered near a notehead (augmentation or staccato)
+ */
+export interface NotationDot {
+  x: number;
+  y: number;
+  radius: number;
 }
 
 /**

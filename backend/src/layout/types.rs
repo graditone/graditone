@@ -148,6 +148,9 @@ pub struct Staff {
     pub bar_lines: Vec<BarLine>,
     /// Ledger lines for notes above/below staff
     pub ledger_lines: Vec<LedgerLine>,
+    /// Notation dots: augmentation dots (right of notehead) and staccato dots (above/below)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notation_dots: Vec<NotationDot>,
 }
 
 /// Short horizontal line for notes outside the 5-line staff range
@@ -162,6 +165,21 @@ pub struct LedgerLine {
     /// Right edge of ledger line in logical units
     #[serde(serialize_with = "round_f32")]
     pub end_x: f32,
+}
+
+/// A dot rendered near a notehead: augmentation dot (to the right)
+/// or staccato dot (above or below).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotationDot {
+    /// Horizontal center of dot in logical units
+    #[serde(serialize_with = "round_f32")]
+    pub x: f32,
+    /// Vertical center of dot in logical units
+    #[serde(serialize_with = "round_f32")]
+    pub y: f32,
+    /// Dot radius in logical units
+    #[serde(serialize_with = "round_f32")]
+    pub radius: f32,
 }
 
 /// Single horizontal line in a staff

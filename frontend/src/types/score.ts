@@ -78,6 +78,8 @@ export interface Note {
   pitch: Pitch;
   spelling?: NoteSpelling;
   beams?: NoteBeamData[];
+  staccato?: boolean;
+  dot_count?: number;
 }
 
 // ============================================================================

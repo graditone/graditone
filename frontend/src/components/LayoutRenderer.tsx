@@ -996,6 +996,16 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       staffElement.appendChild(glyphElement);
     }
 
+    // Render notation dots (augmentation and staccato) after glyphs so they appear on top
+    for (const dot of staff.notation_dots ?? []) {
+      const circle = createSVGElement('circle');
+      circle.setAttribute('cx', dot.x.toString());
+      circle.setAttribute('cy', dot.y.toString());
+      circle.setAttribute('r', dot.radius.toString());
+      circle.setAttribute('fill', config.glyphColor);
+      staffElement.appendChild(circle);
+    }
+
     return staffElement;
   }
 

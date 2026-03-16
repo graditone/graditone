@@ -208,7 +208,7 @@ pub fn compute_glyph_bounding_box(
 /// Vector of positioned glyph structs
 #[allow(clippy::too_many_arguments)]
 pub fn position_noteheads(
-    notes: &[super::NoteData], // (pitch, start_tick, duration, spelling)
+    notes: &[super::NoteData], // (pitch, start_tick, duration, spelling, staccato, dot_count)
     horizontal_offsets: &[f32],
     clef_types: &[&str],
     units_per_space: f32,
@@ -217,31 +217,57 @@ pub fn position_noteheads(
     voice_index: usize,
     staff_vertical_offset: f32,
     beamed_note_indices: &std::collections::HashSet<usize>,
+    // Chord notehead overrides: maps note index → rendering font_size.
+    // Notes in this map use a duration-appropriate bare notehead (noteheadBlack /
+    // noteheadHalf / noteheadWhole) at the given font_size, scaled so their visual
+    // size matches the notehead in the corresponding combined glyph (e.g. noteHalfDown).
+    chord_scale_map: &std::collections::HashMap<usize, f32>,
+    // Multi-voice override: Some(true) = stems down, Some(false) = stems up, None = auto
+    forced_stem_down: Option<bool>,
 ) -> Vec<Glyph> {
     notes
         .iter()
         .zip(horizontal_offsets.iter())
         .enumerate()
-        .map(|(i, ((pitch, _start, duration, spelling), &x))| {
+        .map(|(i, ((pitch, _start, duration, spelling, _, _), &x))| {
             // Use explicit spelling for Y position when available (e.g., Eb vs D#)
             let clef_type = clef_types[i];
             let y = pitch_to_y_with_spelling(*pitch, clef_type, units_per_space, *spelling)
                 + staff_vertical_offset;
             let position = Point { x, y };
 
-            // T021-T022: Choose notehead codepoint based on duration_ticks
-            // For beamed notes (in beamed_note_indices), use bare noteheadBlack (U+E0A4)
-            // instead of combined head+stem+flag glyphs
+            // T021-T022: Choose notehead codepoint based on duration_ticks.
+            // Beamed notes (in beamed_note_indices) use bare noteheadBlack (U+E0A4).
+            // Chord notes (chord_scale_map) use a bare notehead at a scaled font_size so
+            // their visual diameter matches the notehead embedded in combined glyphs.
             let is_beamed = beamed_note_indices.contains(&i) && *duration < 960;
+            let chord_font_size = if is_beamed {
+                None
+            } else {
+                chord_scale_map.get(&i).copied()
+            };
 
             // Determine stem direction based on note position relative to staff middle line.
             // Middle line (3rd line, 0-indexed 2) is at staff_vertical_offset + 2.0*ups, but
             // pitch_to_y includes a -0.5*ups offset, so threshold is staff_vertical_offset + 1.5*ups.
-            let stem_middle_y = staff_vertical_offset + 1.5 * units_per_space;
-            let stem_down = y <= stem_middle_y;
+            let stem_down = if let Some(forced) = forced_stem_down {
+                forced
+            } else {
+                let stem_middle_y = staff_vertical_offset + 1.5 * units_per_space;
+                y <= stem_middle_y
+            };
 
             let (codepoint, glyph_name) = if is_beamed {
                 ('\u{E0A4}', "noteheadBlack")
+            } else if chord_font_size.is_some() {
+                // Bare notehead — style matches the note duration but without a stem.
+                if *duration >= 3840 {
+                    ('\u{E0A2}', "noteheadWhole")
+                } else if *duration >= 1920 {
+                    ('\u{E0A3}', "noteheadHalf")
+                } else {
+                    ('\u{E0A4}', "noteheadBlack")
+                }
             } else if *duration >= 3840 {
                 ('\u{E0A2}', "noteheadWhole")
             } else if *duration >= 1920 {
@@ -268,12 +294,12 @@ pub fn position_noteheads(
                 ('\u{E1D9}', "note16thUp")
             };
 
-            let bounding_box = compute_glyph_bounding_box(
-                glyph_name,
-                &position,
-                40.0, // Standard font size
-                units_per_space,
-            );
+            // Use scaled font_size for chord noteheads; standard 80.0 for everything else.
+            // The bounding box uses half the rendering font-size (40.0 baseline → scale by same ratio).
+            let render_font_size = chord_font_size.unwrap_or(80.0);
+            let bbox_font_size = 40.0 * (render_font_size / 80.0);
+            let bounding_box =
+                compute_glyph_bounding_box(glyph_name, &position, bbox_font_size, units_per_space);
 
             Glyph {
                 position,
@@ -285,7 +311,7 @@ pub fn position_noteheads(
                     voice_index,
                     event_index: i,
                 },
-                font_size: None,
+                font_size: chord_font_size,
             }
         })
         .collect()
@@ -727,7 +753,7 @@ pub fn position_note_accidentals(
     // standard gap ~3 units.  Total center-to-center offset: -(12 + 3 + 10) = -25.
     let accidental_x_offset = -25.0;
 
-    for (i, ((pitch, start_tick, _duration, spelling), &notehead_x)) in
+    for (i, ((pitch, start_tick, _duration, spelling, _, _), &notehead_x)) in
         notes.iter().zip(horizontal_offsets.iter()).enumerate()
     {
         let pitch = *pitch;
@@ -897,7 +923,7 @@ pub fn position_ledger_lines(
     // (multiple notes at the same tick/pitch shouldn't duplicate ledger lines)
     let mut seen: std::collections::HashSet<(i32, i32)> = std::collections::HashSet::new();
 
-    for (i, ((pitch, _start_tick, _duration, spelling), &notehead_x)) in
+    for (i, ((pitch, _start_tick, _duration, spelling, _, _), &notehead_x)) in
         notes.iter().zip(horizontal_offsets.iter()).enumerate()
     {
         let clef_type = clef_types[i];
@@ -1242,9 +1268,9 @@ mod tests {
     fn test_position_noteheads_integration() {
         let units_per_space = 20.0;
         let notes = vec![
-            (60, 0, 960, None),    // Middle C, quarter note
-            (62, 960, 960, None),  // D4, quarter note
-            (64, 1920, 960, None), // E4, quarter note
+            (60, 0, 960, None, false, 0),    // Middle C, quarter note
+            (62, 960, 960, None, false, 0),  // D4, quarter note
+            (64, 1920, 960, None, false, 0), // E4, quarter note
         ];
         let horizontal_offsets = vec![0.0, 100.0, 200.0];
 
@@ -1258,6 +1284,8 @@ mod tests {
             0,
             0.0,                               // staff_vertical_offset
             &std::collections::HashSet::new(), // no beamed notes
+            &std::collections::HashMap::new(), // no chord scale overrides
+            None,                              // no multi-voice override
         );
 
         // Verify correct number of glyphs
@@ -1577,8 +1605,8 @@ mod tests {
     fn test_beamed_eighth_uses_bare_notehead() {
         let units_per_space = 20.0;
         let notes = vec![
-            (60, 0, 480, None),   // C4 eighth note
-            (62, 480, 480, None), // D4 eighth note
+            (60, 0, 480, None, false, 0),   // C4 eighth note
+            (62, 480, 480, None, false, 0), // D4 eighth note
         ];
         let offsets = vec![0.0, 100.0];
         let mut beamed = std::collections::HashSet::new();
@@ -1595,6 +1623,8 @@ mod tests {
             0,
             0.0,
             &beamed,
+            &std::collections::HashMap::new(), // no chord scale overrides
+            None,
         );
 
         assert_eq!(glyphs.len(), 2);
@@ -1616,7 +1646,7 @@ mod tests {
     fn test_unbeamed_eighth_uses_combined_glyph() {
         let units_per_space = 20.0;
         let notes = vec![
-            (60, 0, 480, None), // C4 eighth note, NOT in beamed set
+            (60, 0, 480, None, false, 0), // C4 eighth note, NOT in beamed set
         ];
         let offsets = vec![0.0];
         let beamed = std::collections::HashSet::new(); // empty
@@ -1631,6 +1661,8 @@ mod tests {
             0,
             0.0,
             &beamed,
+            &std::collections::HashMap::new(), // no chord scale overrides
+            None,
         );
 
         assert_eq!(glyphs.len(), 1);
@@ -1647,7 +1679,7 @@ mod tests {
     fn test_quarter_note_unchanged_by_beam_set() {
         let units_per_space = 20.0;
         let notes = vec![
-            (60, 0, 960, None), // C4 quarter note
+            (60, 0, 960, None, false, 0), // C4 quarter note
         ];
         let offsets = vec![0.0];
         let mut beamed = std::collections::HashSet::new();
@@ -1663,6 +1695,8 @@ mod tests {
             0,
             0.0,
             &beamed,
+            &std::collections::HashMap::new(), // no chord scale overrides
+            None,
         );
 
         assert_eq!(glyphs.len(), 1);

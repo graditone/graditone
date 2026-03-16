@@ -217,6 +217,12 @@ pub struct NoteData {
 
     /// Beam annotations parsed from `<beam>` elements (empty if no beams)
     pub beams: Vec<BeamData>,
+
+    /// Staccato articulation from `<notations><articulations><staccato/>`
+    pub staccato: bool,
+
+    /// Number of augmentation dots from `<dot/>` elements
+    pub dot_count: u8,
 }
 
 /// Pitch from <pitch> element
