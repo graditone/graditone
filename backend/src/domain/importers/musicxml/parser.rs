@@ -1025,9 +1025,10 @@ impl MusicXMLParser {
                         }
                     }
                     b"slur" => {
-                        // <slur type="start|stop" number="N"/> — phrase slur arc
+                        // <slur type="start|stop" number="N" placement="above|below"/> — phrase slur arc
                         let mut slur_type_val = None;
                         let mut slur_number: u8 = 1;
+                        let mut slur_placement = None;
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
                                 b"type" => {
@@ -1043,6 +1044,29 @@ impl MusicXMLParser {
                                         .parse()
                                         .unwrap_or(1);
                                 }
+                                b"placement" => {
+                                    slur_placement = match attr.value.as_ref() {
+                                        b"above" => Some(SlurPlacement::Above),
+                                        b"below" => Some(SlurPlacement::Below),
+                                        _ => None,
+                                    };
+                                }
+                                b"bezier-y" => {
+                                    // Infer placement from bezier-y when no explicit placement.
+                                    // Negative bezier-y = curve above, positive = below.
+                                    if slur_placement.is_none() {
+                                        if let Ok(val) = std::str::from_utf8(&attr.value)
+                                            .unwrap_or("0")
+                                            .parse::<f64>()
+                                        {
+                                            if val < 0.0 {
+                                                slur_placement = Some(SlurPlacement::Above);
+                                            } else if val > 0.0 {
+                                                slur_placement = Some(SlurPlacement::Below);
+                                            }
+                                        }
+                                    }
+                                }
                                 _ => {}
                             }
                         }
@@ -1050,6 +1074,7 @@ impl MusicXMLParser {
                             note.slurs.push(SlurInfo {
                                 slur_type: st,
                                 number: slur_number,
+                                placement: slur_placement,
                             });
                         }
                     }

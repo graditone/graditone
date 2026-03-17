@@ -59,6 +59,9 @@ pub struct Note {
     /// If a slur starts on this note, the ID of the note where it ends.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slur_next: Option<NoteId>,
+    /// Slur direction from MusicXML: true=above, false=below, None=auto.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slur_above: Option<bool>,
 }
 
 fn is_zero_u8(v: &u8) -> bool {
@@ -83,6 +86,7 @@ impl Note {
             tie_next: None,
             is_tie_continuation: false,
             slur_next: None,
+            slur_above: None,
         })
     }
 

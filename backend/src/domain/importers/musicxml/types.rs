@@ -219,6 +219,15 @@ pub struct SlurInfo {
     pub slur_type: SlurType,
     /// Slur number (1-indexed, for nesting)
     pub number: u8,
+    /// Visual placement from MusicXML placement attribute
+    pub placement: Option<SlurPlacement>,
+}
+
+/// Visual arc placement for a slur, sourced from <notations><slur placement="..."/>.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SlurPlacement {
+    Above,
+    Below,
 }
 
 /// Slur type from the MusicXML <slur type="..."/> element.

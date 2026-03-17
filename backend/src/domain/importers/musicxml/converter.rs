@@ -1172,6 +1172,7 @@ impl MusicXMLConverter {
     ///
     /// For each note with a slur start, finds the next note with a matching
     /// slur stop (same number) and sets slur_next on the start note.
+    /// Also propagates the MusicXML placement (above/below) to slur_above.
     fn resolve_slur_chains(notes: &mut [Note], slur_infos: &[Vec<SlurInfo>]) {
         if notes.len() != slur_infos.len() {
             return;
@@ -1188,6 +1189,13 @@ impl MusicXMLConverter {
                             .any(|s| s.slur_type == SlurType::Stop && s.number == slur.number)
                         {
                             notes[i].slur_next = Some(notes[j].id);
+                            // Copy MusicXML placement into domain Note
+                            notes[i].slur_above = slur.placement.as_ref().map(|p| {
+                                matches!(
+                                    p,
+                                    crate::domain::importers::musicxml::types::SlurPlacement::Above
+                                )
+                            });
                             break;
                         }
                     }

@@ -21,8 +21,8 @@ fn check_m16_slur_system() {
                 for note in &voice.interval_events {
                     if note.slur_next.is_some() {
                         eprintln!(
-                            "Staff {} slur: pitch={:?} tick={:?} -> {:?}",
-                            si, note.pitch, note.start_tick, note.slur_next
+                            "Staff {} slur: pitch={:?} tick={:?} -> {:?} above={:?}",
+                            si, note.pitch, note.start_tick, note.slur_next, note.slur_above
                         );
                     }
                 }

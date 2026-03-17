@@ -1185,16 +1185,21 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                     continue;
                                 }
 
-                                // Slur direction: above if note is above staff middle
-                                // (corresponds to stem-down → slur on opposite side)
-                                let clef = staff_data.get_clef_at_tick(n.start_tick);
-                                let y_raw = positioner::pitch_to_y_with_spelling(
-                                    n.pitch,
-                                    clef,
-                                    config.units_per_space,
-                                    n.spelling,
-                                ) + staff_vertical_offset;
-                                let above = y_raw <= staff_middle_y;
+                                // Slur direction: use MusicXML placement if available,
+                                // otherwise fall back to staff-position heuristic.
+                                let above = match n.slur_above {
+                                    Some(v) => v,
+                                    None => {
+                                        let clef = staff_data.get_clef_at_tick(n.start_tick);
+                                        let y_raw = positioner::pitch_to_y_with_spelling(
+                                            n.pitch,
+                                            clef,
+                                            config.units_per_space,
+                                            n.spelling,
+                                        ) + staff_vertical_offset;
+                                        y_raw <= staff_middle_y
+                                    }
+                                };
                                 // Vertical offset to place endpoint at notehead edge
                                 let y_edge = if above {
                                     -notehead_half_h
@@ -1929,6 +1934,8 @@ struct NoteEvent {
     tie_next: Option<String>,
     /// If a slur starts on this note, the ID of the note where it ends
     slur_next: Option<String>,
+    /// Slur direction from MusicXML: Some(true)=above, Some(false)=below, None=auto
+    slur_above: Option<bool>,
 }
 
 /// Extract instruments from CompiledScore JSON
@@ -2059,6 +2066,7 @@ fn extract_instruments(
                                         slur_next: note_item["slur_next"]
                                             .as_str()
                                             .map(|s| s.to_string()),
+                                        slur_above: note_item["slur_above"].as_bool(),
                                     });
                                 }
                             }

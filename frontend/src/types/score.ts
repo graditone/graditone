@@ -86,6 +86,8 @@ export interface Note {
   is_tie_continuation?: boolean;
   /** ID of the next note in this slur chain. Present only on slur-start notes. */
   slur_next?: string;
+  /** Slur direction from MusicXML: true=above, false=below. */
+  slur_above?: boolean;
 }
 
 // ============================================================================
