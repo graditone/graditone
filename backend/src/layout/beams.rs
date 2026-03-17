@@ -548,11 +548,12 @@ pub struct BeamGroup {
     pub beam_count: u8,
 }
 
-/// Compute uniform stem direction for a beam group using majority rule
+/// Compute uniform stem direction for a beam group using the farthest-note rule
 ///
 /// All notes in a beamed group must have the same stem direction.
-/// The direction is determined by which side of the staff middle line
-/// the majority of notes fall on.
+/// The direction is determined by the note farthest from the staff middle
+/// line (Gould, *Behind Bars*, p. 17). When two notes are equidistant on
+/// opposite sides, prefer stems up.
 ///
 /// # Arguments
 /// * `notes` - Notes in the beam group
@@ -560,26 +561,44 @@ pub struct BeamGroup {
 ///
 /// # Returns
 /// Uniform `StemDirection` for the entire group.
-/// Tie-break: defaults to `StemDirection::Up`.
+/// Tie-break (equal distance): defaults to `StemDirection::Up`.
 pub fn compute_group_stem_direction(
     notes: &[BeamableNote],
     staff_middle_y: f32,
 ) -> crate::layout::stems::StemDirection {
-    use crate::layout::stems::{StemDirection, compute_stem_direction};
+    use crate::layout::stems::StemDirection;
 
     if notes.is_empty() {
         return StemDirection::Up;
     }
 
-    let up_count = notes
-        .iter()
-        .filter(|n| compute_stem_direction(n.y, staff_middle_y) == StemDirection::Up)
-        .count();
+    // Find the note with the greatest absolute distance from the middle line.
+    // In positive-Y-down coords:
+    //   y < staff_middle_y ⇒ above middle (stem down)
+    //   y > staff_middle_y ⇒ below middle (stem up)
+    let mut max_above: f32 = 0.0; // max distance *above* middle (y < middle)
+    let mut max_below: f32 = 0.0; // max distance *below* middle (y > middle)
 
-    if up_count * 2 >= notes.len() {
+    for note in notes {
+        let delta = note.y - staff_middle_y;
+        if delta < 0.0 {
+            // Above the middle line
+            max_above = max_above.max(-delta);
+        } else {
+            // Below (or on) the middle line
+            max_below = max_below.max(delta);
+        }
+    }
+
+    if max_below > max_above {
+        // Farthest note is below middle → stems up
         StemDirection::Up
-    } else {
+    } else if max_above > max_below {
+        // Farthest note is above middle → stems down
         StemDirection::Down
+    } else {
+        // Equal distance on both sides → default stems up
+        StemDirection::Up
     }
 }
 
@@ -1367,14 +1386,14 @@ mod tests {
         );
     }
 
-    /// T032: Mixed with majority above → Down (stems down since above middle_y)
+    /// T032: Mixed with farthest note above → Down (farthest-note rule)
     #[test]
     fn test_group_stem_direction_majority_above() {
         let staff_middle_y = 80.0;
         let notes = vec![
             BeamableNote {
                 x: 100.0,
-                y: 50.0,
+                y: 50.0, // 30 above middle (farthest)
                 stem_end_y: 0.0,
                 tick: 0,
                 duration_ticks: 480,
@@ -1384,7 +1403,7 @@ mod tests {
             },
             BeamableNote {
                 x: 140.0,
-                y: 60.0,
+                y: 60.0, // 20 above middle
                 stem_end_y: 0.0,
                 tick: 480,
                 duration_ticks: 480,
@@ -1394,7 +1413,7 @@ mod tests {
             },
             BeamableNote {
                 x: 180.0,
-                y: 100.0,
+                y: 100.0, // 20 below middle
                 stem_end_y: 0.0,
                 tick: 960,
                 duration_ticks: 480,
@@ -1405,22 +1424,23 @@ mod tests {
         ];
 
         let dir = compute_group_stem_direction(&notes, staff_middle_y);
-        // 2 notes above (y<80) → Down, 1 below → Up; majority above → Down
+        // Farthest note is 30 above middle → Down
         assert_eq!(
             dir,
             crate::layout::stems::StemDirection::Down,
-            "Majority above middle → Down"
+            "Farthest note above middle → Down"
         );
     }
 
-    /// T032: Even split → defaults to Up
+    /// T032: Farthest note below middle → Up (even when majority is above)
     #[test]
-    fn test_group_stem_direction_even_split() {
+    fn test_group_stem_direction_farthest_below() {
         let staff_middle_y = 80.0;
+        // Two notes slightly above middle (5 and 10 above), one note far below (40 below)
         let notes = vec![
             BeamableNote {
                 x: 100.0,
-                y: 50.0,
+                y: 75.0, // 5 above middle
                 stem_end_y: 0.0,
                 tick: 0,
                 duration_ticks: 480,
@@ -1430,7 +1450,89 @@ mod tests {
             },
             BeamableNote {
                 x: 140.0,
-                y: 100.0,
+                y: 70.0, // 10 above middle
+                stem_end_y: 0.0,
+                tick: 480,
+                duration_ticks: 480,
+                beam_levels: 0,
+                beam_types: Vec::new(),
+                event_index: 0,
+            },
+            BeamableNote {
+                x: 180.0,
+                y: 120.0, // 40 below middle (farthest)
+                stem_end_y: 0.0,
+                tick: 960,
+                duration_ticks: 480,
+                beam_levels: 0,
+                beam_types: Vec::new(),
+                event_index: 0,
+            },
+        ];
+
+        let dir = compute_group_stem_direction(&notes, staff_middle_y);
+        // Farthest note is 40 below → Up (even though 2 of 3 notes are above)
+        assert_eq!(
+            dir,
+            crate::layout::stems::StemDirection::Up,
+            "Farthest note below middle → Up (overrides majority above)"
+        );
+    }
+
+    /// T032: One note above, one below — farthest decides (not a true even split)
+    #[test]
+    fn test_group_stem_direction_unequal_spread() {
+        let staff_middle_y = 80.0;
+        let notes = vec![
+            BeamableNote {
+                x: 100.0,
+                y: 50.0, // 30 above middle (farthest)
+                stem_end_y: 0.0,
+                tick: 0,
+                duration_ticks: 480,
+                beam_levels: 0,
+                beam_types: Vec::new(),
+                event_index: 0,
+            },
+            BeamableNote {
+                x: 140.0,
+                y: 100.0, // 20 below middle
+                stem_end_y: 0.0,
+                tick: 480,
+                duration_ticks: 480,
+                beam_levels: 0,
+                beam_types: Vec::new(),
+                event_index: 0,
+            },
+        ];
+
+        let dir = compute_group_stem_direction(&notes, staff_middle_y);
+        // Farthest = 30 above > 20 below → stems Down
+        assert_eq!(
+            dir,
+            crate::layout::stems::StemDirection::Down,
+            "Farthest note above middle → Down"
+        );
+    }
+
+    /// T032: True equal distance → defaults to Up
+    #[test]
+    fn test_group_stem_direction_true_even_split() {
+        let staff_middle_y = 80.0;
+        let notes = vec![
+            BeamableNote {
+                x: 100.0,
+                y: 50.0, // 30 above middle
+                stem_end_y: 0.0,
+                tick: 0,
+                duration_ticks: 480,
+                beam_levels: 0,
+                beam_types: Vec::new(),
+                event_index: 0,
+            },
+            BeamableNote {
+                x: 140.0,
+                y: 110.0, // 30 below middle
                 stem_end_y: 0.0,
                 tick: 480,
                 duration_ticks: 480,
@@ -1444,7 +1546,7 @@ mod tests {
         assert_eq!(
             dir,
             crate::layout::stems::StemDirection::Up,
-            "Even split defaults to Up"
+            "Equal distance from middle defaults to Up"
         );
     }
 
