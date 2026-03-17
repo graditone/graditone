@@ -2396,22 +2396,23 @@ fn position_glyphs_for_staff(
             // are SVG <line> elements (not text), so they need the visual center Y.
             let visual_y_offset = 0.5 * units_per_space;
             let mut initial_stems: Vec<stems::Stem> = Vec::new();
+            let min_length = stems::Stem::MIN_BEAMED_STEM_LENGTH;
             for note in &group.notes {
                 let visual_y = note.y + visual_y_offset;
                 let mut stem =
                     stems::create_stem(note.x, visual_y, group_direction, notehead_width);
 
-                // Enforce minimum stem length for beamed notes
-                let stem_length = (stem.y_end - stem.y_start).abs();
-                let min_length = stems::Stem::MIN_BEAMED_STEM_LENGTH;
-                if stem_length < min_length {
-                    match group_direction {
-                        stems::StemDirection::Up => {
-                            stem.y_end = stem.y_start - min_length;
-                        }
-                        stems::StemDirection::Down => {
-                            stem.y_end = stem.y_start + min_length;
-                        }
+                // For beamed notes, use MIN_BEAMED_STEM_LENGTH for initial beam
+                // positioning. STEM_LENGTH (3.5 spaces) is for un-beamed notes;
+                // using it here pushes the beam too far from noteheads, causing
+                // excessively long stems on notes far from the beam side.
+                // The beam offset logic below will extend stems outward as needed.
+                match group_direction {
+                    stems::StemDirection::Up => {
+                        stem.y_end = stem.y_start - min_length;
+                    }
+                    stems::StemDirection::Down => {
+                        stem.y_end = stem.y_start + min_length;
                     }
                 }
                 initial_stems.push(stem);
