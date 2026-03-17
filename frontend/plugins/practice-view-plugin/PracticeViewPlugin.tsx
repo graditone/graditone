@@ -34,6 +34,7 @@ import { reduce } from './practiceEngine';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
 import type { PracticeNoteResult, WrongNoteEvent } from './practiceEngine.types';
 import { ChordDetector } from '../../src/plugin-api/index';
+import { mergePracticeNotesByTick } from './mergePracticeNotesByTick';
 import './PracticeViewPlugin.css';
 
 // ---------------------------------------------------------------------------
@@ -89,52 +90,6 @@ const INITIAL_PLAYER_STATE: ScorePlayerState = {
   staffCount: 0,
   timeSignature: { numerator: 4, denominator: 4 },
 };
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Merge practice note entries from multiple staves into a single sorted list.
- *
- * Notes at the same tick are fused into one entry whose `midiPitches` is the
- * union of all per-staff pitches (duplicates removed) and whose `noteIds`
- * concatenates all ids. Used for "Both Clefs" practice mode so the
- * ChordDetector requires every pitch across all staves to be pressed.
- *
- * Principle VI: only integer tick / MIDI values — no coordinates.
- */
-function mergePracticeNotesByTick(
-  allNotes: PluginPracticeNoteEntry[],
-): PluginPracticeNoteEntry[] {
-  if (allNotes.length === 0) return [];
-  const byTick = new Map<number, { pitches: number[]; sustainedPitches: number[]; noteIds: string[]; durationTicks: number }>();
-  for (const entry of allNotes) {
-    const group = byTick.get(entry.tick);
-    if (group) {
-      for (const p of entry.midiPitches) {
-        if (!group.pitches.includes(p)) group.pitches.push(p);
-      }
-      for (const p of (entry.sustainedPitches ?? [])) {
-        if (!group.sustainedPitches.includes(p) && !group.pitches.includes(p)) group.sustainedPitches.push(p);
-      }
-      group.noteIds.push(...entry.noteIds);
-      group.durationTicks = Math.max(group.durationTicks, entry.durationTicks);
-    } else {
-      byTick.set(entry.tick, {
-        pitches: [...(entry.midiPitches as number[])],
-        sustainedPitches: [...((entry.sustainedPitches ?? []) as number[])],
-        noteIds: [...entry.noteIds],
-        durationTicks: entry.durationTicks,
-      });
-    }
-  }
-  return Array.from(byTick.entries())
-    .sort(([a], [b]) => a - b)
-    .map(([tick, { pitches, sustainedPitches, noteIds, durationTicks }]) => ({
-      tick, midiPitches: pitches, sustainedPitches, noteIds, durationTicks,
-    }));
-}
 
 // ---------------------------------------------------------------------------
 // Props
