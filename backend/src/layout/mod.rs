@@ -306,7 +306,11 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
     }
 
     // Populate staff_groups for each system with positioned and batched glyphs
-    let mut running_y: f32 = 0.0; // Track cumulative y position across systems (collision-aware)
+    // Top margin: leave space above the first system so stems, beams, flags,
+    // and measure numbers above the top staff are not clipped by viewport y=0.
+    // 4 staff spaces (80 units at ups=20) matches standard engraving practice.
+    let top_margin = 4.0 * config.units_per_space;
+    let mut running_y: f32 = top_margin; // Track cumulative y position across systems (collision-aware)
     for system in &mut systems {
         // Update system y to account for collision-adjusted heights of previous systems
         system.bounding_box.y = running_y;

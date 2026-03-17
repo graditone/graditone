@@ -2195,3 +2195,55 @@ mod canon_d_spacing_tests {
         );
     }
 }
+
+mod top_margin_tests {
+    use super::*;
+
+    /// T086 (spec 050): First system must have a top margin so stems/beams/flags
+    /// above the treble staff are not clipped by viewport y=0.
+    ///
+    /// The layout engine starts staff placement at running_y. If running_y = 0,
+    /// notes above the first staff extend into negative Y territory, causing
+    /// the first system to be cut off at the top.
+    ///
+    /// Standard engraving practice places the top system ≥ 3 staff spaces below
+    /// the page edge. At units_per_space=20 this means the first staff line
+    /// should be at y ≥ 60. We assert the first system's bounding_box.y ≥ 0
+    /// (all content in positive coordinate space after bbox expansion).
+    #[test]
+    fn test_first_system_has_top_margin() {
+        let score = load_fixture("piano_50_measures.json");
+        let config = LayoutConfig {
+            max_system_width: 2400.0,
+            units_per_space: 20.0,
+            system_spacing: 200.0,
+            system_height: 200.0,
+        };
+
+        let layout = compute_layout(&score, &config);
+        assert!(
+            !layout.systems.is_empty(),
+            "Layout must have at least one system"
+        );
+
+        let first_system = &layout.systems[0];
+        // First system's staff lines should start well above y=0 after bbox expansion
+        // This ensures no content is clipped when viewport starts at y=0
+        assert!(
+            first_system.bounding_box.y >= 0.0,
+            "First system bounding_box.y must be >= 0 (got {:.1}). \
+             Content above the first staff must not extend into negative Y territory. \
+             Add a top margin to running_y in compute_layout().",
+            first_system.bounding_box.y,
+        );
+    }
+
+    /// Helper function to load test fixtures
+    fn load_fixture(filename: &str) -> Value {
+        let path = format!("tests/fixtures/{}", filename);
+        let content = fs::read_to_string(&path)
+            .unwrap_or_else(|_| panic!("Failed to load fixture: {}", path));
+        serde_json::from_str(&content)
+            .unwrap_or_else(|_| panic!("Failed to parse fixture JSON: {}", path))
+    }
+}
