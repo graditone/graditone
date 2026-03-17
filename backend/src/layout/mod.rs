@@ -1168,9 +1168,12 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     }
 
                     // Compute slur arcs (phrase marks) — same 3-case logic as ties
+                    // Slur endpoints attach to notehead edge (top/bottom), not center.
+                    // X position is near notehead center for natural curve attachment.
                     {
                         let system_note_ids: std::collections::HashSet<&str> =
                             note_lookup.keys().copied().collect();
+                        let notehead_half_h = config.units_per_space * 0.5;
 
                         for voice in &staff_data.voices {
                             for n in &voice.notes {
@@ -1183,6 +1186,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                 }
 
                                 // Slur direction: above if note is above staff middle
+                                // (corresponds to stem-down → slur on opposite side)
                                 let clef = staff_data.get_clef_at_tick(n.start_tick);
                                 let y_raw = positioner::pitch_to_y_with_spelling(
                                     n.pitch,
@@ -1191,6 +1195,12 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                     n.spelling,
                                 ) + staff_vertical_offset;
                                 let above = y_raw <= staff_middle_y;
+                                // Vertical offset to place endpoint at notehead edge
+                                let y_edge = if above {
+                                    -notehead_half_h
+                                } else {
+                                    notehead_half_h
+                                };
 
                                 let in_range = n.start_tick >= system.tick_range.start_tick
                                     && n.start_tick < system.tick_range.end_tick;
@@ -1205,30 +1215,32 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                     match note_lookup.get(slur_target_id) {
                                         Some(&(end_x, end_y, _ep, _et)) => {
                                             // Same-system slur
-                                            let arc_start_x = start_x + notehead_half_w;
-                                            let arc_end_x = end_x - notehead_half_w;
+                                            let arc_start_x = start_x + notehead_half_w * 0.3;
+                                            let arc_end_x = end_x - notehead_half_w * 0.3;
+                                            let adj_start_y = start_y + y_edge;
+                                            let adj_end_y = end_y + y_edge;
                                             let span_x = (arc_end_x - arc_start_x).abs().max(1.0);
                                             let arc_height =
-                                                span_x.mul_add(0.12, 0.0).clamp(6.0, 40.0);
+                                                span_x.mul_add(0.18, 0.0).clamp(8.0, 45.0);
                                             let y_offset =
                                                 if above { -arc_height } else { arc_height };
-                                            let mid_y = (start_y + end_y) / 2.0 + y_offset;
+                                            let mid_y = (adj_start_y + adj_end_y) / 2.0 + y_offset;
 
                                             slur_arcs.push(types::TieArc {
                                                 start: types::Point {
                                                     x: arc_start_x,
-                                                    y: start_y,
+                                                    y: adj_start_y,
                                                 },
                                                 end: types::Point {
                                                     x: arc_end_x,
-                                                    y: end_y,
+                                                    y: adj_end_y,
                                                 },
                                                 cp1: types::Point {
-                                                    x: arc_start_x + span_x * 0.25,
+                                                    x: arc_start_x + span_x * 0.33,
                                                     y: mid_y,
                                                 },
                                                 cp2: types::Point {
-                                                    x: arc_end_x - span_x * 0.25,
+                                                    x: arc_end_x - span_x * 0.33,
                                                     y: mid_y,
                                                 },
                                                 above,
@@ -1238,30 +1250,31 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                         }
                                         None => {
                                             // Cross-system outgoing slur
-                                            let arc_start_x = start_x + notehead_half_w;
+                                            let arc_start_x = start_x + notehead_half_w * 0.3;
                                             let arc_end_x = system_right_edge;
+                                            let adj_start_y = start_y + y_edge;
                                             let span_x = arc_end_x - arc_start_x;
                                             let arc_height =
-                                                span_x.mul_add(0.12, 0.0).clamp(6.0, 40.0);
+                                                span_x.mul_add(0.18, 0.0).clamp(8.0, 45.0);
                                             let y_offset =
                                                 if above { -arc_height } else { arc_height };
-                                            let mid_y = start_y + y_offset;
+                                            let mid_y = adj_start_y + y_offset;
 
                                             slur_arcs.push(types::TieArc {
                                                 start: types::Point {
                                                     x: arc_start_x,
-                                                    y: start_y,
+                                                    y: adj_start_y,
                                                 },
                                                 end: types::Point {
                                                     x: arc_end_x,
-                                                    y: start_y,
+                                                    y: adj_start_y,
                                                 },
                                                 cp1: types::Point {
-                                                    x: arc_start_x + span_x * 0.25,
+                                                    x: arc_start_x + span_x * 0.33,
                                                     y: mid_y,
                                                 },
                                                 cp2: types::Point {
-                                                    x: arc_end_x - span_x * 0.25,
+                                                    x: arc_end_x - span_x * 0.33,
                                                     y: mid_y,
                                                 },
                                                 above,
@@ -1276,32 +1289,32 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                     // Cross-system incoming slur
                                     let (end_x, end_y, _ep, _et) =
                                         *note_lookup.get(slur_target_id).unwrap();
-                                    let arc_end_x = end_x - notehead_half_w;
-                                    // Start before note area; ensure minimum visible span.
+                                    let adj_end_y = end_y + y_edge;
+                                    let arc_end_x = end_x - notehead_half_w * 0.3;
                                     let incoming_offset = 3.0 * notehead_half_w;
                                     let arc_start_x = (unified_left_margin - incoming_offset)
                                         .min(arc_end_x - 20.0)
                                         .max(0.0);
                                     let span_x = (arc_end_x - arc_start_x).max(1.0);
-                                    let arc_height = span_x.mul_add(0.12, 0.0).clamp(6.0, 40.0);
+                                    let arc_height = span_x.mul_add(0.18, 0.0).clamp(8.0, 45.0);
                                     let y_offset = if above { -arc_height } else { arc_height };
-                                    let mid_y = end_y + y_offset;
+                                    let mid_y = adj_end_y + y_offset;
 
                                     slur_arcs.push(types::TieArc {
                                         start: types::Point {
                                             x: arc_start_x,
-                                            y: end_y,
+                                            y: adj_end_y,
                                         },
                                         end: types::Point {
                                             x: arc_end_x,
-                                            y: end_y,
+                                            y: adj_end_y,
                                         },
                                         cp1: types::Point {
-                                            x: arc_start_x + span_x * 0.25,
+                                            x: arc_start_x + span_x * 0.33,
                                             y: mid_y,
                                         },
                                         cp2: types::Point {
-                                            x: arc_end_x - span_x * 0.25,
+                                            x: arc_end_x - span_x * 0.33,
                                             y: mid_y,
                                         },
                                         above,
