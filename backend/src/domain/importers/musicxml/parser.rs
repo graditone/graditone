@@ -1053,15 +1053,15 @@ impl MusicXMLParser {
                                 }
                                 b"bezier-y" => {
                                     // Infer placement from bezier-y when no explicit placement.
-                                    // Negative bezier-y = curve above, positive = below.
+                                    // MusicXML uses Y-up coordinates: positive = above, negative = below.
                                     if slur_placement.is_none() {
                                         if let Ok(val) = std::str::from_utf8(&attr.value)
                                             .unwrap_or("0")
                                             .parse::<f64>()
                                         {
-                                            if val < 0.0 {
+                                            if val > 0.0 {
                                                 slur_placement = Some(SlurPlacement::Above);
-                                            } else if val > 0.0 {
+                                            } else if val < 0.0 {
                                                 slur_placement = Some(SlurPlacement::Below);
                                             }
                                         }
