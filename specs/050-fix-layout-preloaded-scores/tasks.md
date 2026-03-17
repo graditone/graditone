@@ -188,6 +188,7 @@ Fixes surfaced during Phase 3–5 review cycles that were not in the original pl
 - [x] T083 Fix multi-voice stem direction: `collect_notes()` and `collect_notes_for_staff()` in `backend/src/domain/importers/musicxml/converter.rs` were discarding MusicXML `<voice>` numbers, merging all notes into one flat list; `VoiceDistributor` only split on overlap so `num_voices` was always 1 and `forced_stem_down` never activated; group notes by voice number so multi-voice staves produce separate `Voice` structs
 - [x] T084 Add `forced_stem_down: Option<bool>` parameter to `position_noteheads` in `backend/src/layout/positioner.rs`; apply override in chord stem, beam-group direction, and staccato dot placement code paths in `backend/src/layout/mod.rs`; voice 0 → stems up, voice 1+ → stems down
 - [x] T085 [P] Add `NotesByVoice` type alias in `backend/src/domain/importers/musicxml/converter.rs` to resolve `clippy::type_complexity` CI error on Rust 1.93.0 (`-D warnings` denies it)
+- [x] T086 Fix first system top clipping: `running_y` started at 0.0 in `backend/src/layout/mod.rs` so stems/beams above the first staff extended into negative Y territory, clipped by viewport y=0; add 4-staff-space top margin (`4.0 * units_per_space = 80 units`) matching standard engraving practice; update `backend/tests/contract_test.rs` to check relative staff-line spacing instead of absolute y positions
 
 ---
 
