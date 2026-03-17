@@ -189,6 +189,7 @@ Fixes surfaced during Phase 3–5 review cycles that were not in the original pl
 - [x] T084 Add `forced_stem_down: Option<bool>` parameter to `position_noteheads` in `backend/src/layout/positioner.rs`; apply override in chord stem, beam-group direction, and staccato dot placement code paths in `backend/src/layout/mod.rs`; voice 0 → stems up, voice 1+ → stems down
 - [x] T085 [P] Add `NotesByVoice` type alias in `backend/src/domain/importers/musicxml/converter.rs` to resolve `clippy::type_complexity` CI error on Rust 1.93.0 (`-D warnings` denies it)
 - [x] T086 Fix first system top clipping: `running_y` started at 0.0 in `backend/src/layout/mod.rs` so stems/beams above the first staff extended into negative Y territory, clipped by viewport y=0; add 4-staff-space top margin (`4.0 * units_per_space = 80 units`) matching standard engraving practice; update `backend/tests/contract_test.rs` to check relative staff-line spacing instead of absolute y positions
+- [x] T087 Fix Both Clefs practice mode: `mergePracticeNotesByTick` in `PracticeViewPlugin.tsx` missed cross-staff sustained-note pass and duration truncation; bass whole-note chord at tick 0 inflated merged durationTicks to full measure (via `Math.max`), forcing user to hold before advancing; add sustained-note propagation so bass chord appears as `sustainedPitches` at later treble onsets; add duration truncation to cap merged entries to gap before next onset; add `MergePracticeNotes.test.ts` with 6 unit tests
 
 ---
 

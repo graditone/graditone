@@ -104,7 +104,7 @@ const INITIAL_PLAYER_STATE: ScorePlayerState = {
  *
  * Principle VI: only integer tick / MIDI values — no coordinates.
  */
-function mergePracticeNotesByTick(
+export function mergePracticeNotesByTick(
   allNotes: PluginPracticeNoteEntry[],
 ): PluginPracticeNoteEntry[] {
   if (allNotes.length === 0) return [];
@@ -129,11 +129,40 @@ function mergePracticeNotesByTick(
       });
     }
   }
-  return Array.from(byTick.entries())
+  const sorted = Array.from(byTick.entries())
     .sort(([a], [b]) => a - b)
     .map(([tick, { pitches, sustainedPitches, noteIds, durationTicks }]) => ({
-      tick, midiPitches: pitches, sustainedPitches, noteIds, durationTicks,
+      tick, midiPitches: pitches as number[], sustainedPitches, noteIds, durationTicks,
     }));
+
+  // Cross-staff sustained-note pass: if an entry's duration extends past a
+  // later onset tick, propagate its pitches as sustainedPitches so the
+  // ChordDetector auto-pins them when the player is still holding (e.g.
+  // bass whole-note chord sustained while treble eighth notes play).
+  for (const outer of sorted) {
+    const end = outer.tick + outer.durationTicks;
+    for (const inner of sorted) {
+      if (outer.tick < inner.tick && end > inner.tick) {
+        for (const p of outer.midiPitches) {
+          if (!inner.midiPitches.includes(p) && !inner.sustainedPitches.includes(p)) {
+            (inner.sustainedPitches as number[]).push(p);
+          }
+        }
+      }
+    }
+  }
+
+  // Truncate each entry's durationTicks to the gap before the next onset so
+  // long cross-staff notes don't block practice advancement (same logic as
+  // extractPracticeNotes within a single staff).
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const gap = sorted[i + 1].tick - sorted[i].tick;
+    if (gap > 0 && gap < sorted[i].durationTicks) {
+      sorted[i].durationTicks = gap;
+    }
+  }
+
+  return sorted;
 }
 
 // ---------------------------------------------------------------------------
