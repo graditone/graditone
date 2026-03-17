@@ -1220,8 +1220,10 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                             let adj_start_y = start_y + y_edge;
                                             let adj_end_y = end_y + y_edge;
                                             let span_x = (arc_end_x - arc_start_x).abs().max(1.0);
+                                            // sqrt scaling: short slurs get proportional curves,
+                                            // long slurs keep visible curvature (~1-2 staff spaces)
                                             let arc_height =
-                                                span_x.mul_add(0.18, 0.0).clamp(8.0, 45.0);
+                                                (3.5 * span_x.sqrt()).clamp(12.0, 50.0);
                                             let y_offset =
                                                 if above { -arc_height } else { arc_height };
                                             let mid_y = (adj_start_y + adj_end_y) / 2.0 + y_offset;
@@ -1236,11 +1238,11 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                                     y: adj_end_y,
                                                 },
                                                 cp1: types::Point {
-                                                    x: arc_start_x + span_x * 0.33,
+                                                    x: arc_start_x + span_x * 0.2,
                                                     y: mid_y,
                                                 },
                                                 cp2: types::Point {
-                                                    x: arc_end_x - span_x * 0.33,
+                                                    x: arc_end_x - span_x * 0.2,
                                                     y: mid_y,
                                                 },
                                                 above,
@@ -1255,7 +1257,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                             let adj_start_y = start_y + y_edge;
                                             let span_x = arc_end_x - arc_start_x;
                                             let arc_height =
-                                                span_x.mul_add(0.18, 0.0).clamp(8.0, 45.0);
+                                                (3.5 * span_x.sqrt()).clamp(12.0, 50.0);
                                             let y_offset =
                                                 if above { -arc_height } else { arc_height };
                                             let mid_y = adj_start_y + y_offset;
@@ -1270,11 +1272,11 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                                     y: adj_start_y,
                                                 },
                                                 cp1: types::Point {
-                                                    x: arc_start_x + span_x * 0.33,
+                                                    x: arc_start_x + span_x * 0.2,
                                                     y: mid_y,
                                                 },
                                                 cp2: types::Point {
-                                                    x: arc_end_x - span_x * 0.33,
+                                                    x: arc_end_x - span_x * 0.2,
                                                     y: mid_y,
                                                 },
                                                 above,
@@ -1296,7 +1298,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                         .min(arc_end_x - 20.0)
                                         .max(0.0);
                                     let span_x = (arc_end_x - arc_start_x).max(1.0);
-                                    let arc_height = span_x.mul_add(0.18, 0.0).clamp(8.0, 45.0);
+                                    let arc_height = (3.5 * span_x.sqrt()).clamp(12.0, 50.0);
                                     let y_offset = if above { -arc_height } else { arc_height };
                                     let mid_y = adj_end_y + y_offset;
 
@@ -1310,11 +1312,11 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                                             y: adj_end_y,
                                         },
                                         cp1: types::Point {
-                                            x: arc_start_x + span_x * 0.33,
+                                            x: arc_start_x + span_x * 0.2,
                                             y: mid_y,
                                         },
                                         cp2: types::Point {
-                                            x: arc_end_x - span_x * 0.33,
+                                            x: arc_end_x - span_x * 0.2,
                                             y: mid_y,
                                         },
                                         above,
