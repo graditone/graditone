@@ -189,6 +189,8 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
             ...(note.id ? { id: note.id } : {}),
             ...(note.tie_next ? { tie_next: note.tie_next } : {}),
             ...(note.is_tie_continuation ? { is_tie_continuation: true } : {}),
+            // Forward slur data for slur arc rendering (Feature 053)
+            ...(note.slur_next ? { slur_next: note.slur_next } : {}),
           })),
           // Forward rest events so the layout engine can produce rest glyphs
           ...(voice.rest_events && voice.rest_events.length > 0
