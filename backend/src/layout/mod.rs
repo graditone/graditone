@@ -739,6 +739,80 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     for note in &voice_notes {
                         tick_groups.entry(note.start_tick).or_default().push(note);
                     }
+
+                    // Pre-compute beam group stem directions so staccato dots on beamed
+                    // notes use the actual beam group direction, not per-chord heuristics.
+                    let beam_tick_stem_down: std::collections::HashMap<u32, bool> = {
+                        let mut map = std::collections::HashMap::new();
+                        if forced_stem_down_dots.is_none() {
+                            // Build beamable notes for beam group analysis
+                            let beamable_raw: Vec<beams::BeamableNote> = voice_notes
+                                .iter()
+                                .filter(|n| n.duration_ticks <= 480)
+                                .map(|n| {
+                                    let clef = staff_data.get_clef_at_tick(n.start_tick);
+                                    let y = positioner::pitch_to_y_with_spelling(
+                                        n.pitch,
+                                        clef,
+                                        config.units_per_space,
+                                        n.spelling,
+                                    ) + staff_vertical_offset;
+                                    let beam_types: Vec<String> =
+                                        n.beam_info.iter().map(|(_, bt)| bt.clone()).collect();
+                                    beams::BeamableNote {
+                                        x: *note_positions.get(&n.start_tick).unwrap_or(&0.0),
+                                        y,
+                                        stem_end_y: 0.0,
+                                        tick: n.start_tick,
+                                        duration_ticks: n.duration_ticks,
+                                        beam_levels: n.beam_info.len() as u8,
+                                        beam_types,
+                                        event_index: 0,
+                                    }
+                                })
+                                .collect();
+                            // Deduplicate by tick (chords share a stem)
+                            let mut deduped: Vec<beams::BeamableNote> = Vec::new();
+                            let mut seen: std::collections::HashSet<u32> =
+                                std::collections::HashSet::new();
+                            for n in beamable_raw {
+                                if seen.insert(n.tick) {
+                                    deduped.push(n);
+                                }
+                            }
+                            let has_beam_info = deduped.iter().any(|n| !n.beam_types.is_empty());
+                            let groups = if has_beam_info {
+                                beams::build_beam_groups_from_musicxml(&deduped)
+                            } else {
+                                let gs = beams::group_beamable_by_time_signature(
+                                    &deduped,
+                                    staff_data.time_numerator,
+                                    staff_data.time_denominator,
+                                );
+                                gs.into_iter()
+                                    .map(|notes| beams::BeamGroup {
+                                        beam_count: 1,
+                                        notes,
+                                    })
+                                    .collect()
+                            };
+                            for group in &groups {
+                                if group.notes.len() < 2 {
+                                    continue;
+                                }
+                                let dir = beams::compute_group_stem_direction(
+                                    &group.notes,
+                                    staff_middle_y,
+                                );
+                                let is_down = dir == stems::StemDirection::Down;
+                                for note in &group.notes {
+                                    map.insert(note.tick, is_down);
+                                }
+                            }
+                        }
+                        map
+                    };
+
                     for (_tick, group) in &tick_groups {
                         let clef = staff_data.get_clef_at_tick(*_tick);
                         // Compute y positions for all notes in this chord/tick
@@ -757,9 +831,11 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                         note_ys.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
                         // Determine stem direction for the chord/note
-                        // Multi-voice override takes priority; otherwise use standard rule
+                        // Priority: multi-voice override > beam group direction > per-chord rule
                         let stem_down = if let Some(forced) = forced_stem_down_dots {
                             forced
+                        } else if let Some(&beamed_down) = beam_tick_stem_down.get(_tick) {
+                            beamed_down
                         } else {
                             let most_extreme_y = note_ys
                                 .iter()
