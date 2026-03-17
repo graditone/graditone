@@ -744,7 +744,8 @@ pub fn position_note_accidentals(
     let mut accidental_glyphs = Vec::new();
 
     // Track accidentals stated so far in the current measure
-    // Maps pitch_class -> last stated alteration in this measure
+    // Maps full MIDI pitch -> last stated alteration in this measure
+    // (accidentals carry within the same octave only, so we key on pitch, not pitch_class)
     let mut measure_accidental_state: HashMap<u8, i8> = HashMap::new();
     let mut current_measure: u32 = u32::MAX; // Force reset on first note
 
@@ -836,14 +837,15 @@ pub fn position_note_accidentals(
         }
 
         // Check measure-scoped state: skip if same accidental already stated for this pitch
-        if let Some(&prev) = measure_accidental_state.get(&pitch_class) {
+        // Use full MIDI pitch (not pitch_class) so accidentals carry per-octave only
+        if let Some(&prev) = measure_accidental_state.get(&pitch) {
             if prev == accidental_type {
                 continue; // Already stated this accidental in this measure
             }
         }
 
-        // Record this accidental in the measure state
-        measure_accidental_state.insert(pitch_class, accidental_type);
+        // Record this accidental in the measure state (keyed by full MIDI pitch)
+        measure_accidental_state.insert(pitch, accidental_type);
 
         // Choose SMuFL codepoint
         let (codepoint, glyph_name) = match accidental_type {
