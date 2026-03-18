@@ -72,6 +72,7 @@ All 6 preloaded scores share a consistent visual style: uniform spacing, note si
 - **FR-007**: Each approved score layout MUST remain stable - subsequent fixes to other scores MUST NOT regress approved ones.
 - **FR-008**: Layout fixes MUST address both geometry/spacing defects (originating in the layout engine) and visual style defects (originating in the rendering layer). Each defect MUST be attributed to the layer responsible.
 - **FR-009**: Musician feedback MUST be delivered as a side-by-side screenshot showing the Musescore region alongside the corresponding Graditone region, accompanied by written comments identifying each discrepancy. This artifact MUST be stored with the score's review materials.
+- **FR-010**: Staccato articulation MUST affect both playback audio duration (notes shortened to 50% of written duration) and practice mode hold requirement (`requiredHoldMs` reduced proportionally), so musical articulation is reflected consistently across all interaction modes.
 
 ### Key Entities
 
@@ -154,6 +155,7 @@ and accepted as out-of-scope for this feature. They are tracked here per FR-006.
 | `consistent_stem_lengths_across_scores` | `backend/tests/cross_score_consistency_test.rs` | Stem lengths ≥ 50 units in all 6 |
 | `consistent_barline_widths_across_scores` | `backend/tests/cross_score_consistency_test.rs` | Barline widths 1.5/4.0 in all 6 |
 | `bounding_boxes_contain_all_glyphs_across_scores` | `backend/tests/cross_score_consistency_test.rs` | No gleems outside bbox (beam-cut, all 6 scores) |
+| `propagates staccato flag from the tie-start note` | `frontend/tests/unit/TieResolver.test.ts` | Staccato flag survives tie resolution (T098) |
 
 ## Constraints & Tradeoffs
 

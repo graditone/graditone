@@ -90,6 +90,57 @@ fn tick_to_measure_index(tick: u32, pickup_ticks: u32, ticks_per_measure: u32) -
     }
 }
 
+/// Measure start tick using actual boundaries if available, formula fallback.
+fn actual_start(
+    measure_index: usize,
+    measure_end_ticks: &[u32],
+    pickup_ticks: u32,
+    ticks_per_measure: u32,
+) -> u32 {
+    if !measure_end_ticks.is_empty()
+        && measure_index > 0
+        && measure_index <= measure_end_ticks.len()
+    {
+        measure_end_ticks[measure_index - 1]
+    } else if measure_index == 0 {
+        0
+    } else {
+        measure_start_tick(measure_index, pickup_ticks, ticks_per_measure)
+    }
+}
+
+/// Measure end tick using actual boundaries if available, formula fallback.
+fn actual_end(
+    measure_index: usize,
+    measure_end_ticks: &[u32],
+    pickup_ticks: u32,
+    ticks_per_measure: u32,
+) -> u32 {
+    if measure_index < measure_end_ticks.len() {
+        measure_end_ticks[measure_index]
+    } else {
+        measure_end_tick(measure_index, pickup_ticks, ticks_per_measure)
+    }
+}
+
+/// Map tick to measure index using actual boundaries, with formula fallback.
+fn actual_tick_to_measure(
+    tick: u32,
+    measure_end_ticks: &[u32],
+    pickup_ticks: u32,
+    ticks_per_measure: u32,
+) -> usize {
+    if !measure_end_ticks.is_empty() {
+        // Binary search: find the first measure whose end_tick > tick
+        match measure_end_ticks.binary_search(&(tick + 1)) {
+            Ok(i) => i,
+            Err(i) => i.min(measure_end_ticks.len().saturating_sub(1)),
+        }
+    } else {
+        tick_to_measure_index(tick, pickup_ticks, ticks_per_measure)
+    }
+}
+
 /// Compute layout from a CompiledScore
 ///
 /// This is the main entry point for the layout engine. Returns a `GlobalLayout`
@@ -153,8 +204,23 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
     // Read pickup_ticks for anacrusis/pickup measure support
     let pickup_ticks = score["pickup_ticks"].as_u64().unwrap_or(0) as u32;
 
+    // Read actual measure end ticks (for shortened measures like first endings)
+    let measure_end_ticks_vec: Vec<u32> = score["measure_end_ticks"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_u64().map(|t| t as u32))
+                .collect()
+        })
+        .unwrap_or_default();
+
     // Extract measures from score using actual time signature
-    let measures = extract_measures(score, ticks_per_measure, pickup_ticks);
+    let measures = extract_measures(
+        score,
+        ticks_per_measure,
+        pickup_ticks,
+        &measure_end_ticks_vec,
+    );
 
     // Extract repeat barline flags indexed by measure position (Feature 041)
     let mut start_repeat_set: std::collections::HashSet<u32> = std::collections::HashSet::new();
@@ -213,8 +279,8 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
         .map(|(i, (note_durations, rest_durations))| {
             let width =
                 spacer::compute_measure_width(note_durations, rest_durations, &spacing_config);
-            let start = measure_start_tick(i, pickup_ticks, ticks_per_measure);
-            let end = measure_end_tick(i, pickup_ticks, ticks_per_measure);
+            let start = actual_start(i, &measure_end_ticks_vec, pickup_ticks, ticks_per_measure);
+            let end = actual_end(i, &measure_end_ticks_vec, pickup_ticks, ticks_per_measure);
             breaker::MeasureInfo {
                 width,
                 start_tick: start,
@@ -493,6 +559,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     unified_left_margin,
                     ticks_per_measure,
                     &measure_x_bounds,
+                    pickup_ticks,
                 );
 
                 // Separate pseudo-glyphs (stems U+0000, beams U+0001) from text glyphs
@@ -1562,8 +1629,9 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
 
         // T010: Compute measure number for this system
         // Derive measure number from the system's start tick using actual ticks per measure
-        let measure_num = tick_to_measure_index(
+        let measure_num = actual_tick_to_measure(
             system.tick_range.start_tick,
+            &measure_end_ticks_vec,
             pickup_ticks,
             ticks_per_measure,
         ) as u32
@@ -1579,13 +1647,15 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
         // Compute volta bracket layouts for this system (Feature 047)
         for vbd in &volta_bracket_data {
             // Get the tick range for the bracket's measures
-            let bracket_start_tick = measure_start_tick(
+            let bracket_start_tick = actual_start(
                 vbd.start_measure_index as usize,
+                &measure_end_ticks_vec,
                 pickup_ticks,
                 ticks_per_measure,
             );
-            let bracket_end_tick = measure_end_tick(
+            let bracket_end_tick = actual_end(
                 vbd.end_measure_index as usize,
+                &measure_end_ticks_vec,
                 pickup_ticks,
                 ticks_per_measure,
             );
@@ -1696,6 +1766,7 @@ fn extract_measures(
     score: &serde_json::Value,
     ticks_per_measure: u32,
     pickup_ticks: u32,
+    measure_end_ticks: &[u32],
 ) -> Vec<(Vec<u32>, Vec<u32>)> {
     let mut note_measures: Vec<Vec<u32>> = Vec::new();
     let mut rest_measures: Vec<Vec<u32>> = Vec::new();
@@ -1745,8 +1816,9 @@ fn extract_measures(
                                         as u32;
 
                                     // Determine which measure this note belongs to
-                                    let measure_index = tick_to_measure_index(
+                                    let measure_index = actual_tick_to_measure(
                                         start_tick,
+                                        measure_end_ticks,
                                         pickup_ticks,
                                         ticks_per_measure,
                                     );
@@ -1773,8 +1845,9 @@ fn extract_measures(
                                     let duration =
                                         rest["duration_ticks"].as_u64().unwrap_or(960) as u32;
 
-                                    let measure_index = tick_to_measure_index(
+                                    let measure_index = actual_tick_to_measure(
                                         start_tick,
+                                        measure_end_ticks,
                                         pickup_ticks,
                                         ticks_per_measure,
                                     );
@@ -2323,6 +2396,7 @@ fn position_glyphs_for_staff(
     left_margin: f32,
     ticks_per_measure: u32,
     measure_x_bounds: &HashMap<u32, (f32, f32)>,
+    pickup_ticks: u32,
 ) -> Vec<Glyph> {
     let mut all_glyphs = Vec::new();
     let num_voices = staff_data.voices.len();
@@ -2714,6 +2788,7 @@ fn position_glyphs_for_staff(
             staff_data.key_sharps,
             ticks_per_measure,
             &staff_data.key_signature_events,
+            pickup_ticks,
         );
 
         all_glyphs.extend(accidental_glyphs);
@@ -2985,6 +3060,7 @@ fn position_glyphs_for_staff(
             instrument_id,
             staff_index,
             measure_x_bounds,
+            pickup_ticks,
         );
         all_glyphs.extend(rest_glyphs);
     }

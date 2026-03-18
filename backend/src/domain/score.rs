@@ -25,6 +25,11 @@ pub struct Score {
     /// Duration of pickup/anacrusis measure in ticks (0 = no pickup)
     #[serde(default)]
     pub pickup_ticks: u32,
+    /// Actual cumulative tick at the end of each measure, computed from content.
+    /// Used for shortened measures (e.g. first endings with pickup).
+    /// Empty = fall back to formula-based calculation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub measure_end_ticks: Vec<u32>,
 }
 
 impl Score {
@@ -37,6 +42,7 @@ impl Score {
             repeat_barlines: Vec::new(),
             volta_brackets: Vec::new(),
             pickup_ticks: 0,
+            measure_end_ticks: Vec::new(),
         };
 
         // Add default tempo (120 BPM) at tick 0

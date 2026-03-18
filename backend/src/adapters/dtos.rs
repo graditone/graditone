@@ -98,6 +98,10 @@ pub struct ScoreDto {
     /// Duration of pickup/anacrusis measure in ticks (0 = no pickup)
     #[serde(default)]
     pub pickup_ticks: u32,
+    /// Actual cumulative tick at the end of each measure, computed from content.
+    /// Empty = fall back to formula-based calculation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub measure_end_ticks: Vec<u32>,
 }
 
 impl From<&Score> for ScoreDto {
@@ -110,6 +114,7 @@ impl From<&Score> for ScoreDto {
             repeat_barlines: score.repeat_barlines.clone(),
             volta_brackets: score.volta_brackets.clone(),
             pickup_ticks: score.pickup_ticks,
+            measure_end_ticks: score.measure_end_ticks.clone(),
         }
     }
 }

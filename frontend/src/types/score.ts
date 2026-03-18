@@ -146,6 +146,9 @@ export interface Score {
 
   /** Duration of pickup/anacrusis measure in ticks (0 = no pickup) */
   pickup_ticks?: number;
+
+  /** Actual cumulative tick at end of each measure, for shortened measures */
+  measure_end_ticks?: number[];
 }
 
 /** Type of repeat barline (Feature 041) */

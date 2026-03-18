@@ -60,6 +60,7 @@ interface ConvertedScore {
   repeat_barlines: unknown[];
   volta_brackets: unknown[];
   pickup_ticks: number;
+  measure_end_ticks?: number[];
 }
 
 interface LayoutViewProps {
@@ -225,6 +226,9 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
     repeat_barlines: score.repeat_barlines ?? [],
     volta_brackets: score.volta_brackets ?? [],
     pickup_ticks: score.pickup_ticks ?? 0,
+    ...(score.measure_end_ticks && score.measure_end_ticks.length > 0
+      ? { measure_end_ticks: score.measure_end_ticks }
+      : {}),
   };
 }
 

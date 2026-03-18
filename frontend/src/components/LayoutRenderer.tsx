@@ -1253,7 +1253,14 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
     // Use 'middle' to center horizontally on X coordinate
     // Use 'middle' baseline to center vertically on Y coordinate (staff line position)
     text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('dominant-baseline', 'middle');
+
+    // Rest glyphs (U+E4E3–U+E4EB) have asymmetric bounding boxes: whole-rest
+    // hangs below baseline, half-rest sits above baseline.  dominant-baseline:middle
+    // centres the em-box and breaks this — use 'auto' (alphabetic) so the font's
+    // designed origin is placed directly at Y.
+    const cp = codepoint.codePointAt(0) ?? 0;
+    const isRest = cp >= 0xE4E3 && cp <= 0xE4EB;
+    text.setAttribute('dominant-baseline', isRest ? 'auto' : 'middle');
     
     // Set SMuFL codepoint as text content (Task T020)
     // Handle invalid codepoints (Task T023)

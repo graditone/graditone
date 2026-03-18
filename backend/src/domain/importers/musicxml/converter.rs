@@ -59,6 +59,39 @@ fn measure_end_tick(measure_index: usize, pickup_ticks: u32, ticks_per_measure: 
 /// Used as the return type of `collect_notes` / `collect_notes_for_staff`.
 type NotesByVoice = (HashMap<usize, Vec<Note>>, Vec<RestEvent>);
 
+/// Measure start tick using actual boundaries if available, formula fallback otherwise.
+fn actual_measure_start(
+    measure_index: usize,
+    measure_end_ticks: &[u32],
+    pickup_ticks: u32,
+    ticks_per_measure: u32,
+) -> u32 {
+    if !measure_end_ticks.is_empty()
+        && measure_index > 0
+        && measure_index <= measure_end_ticks.len()
+    {
+        measure_end_ticks[measure_index - 1]
+    } else if measure_index == 0 {
+        0
+    } else {
+        measure_start_tick(measure_index, pickup_ticks, ticks_per_measure)
+    }
+}
+
+/// Measure end tick using actual boundaries if available, formula fallback otherwise.
+fn actual_measure_end(
+    measure_index: usize,
+    measure_end_ticks: &[u32],
+    pickup_ticks: u32,
+    ticks_per_measure: u32,
+) -> u32 {
+    if measure_index < measure_end_ticks.len() {
+        measure_end_ticks[measure_index]
+    } else {
+        measure_end_tick(measure_index, pickup_ticks, ticks_per_measure)
+    }
+}
+
 /// Voice distributor for resolving overlapping notes by splitting into multiple voices
 ///
 /// Uses deterministic algorithm: sort notes by (start_tick, pitch), then assign
@@ -274,11 +307,19 @@ impl MusicXMLConverter {
         // Detect pickup/anacrusis measure: if first measure's duration < ticks_per_measure
         let pickup_ticks = Self::detect_pickup_ticks(&doc.parts, ticks_per_measure);
 
+        // Compute actual measure boundaries from content (handles shortened measures)
+        let measure_end_ticks = Self::compute_measure_end_ticks(&doc.parts);
+
         let repeat_barlines = doc
             .parts
             .first()
             .map(|first_part| {
-                Self::collect_repeat_barlines(&first_part.measures, ticks_per_measure, pickup_ticks)
+                Self::collect_repeat_barlines(
+                    &first_part.measures,
+                    ticks_per_measure,
+                    pickup_ticks,
+                    &measure_end_ticks,
+                )
             })
             .unwrap_or_default();
 
@@ -287,7 +328,12 @@ impl MusicXMLConverter {
             .parts
             .first()
             .map(|first_part| {
-                Self::collect_volta_brackets(&first_part.measures, ticks_per_measure, pickup_ticks)
+                Self::collect_volta_brackets(
+                    &first_part.measures,
+                    ticks_per_measure,
+                    pickup_ticks,
+                    &measure_end_ticks,
+                )
             })
             .unwrap_or_default();
 
@@ -302,6 +348,7 @@ impl MusicXMLConverter {
         score.volta_brackets = volta_brackets;
 
         score.pickup_ticks = pickup_ticks;
+        score.measure_end_ticks = measure_end_ticks;
 
         Ok(score)
     }
@@ -325,7 +372,8 @@ impl MusicXMLConverter {
         for element in &first_measure.elements {
             match element {
                 MeasureElement::Note(note_data) => {
-                    if timing.advance_by_duration(note_data.duration).is_ok() {
+                    if !note_data.is_chord && timing.advance_by_duration(note_data.duration).is_ok()
+                    {
                         max_tick = max_tick.max(timing.current_tick);
                     }
                 }
@@ -359,19 +407,85 @@ impl MusicXMLConverter {
         }
     }
 
+    /// Computes the actual cumulative end tick of each measure from note content.
+    ///
+    /// Walks all measures in the first part, tracking the furthest tick position
+    /// reached in each measure. This handles shortened measures (e.g. first endings
+    /// that are shorter than the time signature because the pickup borrows time).
+    fn compute_measure_end_ticks(parts: &[PartData]) -> Vec<u32> {
+        let first_part = match parts.first() {
+            Some(p) => p,
+            None => return Vec::new(),
+        };
+
+        let mut result = Vec::with_capacity(first_part.measures.len());
+        let mut timing = TimingContext::new();
+
+        for measure in &first_part.measures {
+            if let Some(attrs) = &measure.attributes {
+                if let Some(divisions) = attrs.divisions {
+                    timing.set_divisions(divisions);
+                }
+            }
+
+            let mut max_tick = timing.current_tick;
+            for element in &measure.elements {
+                match element {
+                    MeasureElement::Note(note_data) => {
+                        // Chord notes share the previous note's tick — don't advance
+                        if !note_data.is_chord
+                            && timing.advance_by_duration(note_data.duration).is_ok()
+                        {
+                            max_tick = max_tick.max(timing.current_tick);
+                        }
+                    }
+                    MeasureElement::Rest(rest_data) => {
+                        if timing.advance_by_duration(rest_data.duration).is_ok() {
+                            max_tick = max_tick.max(timing.current_tick);
+                        }
+                    }
+                    MeasureElement::Backup(duration) => {
+                        if let Ok(ticks) =
+                            Fraction::from_musicxml(*duration, timing.divisions).to_ticks()
+                        {
+                            let ticks = ticks as u32;
+                            if timing.current_tick >= ticks {
+                                timing.current_tick -= ticks;
+                            }
+                        }
+                    }
+                    MeasureElement::Forward(duration) => {
+                        let _ = timing.advance_by_duration(*duration);
+                        max_tick = max_tick.max(timing.current_tick);
+                    }
+                    MeasureElement::Attributes(_) => {}
+                }
+            }
+
+            // Advance to the furthest position for the next measure
+            timing.current_tick = max_tick;
+            result.push(max_tick);
+        }
+
+        result
+    }
+
     /// Collects repeat barlines from a slice of MeasureData.
     ///
     /// Each measure with `start_repeat` or `end_repeat` produces a `RepeatBarline` entry.
-    /// Tick positions use the provided ticks_per_measure derived from the time signature.
+    /// Uses actual measure boundaries when available, falls back to formula-based.
     fn collect_repeat_barlines(
         measures: &[MeasureData],
         ticks_per_measure: u32,
         pickup_ticks: u32,
+        measure_end_ticks: &[u32],
     ) -> Vec<RepeatBarline> {
         let mut result = Vec::new();
         for (i, measure) in measures.iter().enumerate() {
-            let start_tick = measure_start_tick(i, pickup_ticks, ticks_per_measure);
-            let end_tick = measure_end_tick(i, pickup_ticks, ticks_per_measure);
+            let start_tick =
+                actual_measure_start(i, measure_end_ticks, pickup_ticks, ticks_per_measure);
+            let end_tick =
+                actual_measure_end(i, measure_end_ticks, pickup_ticks, ticks_per_measure);
             match (measure.start_repeat, measure.end_repeat) {
                 (true, true) => result.push(RepeatBarline {
                     measure_index: i as u32,
@@ -405,6 +519,7 @@ impl MusicXMLConverter {
         measures: &[MeasureData],
         ticks_per_measure: u32,
         pickup_ticks: u32,
+        measure_end_ticks: &[u32],
     ) -> Vec<VoltaBracket> {
         use std::collections::HashMap;
 
@@ -413,8 +528,10 @@ impl MusicXMLConverter {
         let mut open: HashMap<u8, (u32, u32)> = HashMap::new();
 
         for (i, measure) in measures.iter().enumerate() {
-            let start_tick = measure_start_tick(i, pickup_ticks, ticks_per_measure);
-            let end_tick = measure_end_tick(i, pickup_ticks, ticks_per_measure);
+            let start_tick =
+                actual_measure_start(i, measure_end_ticks, pickup_ticks, ticks_per_measure);
+            let end_tick =
+                actual_measure_end(i, measure_end_ticks, pickup_ticks, ticks_per_measure);
 
             for ending in &measure.endings {
                 match ending.end_type {

@@ -675,6 +675,7 @@ pub fn position_note_accidentals(
     key_sharps: i8,
     ticks_per_measure: u32,
     key_signature_events: &[(u32, i8)],
+    pickup_ticks: u32,
 ) -> Vec<Glyph> {
     use std::collections::HashMap;
 
@@ -747,6 +748,10 @@ pub fn position_note_accidentals(
     // Maps full MIDI pitch -> last stated alteration in this measure
     // (accidentals carry within the same octave only, so we key on pitch, not pitch_class)
     let mut measure_accidental_state: HashMap<u8, i8> = HashMap::new();
+    // Track the last stated alteration per diatonic pitch (base MIDI of the natural note).
+    // This enables courtesy/cancellation accidentals: after D#5 in a measure, D♮5 needs
+    // an explicit natural sign even though D natural matches the key signature.
+    let mut diatonic_accidental_state: HashMap<u8, i8> = HashMap::new();
     let mut current_measure: u32 = u32::MAX; // Force reset on first note
 
     // Position accidental to the left of notehead.
@@ -762,14 +767,28 @@ pub fn position_note_accidentals(
         let pitch_class = pitch % 12;
 
         // Check for measure boundary (reset accidental state)
-        let measure = start_tick / ticks_per_measure;
+        // Use pickup-aware measure index so pickup bars get their own measure
+        let measure = if pickup_ticks > 0 {
+            if start_tick < pickup_ticks {
+                0
+            } else {
+                (start_tick - pickup_ticks) / ticks_per_measure + 1
+            }
+        } else {
+            start_tick / ticks_per_measure
+        };
         if measure != current_measure {
             measure_accidental_state.clear();
+            diatonic_accidental_state.clear();
             current_measure = measure;
 
             // Check if key signature changed at this measure's tick
             if !key_signature_events.is_empty() {
-                let measure_tick = measure * ticks_per_measure;
+                let measure_tick = if pickup_ticks > 0 && measure > 0 {
+                    pickup_ticks + (measure - 1) * ticks_per_measure
+                } else {
+                    measure * ticks_per_measure
+                };
                 // Find the last key event at or before this measure's start
                 let mut new_key = key_sharps; // default to initial
                 for &(event_tick, sharps) in key_signature_events {
@@ -815,37 +834,61 @@ pub fn position_note_accidentals(
         // What does the key signature say about this diatonic note?
         let key_says = key_alterations.get(&diatonic_pc).copied().unwrap_or(0);
 
+        // Compute the "base MIDI" pitch — the MIDI pitch of the natural version of this note.
+        // E.g., D#5 (MIDI 75) → base = 6*12+2 = 74 (D5 natural).
+        let base_midi = (pitch / 12) * 12 + diatonic_pc;
+
         // A note needs an accidental if:
         // 1. It has an alteration not covered by the key signature, OR
-        // 2. It is natural but the key signature would alter it (needs a natural sign)
+        // 2. It matches the key signature BUT a different chromatic variant of the
+        //    same letter name was stated earlier in this measure (courtesy/cancellation).
 
         let needs_accidental;
         let accidental_type: i8; // +1=sharp, -1=flat, 0=natural
 
-        if note_alteration == key_says {
-            // Note matches what the key signature prescribes → no accidental
-            needs_accidental = false;
-            accidental_type = 0;
-        } else {
+        if note_alteration != key_says {
             // Note differs from key signature → show accidental
             needs_accidental = true;
             accidental_type = note_alteration;
+        } else if let Some(&prev_alt) = diatonic_accidental_state.get(&base_midi) {
+            if prev_alt != note_alteration {
+                // A different alteration of this letter name appeared earlier in the
+                // measure (e.g., D# before D♮) → courtesy/cancellation accidental
+                needs_accidental = true;
+                accidental_type = note_alteration;
+            } else {
+                needs_accidental = false;
+                accidental_type = 0;
+            }
+        } else {
+            // Note matches key signature and no prior chromatic variant → no accidental
+            needs_accidental = false;
+            accidental_type = 0;
         }
 
         if !needs_accidental {
             continue;
         }
 
-        // Check measure-scoped state: skip if same accidental already stated for this pitch
-        // Use full MIDI pitch (not pitch_class) so accidentals carry per-octave only
+        // Check measure-scoped state: skip if same accidental already stated for this pitch,
+        // UNLESS the diatonic state changed since then (an intervening note with a different
+        // alteration of the same letter requires re-affirmation).
         if let Some(&prev) = measure_accidental_state.get(&pitch) {
             if prev == accidental_type {
-                continue; // Already stated this accidental in this measure
+                if let Some(&cur_diatonic) = diatonic_accidental_state.get(&base_midi) {
+                    if cur_diatonic == note_alteration {
+                        continue; // Same accidental, diatonic state unchanged → skip
+                    }
+                    // Diatonic state changed by intervening note → re-show
+                } else {
+                    continue; // Already stated this accidental in this measure
+                }
             }
         }
 
-        // Record this accidental in the measure state (keyed by full MIDI pitch)
+        // Record this accidental in both state maps
         measure_accidental_state.insert(pitch, accidental_type);
+        diatonic_accidental_state.insert(base_midi, note_alteration);
 
         // Choose SMuFL codepoint
         let (codepoint, glyph_name) = match accidental_type {
@@ -1077,6 +1120,7 @@ pub(super) fn position_rests_for_staff(
     instrument_id: &str,
     staff_index: usize,
     measure_x_bounds: &std::collections::HashMap<u32, (f32, f32)>,
+    pickup_ticks: u32,
 ) -> Vec<Glyph> {
     let ticks_per_measure = (time_numerator as u32) * (3840 / (time_denominator as u32));
 
@@ -1088,17 +1132,45 @@ pub(super) fn position_rests_for_staff(
     let mut glyphs = Vec::with_capacity(rests_in_range.len());
 
     for (event_index, rest) in rests_in_range.iter().enumerate() {
-        let codepoint = rest_glyph_codepoint(rest.note_type.as_deref(), rest.duration_ticks);
-        let y = rest_y(
-            rest.duration_ticks,
-            rest.voice,
-            multi_voice,
-            units_per_space,
-        ) + staff_vertical_offset;
+        let is_full = is_full_measure_rest(rest.duration_ticks, time_numerator, time_denominator);
+        // Full-measure rests always use the whole-rest glyph (standard notation convention)
+        let codepoint = if is_full {
+            '\u{E4E3}'
+        } else {
+            rest_glyph_codepoint(rest.note_type.as_deref(), rest.duration_ticks)
+        };
+        // Full-measure rests hang from the 2nd staff line regardless of actual duration.
+        // The frontend renders rest glyphs with dominant-baseline:auto so the font's
+        // designed origin is used directly — whole-rest (E4E3) hangs from Y, half-rest
+        // (E4E4) sits on Y.  Y = 1.0 * ups places the origin on the 2nd staff line.
+        let y = if is_full && !multi_voice {
+            1.0 * units_per_space + staff_vertical_offset
+        } else {
+            rest_y(
+                rest.duration_ticks,
+                rest.voice,
+                multi_voice,
+                units_per_space,
+            ) + staff_vertical_offset
+        };
 
         let x = if is_full_measure_rest(rest.duration_ticks, time_numerator, time_denominator) {
-            let measure_start = (rest.start_tick / ticks_per_measure) * ticks_per_measure;
-            let measure_end = measure_start + ticks_per_measure;
+            // Compute pickup-aware measure boundaries
+            let measure_start = if pickup_ticks > 0 {
+                if rest.start_tick < pickup_ticks {
+                    0
+                } else {
+                    pickup_ticks
+                        + ((rest.start_tick - pickup_ticks) / ticks_per_measure) * ticks_per_measure
+                }
+            } else {
+                (rest.start_tick / ticks_per_measure) * ticks_per_measure
+            };
+            let measure_end = if pickup_ticks > 0 && measure_start == 0 {
+                pickup_ticks
+            } else {
+                measure_start + ticks_per_measure
+            };
 
             let xs: Vec<f32> = note_positions
                 .iter()
