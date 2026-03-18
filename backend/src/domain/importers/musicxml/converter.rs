@@ -372,10 +372,9 @@ impl MusicXMLConverter {
         for element in &first_measure.elements {
             match element {
                 MeasureElement::Note(note_data) => {
-                    if !note_data.is_chord {
-                        if timing.advance_by_duration(note_data.duration).is_ok() {
-                            max_tick = max_tick.max(timing.current_tick);
-                        }
+                    if !note_data.is_chord && timing.advance_by_duration(note_data.duration).is_ok()
+                    {
+                        max_tick = max_tick.max(timing.current_tick);
                     }
                 }
                 MeasureElement::Rest(rest_data) => {
@@ -434,10 +433,10 @@ impl MusicXMLConverter {
                 match element {
                     MeasureElement::Note(note_data) => {
                         // Chord notes share the previous note's tick — don't advance
-                        if !note_data.is_chord {
-                            if timing.advance_by_duration(note_data.duration).is_ok() {
-                                max_tick = max_tick.max(timing.current_tick);
-                            }
+                        if !note_data.is_chord
+                            && timing.advance_by_duration(note_data.duration).is_ok()
+                        {
+                            max_tick = max_tick.max(timing.current_tick);
                         }
                     }
                     MeasureElement::Rest(rest_data) => {

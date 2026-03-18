@@ -772,7 +772,7 @@ pub fn position_note_accidentals(
             if start_tick < pickup_ticks {
                 0
             } else {
-                ((start_tick - pickup_ticks) / ticks_per_measure) as u32 + 1
+                (start_tick - pickup_ticks) / ticks_per_measure + 1
             }
         } else {
             start_tick / ticks_per_measure
