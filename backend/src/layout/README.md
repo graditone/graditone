@@ -13,20 +13,56 @@ The layout engine transforms semantic musical data (notes, rests, clefs, etc.) i
 
 ## Architecture Diagram
 
-```
-Score Data (JSON)
-       ↓
-  extract_measures()
-       ↓
-  spacer::compute_measure_width()  ← Time-proportional spacing
-       ↓
-  breaker::break_into_systems()    ← System/page breaking
-       ↓
-  positioner::position_glyphs()    ← Absolute positioning
-       ↓
-  batcher::batch_glyphs()          ← Render optimization
-       ↓
-  GlobalLayout (JSON output)
+```mermaid
+flowchart TD
+    WASM["wasm.rs<br/>WebAssembly entry"]
+    MOD["mod.rs<br/>compute_layout orchestrator"]
+    EXT["extraction.rs<br/>JSON → typed data"]
+    SPC["spacer.rs<br/>time-proportional spacing"]
+    BRK["breaker.rs<br/>system breaking"]
+    POS["positioner.rs<br/>glyph positioning"]
+    NL["note_layout.rs<br/>note positions & glyphs"]
+    STR["structural.rs<br/>clefs, key/time sigs"]
+    BAR["barlines.rs<br/>barline rendering"]
+    SG["staff_groups.rs<br/>multi-staff layout"]
+    ASM["assembly.rs<br/>staff lines & assembly"]
+    ANN["annotations.rs<br/>ties, slurs, dots, ledgers"]
+    BAT["batcher.rs<br/>glyph batching"]
+    BMS["beams.rs & stems.rs<br/>beam/stem helpers"]
+    MET["metrics.rs<br/>font metrics"]
+    TYP["types.rs<br/>shared data structures"]
+
+    WASM --> MOD
+    MOD --> EXT
+    MOD --> SPC
+    MOD --> BRK
+    MOD --> POS
+    MOD --> NL
+    MOD --> STR
+    MOD --> BAR
+    MOD --> SG
+    MOD --> ASM
+    MOD --> ANN
+    MOD --> BAT
+
+    NL --> BMS
+    NL --> POS
+    NL --> SPC
+    ANN --> POS
+    ANN --> BMS
+
+    EXT --> TYP
+    NL --> TYP
+    STR --> TYP
+    BAR --> TYP
+    SG --> TYP
+    ASM --> TYP
+    ANN --> TYP
+    POS --> TYP
+    SPC --> TYP
+    BRK --> TYP
+    BAT --> TYP
+    POS --> MET
 ```
 
 ## Module Responsibilities
@@ -34,18 +70,28 @@ Score Data (JSON)
 ### `mod.rs` - Layout Orchestrator
 **Entry Point**: `compute_layout(score, config) -> GlobalLayout`
 
-Coordinates all layout phases and assembles the final `GlobalLayout` structure. Handles:
-- Measure extraction from score data
-- Multi-staff system creation (grand staff, etc.)
-- Staff structural elements (clefs, barlines)
-- Bracket/brace positioning for staff groups
+Thin orchestration layer that delegates to focused sub-modules. Coordinates the full layout pipeline: extraction → spacing → system breaking → note positioning → structural glyphs → barlines → annotations → assembly. All domain logic has been extracted into the modules listed below.
 
-**Key Functions**:
-- `compute_layout()` - Main entry point
-- `create_staff_groups()` - Multi-staff systems (piano, etc.)
-- `create_structural_glyphs()` - Clefs, key/time signatures
-- `create_bar_lines()` - Measure separators
-- `compute_bracket_glyph()` - Grand staff braces
+### `extraction.rs` - Data Extraction
+Converts raw JSON score data into typed internal representations (`InstrumentData`, `StaffData`, `VoiceData`, `NoteEvent`, `RestLayoutEvent`). Contains tick-to-measure conversion helpers and the primary `extract_measures` / `extract_instruments` functions.
+
+### `note_layout.rs` - Note & Glyph Positioning
+Computes unified horizontal positions for notes across all staves (`compute_unified_note_positions`), generates positioned glyphs — noteheads, accidentals, dots, stems, beams, flags — for each staff (`position_glyphs_for_staff`), and calculates vertical note extents (`compute_staff_note_extents`).
+
+### `barlines.rs` - Barline Rendering
+Creates barlines at measure boundaries, generates barline segment geometry (single, double, final, repeat), computes repeat-dot positions, and handles system-end and multi-staff barline joining.
+
+### `structural.rs` - Structural Glyphs
+Positions clef, key-signature, and time-signature glyphs at system starts and handles mid-system clef and key-signature changes.
+
+### `staff_groups.rs` - Multi-Staff Layout
+Manages inter-staff collision detection, vertical spacing adjustments, bracket/brace glyph generation, and staff-group assembly for multi-instrument and grand-staff layouts.
+
+### `assembly.rs` - Staff Lines & System Assembly
+Creates the five staff lines for each staff, renders measure-number annotations and volta brackets, and expands system bounding boxes to accommodate stems, beams, and other overhanging elements.
+
+### `annotations.rs` - Annotation Rendering
+Handles augmentation and staccato dots, tie arcs (same-system and cross-system), slur arcs, and ledger-line generation. Returns a consolidated `AnnotationResult` consumed by the orchestrator.
 
 ### `spacer.rs` - Time-Proportional Spacing
 Computes horizontal spacing for notes based on duration using logarithmic-like scaling.

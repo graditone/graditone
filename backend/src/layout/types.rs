@@ -415,3 +415,27 @@ impl Color {
         a: 255,
     };
 }
+
+/// Configuration for layout computation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayoutConfig {
+    /// Maximum system width in logical units (default: 1600.0)
+    pub max_system_width: f32,
+    /// Scaling factor: logical units per staff space (default: 10.0)
+    pub units_per_space: f32,
+    /// Vertical spacing between systems in logical units (default: 150.0)
+    pub system_spacing: f32,
+    /// System height in logical units (default: 200.0 for grand staff)
+    pub system_height: f32,
+}
+
+impl Default for LayoutConfig {
+    fn default() -> Self {
+        Self {
+            max_system_width: 2400.0, // Wide enough for 3+ measures per system
+            units_per_space: 20.0,    // SMuFL: font_size 80 = 4 spaces, so 1 space = 20 units
+            system_spacing: 100.0,    // Spacing between systems (gap after system_height)
+            system_height: 200.0,     // Base height for a single staff system
+        }
+    }
+}
