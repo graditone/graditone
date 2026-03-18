@@ -202,8 +202,13 @@ pub(crate) fn position_glyphs_for_staff(
         let has_beam_info = beamable_for_analysis
             .iter()
             .any(|n| !n.beam_types.is_empty());
+        let measure_starts: Vec<u32> = {
+            let mut starts: Vec<u32> = measure_x_bounds.keys().copied().collect();
+            starts.sort();
+            starts
+        };
         let beam_groups = if has_beam_info {
-            beams::build_beam_groups_from_musicxml(&beamable_for_analysis)
+            beams::build_beam_groups_from_musicxml(&beamable_for_analysis, &measure_starts)
         } else {
             let groups = beams::group_beamable_by_time_signature(
                 &beamable_for_analysis,
@@ -421,6 +426,11 @@ pub(crate) fn position_glyphs_for_staff(
             all_glyphs.push(stem_glyph);
         }
 
+        let measure_starts_sorted: Vec<u32> = {
+            let mut ms: Vec<u32> = measure_x_bounds.keys().copied().collect();
+            ms.sort();
+            ms
+        };
         let accidental_glyphs = positioner::position_note_accidentals(
             &notes_in_range,
             &adjusted_horizontal_offsets,
@@ -434,6 +444,7 @@ pub(crate) fn position_glyphs_for_staff(
             ticks_per_measure,
             &staff_data.key_signature_events,
             pickup_ticks,
+            &measure_starts_sorted,
         );
 
         all_glyphs.extend(accidental_glyphs);

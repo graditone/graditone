@@ -16,7 +16,7 @@ pub(crate) fn render_structural_glyphs(
     staff_data: &StaffData,
     system_tick_range: &TickRange,
     system_index: usize,
-    system_width: f32,
+    _system_width: f32,
     staff_vertical_offset: f32,
     units_per_space: f32,
     note_positions: &HashMap<u32, f32>,
@@ -27,8 +27,15 @@ pub(crate) fn render_structural_glyphs(
     // Determine the active key signature at this system's start tick
     let system_key_sharps = staff_data.get_key_at_tick(system_tick_range.start_tick);
 
-    // Determine the active clef at this system's start tick
-    let system_clef = staff_data.get_clef_at_tick(system_tick_range.start_tick);
+    // Use the clef active just before the system start so the system-start
+    // glyph reflects the "incoming" clef.  A clef change exactly at the
+    // system start tick will be rendered as a mid-system change instead.
+    // For system 0, use get_clef_at_tick since there is no prior context.
+    let system_clef = if system_index == 0 {
+        staff_data.get_clef_at_tick(system_tick_range.start_tick)
+    } else {
+        staff_data.get_clef_before_tick(system_tick_range.start_tick)
+    };
 
     // Position clef at x=60 (left margin with room for brace and glyph extent)
     let clef_glyph =
@@ -87,30 +94,31 @@ pub(crate) fn render_structural_glyphs(
         }
     }
 
-    // Render clef changes within this system (mid-system and
-    // mid-measure).  Also render a courtesy clef at the right
-    // edge when the clef changes at the start of the next system.
+    // Render clef changes within this system.  Events exactly at the
+    // system start tick are included when the system-start clef shows
+    // the incoming (previous) clef — the change must still be rendered.
     if !staff_data.clef_events.is_empty() {
         for (event_tick, event_clef) in &staff_data.clef_events {
-            // Skip the initial clef (tick 0 or system start) — it is
-            // already rendered as the system-start clef glyph.
-            if *event_tick <= system_tick_range.start_tick {
+            // Skip events that precede this system.
+            if *event_tick < system_tick_range.start_tick {
                 continue;
             }
 
-            // Courtesy clef: event falls on or after this system's
-            // end tick → place a small warning clef at the right edge.
+            // On System 0, skip the event at tick 0 — it matches the
+            // system-start clef already rendered above.
+            if system_index == 0 && *event_tick == system_tick_range.start_tick {
+                continue;
+            }
+
+            // Skip if the clef at the system start tick is the same as
+            // the system-start clef (no visible change needed).
+            if *event_tick == system_tick_range.start_tick && event_clef.as_str() == system_clef {
+                continue;
+            }
+
+            // Skip clef events at or beyond this system's end tick.
+            // The next system will render the correct clef at its start.
             if *event_tick >= system_tick_range.end_tick {
-                if *event_tick == system_tick_range.end_tick {
-                    let courtesy_x = system_width - 40.0;
-                    let courtesy_glyph = positioner::position_courtesy_clef(
-                        event_clef,
-                        courtesy_x,
-                        units_per_space,
-                        staff_vertical_offset,
-                    );
-                    structural_glyphs.push(courtesy_glyph);
-                }
                 continue;
             }
 
@@ -123,12 +131,31 @@ pub(crate) fn render_structural_glyphs(
                 .max_by_key(|(tick, _)| *tick);
 
             if let Some((&_m_tick, &(measure_x_start, _measure_x_end))) = enclosing {
-                // Place the courtesy clef near the start of the
-                // measure (for measure-start changes) or just before
-                // the first note at the clef change tick for
-                // mid-measure changes.
+                // Place the clef change just before the first note at
+                // or after the event tick.  Use a small offset (-30)
+                // so the clef sits between the barline and the first
+                // note, not in the preceding measure's visual space.
+                // For events at a measure boundary, use the midpoint
+                // between the measure's start_x and the first note to
+                // ensure the clef falls after the barline.
                 let clef_x = if *event_tick == _m_tick {
-                    measure_x_start + 10.0
+                    // Measure-start clef change: place before the
+                    // first note in this measure.
+                    let first_note_x = note_positions
+                        .iter()
+                        .filter(|(t, _)| **t >= *event_tick && **t < system_tick_range.end_tick)
+                        .min_by_key(|(t, _)| *t)
+                        .map(|(_, &x)| x);
+                    if let Some(nx) = first_note_x {
+                        // Place clef close to the note, AFTER the
+                        // barline. The barline sits roughly at the
+                        // midpoint between the previous measure's
+                        // last note and this note, so -30 keeps us
+                        // after the barline while leaving room.
+                        nx - 30.0
+                    } else {
+                        measure_x_start + 10.0
+                    }
                 } else {
                     // Mid-measure: use the pre-computed note position
                     // at the clef change tick and place the clef just

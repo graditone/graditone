@@ -612,7 +612,28 @@ pub fn compute_group_stem_direction(
 ///
 /// # Returns
 /// Vector of BeamGroups
-pub fn build_beam_groups_from_musicxml(notes: &[BeamableNote]) -> Vec<BeamGroup> {
+/// Determine if two ticks fall in different measures given sorted measure start ticks.
+fn crosses_barline(tick_a: u32, tick_b: u32, measure_starts: &[u32]) -> bool {
+    if measure_starts.is_empty() {
+        return false;
+    }
+    // Find measure index for each tick.  A tick that falls exactly on a
+    // measure start belongs to that new measure.
+    let idx_a = match measure_starts.binary_search(&tick_a) {
+        Ok(i) => i,
+        Err(i) => i.saturating_sub(1),
+    };
+    let idx_b = match measure_starts.binary_search(&tick_b) {
+        Ok(i) => i,
+        Err(i) => i.saturating_sub(1),
+    };
+    idx_a != idx_b
+}
+
+pub fn build_beam_groups_from_musicxml(
+    notes: &[BeamableNote],
+    measure_starts: &[u32],
+) -> Vec<BeamGroup> {
     let mut groups: Vec<BeamGroup> = Vec::new();
     let mut current_group: Vec<BeamableNote> = Vec::new();
     let mut in_group = false;
@@ -654,11 +675,49 @@ pub fn build_beam_groups_from_musicxml(notes: &[BeamableNote]) -> Vec<BeamGroup>
             }
             "Continue" => {
                 if in_group {
-                    current_group.push(note.clone());
+                    // Break beam at barline boundary
+                    let prev_tick = current_group.last().map(|n| n.tick).unwrap_or(0);
+                    if crosses_barline(prev_tick, note.tick, measure_starts) {
+                        if current_group.len() >= 2 {
+                            let beam_count = current_group
+                                .iter()
+                                .map(|n| n.beam_levels)
+                                .max()
+                                .unwrap_or(1)
+                                .max(1);
+                            groups.push(BeamGroup {
+                                notes: current_group.clone(),
+                                beam_count,
+                            });
+                        }
+                        current_group.clear();
+                        current_group.push(note.clone());
+                    } else {
+                        current_group.push(note.clone());
+                    }
                 }
             }
             "End" => {
                 if in_group {
+                    // Break beam at barline boundary
+                    let prev_tick = current_group.last().map(|n| n.tick).unwrap_or(0);
+                    if crosses_barline(prev_tick, note.tick, measure_starts) {
+                        if current_group.len() >= 2 {
+                            let beam_count = current_group
+                                .iter()
+                                .map(|n| n.beam_levels)
+                                .max()
+                                .unwrap_or(1)
+                                .max(1);
+                            groups.push(BeamGroup {
+                                notes: current_group.clone(),
+                                beam_count,
+                            });
+                        }
+                        current_group.clear();
+                        in_group = false;
+                        continue;
+                    }
                     current_group.push(note.clone());
                     if current_group.len() >= 2 {
                         let beam_count = current_group
@@ -1021,7 +1080,7 @@ mod tests {
             },
         ];
 
-        let groups = build_beam_groups_from_musicxml(&notes);
+        let groups = build_beam_groups_from_musicxml(&notes, &[]);
         assert_eq!(groups.len(), 1, "4 eighth notes should form 1 group");
         assert_eq!(groups[0].notes.len(), 4, "Group should have 4 notes");
         assert_eq!(groups[0].beam_count, 1, "Eighth notes have 1 beam level");
@@ -1073,7 +1132,7 @@ mod tests {
             },
         ];
 
-        let groups = build_beam_groups_from_musicxml(&notes);
+        let groups = build_beam_groups_from_musicxml(&notes, &[]);
         assert_eq!(groups.len(), 1, "Should form 1 beam group from 2 eighths");
         assert_eq!(groups[0].notes.len(), 2, "Group should have 2 notes");
     }
@@ -1092,7 +1151,7 @@ mod tests {
             event_index: 0,
         }];
 
-        let groups = build_beam_groups_from_musicxml(&notes);
+        let groups = build_beam_groups_from_musicxml(&notes, &[]);
         assert_eq!(groups.len(), 0, "Single note should not form a beam group");
     }
 
@@ -1142,7 +1201,7 @@ mod tests {
             },
         ];
 
-        let groups = build_beam_groups_from_musicxml(&notes);
+        let groups = build_beam_groups_from_musicxml(&notes, &[]);
         assert_eq!(groups.len(), 2, "Should form 2 separate beam groups");
         assert_eq!(groups[0].notes.len(), 2);
         assert_eq!(groups[1].notes.len(), 2);

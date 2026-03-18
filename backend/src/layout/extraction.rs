@@ -157,6 +157,24 @@ impl StaffData {
         }
         result
     }
+
+    /// Return the clef active strictly *before* `tick` (exclusive).
+    /// Used for system-start clefs so the system shows the "incoming" clef
+    /// rather than a clef change that happens exactly at the system start.
+    pub(crate) fn get_clef_before_tick(&self, tick: u32) -> &str {
+        if self.clef_events.is_empty() {
+            return &self.clef;
+        }
+        let mut result = &self.clef;
+        for (event_tick, clef) in &self.clef_events {
+            if *event_tick < tick {
+                result = clef;
+            } else {
+                break;
+            }
+        }
+        result
+    }
 }
 
 /// Represents a voice with interval events (notes) and rest events

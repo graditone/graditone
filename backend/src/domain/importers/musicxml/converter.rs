@@ -339,8 +339,13 @@ impl MusicXMLConverter {
 
         // Convert each part to an Instrument
         for part_data in doc.parts {
-            let instrument =
-                Self::convert_part(part_data, context, ticks_per_measure, pickup_ticks)?;
+            let instrument = Self::convert_part(
+                part_data,
+                context,
+                ticks_per_measure,
+                pickup_ticks,
+                &measure_end_ticks,
+            )?;
             score.add_instrument(instrument);
         }
 
@@ -568,6 +573,7 @@ impl MusicXMLConverter {
         context: &mut ImportContext,
         ticks_per_measure: u32,
         pickup_ticks: u32,
+        measure_end_ticks: &[u32],
     ) -> Result<Instrument, ImportError> {
         let name = if part_data.name.is_empty() {
             format!("Instrument {}", part_data.id)
@@ -587,12 +593,18 @@ impl MusicXMLConverter {
                 context,
                 ticks_per_measure,
                 pickup_ticks,
+                measure_end_ticks,
             )?;
             instrument.add_staff(staff);
         } else {
             // Multi-staff instrument (US2) - e.g., piano grand staff
-            let staves =
-                Self::convert_multi_staff(&part_data, context, ticks_per_measure, pickup_ticks)?;
+            let staves = Self::convert_multi_staff(
+                &part_data,
+                context,
+                ticks_per_measure,
+                pickup_ticks,
+                measure_end_ticks,
+            )?;
             for staff in staves {
                 instrument.add_staff(staff);
             }
@@ -607,6 +619,7 @@ impl MusicXMLConverter {
         context: &mut ImportContext,
         ticks_per_measure: u32,
         pickup_ticks: u32,
+        measure_end_ticks: &[u32],
     ) -> Result<Vec<Staff>, ImportError> {
         let mut staves = Vec::new();
 
@@ -646,6 +659,7 @@ impl MusicXMLConverter {
                 &part_data.measures,
                 ticks_per_measure,
                 pickup_ticks,
+                measure_end_ticks,
             )?;
 
             // Extract clef changes from subsequent measures (for this staff number)
@@ -655,6 +669,7 @@ impl MusicXMLConverter {
                 ticks_per_measure,
                 pickup_ticks,
                 Some(staff_num),
+                measure_end_ticks,
             )?;
 
             // Convert measures to notes grouped by MusicXML voice number, filtering by staff
@@ -700,6 +715,7 @@ impl MusicXMLConverter {
         context: &mut ImportContext,
         ticks_per_measure: u32,
         pickup_ticks: u32,
+        measure_end_ticks: &[u32],
     ) -> Result<Staff, ImportError> {
         // Create staff with defaults (Treble clef, C major, 1 voice)
         let mut staff = Staff::new();
@@ -733,6 +749,7 @@ impl MusicXMLConverter {
             &part_data.measures,
             ticks_per_measure,
             pickup_ticks,
+            measure_end_ticks,
         )?;
 
         // Extract clef changes from subsequent measures
@@ -742,6 +759,7 @@ impl MusicXMLConverter {
             ticks_per_measure,
             pickup_ticks,
             None,
+            measure_end_ticks,
         )?;
 
         // Convert measures to notes grouped by MusicXML voice number
@@ -787,11 +805,13 @@ impl MusicXMLConverter {
         measures: &[MeasureData],
         ticks_per_measure: u32,
         pickup_ticks: u32,
+        measure_end_ticks: &[u32],
     ) -> Result<(), ImportError> {
         for (i, measure) in measures.iter().enumerate().skip(1) {
             if let Some(attrs) = &measure.attributes {
                 if let Some(key_data) = &attrs.key {
-                    let tick = measure_start_tick(i, pickup_ticks, ticks_per_measure);
+                    let tick =
+                        actual_measure_start(i, measure_end_ticks, pickup_ticks, ticks_per_measure);
                     let key_sig = ElementMapper::map_key(key_data.fifths, Some(&key_data.mode))?;
                     let key_event = KeySignatureEvent::new(Tick::new(tick), key_sig);
                     // Ignore duplicate-tick errors (shouldn't happen, but be safe)
@@ -815,6 +835,7 @@ impl MusicXMLConverter {
         ticks_per_measure: u32,
         pickup_ticks: u32,
         staff_number: Option<usize>,
+        measure_end_ticks: &[u32],
     ) -> Result<(), ImportError> {
         // Track divisions across measures (inherited from previous measures)
         let mut divisions: i32 = measures
@@ -831,7 +852,8 @@ impl MusicXMLConverter {
                 }
             }
 
-            let measure_start = measure_start_tick(i, pickup_ticks, ticks_per_measure);
+            let measure_start =
+                actual_measure_start(i, measure_end_ticks, pickup_ticks, ticks_per_measure);
             // Current timing offset within measure (in 960 PPQ ticks)
             let mut offset: u32 = 0;
 

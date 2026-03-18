@@ -501,6 +501,11 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                 );
 
                 // Render annotation elements (ledger lines, dots, ties, slurs)
+                let measure_starts: Vec<u32> = {
+                    let mut starts: Vec<u32> = measure_x_bounds.keys().copied().collect();
+                    starts.sort();
+                    starts
+                };
                 let ann = annotations::render_annotations(
                     staff_data,
                     &system.tick_range,
@@ -510,6 +515,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     unified_left_margin,
                     config.units_per_space,
                     &note_positions,
+                    &measure_starts,
                 );
 
                 // Create staff with batched glyphs and structural glyphs

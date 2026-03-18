@@ -36,6 +36,7 @@ pub(crate) fn render_annotations(
     unified_left_margin: f32,
     units_per_space: f32,
     note_positions: &HashMap<u32, f32>,
+    measure_starts: &[u32],
 ) -> AnnotationResult {
     let ledger_lines = render_ledger_lines(
         staff_data,
@@ -54,6 +55,7 @@ pub(crate) fn render_annotations(
         staff_middle_y,
         units_per_space,
         note_positions,
+        measure_starts,
     );
 
     let (tie_arcs, slur_arcs) = render_ties_and_slurs(
@@ -129,6 +131,7 @@ fn render_notation_dots(
     staff_middle_y: f32,
     units_per_space: f32,
     note_positions: &HashMap<u32, f32>,
+    measure_starts: &[u32],
 ) -> Vec<types::NotationDot> {
     let mut notation_dots = Vec::new();
     let dot_radius = 0.18 * units_per_space;
@@ -190,7 +193,7 @@ fn render_notation_dots(
                 }
                 let has_beam_info = deduped.iter().any(|n| !n.beam_types.is_empty());
                 let groups = if has_beam_info {
-                    beams::build_beam_groups_from_musicxml(&deduped)
+                    beams::build_beam_groups_from_musicxml(&deduped, measure_starts)
                 } else {
                     let gs = beams::group_beamable_by_time_signature(
                         &deduped,
