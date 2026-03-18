@@ -1129,10 +1129,8 @@ pub(super) fn position_rests_for_staff(
     instrument_id: &str,
     staff_index: usize,
     measure_x_bounds: &std::collections::HashMap<u32, (f32, f32)>,
-    pickup_ticks: u32,
+    _pickup_ticks: u32,
 ) -> Vec<Glyph> {
-    let ticks_per_measure = (time_numerator as u32) * (3840 / (time_denominator as u32));
-
     let rests_in_range: Vec<&super::RestLayoutEvent> = staff_rests
         .iter()
         .filter(|r| r.start_tick >= tick_range_start && r.start_tick < tick_range_end)
@@ -1164,39 +1162,38 @@ pub(super) fn position_rests_for_staff(
         };
 
         let x = if is_full_measure_rest(rest.duration_ticks, time_numerator, time_denominator) {
-            // Compute pickup-aware measure boundaries
-            let measure_start = if pickup_ticks > 0 {
-                if rest.start_tick < pickup_ticks {
-                    0
+            // Find the enclosing measure using actual measure boundaries
+            // from measure_x_bounds (keys are actual measure start ticks).
+            let enclosing = measure_x_bounds
+                .iter()
+                .filter(|(tick, _)| **tick <= rest.start_tick)
+                .max_by_key(|(tick, _)| *tick);
+
+            if let Some((&_m_tick, &(start_x, end_x))) = enclosing {
+                // Check if there are any note positions inside this measure's x-range
+                let next_measure_start = measure_x_bounds
+                    .keys()
+                    .filter(|&&t| t > _m_tick)
+                    .min()
+                    .copied();
+                let m_end_tick = next_measure_start.unwrap_or(tick_range_end);
+
+                let xs: Vec<f32> = note_positions
+                    .iter()
+                    .filter(|&(&t, _)| t >= _m_tick && t < m_end_tick)
+                    .map(|(_, &x)| x)
+                    .collect();
+
+                if xs.is_empty() {
+                    // No notes in this measure — center rest within measure x-bounds
+                    (start_x + end_x) / 2.0 - REST_GLYPH_WIDTH / 2.0
                 } else {
-                    pickup_ticks
-                        + ((rest.start_tick - pickup_ticks) / ticks_per_measure) * ticks_per_measure
+                    let min_x = xs.iter().cloned().fold(f32::MAX, f32::min);
+                    let max_x = xs.iter().cloned().fold(f32::MIN, f32::max) + 30.0;
+                    min_x + (max_x - min_x - REST_GLYPH_WIDTH) / 2.0
                 }
             } else {
-                (rest.start_tick / ticks_per_measure) * ticks_per_measure
-            };
-            let measure_end = if pickup_ticks > 0 && measure_start == 0 {
-                pickup_ticks
-            } else {
-                measure_start + ticks_per_measure
-            };
-
-            let xs: Vec<f32> = note_positions
-                .iter()
-                .filter(|&(&t, _)| t >= measure_start && t < measure_end)
-                .map(|(_, &x)| x)
-                .collect();
-
-            if xs.is_empty() {
-                // No notes in this measure — center rest within measure boundaries
-                measure_x_bounds
-                    .get(&measure_start)
-                    .map(|(start_x, end_x)| (start_x + end_x) / 2.0 - REST_GLYPH_WIDTH / 2.0)
-                    .unwrap_or(left_margin + 90.0)
-            } else {
-                let start_x = xs.iter().cloned().fold(f32::MAX, f32::min);
-                let end_x = xs.iter().cloned().fold(f32::MIN, f32::max) + 30.0;
-                start_x + (end_x - start_x - REST_GLYPH_WIDTH) / 2.0
+                left_margin + 90.0
             }
         } else {
             // Beat-aligned: use note position at or just before the rest's start_tick

@@ -16,7 +16,7 @@ pub(crate) fn render_structural_glyphs(
     staff_data: &StaffData,
     system_tick_range: &TickRange,
     system_index: usize,
-    system_width: f32,
+    _system_width: f32,
     staff_vertical_offset: f32,
     units_per_space: f32,
     note_positions: &HashMap<u32, f32>,
@@ -98,19 +98,9 @@ pub(crate) fn render_structural_glyphs(
                 continue;
             }
 
-            // Courtesy clef: event falls on or after this system's
-            // end tick → place a small warning clef at the right edge.
+            // Skip clef events at or beyond this system's end tick.
+            // The next system will render the correct clef at its start.
             if *event_tick >= system_tick_range.end_tick {
-                if *event_tick == system_tick_range.end_tick {
-                    let courtesy_x = system_width - 40.0;
-                    let courtesy_glyph = positioner::position_courtesy_clef(
-                        event_clef,
-                        courtesy_x,
-                        units_per_space,
-                        staff_vertical_offset,
-                    );
-                    structural_glyphs.push(courtesy_glyph);
-                }
                 continue;
             }
 

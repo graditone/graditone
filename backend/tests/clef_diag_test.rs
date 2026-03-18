@@ -59,3 +59,67 @@ fn check_beam_info_m14_m15() {
         }
     }
 }
+
+#[test]
+fn check_lh_rests_m15_m18() {
+    let score = load_fur_elise();
+    // Measure boundaries
+    eprintln!("pickup_ticks={}", score.pickup_ticks);
+    for i in 14..=18 {
+        if i < score.measure_end_ticks.len() {
+            eprintln!(
+                "measure_end_ticks[{i}] = {} (m{} end / m{} start)",
+                score.measure_end_ticks[i],
+                i + 1,
+                i + 2
+            );
+        }
+    }
+    // LH staff notes and rests
+    let inst = &score.instruments[0];
+    let staff = &inst.staves[1];
+    eprintln!("\n--- LH notes (all voices) tick range 20000-25000 ---");
+    for (vi, voice) in staff.voices.iter().enumerate() {
+        for note in &voice.interval_events {
+            let tick = note.start_tick.value();
+            if tick >= 20000 && tick < 25000 {
+                eprintln!(
+                    "  voice={vi} NOTE tick={tick} pitch={:?} dur={}",
+                    note.pitch, note.duration_ticks
+                );
+            }
+        }
+        for rest in &voice.rest_events {
+            let tick = rest.start_tick.value();
+            if tick >= 20000 && tick < 25000 {
+                eprintln!("  voice={vi} REST tick={tick} dur={}", rest.duration_ticks);
+            }
+        }
+    }
+    // Also show clef events
+    for event in &staff.staff_structural_events {
+        if let musicore_backend::domain::events::staff::StaffStructuralEvent::Clef(ce) = event {
+            let t = ce.tick.value();
+            if t >= 20000 && t <= 25000 {
+                eprintln!("  CLEF tick={t} clef={:?}", ce.clef);
+            }
+        }
+    }
+}
+
+#[test]
+fn check_system_boundaries_m16_m18() {
+    use musicore_backend::layout::{LayoutConfig, compute_layout};
+    let score = load_fur_elise();
+    let score_json = serde_json::to_value(&score).expect("serialize");
+    let config = LayoutConfig::default();
+    let layout = compute_layout(&score_json, &config);
+    for sys in &layout.systems {
+        if sys.tick_range.start_tick <= 23040 && sys.tick_range.end_tick >= 20160 {
+            eprintln!(
+                "System {} tick_range=[{}, {}) measure_number={:?}",
+                sys.index, sys.tick_range.start_tick, sys.tick_range.end_tick, sys.measure_number
+            );
+        }
+    }
+}
