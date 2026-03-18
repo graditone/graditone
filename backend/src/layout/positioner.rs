@@ -676,6 +676,7 @@ pub fn position_note_accidentals(
     ticks_per_measure: u32,
     key_signature_events: &[(u32, i8)],
     pickup_ticks: u32,
+    measure_starts: &[u32],
 ) -> Vec<Glyph> {
     use std::collections::HashMap;
 
@@ -767,8 +768,14 @@ pub fn position_note_accidentals(
         let pitch_class = pitch % 12;
 
         // Check for measure boundary (reset accidental state)
-        // Use pickup-aware measure index so pickup bars get their own measure
-        let measure = if pickup_ticks > 0 {
+        // Use actual measure start ticks (from measure_end_ticks) when available,
+        // falling back to formula for scores without shortened measures.
+        let measure = if !measure_starts.is_empty() {
+            match measure_starts.binary_search(&start_tick) {
+                Ok(idx) => idx as u32,
+                Err(idx) => idx.saturating_sub(1) as u32,
+            }
+        } else if pickup_ticks > 0 {
             if start_tick < pickup_ticks {
                 0
             } else {
@@ -784,7 +791,9 @@ pub fn position_note_accidentals(
 
             // Check if key signature changed at this measure's tick
             if !key_signature_events.is_empty() {
-                let measure_tick = if pickup_ticks > 0 && measure > 0 {
+                let measure_tick = if !measure_starts.is_empty() {
+                    measure_starts.get(measure as usize).copied().unwrap_or(0)
+                } else if pickup_ticks > 0 && measure > 0 {
                     pickup_ticks + (measure - 1) * ticks_per_measure
                 } else {
                     measure * ticks_per_measure

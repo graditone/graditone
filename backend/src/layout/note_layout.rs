@@ -426,6 +426,11 @@ pub(crate) fn position_glyphs_for_staff(
             all_glyphs.push(stem_glyph);
         }
 
+        let measure_starts_sorted: Vec<u32> = {
+            let mut ms: Vec<u32> = measure_x_bounds.keys().copied().collect();
+            ms.sort();
+            ms
+        };
         let accidental_glyphs = positioner::position_note_accidentals(
             &notes_in_range,
             &adjusted_horizontal_offsets,
@@ -439,6 +444,7 @@ pub(crate) fn position_glyphs_for_staff(
             ticks_per_measure,
             &staff_data.key_signature_events,
             pickup_ticks,
+            &measure_starts_sorted,
         );
 
         all_glyphs.extend(accidental_glyphs);
