@@ -13,6 +13,42 @@ use crate::layout::spacer;
 use crate::layout::stems;
 use crate::layout::types::{BoundingBox, Glyph, Point, SourceReference, TickRange};
 
+/// Compute absolute diatonic staff position for a note.
+/// Uses the explicit spelling (step letter + alteration) when available,
+/// otherwise falls back to an approximate mapping from MIDI pitch.
+fn diatonic_staff_pos(pitch: u8, spelling: &Option<(char, i8)>) -> i32 {
+    if let Some((step, alter)) = spelling {
+        let step_pos: i32 = match step {
+            'C' => 0,
+            'D' => 1,
+            'E' => 2,
+            'F' => 3,
+            'G' => 4,
+            'A' => 5,
+            'B' => 6,
+            _ => 0,
+        };
+        let base_pitch = pitch as i32 - *alter as i32;
+        let octave = base_pitch / 12 - 1;
+        octave * 7 + step_pos
+    } else {
+        // Fallback: approximate diatonic position from MIDI pitch class
+        let octave = (pitch / 12) as i32 - 1;
+        let pc = pitch % 12;
+        let step_pos: i32 = match pc {
+            0 => 0,       // C
+            1 | 2 => 1,   // C#/Db → D area
+            3 | 4 => 2,   // D#/Eb → E area
+            5 => 3,       // F
+            6 | 7 => 4,   // F#/Gb → G area
+            8 | 9 => 5,   // G#/Ab → A area
+            10 | 11 => 6, // A#/Bb → B area
+            _ => 0,
+        };
+        octave * 7 + step_pos
+    }
+}
+
 pub(crate) fn compute_unified_note_positions(
     staves: &[&StaffData],
     tick_range: &TickRange,
@@ -50,34 +86,45 @@ pub(crate) fn compute_unified_note_positions(
     tick_durations.sort_by_key(|(tick, _)| *tick);
     tick_durations.dedup_by_key(|(tick, _)| *tick);
 
-    // Detect ticks where a chord contains a second (adjacent notes) that will
-    // need notehead displacement.  When stems point down, the lower note shifts
-    // LEFT by one notehead width, and its accidental extends even further left.
-    // Pre-allocate extra horizontal space at those ticks so nothing collides
-    // with the preceding event.
+    // Detect ticks where a chord contains a second (adjacent staff positions)
+    // that will need notehead displacement.  When stems point down, the lower
+    // note shifts LEFT by one notehead width, and its accidental extends even
+    // further left.  Pre-allocate extra horizontal space at those ticks so
+    // nothing collides with the preceding event.
+    //
+    // We use diatonic (staff) positions rather than chromatic semitones, because
+    // an augmented second like Bb→C# spans 3 semitones but occupies adjacent
+    // staff lines and still causes notehead displacement.
     let mut chord_second_ticks: std::collections::HashSet<u32> = std::collections::HashSet::new();
     for staff_data in staves {
         for voice in &staff_data.voices {
-            let mut tick_pitches: std::collections::HashMap<u32, Vec<u8>> =
-                std::collections::HashMap::new();
+            #[allow(clippy::type_complexity)]
+            let mut tick_notes: std::collections::HashMap<
+                u32,
+                Vec<(u8, Option<(char, i8)>)>,
+            > = std::collections::HashMap::new();
             for note in &voice.notes {
                 if note.start_tick >= tick_range.start_tick && note.start_tick < tick_range.end_tick
                 {
-                    tick_pitches
+                    tick_notes
                         .entry(note.start_tick)
                         .or_default()
-                        .push(note.pitch);
+                        .push((note.pitch, note.spelling));
                 }
             }
-            for (tick, pitches) in &tick_pitches {
-                if pitches.len() < 2 {
+            for (tick, notes) in &tick_notes {
+                if notes.len() < 2 {
                     continue;
                 }
-                let mut sorted = pitches.clone();
-                sorted.sort();
-                for w in sorted.windows(2) {
-                    // A second = 1 or 2 semitones apart
-                    if w[1] - w[0] <= 2 {
+                let mut diatonic: Vec<i32> = notes
+                    .iter()
+                    .map(|&(pitch, ref spelling)| diatonic_staff_pos(pitch, spelling))
+                    .collect();
+                diatonic.sort();
+                diatonic.dedup();
+                for w in diatonic.windows(2) {
+                    // Adjacent diatonic positions = staff second (or unison)
+                    if w[1] - w[0] <= 1 {
                         chord_second_ticks.insert(*tick);
                         break;
                     }
@@ -103,9 +150,9 @@ pub(crate) fn compute_unified_note_positions(
             if clef_change_ticks.contains(start_tick) {
                 gap += 50.0;
             }
-            // Extra space for chords with seconds (displaced noteheads + accidentals)
+            // Extra space for chords with seconds (displaced noteheads + staggered accidentals)
             if chord_second_ticks.contains(start_tick) {
-                gap += 30.0;
+                gap += 55.0;
             }
             current_position += gap;
         }
