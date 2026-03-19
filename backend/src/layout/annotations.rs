@@ -257,6 +257,32 @@ fn render_notation_dots(
 
             // Augmentation dots — collect per-note positions first, then
             // de-collide so adjacent chord notes don't share the same space.
+            //
+            // In chords with a second (adjacent notes), one notehead is
+            // displaced sideways.  All dots must align in a single column
+            // to the right of the *rightmost* notehead.
+            let chord_second_threshold = 0.5 * units_per_space + 0.01;
+            let has_second = note_ys.len() > 1
+                && note_ys
+                    .windows(2)
+                    .any(|w| (w[1].0 - w[0].0).abs() <= chord_second_threshold);
+
+            // Extra x-shift so dots clear the displaced notehead.
+            let dot_x_extra = if has_second && !stem_down && group.len() > 1 {
+                // Stem up: upper note displaced right by 2 × scaled half-width.
+                let dur = group[0].duration_ticks;
+                let notehead_scale: f32 = if dur >= 3840 {
+                    1.0
+                } else if dur >= 1920 {
+                    345.0 / 300.0
+                } else {
+                    332.0 / 295.0
+                };
+                stems::Stem::NOTEHEAD_WIDTH * notehead_scale * 2.0
+            } else {
+                0.0
+            };
+
             let mut chord_dot_entries: Vec<(f32, f32, u8)> = Vec::new(); // (note_x, dot_y, dot_count)
             for &(y_raw, note) in &note_ys {
                 if note.dot_count > 0 {
@@ -264,7 +290,7 @@ fn render_notation_dots(
                     let visual_y = y_raw + 0.5 * units_per_space;
                     let dot_y =
                         shift_dot_to_space(visual_y, staff_vertical_offset, units_per_space);
-                    chord_dot_entries.push((note_x, dot_y, note.dot_count));
+                    chord_dot_entries.push((note_x + dot_x_extra, dot_y, note.dot_count));
                 }
             }
             // note_ys is sorted top-to-bottom (ascending y).  Walk the
