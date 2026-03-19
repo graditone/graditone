@@ -562,6 +562,9 @@ fn render_ties_and_slurs(
                 let above = match n.slur_above {
                     Some(v) => v,
                     None => {
+                        // Standard engraving: slur on opposite side of stems.
+                        // Note above/on middle → stem down → slur above.
+                        // Note below middle → stem up → slur below.
                         let clef = staff_data.get_clef_at_tick(n.start_tick);
                         let y_raw = positioner::pitch_to_y_with_spelling(
                             n.pitch,

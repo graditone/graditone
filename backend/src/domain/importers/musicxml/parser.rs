@@ -1056,20 +1056,9 @@ impl MusicXMLParser {
                                     };
                                 }
                                 b"bezier-y" => {
-                                    // Infer placement from bezier-y when no explicit placement.
-                                    // MusicXML uses Y-up coordinates: positive = above, negative = below.
-                                    if slur_placement.is_none() {
-                                        if let Ok(val) = std::str::from_utf8(&attr.value)
-                                            .unwrap_or("0")
-                                            .parse::<f64>()
-                                        {
-                                            if val > 0.0 {
-                                                slur_placement = Some(SlurPlacement::Above);
-                                            } else if val < 0.0 {
-                                                slur_placement = Some(SlurPlacement::Below);
-                                            }
-                                        }
-                                    }
+                                    // bezier-y describes control-point offset, not overall
+                                    // slur direction.  Only explicit placement="above|below"
+                                    // should override auto-determination.
                                 }
                                 _ => {}
                             }
