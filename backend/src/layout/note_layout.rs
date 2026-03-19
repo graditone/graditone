@@ -451,6 +451,26 @@ pub(crate) fn position_glyphs_for_staff(
 
         let staff_middle_y = staff_vertical_offset + 1.5 * units_per_space;
 
+        // Build a map of tick → (min_y, max_y) for chord noteheads so that
+        // beamed stems span the full chord extent and the beam has adequate
+        // clearance from the nearest notehead.
+        let mut chord_y_range: std::collections::HashMap<u32, (f32, f32)> =
+            std::collections::HashMap::new();
+        for (idx, (_, start_tick, _, _, _, _)) in notes_in_range.iter().enumerate() {
+            let y = chord_note_y_positions[idx];
+            chord_y_range
+                .entry(*start_tick)
+                .and_modify(|(min_y, max_y)| {
+                    if y < *min_y {
+                        *min_y = y;
+                    }
+                    if y > *max_y {
+                        *max_y = y;
+                    }
+                })
+                .or_insert((y, y));
+        }
+
         let mut stem_glyphs = Vec::new();
 
         for group in &beam_groups {
@@ -465,7 +485,30 @@ pub(crate) fn position_glyphs_for_staff(
                     stems::StemDirection::Up
                 }
             } else {
-                beams::compute_group_stem_direction(&group.notes, staff_middle_y)
+                // Expand each beamable note into all chord notes at
+                // that tick so the stem direction considers every
+                // notehead's distance from the middle line.
+                let expanded: Vec<beams::BeamableNote> = group
+                    .notes
+                    .iter()
+                    .flat_map(|n| {
+                        if let Some(&(min_y, max_y)) = chord_y_range.get(&n.tick) {
+                            vec![
+                                beams::BeamableNote {
+                                    y: min_y,
+                                    ..n.clone()
+                                },
+                                beams::BeamableNote {
+                                    y: max_y,
+                                    ..n.clone()
+                                },
+                            ]
+                        } else {
+                            vec![n.clone()]
+                        }
+                    })
+                    .collect();
+                beams::compute_group_stem_direction(&expanded, staff_middle_y)
             };
 
             let notehead_width = stems::Stem::NOTEHEAD_WIDTH;
@@ -475,15 +518,31 @@ pub(crate) fn position_glyphs_for_staff(
             let mut initial_stems: Vec<stems::Stem> = Vec::new();
             let min_length = stems::Stem::MIN_BEAMED_STEM_LENGTH;
             for note in &group.notes {
-                let visual_y = note.y + visual_y_offset;
+                // For chords, use the notehead closest to the beam
+                // direction as the stem origin, so the minimum stem length
+                // is measured from the chord edge nearest the beam.
+                let (beam_side_y, far_side_y) =
+                    if let Some(&(min_y, max_y)) = chord_y_range.get(&note.tick) {
+                        match group_direction {
+                            // Stem up → beam above → origin at top note (min_y)
+                            stems::StemDirection::Up => (min_y, max_y),
+                            // Stem down → beam below → origin at bottom note (max_y)
+                            stems::StemDirection::Down => (max_y, min_y),
+                        }
+                    } else {
+                        (note.y, note.y)
+                    };
+
+                let beam_visual_y = beam_side_y + visual_y_offset;
+                let far_visual_y = far_side_y + visual_y_offset;
                 let mut stem =
-                    stems::create_stem(note.x, visual_y, group_direction, notehead_width);
+                    stems::create_stem(note.x, far_visual_y, group_direction, notehead_width);
                 match group_direction {
                     stems::StemDirection::Up => {
-                        stem.y_end = stem.y_start - min_length;
+                        stem.y_end = beam_visual_y - min_length;
                     }
                     stems::StemDirection::Down => {
-                        stem.y_end = stem.y_start + min_length;
+                        stem.y_end = beam_visual_y + min_length;
                     }
                 }
                 initial_stems.push(stem);
@@ -518,16 +577,29 @@ pub(crate) fn position_glyphs_for_staff(
             for (i, stem) in initial_stems.iter().enumerate() {
                 let beam_y = beam_y_at_stems[i];
                 let min_length = stems::Stem::MIN_BEAMED_STEM_LENGTH;
+                // For chords, enforce minimum clearance from the
+                // notehead closest to the beam, not the stem origin
+                // (which is at the far side of the chord).
+                let beam_side_y =
+                    if let Some(&(min_y, max_y)) = chord_y_range.get(&group.notes[i].tick) {
+                        let vy_offset = 0.5 * units_per_space;
+                        match group_direction {
+                            stems::StemDirection::Up => min_y + vy_offset,
+                            stems::StemDirection::Down => max_y + vy_offset,
+                        }
+                    } else {
+                        stem.y_start
+                    };
                 match group_direction {
                     stems::StemDirection::Up => {
-                        let required_beam_y = stem.y_start - min_length;
+                        let required_beam_y = beam_side_y - min_length;
                         if beam_y > required_beam_y {
                             let needed_offset = required_beam_y - beam_y;
                             beam_offset = beam_offset.min(needed_offset);
                         }
                     }
                     stems::StemDirection::Down => {
-                        let required_beam_y = stem.y_start + min_length;
+                        let required_beam_y = beam_side_y + min_length;
                         if beam_y < required_beam_y {
                             let needed_offset = required_beam_y - beam_y;
                             beam_offset = beam_offset.max(needed_offset);
