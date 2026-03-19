@@ -808,13 +808,12 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
 
             let x_end = {
                 // End at the barline of the measure containing the end tick
-                let end_measure_start = measure_x_bounds
+                measure_x_bounds
                     .iter()
                     .filter(|(t, _)| **t < effective_end)
                     .max_by_key(|(t, _)| **t)
                     .map(|(_, (_, e))| *e)
-                    .unwrap_or(x_start + 100.0);
-                end_measure_start
+                    .unwrap_or(x_start + 100.0)
             };
 
             // For 8va (above): place bracket above the topmost staff line of the relevant staff.
