@@ -255,23 +255,36 @@ fn render_notation_dots(
                 most_extreme_y <= staff_middle_y
             };
 
-            // Augmentation dots
+            // Augmentation dots — collect per-note positions first, then
+            // de-collide so adjacent chord notes don't share the same space.
+            let mut chord_dot_entries: Vec<(f32, f32, u8)> = Vec::new(); // (note_x, dot_y, dot_count)
             for &(y_raw, note) in &note_ys {
                 if note.dot_count > 0 {
                     let note_x = *note_positions.get(&note.start_tick).unwrap_or(&0.0);
                     let visual_y = y_raw + 0.5 * units_per_space;
                     let dot_y =
                         shift_dot_to_space(visual_y, staff_vertical_offset, units_per_space);
-                    let notehead_half_w = stems::Stem::NOTEHEAD_WIDTH;
-                    for d in 0..note.dot_count {
-                        let gap = 0.4 * units_per_space;
-                        let dot_spacing = 0.6 * units_per_space;
-                        notation_dots.push(types::NotationDot {
-                            x: note_x + notehead_half_w + gap + d as f32 * dot_spacing,
-                            y: dot_y,
-                            radius: dot_radius,
-                        });
-                    }
+                    chord_dot_entries.push((note_x, dot_y, note.dot_count));
+                }
+            }
+            // note_ys is sorted top-to-bottom (ascending y).  Walk the
+            // collected dots in that same order and push any collision down
+            // by one staff space so every dot occupies a unique space.
+            for i in 1..chord_dot_entries.len() {
+                if (chord_dot_entries[i].1 - chord_dot_entries[i - 1].1).abs() < 1.0 {
+                    chord_dot_entries[i].1 = chord_dot_entries[i - 1].1 + units_per_space;
+                }
+            }
+            let notehead_half_w = stems::Stem::NOTEHEAD_WIDTH;
+            for &(note_x, dot_y, dot_count) in &chord_dot_entries {
+                for d in 0..dot_count {
+                    let gap = 0.4 * units_per_space;
+                    let dot_spacing = 0.6 * units_per_space;
+                    notation_dots.push(types::NotationDot {
+                        x: note_x + notehead_half_w + gap + d as f32 * dot_spacing,
+                        y: dot_y,
+                        radius: dot_radius,
+                    });
                 }
             }
 
