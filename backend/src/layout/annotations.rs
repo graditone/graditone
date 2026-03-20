@@ -377,6 +377,42 @@ fn render_ties_and_slurs(
     // Build a lookup: note_id → (x, visual_y, pitch, start_tick)
     let mut note_lookup: HashMap<&str, (f32, f32, u8, u32)> = HashMap::new();
 
+    // Compute grace note x positions per voice (mirrors note_layout logic).
+    let mut grace_x_by_tick: HashMap<u32, f32> = HashMap::new();
+    for voice in &staff_data.voices {
+        let notes_in_range: Vec<&crate::layout::extraction::NoteEvent> = voice
+            .notes
+            .iter()
+            .filter(|n| n.start_tick >= tick_range.start_tick && n.start_tick < tick_range.end_tick)
+            .collect();
+        let n = notes_in_range.len();
+        let mut i = 0;
+        while i < n {
+            if notes_in_range[i].is_grace {
+                let run_start = i;
+                while i < n && notes_in_range[i].is_grace {
+                    i += 1;
+                }
+                let run_end = i;
+                let target_x = if run_end < n {
+                    *note_positions
+                        .get(&notes_in_range[run_end].start_tick)
+                        .unwrap_or(&unified_left_margin)
+                } else {
+                    unified_left_margin
+                };
+                let run_len = (run_end - run_start) as f32;
+                for (k, idx) in (run_start..run_end).enumerate() {
+                    let offset = (run_len - k as f32) * 30.0;
+                    let x = (target_x - offset).max(unified_left_margin);
+                    grace_x_by_tick.insert(notes_in_range[idx].start_tick, x);
+                }
+            } else {
+                i += 1;
+            }
+        }
+    }
+
     for voice in &staff_data.voices {
         for n in &voice.notes {
             if n.note_id.is_empty() {
@@ -392,7 +428,11 @@ fn render_ties_and_slurs(
                 positioner::pitch_to_y_with_spelling(n.pitch, clef, units_per_space, n.spelling)
                     + staff_vertical_offset;
             let visual_y = y_raw + 0.5 * units_per_space;
-            let note_x = *note_positions.get(&n.start_tick).unwrap_or(&0.0);
+            let note_x = if n.is_grace {
+                *grace_x_by_tick.get(&n.start_tick).unwrap_or(&0.0)
+            } else {
+                *note_positions.get(&n.start_tick).unwrap_or(&0.0)
+            };
             note_lookup.insert(&n.note_id, (note_x, visual_y, n.pitch, n.start_tick));
         }
     }

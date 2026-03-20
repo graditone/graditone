@@ -233,7 +233,7 @@ pub(crate) fn position_glyphs_for_staff(
     instrument_id: &str,
     staff_index: usize,
     staff_vertical_offset: f32,
-    note_positions: &mut HashMap<u32, f32>,
+    note_positions: &HashMap<u32, f32>,
     left_margin: f32,
     ticks_per_measure: u32,
     measure_x_bounds: &HashMap<u32, (f32, f32)>,
@@ -312,12 +312,6 @@ pub(crate) fn position_glyphs_for_staff(
                         i += 1;
                     }
                 }
-            }
-
-            // Merge grace note positions into unified note_positions so that
-            // annotation rendering (ties, slurs) can find them.
-            for (&tick, &x) in &grace_tick_x {
-                note_positions.entry(tick).or_insert(x);
             }
 
             notes_in_range
