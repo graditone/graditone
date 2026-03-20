@@ -5,7 +5,7 @@ import type { Score } from '../../types/score';
 /**
  * T109: Grace notes must be forwarded to the WASM layout engine via is_grace flag.
  * Without this flag, the layout engine treats grace notes as normal notes,
- * rendering them at full width and opacity instead of 60% size with 0.5 opacity.
+ * rendering them at full width instead of 75% size.
  */
 describe('convertScoreToLayoutFormat grace note forwarding', () => {
   it('forwards is_grace flag for grace notes', () => {

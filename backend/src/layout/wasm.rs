@@ -7,9 +7,6 @@ use serde_json::Value;
 use serde_wasm_bindgen;
 use wasm_bindgen::prelude::*;
 
-#[cfg(target_arch = "wasm32")]
-use web_sys::console;
-
 /// WASM-compatible wrapper for compute_layout
 ///
 /// Takes JSON strings as input and returns JsValue output to avoid

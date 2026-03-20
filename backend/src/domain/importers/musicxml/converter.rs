@@ -27,9 +27,6 @@ use super::types::{
 };
 use std::collections::{BTreeMap, HashMap};
 
-#[cfg(target_arch = "wasm32")]
-use web_sys::console;
-
 /// Compute the start tick of a measure, accounting for pickup/anacrusis.
 fn measure_start_tick(measure_index: usize, pickup_ticks: u32, ticks_per_measure: u32) -> u32 {
     if pickup_ticks == 0 || measure_index == 0 {
@@ -1521,15 +1518,14 @@ impl MusicXMLConverter {
         let tick = if note_data.is_chord {
             timing_context.last_note_tick()
         } else {
-            // Grace notes preceding this note advanced current_tick by a
-            // visual-only amount.  Rewind the cursor so this real note
-            // (and every note after it) aligns with the correct beat.
-            let advance = timing_context.grace_tick_advance;
-            if advance > 0 {
-                timing_context.current_tick = timing_context.current_tick.saturating_sub(advance);
-                timing_context.grace_tick_advance = 0;
-            }
-            timing_context.current_tick()
+            // Grace notes preceding this note advanced current_tick by a visual-only
+            // amount. Subtract that offset so this real note aligns with the correct
+            // beat position (shared with notes in the other staff at the same beat).
+            let real_u32 = timing_context
+                .current_tick
+                .saturating_sub(timing_context.grace_tick_advance);
+            timing_context.grace_tick_advance = 0; // consumed; reset for next group
+            Tick::new(real_u32)
         };
 
         let fraction = Fraction::from_musicxml(note_data.duration, timing_context.divisions);
@@ -1549,6 +1545,7 @@ impl MusicXMLConverter {
         // Advance timing cursor only for non-chord notes
         // Chord notes start at the same tick as the previous note
         if !note_data.is_chord {
+            // Store the tick assigned to this note so chord notes can share it
             timing_context.last_note_tick = tick.value();
             timing_context.advance_by_duration(note_data.duration)?;
         }

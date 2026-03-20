@@ -224,7 +224,7 @@ pub fn position_noteheads(
     chord_scale_map: &std::collections::HashMap<usize, f32>,
     // Multi-voice override: Some(true) = stems down, Some(false) = stems up, None = auto
     forced_stem_down: Option<bool>,
-    // Grace note indices: these render at 60% size with reduced opacity
+    // Grace note indices: these render at 75% of normal size
     grace_note_indices: &std::collections::HashSet<usize>,
 ) -> Vec<Glyph> {
     notes
@@ -252,7 +252,10 @@ pub fn position_noteheads(
             // Determine stem direction based on note position relative to staff middle line.
             // Middle line (3rd line, 0-indexed 2) is at staff_vertical_offset + 2.0*ups, but
             // pitch_to_y includes a -0.5*ups offset, so threshold is staff_vertical_offset + 1.5*ups.
-            let stem_down = if let Some(forced) = forced_stem_down {
+            let stem_down = if grace_note_indices.contains(&i) {
+                // Grace notes always get stems up (music convention).
+                false
+            } else if let Some(forced) = forced_stem_down {
                 forced
             } else {
                 let stem_middle_y = staff_vertical_offset + 1.5 * units_per_space;
@@ -296,9 +299,9 @@ pub fn position_noteheads(
                 ('\u{E1D9}', "note16thUp")
             };
 
-            // Grace notes render at 60% of normal size with reduced opacity.
+            // Grace notes render at 75% of normal size with full opacity.
             let is_grace = grace_note_indices.contains(&i);
-            let grace_scale: f32 = if is_grace { 0.6 } else { 1.0 };
+            let grace_scale: f32 = if is_grace { 0.75 } else { 1.0 };
 
             // Use scaled font_size for chord noteheads; standard 80.0 for everything else.
             // The bounding box uses half the rendering font-size (40.0 baseline → scale by same ratio).
@@ -319,7 +322,7 @@ pub fn position_noteheads(
                     event_index: i,
                 },
                 font_size: Some(render_font_size),
-                opacity: if is_grace { Some(0.5) } else { None },
+                opacity: None,
             }
         })
         .collect()
@@ -690,6 +693,7 @@ pub fn position_note_accidentals(
     key_signature_events: &[(u32, i8)],
     pickup_ticks: u32,
     measure_starts: &[u32],
+    grace_note_indices: &std::collections::HashSet<usize>,
 ) -> Vec<Glyph> {
     use std::collections::HashMap;
 
@@ -935,7 +939,17 @@ pub fn position_note_accidentals(
             y,
         };
 
-        let bounding_box = compute_glyph_bounding_box(glyph_name, &position, 40.0, units_per_space);
+        // Scale accidentals for grace notes to match their notehead size
+        let is_grace_acc = grace_note_indices.contains(&i);
+        let acc_grace_scale: f32 = if is_grace_acc { 0.75 } else { 1.0 };
+        let acc_bbox_size = 40.0 * acc_grace_scale;
+        let bounding_box =
+            compute_glyph_bounding_box(glyph_name, &position, acc_bbox_size, units_per_space);
+        let acc_font_size = if is_grace_acc {
+            Some(80.0 * acc_grace_scale)
+        } else {
+            None
+        };
 
         accidental_glyphs.push(Glyph {
             position,
@@ -947,7 +961,7 @@ pub fn position_note_accidentals(
                 voice_index,
                 event_index: i,
             },
-            font_size: None,
+            font_size: acc_font_size,
             opacity: None,
         });
     }

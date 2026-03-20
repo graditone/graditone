@@ -383,7 +383,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
             .filter(|(t, _)| *t > system.tick_range.start_tick && *t < system.tick_range.end_tick)
             .map(|(t, _)| *t)
             .collect();
-        let note_positions = note_layout::compute_unified_note_positions(
+        let mut note_positions = note_layout::compute_unified_note_positions(
             &all_staves,
             &system.tick_range,
             system.bounding_box.width,
@@ -527,7 +527,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     &instrument.id,
                     staff_index,
                     staff_vertical_offset,
-                    &note_positions,
+                    &mut note_positions,
                     unified_left_margin,
                     ticks_per_measure,
                     &measure_x_bounds,

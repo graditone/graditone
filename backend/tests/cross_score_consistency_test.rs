@@ -66,10 +66,6 @@ fn collect_metrics(layout: &serde_json::Value) -> ScoreMetrics {
                     if let Some(fs) = run["font_size"].as_f64() {
                         font_sizes.push(fs);
                     }
-                    // Grace-note runs have reduced opacity — exclude their stems
-                    // from the consistency minimum (grace stems are intentionally shorter).
-                    let run_opacity = run["opacity"].as_f64().unwrap_or(1.0);
-                    let is_grace_run = run_opacity < 0.9;
                     for glyph in run["glyphs"].as_array().unwrap() {
                         let cp = glyph["codepoint"].as_str().unwrap_or("");
                         for ch in cp.chars() {
@@ -80,10 +76,14 @@ fn collect_metrics(layout: &serde_json::Value) -> ScoreMetrics {
                             }
                         }
                         // Stems (U+0000): measure stem length from bounding_box.height
-                        // Skip grace-note stems (they are intentionally 60% shorter)
-                        if cp == "\u{0000}" && !is_grace_run {
-                            if let Some(h) = glyph["bounding_box"]["height"].as_f64() {
-                                stem_lengths.push(h);
+                        // Skip grace-note stems — detected by reduced width (1.125 vs 1.5)
+                        if cp == "\u{0000}" {
+                            let w = glyph["bounding_box"]["width"].as_f64().unwrap_or(0.0);
+                            let is_grace_stem = w < 1.3 && w > 0.5;
+                            if !is_grace_stem {
+                                if let Some(h) = glyph["bounding_box"]["height"].as_f64() {
+                                    stem_lengths.push(h);
+                                }
                             }
                         }
                     }
@@ -130,7 +130,7 @@ fn consistent_font_size_across_scores() {
     // Allowed render font sizes (with ±0.1 tolerance).
     let allowed: &[(f64, &str)] = &[
         (80.0, "standard"),
-        (80.0 * 0.6, "grace-note"),
+        (80.0 * 0.75, "grace-note"),
         (80.0 * 332.0 / 295.0, "chord-black-notehead"),
         (80.0 * 345.0 / 300.0, "chord-half-notehead"),
     ];

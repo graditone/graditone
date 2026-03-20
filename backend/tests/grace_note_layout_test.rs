@@ -1,5 +1,5 @@
 //! Grace note layout test: verifies that grace notes in Für Elise M26
-//! are rendered at reduced font_size (60% of normal) and reduced opacity (0.5).
+//! are rendered at reduced font_size (75% of normal) and full opacity.
 
 use musicore_backend::adapters::dtos::ScoreDto;
 use musicore_backend::domain::importers::musicxml::MusicXMLImporter;
@@ -27,8 +27,9 @@ fn layout_fur_elise() -> serde_json::Value {
 
 /// Für Elise M26 contains two grace notes (F4, A4) before the principal C5.
 /// These grace notes MUST have:
-///   - font_size ≈ 48.0 (60% of standard 80.0)
-///   - opacity ≈ 0.5
+/// - font_size ≈ 60.0 (75% of standard 80.0)
+/// - full opacity (same as normal notes)
+///
 /// Normal notes MUST have font_size ≈ 80.0 and opacity 1.0 (or absent).
 #[test]
 fn test_grace_notes_have_reduced_font_size_and_opacity() {
@@ -37,22 +38,18 @@ fn test_grace_notes_have_reduced_font_size_and_opacity() {
     // Collect all glyph runs across all systems/staff_groups/staves
     let systems = layout["systems"].as_array().expect("systems array");
     let mut grace_font_sizes: Vec<f64> = Vec::new();
-    let mut grace_opacities: Vec<f64> = Vec::new();
     let mut normal_font_sizes: Vec<f64> = Vec::new();
-    let mut normal_opacities: Vec<f64> = Vec::new();
 
     for system in systems {
         for sg in system["staff_groups"].as_array().unwrap_or(&vec![]) {
             for staff in sg["staves"].as_array().unwrap_or(&vec![]) {
                 for run in staff["glyph_runs"].as_array().unwrap_or(&vec![]) {
                     let run_font_size = run["font_size"].as_f64().unwrap_or(80.0);
-                    let run_opacity = run["opacity"].as_f64().unwrap_or(1.0);
 
-                    // Grace-note runs: font_size < 60 (48 = 80*0.6)
-                    if run_font_size < 60.0 && run_opacity < 0.9 {
+                    // Grace-note runs: font_size ≈ 60.0 (80*0.75)
+                    if run_font_size < 70.0 && run_font_size > 50.0 {
                         grace_font_sizes.push(run_font_size);
-                        grace_opacities.push(run_opacity);
-                    } else if run_font_size >= 60.0 {
+                    } else if run_font_size >= 70.0 {
                         // Check only noteheads (not stems/beams which use special codepoints)
                         for glyph in run["glyphs"].as_array().unwrap_or(&vec![]) {
                             let cp = glyph["codepoint"].as_str().unwrap_or("");
@@ -62,7 +59,6 @@ fn test_grace_notes_have_reduced_font_size_and_opacity() {
                                 || (0xE1D0..=0xE1FF).contains(&code)
                             {
                                 normal_font_sizes.push(run_font_size);
-                                normal_opacities.push(run_opacity);
                             }
                         }
                     }
@@ -74,49 +70,35 @@ fn test_grace_notes_have_reduced_font_size_and_opacity() {
     // There must be grace-note runs (Für Elise has grace notes in M26 and M29)
     assert!(
         !grace_font_sizes.is_empty(),
-        "Expected grace-note GlyphRuns with font_size < 60 and opacity < 0.9, found none. \
+        "Expected grace-note GlyphRuns with font_size ≈ 60, found none. \
          Grace notes are not being rendered at reduced size."
     );
 
-    // Grace notes should be ~48.0 (80*0.6)
+    // Grace notes should be ~60.0 (80*0.75)
     for &fs in &grace_font_sizes {
         assert!(
-            (fs - 48.0).abs() < 2.0,
-            "Grace note font_size should be ~48.0 (60% of 80), got {fs}"
+            (fs - 60.0).abs() < 2.0,
+            "Grace note font_size should be ~60.0 (75% of 80), got {fs}"
         );
     }
 
-    // Grace notes should have opacity 0.5
-    for &op in &grace_opacities {
-        assert!(
-            (op - 0.5).abs() < 0.1,
-            "Grace note opacity should be ~0.5, got {op}"
-        );
-    }
-
-    // Normal notes should be ~80.0 with full opacity
+    // Normal notes should be ~80.0
     assert!(
         !normal_font_sizes.is_empty(),
         "Expected normal note GlyphRuns"
     );
     for &fs in &normal_font_sizes {
         assert!(
-            fs >= 60.0,
-            "Normal note font_size should be >= 60.0, got {fs}"
-        );
-    }
-    for &op in &normal_opacities {
-        assert!(
-            op >= 0.9,
-            "Normal note opacity should be >= 0.9 (fully opaque), got {op}"
+            fs >= 70.0,
+            "Normal note font_size should be >= 70.0, got {fs}"
         );
     }
 }
 
-/// Grace note stems (U+0000) and beams (U+0001) must also have reduced opacity
-/// and thinner dimensions (0.6x scaling).
+/// Grace note stems (U+0000) and beams (U+0001) must have thinner
+/// dimensions (0.75x scaling) while retaining full opacity.
 #[test]
-fn test_grace_note_stems_and_beams_have_reduced_opacity() {
+fn test_grace_note_stems_and_beams_have_reduced_thickness() {
     let layout = layout_fur_elise();
     let systems = layout["systems"].as_array().expect("systems array");
 
@@ -129,34 +111,28 @@ fn test_grace_note_stems_and_beams_have_reduced_opacity() {
         for sg in system["staff_groups"].as_array().unwrap_or(&vec![]) {
             for staff in sg["staves"].as_array().unwrap_or(&vec![]) {
                 for run in staff["glyph_runs"].as_array().unwrap_or(&vec![]) {
-                    let run_opacity = run["opacity"].as_f64().unwrap_or(1.0);
                     for glyph in run["glyphs"].as_array().unwrap_or(&vec![]) {
                         let cp = glyph["codepoint"].as_str().unwrap_or("");
-                        let is_stem = cp == "\u{0000}" || cp == "\0";
-                        let is_beam = cp == "\u{0001}" || cp == "\x01";
+                        let is_stem = cp == "\u{0000}";
+                        let is_beam = cp == "\u{0001}";
 
-                        if is_stem && run_opacity < 0.9 {
-                            grace_stem_runs += 1;
-                            // Grace stem thickness should be ~0.9 (1.5 * 0.6)
+                        if is_stem {
                             let w = glyph["bounding_box"]["width"].as_f64().unwrap_or(0.0);
-                            assert!(
-                                w < 1.2,
-                                "Grace stem width should be ~0.9 (1.5*0.6), got {w}"
-                            );
-                        } else if is_stem && run_opacity >= 0.9 {
-                            let w = glyph["bounding_box"]["width"].as_f64().unwrap_or(0.0);
-                            normal_stem_thickness_sum += w;
-                            normal_stem_count += 1;
+                            // Grace stems: ~1.125 (1.5 * 0.75); normal: ~1.5
+                            if w < 1.3 && w > 0.5 {
+                                grace_stem_runs += 1;
+                            } else if w >= 1.3 {
+                                normal_stem_thickness_sum += w;
+                                normal_stem_count += 1;
+                            }
                         }
 
-                        if is_beam && run_opacity < 0.9 {
-                            grace_beam_runs += 1;
-                            // Grace beam thickness should be ~6.0 (10.0 * 0.6)
+                        if is_beam {
                             let h = glyph["bounding_box"]["height"].as_f64().unwrap_or(0.0);
-                            assert!(
-                                h < 8.0,
-                                "Grace beam thickness should be ~6.0 (10*0.6), got {h}"
-                            );
+                            // Grace beams: ~7.5 (10.0 * 0.75); normal: ~10.0
+                            if h < 9.0 && h > 4.0 {
+                                grace_beam_runs += 1;
+                            }
                         }
                     }
                 }
@@ -166,11 +142,11 @@ fn test_grace_note_stems_and_beams_have_reduced_opacity() {
 
     assert!(
         grace_stem_runs > 0,
-        "Expected grace-note stem GlyphRuns with opacity < 0.9, found none"
+        "Expected grace-note stems with reduced thickness, found none"
     );
     assert!(
         grace_beam_runs > 0,
-        "Expected grace-note beam GlyphRuns with opacity < 0.9, found none"
+        "Expected grace-note beams with reduced thickness, found none"
     );
     // Normal stems should be full thickness (1.5)
     if normal_stem_count > 0 {

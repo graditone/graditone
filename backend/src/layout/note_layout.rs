@@ -93,7 +93,7 @@ pub(crate) fn compute_unified_note_positions(
     // Count grace notes preceding each target tick so we can add a small
     // horizontal prefix gap.  The gap is part of the unified position map,
     // ensuring BOTH staves widen equally and stay aligned.
-    let grace_step: f32 = 12.0; // horizontal units per grace note
+    let grace_step: f32 = 30.0; // horizontal units per grace note
     let mut grace_prefix_counts: HashMap<u32, usize> = HashMap::new();
     for staff_data in staves {
         for voice in &staff_data.voices {
@@ -233,7 +233,7 @@ pub(crate) fn position_glyphs_for_staff(
     instrument_id: &str,
     staff_index: usize,
     staff_vertical_offset: f32,
-    note_positions: &HashMap<u32, f32>,
+    note_positions: &mut HashMap<u32, f32>,
     left_margin: f32,
     ticks_per_measure: u32,
     measure_x_bounds: &HashMap<u32, (f32, f32)>,
@@ -304,14 +304,20 @@ pub(crate) fn position_glyphs_for_staff(
                         };
                         let run_len = (run_end - run_start) as f32;
                         for (k, idx) in (run_start..run_end).enumerate() {
-                            let offset = (run_len - k as f32) * 12.0;
-                            grace_tick_x
-                                .insert(voice_notes_in_range[idx].start_tick, target_x - offset);
+                            let offset = (run_len - k as f32) * 30.0;
+                            let x = (target_x - offset).max(left_margin);
+                            grace_tick_x.insert(voice_notes_in_range[idx].start_tick, x);
                         }
                     } else {
                         i += 1;
                     }
                 }
+            }
+
+            // Merge grace note positions into unified note_positions so that
+            // annotation rendering (ties, slurs) can find them.
+            for (&tick, &x) in &grace_tick_x {
+                note_positions.entry(tick).or_insert(x);
             }
 
             notes_in_range
@@ -330,6 +336,14 @@ pub(crate) fn position_glyphs_for_staff(
         let note_clefs: Vec<&str> = notes_in_range
             .iter()
             .map(|(_, start_tick, _, _, _, _, _)| staff_data.get_clef_at_tick(*start_tick))
+            .collect();
+
+        // Grace note event indices for event-based grace detection
+        let grace_note_indices: std::collections::HashSet<usize> = voice_notes_in_range
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| n.is_grace)
+            .map(|(i, _)| i)
             .collect();
 
         let beamable_for_analysis_raw: Vec<beams::BeamableNote> = voice_notes_in_range
@@ -359,9 +373,11 @@ pub(crate) fn position_glyphs_for_staff(
             .collect();
 
         let mut beamable_for_analysis: Vec<beams::BeamableNote> = Vec::new();
-        let mut seen_ticks: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        let mut seen_tick_grace: std::collections::HashSet<(u32, bool)> =
+            std::collections::HashSet::new();
         for note in beamable_for_analysis_raw {
-            if seen_ticks.insert(note.tick) {
+            let is_grace = grace_note_indices.contains(&note.event_index);
+            if seen_tick_grace.insert((note.tick, is_grace)) {
                 beamable_for_analysis.push(note);
             }
         }
@@ -407,10 +423,18 @@ pub(crate) fn position_glyphs_for_staff(
             if group.notes.len() < 2 {
                 continue;
             }
+            let is_grace_group = group
+                .notes
+                .iter()
+                .all(|n| grace_note_indices.contains(&n.event_index));
             for note in &group.notes {
                 if let Some(indices) = tick_to_indices.get(&note.tick) {
                     for &idx in indices {
-                        beamed_note_indices.insert(idx);
+                        // Only mark indices whose grace status matches the group
+                        let idx_is_grace = grace_note_indices.contains(&idx);
+                        if idx_is_grace == is_grace_group {
+                            beamed_note_indices.insert(idx);
+                        }
                     }
                 }
             }
@@ -572,20 +596,6 @@ pub(crate) fn position_glyphs_for_staff(
             .map(|(x, dx)| x + dx)
             .collect();
 
-        let grace_note_indices: std::collections::HashSet<usize> = voice_notes_in_range
-            .iter()
-            .enumerate()
-            .filter(|(_, n)| n.is_grace)
-            .map(|(i, _)| i)
-            .collect();
-
-        // Grace note ticks: used to scale stems and beams for grace notes
-        let grace_note_ticks: std::collections::HashSet<u32> = voice_notes_in_range
-            .iter()
-            .filter(|n| n.is_grace)
-            .map(|n| n.start_tick)
-            .collect();
-
         let glyphs = positioner::position_noteheads(
             &notes_in_range,
             &adjusted_horizontal_offsets,
@@ -604,9 +614,8 @@ pub(crate) fn position_glyphs_for_staff(
         all_glyphs.extend(glyphs);
 
         for &(stem_x, y_top, y_bottom, event_index) in &chord_stem_data {
-            let chord_tick = notes_in_range[event_index].1;
-            let is_grace_stem = grace_note_ticks.contains(&chord_tick);
-            let grace_scale: f32 = if is_grace_stem { 0.6 } else { 1.0 };
+            let is_grace_stem = grace_note_indices.contains(&event_index);
+            let grace_scale: f32 = if is_grace_stem { 0.75 } else { 1.0 };
             let thickness = stems::Stem::STEM_THICKNESS * grace_scale;
             let stem_height = y_bottom - y_top;
             let stem_glyph = Glyph {
@@ -628,16 +637,15 @@ pub(crate) fn position_glyphs_for_staff(
                     event_index,
                 },
                 font_size: None,
-                opacity: if is_grace_stem { Some(0.5) } else { None },
+                opacity: None,
             };
             all_glyphs.push(stem_glyph);
         }
 
         // Generate flag glyphs for short-duration chord stems (eighths, 16ths, 32nds)
         for &(flag_x, flag_y, stem_down, duration, event_index) in &chord_flag_data {
-            let chord_tick = notes_in_range[event_index].1;
-            let is_grace = grace_note_ticks.contains(&chord_tick);
-            let grace_scale: f32 = if is_grace { 0.6 } else { 1.0 };
+            let is_grace = grace_note_indices.contains(&event_index);
+            let grace_scale: f32 = if is_grace { 0.75 } else { 1.0 };
 
             let (flag_codepoint, flag_glyph_name) = if stem_down {
                 if duration < 240 {
@@ -683,7 +691,7 @@ pub(crate) fn position_glyphs_for_staff(
                     event_index,
                 },
                 font_size: Some(flag_font_size),
-                opacity: if is_grace { Some(0.5) } else { None },
+                opacity: None,
             };
             all_glyphs.push(flag_glyph);
         }
@@ -707,6 +715,7 @@ pub(crate) fn position_glyphs_for_staff(
             &staff_data.key_signature_events,
             pickup_ticks,
             &measure_starts_sorted,
+            &grace_note_indices,
         );
 
         all_glyphs.extend(accidental_glyphs);
@@ -740,7 +749,15 @@ pub(crate) fn position_glyphs_for_staff(
                 continue;
             }
 
-            let group_direction = if let Some(forced) = forced_stem_down {
+            let is_grace_group = group
+                .notes
+                .iter()
+                .all(|n| grace_note_indices.contains(&n.event_index));
+
+            let group_direction = if is_grace_group {
+                // Grace notes always get stems up (music convention).
+                stems::StemDirection::Up
+            } else if let Some(forced) = forced_stem_down {
                 if forced {
                     stems::StemDirection::Down
                 } else {
@@ -772,12 +789,7 @@ pub(crate) fn position_glyphs_for_staff(
                     .collect();
                 beams::compute_group_stem_direction(&expanded, staff_middle_y)
             };
-
-            let is_grace_group = group
-                .notes
-                .iter()
-                .all(|n| grace_note_ticks.contains(&n.tick));
-            let grace_scale: f32 = if is_grace_group { 0.6 } else { 1.0 };
+            let grace_scale: f32 = if is_grace_group { 0.75 } else { 1.0 };
             let notehead_width = stems::Stem::NOTEHEAD_WIDTH * grace_scale;
 
             // === PHASE 1: Compute initial stems and beam line ===
@@ -905,7 +917,7 @@ pub(crate) fn position_glyphs_for_staff(
                         event_index: group.notes[i].event_index,
                     },
                     font_size: None,
-                    opacity: if is_grace_group { Some(0.5) } else { None },
+                    opacity: None,
                 };
                 stem_glyphs.push(stem_glyph);
                 stem_end_ys.push(final_stem_end);
@@ -951,7 +963,7 @@ pub(crate) fn position_glyphs_for_staff(
                         event_index: group.notes.first().map_or(0, |n| n.event_index),
                     },
                     font_size: None,
-                    opacity: if is_grace_group { Some(0.5) } else { None },
+                    opacity: None,
                 };
                 all_glyphs.push(beam_glyph);
             }
@@ -984,7 +996,7 @@ pub(crate) fn position_glyphs_for_staff(
                         event_index: updated_group.notes.first().map_or(0, |n| n.event_index),
                     },
                     font_size: None,
-                    opacity: if is_grace_group { Some(0.5) } else { None },
+                    opacity: None,
                 };
                 all_glyphs.push(beam_glyph);
             }
