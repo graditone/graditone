@@ -170,6 +170,16 @@ pub(crate) fn compute_unified_note_positions(
     let mut current_position = 0.0;
     let mut last_tick = tick_range.start_tick;
 
+    // Grace prefix gap for the very first tick in the system.
+    // The loop below only adds gaps when start_tick > last_tick, so the
+    // first event is skipped.  Handle it here so the principal note shifts
+    // right in note_positions (shared across staves → keeps LH/RH aligned).
+    if let Some((first_tick, _)) = tick_durations.first() {
+        if let Some(&gc) = grace_prefix_counts.get(first_tick) {
+            current_position += gc as f32 * grace_step;
+        }
+    }
+
     for (start_tick, duration_ticks) in &tick_durations {
         if *start_tick > last_tick {
             let gap_duration = (*start_tick - last_tick).min(*duration_ticks);
@@ -303,10 +313,25 @@ pub(crate) fn position_glyphs_for_staff(
                             left_margin
                         };
                         let run_len = (run_end - run_start) as f32;
-                        for (k, idx) in (run_start..run_end).enumerate() {
-                            let offset = (run_len - k as f32) * 30.0;
-                            let x = (target_x - offset).max(left_margin);
-                            grace_tick_x.insert(voice_notes_in_range[idx].start_tick, x);
+                        // If placing grace notes before target_x would push the
+                        // first one past the left margin, anchor the run at
+                        // left_margin and space rightward instead of clamping
+                        // all noteheads onto each other.
+                        let first_x = target_x - run_len * 30.0;
+                        if first_x >= left_margin {
+                            // Normal case: enough room before target_x
+                            for (k, idx) in (run_start..run_end).enumerate() {
+                                let offset = (run_len - k as f32) * 30.0;
+                                let x = target_x - offset;
+                                grace_tick_x.insert(voice_notes_in_range[idx].start_tick, x);
+                            }
+                        } else {
+                            // System-start case: anchor at left_margin, space
+                            // rightward by 30 units each.
+                            for (k, idx) in (run_start..run_end).enumerate() {
+                                let x = left_margin + k as f32 * 30.0;
+                                grace_tick_x.insert(voice_notes_in_range[idx].start_tick, x);
+                            }
                         }
                     } else {
                         i += 1;

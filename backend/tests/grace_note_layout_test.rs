@@ -221,3 +221,96 @@ fn test_grace_notes_do_not_cause_tick_drift_between_staves() {
          rewind current_tick after processing grace notes in M8."
     );
 }
+
+/// Regression test: grace notes at the start of a system must not overlap
+/// with the principal note.  When a grace run begins at the system's first
+/// tick, the grace prefix gap in `compute_unified_note_positions` must push
+/// the principal note (and the corresponding LH note) right so that grace
+/// noteheads occupy distinct x-positions before the principal.
+///
+/// The Chopin Nocturne M22 has 3 grace notes (G4, Bb4, Eb5) before the
+/// principal G5.  Depending on page breaks, M22 can start a system.  Before
+/// the fix, `(target_x - offset).max(left_margin)` collapsed all grace
+/// noteheads onto `left_margin`, identical to the principal.
+#[test]
+fn test_grace_notes_at_system_start_have_distinct_x_positions() {
+    let fixture_path = std::path::Path::new("../scores/Chopin_NocturneOp9No2.mxl");
+    let importer = MusicXMLImporter::new();
+    let result = importer.import_file(fixture_path).unwrap();
+    let dto: ScoreDto = (&result.score).into();
+    let json = serde_json::to_value(&dto).unwrap();
+    let layout = compute_layout(&json, &CONFIG);
+    let layout_json = serde_json::to_value(&layout).unwrap();
+
+    let systems = layout_json["systems"].as_array().expect("systems array");
+
+    // For each system, check that grace noteheads have distinct x from their
+    // principal note in the first staff (treble).
+    for (sys_idx, system) in systems.iter().enumerate() {
+        let staves = system["staff_groups"]
+            .as_array()
+            .and_then(|sgs| sgs.first())
+            .and_then(|sg| sg["staves"].as_array());
+        let staves = match staves {
+            Some(s) => s,
+            None => continue,
+        };
+        if staves.is_empty() {
+            continue;
+        }
+
+        // Collect noteheads from the treble staff (index 0).
+        let treble = &staves[0];
+        let mut grace_xs: Vec<f64> = Vec::new();
+        let mut normal_xs: Vec<f64> = Vec::new();
+
+        for run in treble["glyph_runs"].as_array().unwrap_or(&vec![]) {
+            let fs = run["font_size"].as_f64().unwrap_or(80.0);
+            let is_grace_run = fs < 70.0 && fs > 50.0;
+            for glyph in run["glyphs"].as_array().unwrap_or(&vec![]) {
+                let cp = glyph["codepoint"].as_str().unwrap_or("");
+                let code = cp.chars().next().unwrap_or('\0') as u32;
+                // SMuFL noteheads U+E0A0..U+E0FF, combined notes U+E1D0..U+E1FF
+                if (0xE0A0..=0xE0FF).contains(&code) || (0xE1D0..=0xE1FF).contains(&code) {
+                    let x = glyph["position"]["x"].as_f64().unwrap_or(0.0);
+                    if is_grace_run {
+                        grace_xs.push(x);
+                    } else {
+                        normal_xs.push(x);
+                    }
+                }
+            }
+        }
+
+        if grace_xs.is_empty() || normal_xs.is_empty() {
+            continue;
+        }
+
+        // When multiple grace noteheads exist in the same system, they must
+        // not all collapse to the same x-position (the original bug clamped
+        // them all to left_margin).
+        if grace_xs.len() >= 2 {
+            let mut sorted_grace = grace_xs.clone();
+            sorted_grace.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let distinct_count = {
+                let mut prev = sorted_grace[0];
+                let mut cnt = 1usize;
+                for &gx in &sorted_grace[1..] {
+                    if (gx - prev).abs() > 1.0 {
+                        cnt += 1;
+                        prev = gx;
+                    }
+                }
+                cnt
+            };
+            assert!(
+                distinct_count >= 2,
+                "sys={sys_idx}: {n} grace noteheads all at x≈{x:.1} — they \
+                 should have distinct x-positions (spaced ~30 apart). \
+                 Grace notes likely collapsed to left_margin.",
+                n = grace_xs.len(),
+                x = sorted_grace[0],
+            );
+        }
+    }
+}

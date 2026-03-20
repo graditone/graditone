@@ -402,10 +402,18 @@ fn render_ties_and_slurs(
                     unified_left_margin
                 };
                 let run_len = (run_end - run_start) as f32;
-                for (k, idx) in (run_start..run_end).enumerate() {
-                    let offset = (run_len - k as f32) * 30.0;
-                    let x = (target_x - offset).max(unified_left_margin);
-                    grace_x_by_tick.insert(notes_in_range[idx].start_tick, x);
+                let first_x = target_x - run_len * 30.0;
+                if first_x >= unified_left_margin {
+                    for (k, idx) in (run_start..run_end).enumerate() {
+                        let offset = (run_len - k as f32) * 30.0;
+                        let x = target_x - offset;
+                        grace_x_by_tick.insert(notes_in_range[idx].start_tick, x);
+                    }
+                } else {
+                    for (k, idx) in (run_start..run_end).enumerate() {
+                        let x = unified_left_margin + k as f32 * 30.0;
+                        grace_x_by_tick.insert(notes_in_range[idx].start_tick, x);
+                    }
                 }
             } else {
                 i += 1;
