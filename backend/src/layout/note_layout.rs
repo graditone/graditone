@@ -508,15 +508,23 @@ pub(crate) fn position_glyphs_for_staff(
             let chord_stem_down = if let Some(forced) = forced_stem_down {
                 forced
             } else {
-                let most_extreme = *sorted
+                // Use explicit MusicXML stem direction if present
+                let explicit_stem = sorted
                     .iter()
-                    .max_by(|&&a, &&b| {
-                        let da = (chord_note_y_positions[a] - chord_stem_middle_y).abs();
-                        let db = (chord_note_y_positions[b] - chord_stem_middle_y).abs();
-                        da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .unwrap();
-                chord_note_y_positions[most_extreme] <= chord_stem_middle_y
+                    .find_map(|&idx| voice_notes_in_range[idx].stem_down);
+                if let Some(sd) = explicit_stem {
+                    sd
+                } else {
+                    let most_extreme = *sorted
+                        .iter()
+                        .max_by(|&&a, &&b| {
+                            let da = (chord_note_y_positions[a] - chord_stem_middle_y).abs();
+                            let db = (chord_note_y_positions[b] - chord_stem_middle_y).abs();
+                            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                        .unwrap();
+                    chord_note_y_positions[most_extreme] <= chord_stem_middle_y
+                }
             };
 
             let anchor_idx = if chord_stem_down {
@@ -615,6 +623,9 @@ pub(crate) fn position_glyphs_for_staff(
             .map(|(x, dx)| x + dx)
             .collect();
 
+        let explicit_stem_downs: Vec<Option<bool>> =
+            voice_notes_in_range.iter().map(|n| n.stem_down).collect();
+
         let glyphs = positioner::position_noteheads(
             &notes_in_range,
             &adjusted_horizontal_offsets,
@@ -628,6 +639,7 @@ pub(crate) fn position_glyphs_for_staff(
             &chord_scale_map,
             forced_stem_down,
             &grace_note_indices,
+            &explicit_stem_downs,
         );
 
         all_glyphs.extend(glyphs);
@@ -787,31 +799,60 @@ pub(crate) fn position_glyphs_for_staff(
                     stems::StemDirection::Up
                 }
             } else {
-                // Expand each beamable note into all chord notes at
-                // that tick so the stem direction considers every
-                // notehead's distance from the middle line.
-                let expanded: Vec<beams::BeamableNote> = group
-                    .notes
-                    .iter()
-                    .flat_map(|n| {
-                        if let Some(&(min_y, max_y)) = chord_y_range.get(&(n.tick, is_grace_group))
-                        {
-                            vec![
-                                beams::BeamableNote {
-                                    y: min_y,
-                                    ..n.clone()
-                                },
-                                beams::BeamableNote {
-                                    y: max_y,
-                                    ..n.clone()
-                                },
-                            ]
-                        } else {
-                            vec![n.clone()]
+                // Use explicit MusicXML stem direction if all notes in
+                // the group agree on the same direction.
+                let explicit_dir: Option<bool> = {
+                    let mut dir = None;
+                    let mut consistent = true;
+                    for n in &group.notes {
+                        if let Some(sd) = voice_notes_in_range[n.event_index].stem_down {
+                            if let Some(prev) = dir {
+                                if sd != prev {
+                                    consistent = false;
+                                    break;
+                                }
+                            } else {
+                                dir = Some(sd);
+                            }
                         }
-                    })
-                    .collect();
-                beams::compute_group_stem_direction(&expanded, staff_middle_y)
+                    }
+                    if consistent { dir } else { None }
+                };
+
+                if let Some(sd) = explicit_dir {
+                    if sd {
+                        stems::StemDirection::Down
+                    } else {
+                        stems::StemDirection::Up
+                    }
+                } else {
+                    // Expand each beamable note into all chord notes at
+                    // that tick so the stem direction considers every
+                    // notehead's distance from the middle line.
+                    let expanded: Vec<beams::BeamableNote> = group
+                        .notes
+                        .iter()
+                        .flat_map(|n| {
+                            if let Some(&(min_y, max_y)) =
+                                chord_y_range.get(&(n.tick, is_grace_group))
+                            {
+                                vec![
+                                    beams::BeamableNote {
+                                        y: min_y,
+                                        ..n.clone()
+                                    },
+                                    beams::BeamableNote {
+                                        y: max_y,
+                                        ..n.clone()
+                                    },
+                                ]
+                            } else {
+                                vec![n.clone()]
+                            }
+                        })
+                        .collect();
+                    beams::compute_group_stem_direction(&expanded, staff_middle_y)
+                }
             };
             let grace_scale: f32 = if is_grace_group { 0.75 } else { 1.0 };
             let notehead_width = stems::Stem::NOTEHEAD_WIDTH * grace_scale;
@@ -819,7 +860,11 @@ pub(crate) fn position_glyphs_for_staff(
             // === PHASE 1: Compute initial stems and beam line ===
             let visual_y_offset = 0.5 * units_per_space;
             let mut initial_stems: Vec<stems::Stem> = Vec::new();
-            let min_length = stems::Stem::MIN_BEAMED_STEM_LENGTH * grace_scale;
+            // Extend minimum stem for multi-beam groups (16ths, 32nds)
+            // so stems aren't cramped by the extra beam lines.
+            let max_beam_levels = group.notes.iter().map(|n| n.beam_levels).max().unwrap_or(1);
+            let beam_level_extra = (max_beam_levels.saturating_sub(1) as f32) * 5.0 * grace_scale;
+            let min_length = stems::Stem::MIN_BEAMED_STEM_LENGTH * grace_scale + beam_level_extra;
             for note in &group.notes {
                 // For chords, use the notehead closest to the beam
                 // direction as the stem origin, so the minimum stem length
@@ -880,7 +925,8 @@ pub(crate) fn position_glyphs_for_staff(
             let mut beam_offset = 0.0f32;
             for (i, stem) in initial_stems.iter().enumerate() {
                 let beam_y = beam_y_at_stems[i];
-                let min_length = stems::Stem::MIN_BEAMED_STEM_LENGTH * grace_scale;
+                let min_length =
+                    stems::Stem::MIN_BEAMED_STEM_LENGTH * grace_scale + beam_level_extra;
                 // For chords, enforce minimum clearance from the
                 // notehead closest to the beam, not the stem origin
                 // (which is at the far side of the chord).
@@ -1141,6 +1187,7 @@ mod tests {
                     slur_above: None,
                     is_grace: false,
                     has_explicit_accidental: false,
+                    stem_down: None,
                 }],
                 rests: vec![],
             }],
@@ -1188,6 +1235,7 @@ mod tests {
                     slur_above: None,
                     is_grace: false,
                     has_explicit_accidental: false,
+                    stem_down: None,
                 }],
                 rests: vec![],
             }],

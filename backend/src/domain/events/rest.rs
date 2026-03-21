@@ -21,6 +21,10 @@ pub struct RestEvent {
     pub voice: usize,
     /// MusicXML staff number (1-indexed).
     pub staff: usize,
+
+    /// `<rest measure="yes"/>` — a rest that fills the entire measure regardless of duration.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_measure_rest: bool,
 }
 
 impl RestEvent {
@@ -43,6 +47,27 @@ impl RestEvent {
             note_type,
             voice,
             staff,
+            is_measure_rest: false,
+        }
+    }
+
+    /// Create a new RestEvent marked as a full-measure rest.
+    pub fn new_measure_rest(
+        start_tick: Tick,
+        duration_ticks: u32,
+        note_type: Option<String>,
+        voice: usize,
+        staff: usize,
+    ) -> Self {
+        assert!(duration_ticks > 0, "RestEvent duration_ticks must be > 0");
+        Self {
+            id: RestEventId::new(),
+            start_tick,
+            duration_ticks,
+            note_type,
+            voice,
+            staff,
+            is_measure_rest: true,
         }
     }
 }

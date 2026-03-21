@@ -293,6 +293,13 @@ pub struct NoteData {
 
     /// Explicit accidental from MusicXML `<accidental>` element (courtesy/editorial)
     pub has_explicit_accidental: bool,
+
+    /// `<rest measure="yes"/>` — a rest that fills the entire measure regardless of duration.
+    pub is_measure_rest: bool,
+
+    /// Explicit stem direction from `<stem>down</stem>` or `<stem>up</stem>`.
+    /// `Some(true)` = stem down, `Some(false)` = stem up, `None` = not specified.
+    pub stem_down: Option<bool>,
 }
 
 /// Pitch from <pitch> element
@@ -322,6 +329,9 @@ pub struct RestData {
 
     /// Note type string (e.g., "whole", "half", "quarter", "eighth", "16th", "32nd", "64th")
     pub note_type: Option<String>,
+
+    /// `<rest measure="yes"/>` — a rest that fills the entire measure.
+    pub is_measure_rest: bool,
 }
 
 impl Default for MusicXMLDocument {

@@ -68,6 +68,10 @@ pub struct Note {
     /// Explicit accidental from MusicXML (courtesy/editorial — always display)
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub has_explicit_accidental: bool,
+    /// Explicit stem direction from MusicXML `<stem>` element.
+    /// `Some(true)` = stem down, `Some(false)` = stem up, `None` = not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stem_down: Option<bool>,
 }
 
 fn is_zero_u8(v: &u8) -> bool {
@@ -95,6 +99,7 @@ impl Note {
             slur_above: None,
             is_grace: false,
             has_explicit_accidental: false,
+            stem_down: None,
         })
     }
 
@@ -137,6 +142,12 @@ impl Note {
     /// Mark as having an explicit MusicXML accidental (builder pattern)
     pub fn with_explicit_accidental(mut self) -> Self {
         self.has_explicit_accidental = true;
+        self
+    }
+
+    /// Set explicit stem direction from MusicXML (builder pattern)
+    pub fn with_stem_down(mut self, down: bool) -> Self {
+        self.stem_down = Some(down);
         self
     }
 

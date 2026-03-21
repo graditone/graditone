@@ -226,6 +226,8 @@ pub fn position_noteheads(
     forced_stem_down: Option<bool>,
     // Grace note indices: these render at 75% of normal size
     grace_note_indices: &std::collections::HashSet<usize>,
+    // Explicit stem direction per note from MusicXML <stem> element
+    explicit_stem_downs: &[Option<bool>],
 ) -> Vec<Glyph> {
     notes
         .iter()
@@ -257,6 +259,8 @@ pub fn position_noteheads(
                 false
             } else if let Some(forced) = forced_stem_down {
                 forced
+            } else if let Some(Some(explicit)) = explicit_stem_downs.get(i) {
+                *explicit
             } else {
                 let stem_middle_y = staff_vertical_offset + 1.5 * units_per_space;
                 y <= stem_middle_y
@@ -862,9 +866,14 @@ pub fn position_note_accidentals(
         // What does the key signature say about this diatonic note?
         let key_says = key_alterations.get(&diatonic_pc).copied().unwrap_or(0);
 
-        // Compute the "base MIDI" pitch — the MIDI pitch of the natural version of this note.
-        // E.g., D#5 (MIDI 75) → base = 6*12+2 = 74 (D5 natural).
-        let base_midi = (pitch / 12) * 12 + diatonic_pc;
+        // Compute the "base MIDI" pitch — the MIDI pitch of the natural version of this note
+        // in the same spelled octave.  We derive it by subtracting the alteration from the
+        // sounding/display pitch.  This correctly handles octave-boundary spellings such as
+        // Cb (alter=-1) and C-natural: both map to the same base regardless of the integer
+        // octave their MIDI value falls in.
+        // E.g., Cb6 (display MIDI 83, alter=-1) → 83-(-1) = 84 (C6 natural).
+        //       C6  (display MIDI 84, alter= 0) → 84-0    = 84 (C6 natural).
+        let base_midi = ((pitch as i16) - (note_alteration as i16)).clamp(0, 127) as u8;
 
         // A note needs an accidental if:
         // 1. It has an alteration not covered by the key signature, OR
@@ -925,8 +934,11 @@ pub fn position_note_accidentals(
 
         // Choose SMuFL codepoint
         let (codepoint, glyph_name) = match accidental_type {
+            2 => ('\u{E263}', "accidentalDoubleSharp"),
             1 => ('\u{E262}', "accidentalSharp"),
+            0 => ('\u{E261}', "accidentalNatural"),
             -1 => ('\u{E260}', "accidentalFlat"),
+            -2 => ('\u{E264}', "accidentalDoubleFlat"),
             _ => ('\u{E261}', "accidentalNatural"),
         };
 
@@ -1007,6 +1019,10 @@ pub fn position_note_accidentals(
                             "accidentalSharp"
                         } else if acc.codepoint == "\u{E260}" {
                             "accidentalFlat"
+                        } else if acc.codepoint == "\u{E263}" {
+                            "accidentalDoubleSharp"
+                        } else if acc.codepoint == "\u{E264}" {
+                            "accidentalDoubleFlat"
                         } else {
                             "accidentalNatural"
                         };
@@ -1063,6 +1079,10 @@ pub fn position_note_accidentals(
                         "accidentalSharp"
                     } else if accidental_glyphs[curr].codepoint == "\u{E260}" {
                         "accidentalFlat"
+                    } else if accidental_glyphs[curr].codepoint == "\u{E263}" {
+                        "accidentalDoubleSharp"
+                    } else if accidental_glyphs[curr].codepoint == "\u{E264}" {
+                        "accidentalDoubleFlat"
                     } else {
                         "accidentalNatural"
                     };
@@ -1285,7 +1305,8 @@ pub(super) fn position_rests_for_staff(
     let mut glyphs = Vec::with_capacity(rests_in_range.len());
 
     for (event_index, rest) in rests_in_range.iter().enumerate() {
-        let is_full = is_full_measure_rest(rest.duration_ticks, time_numerator, time_denominator);
+        let is_full = rest.is_measure_rest
+            || is_full_measure_rest(rest.duration_ticks, time_numerator, time_denominator);
         // Full-measure rests always use the whole-rest glyph (standard notation convention)
         let codepoint = if is_full {
             '\u{E4E3}'
@@ -1307,7 +1328,7 @@ pub(super) fn position_rests_for_staff(
             ) + staff_vertical_offset
         };
 
-        let x = if is_full_measure_rest(rest.duration_ticks, time_numerator, time_denominator) {
+        let x = if is_full {
             // Find the enclosing measure using actual measure boundaries
             // from measure_x_bounds (keys are actual measure start ticks).
             let enclosing = measure_x_bounds
@@ -1514,6 +1535,7 @@ mod tests {
             &std::collections::HashMap::new(), // no chord scale overrides
             None,                              // no multi-voice override
             &std::collections::HashSet::new(), // no grace notes
+            &vec![None; notes.len()],          // no explicit stem directions
         );
 
         // Verify correct number of glyphs
@@ -1854,6 +1876,7 @@ mod tests {
             &std::collections::HashMap::new(), // no chord scale overrides
             None,
             &std::collections::HashSet::new(), // no grace notes
+            &vec![None; notes.len()],          // no explicit stem directions
         );
 
         assert_eq!(glyphs.len(), 2);
@@ -1893,6 +1916,7 @@ mod tests {
             &std::collections::HashMap::new(), // no chord scale overrides
             None,
             &std::collections::HashSet::new(), // no grace notes
+            &vec![None; notes.len()],          // no explicit stem directions
         );
 
         assert_eq!(glyphs.len(), 1);
@@ -1928,6 +1952,7 @@ mod tests {
             &std::collections::HashMap::new(), // no chord scale overrides
             None,
             &std::collections::HashSet::new(), // no grace notes
+            &vec![None; notes.len()],          // no explicit stem directions
         );
 
         assert_eq!(glyphs.len(), 1);

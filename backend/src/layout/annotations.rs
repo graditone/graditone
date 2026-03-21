@@ -239,8 +239,12 @@ fn render_notation_dots(
             note_ys.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
             // Determine stem direction for the chord/note
+            let explicit_stem_down = group.iter().find_map(|n| n.stem_down);
             let stem_down = if let Some(forced) = forced_stem_down {
                 forced
+            } else if let Some(explicit) = explicit_stem_down {
+                // Use stem direction explicitly encoded in MusicXML <stem> element
+                explicit
             } else if let Some(&beamed_down) = beam_tick_stem_down.get(_tick) {
                 beamed_down
             } else {
@@ -326,7 +330,18 @@ fn render_notation_dots(
                 let note_x = *note_positions.get(&anchor_note.start_tick).unwrap_or(&0.0);
                 let visual_y = anchor_y_raw + 0.5 * units_per_space;
                 let staccato_offset = 1.2 * units_per_space;
-                let staccato_y = if stem_down {
+                // In multi-voice, voice 0 is stem-up: place staccato above
+                // (stem side) so it doesn't collide with the staff bottom or
+                // with notes from other voices above.
+                let dot_above = if stem_down {
+                    true
+                } else if forced_stem_down == Some(false) {
+                    // Voice 0 forced stem up in multi-voice → dot above
+                    true
+                } else {
+                    false
+                };
+                let staccato_y = if dot_above {
                     visual_y - staccato_offset
                 } else {
                     visual_y + staccato_offset
@@ -689,9 +704,12 @@ fn render_ties_and_slurs(
                     }
                 };
                 let y_edge = if above {
-                    -notehead_half_h
+                    // Offset to reach the notehead top edge from visual_y.
+                    // visual_y = y_raw + 0.5*ups, so -2*half_h brings us to
+                    // y_raw − half_h, i.e. the physical top of the notehead.
+                    -2.0 * notehead_half_h
                 } else {
-                    notehead_half_h
+                    2.0 * notehead_half_h
                 };
 
                 let in_range =
@@ -707,40 +725,123 @@ fn render_ties_and_slurs(
                     match note_lookup.get(slur_target_id) {
                         Some(&(end_x, end_y, _ep, end_tick)) => {
                             // Same-system slur
-                            let arc_start_x = start_x + notehead_half_w * 0.3;
-                            let arc_end_x = end_x - notehead_half_w * 0.3;
-                            let adj_start_y = start_y + y_edge;
-                            let adj_end_y = end_y + y_edge;
+                            let arc_start_x = start_x;
+                            let arc_end_x = end_x;
+                            // Small gap so endpoints sit just above the notehead top.
+                            let endpoint_gap = notehead_half_h * 0.15;
+
+                            // For chords, move endpoint to the outermost note
+                            // edge at the same tick so the slur doesn't cross
+                            // other chord notes.
+                            let start_tick = n.start_tick;
+                            let mut adj_start_y =
+                                start_y + y_edge + if above { -endpoint_gap } else { endpoint_gap };
+                            for &(_nx, ny, _np, nt) in note_lookup.values() {
+                                if nt == start_tick {
+                                    let edge = ny + y_edge;
+                                    if above && edge < adj_start_y {
+                                        adj_start_y = edge - endpoint_gap;
+                                    } else if !above && edge > adj_start_y {
+                                        adj_start_y = edge + endpoint_gap;
+                                    }
+                                }
+                            }
+                            let mut adj_end_y =
+                                end_y + y_edge + if above { -endpoint_gap } else { endpoint_gap };
+                            for &(_nx, ny, _np, nt) in note_lookup.values() {
+                                if nt == end_tick {
+                                    let edge = ny + y_edge;
+                                    if above && edge < adj_end_y {
+                                        adj_end_y = edge - endpoint_gap;
+                                    } else if !above && edge > adj_end_y {
+                                        adj_end_y = edge + endpoint_gap;
+                                    }
+                                }
+                            }
+
                             let span_x = (arc_end_x - arc_start_x).abs().max(1.0);
-                            let arc_height = (3.5 * span_x.sqrt()).clamp(12.0, 50.0);
+
+                            // Collect intermediate notes for clearance checks.
+                            let clearance = notehead_half_h + 4.0;
+                            let intermediates: Vec<(f32, f32)> = note_lookup
+                                .values()
+                                .filter(|&&(nx, _ny, _np, nt)| {
+                                    nt > start_tick
+                                        && nt < end_tick
+                                        && nx > arc_start_x
+                                        && nx < arc_end_x
+                                })
+                                .map(|&(nx, ny, _np, _nt)| (nx, ny + y_edge))
+                                .collect();
+
+                            // Phase 1: compute baseline arc height and push
+                            // control-point Y so the arc clears every notehead.
+                            let arc_height = (5.0 * span_x.sqrt()).clamp(15.0, 80.0);
                             let y_offset = if above { -arc_height } else { arc_height };
                             let baseline_mid_y = (adj_start_y + adj_end_y) / 2.0 + y_offset;
-
-                            // Scan intermediate notes to ensure the slur arc clears them.
-                            // Collect the most extreme Y (in the slur direction) among
-                            // notes between start and end ticks (exclusive).
-                            let start_tick = n.start_tick;
-                            let clearance = notehead_half_h + 4.0;
                             let mut mid_y = baseline_mid_y;
-                            for &(nx, ny, _np, nt) in note_lookup.values() {
-                                if nt > start_tick
-                                    && nt < end_tick
-                                    && nx > arc_start_x
-                                    && nx < arc_end_x
-                                {
-                                    let edge_y = ny + y_edge;
-                                    if above {
-                                        // Slur above: mid_y must be above the highest intermediate note
-                                        let required = edge_y - clearance;
-                                        if required < mid_y {
-                                            mid_y = required;
-                                        }
+                            for &(_, edge_y) in &intermediates {
+                                if above && edge_y - clearance < mid_y {
+                                    mid_y = edge_y - clearance;
+                                } else if !above && edge_y + clearance > mid_y {
+                                    mid_y = edge_y + clearance;
+                                }
+                            }
+
+                            // Phase 2: verify actual Bézier at each intermediate
+                            // note's x.  If the curve still crosses a note (common
+                            // when the start or end sits much lower than neighbours),
+                            // pull the nearer endpoint up to eliminate the deficit.
+                            for _ in 0..4 {
+                                let mut ok = true;
+                                for &(nx, edge_y) in &intermediates {
+                                    let t = ((nx - arc_start_x) / span_x).clamp(0.01, 0.99);
+                                    let u = 1.0 - t;
+                                    let curve_y = u * u * u * adj_start_y
+                                        + 3.0 * u * u * t * mid_y
+                                        + 3.0 * u * t * t * mid_y
+                                        + t * t * t * adj_end_y;
+                                    let target = if above {
+                                        edge_y - clearance
                                     } else {
-                                        // Slur below: mid_y must be below the lowest intermediate note
-                                        let required = edge_y + clearance;
-                                        if required > mid_y {
-                                            mid_y = required;
+                                        edge_y + clearance
+                                    };
+                                    let crossed = if above {
+                                        curve_y > target
+                                    } else {
+                                        curve_y < target
+                                    };
+                                    if crossed {
+                                        ok = false;
+                                        let deficit = (curve_y - target).abs();
+                                        // Weight adjustment toward the nearer endpoint.
+                                        if t < 0.5 {
+                                            let w = 1.0 - t; // heavier near start
+                                            if above {
+                                                adj_start_y -= deficit * w;
+                                            } else {
+                                                adj_start_y += deficit * w;
+                                            }
+                                        } else {
+                                            let w = t;
+                                            if above {
+                                                adj_end_y -= deficit * w;
+                                            } else {
+                                                adj_end_y += deficit * w;
+                                            }
                                         }
+                                    }
+                                }
+                                if ok {
+                                    break;
+                                }
+                                // Recompute mid_y with updated endpoints.
+                                mid_y = (adj_start_y + adj_end_y) / 2.0 + y_offset;
+                                for &(_, edge_y) in &intermediates {
+                                    if above && edge_y - clearance < mid_y {
+                                        mid_y = edge_y - clearance;
+                                    } else if !above && edge_y + clearance > mid_y {
+                                        mid_y = edge_y + clearance;
                                     }
                                 }
                             }
@@ -769,9 +870,11 @@ fn render_ties_and_slurs(
                         }
                         None => {
                             // Cross-system outgoing slur
-                            let arc_start_x = start_x + notehead_half_w * 0.3;
+                            let arc_start_x = start_x;
                             let arc_end_x = system_right_edge;
-                            let adj_start_y = start_y + y_edge;
+                            let endpoint_gap = notehead_half_h * 0.5;
+                            let adj_start_y =
+                                start_y + y_edge + if above { -endpoint_gap } else { endpoint_gap };
                             let span_x = arc_end_x - arc_start_x;
                             let arc_height = (3.5 * span_x.sqrt()).clamp(12.0, 50.0);
                             let y_offset = if above { -arc_height } else { arc_height };
@@ -805,8 +908,10 @@ fn render_ties_and_slurs(
                 {
                     // Cross-system incoming slur
                     let (end_x, end_y, _ep, _et) = *note_lookup.get(slur_target_id).unwrap();
-                    let adj_end_y = end_y + y_edge;
-                    let arc_end_x = end_x - notehead_half_w * 0.3;
+                    let endpoint_gap = notehead_half_h * 0.5;
+                    let adj_end_y =
+                        end_y + y_edge + if above { -endpoint_gap } else { endpoint_gap };
+                    let arc_end_x = end_x;
                     let incoming_offset = 3.0 * notehead_half_w;
                     let arc_start_x = (unified_left_margin - incoming_offset)
                         .min(arc_end_x - 20.0)
