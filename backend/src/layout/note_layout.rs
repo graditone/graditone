@@ -860,7 +860,11 @@ pub(crate) fn position_glyphs_for_staff(
             // === PHASE 1: Compute initial stems and beam line ===
             let visual_y_offset = 0.5 * units_per_space;
             let mut initial_stems: Vec<stems::Stem> = Vec::new();
-            let min_length = stems::Stem::MIN_BEAMED_STEM_LENGTH * grace_scale;
+            // Extend minimum stem for multi-beam groups (16ths, 32nds)
+            // so stems aren't cramped by the extra beam lines.
+            let max_beam_levels = group.notes.iter().map(|n| n.beam_levels).max().unwrap_or(1);
+            let beam_level_extra = (max_beam_levels.saturating_sub(1) as f32) * 5.0 * grace_scale;
+            let min_length = stems::Stem::MIN_BEAMED_STEM_LENGTH * grace_scale + beam_level_extra;
             for note in &group.notes {
                 // For chords, use the notehead closest to the beam
                 // direction as the stem origin, so the minimum stem length
@@ -921,7 +925,8 @@ pub(crate) fn position_glyphs_for_staff(
             let mut beam_offset = 0.0f32;
             for (i, stem) in initial_stems.iter().enumerate() {
                 let beam_y = beam_y_at_stems[i];
-                let min_length = stems::Stem::MIN_BEAMED_STEM_LENGTH * grace_scale;
+                let min_length =
+                    stems::Stem::MIN_BEAMED_STEM_LENGTH * grace_scale + beam_level_extra;
                 // For chords, enforce minimum clearance from the
                 // notehead closest to the beam, not the stem origin
                 // (which is at the far side of the chord).
