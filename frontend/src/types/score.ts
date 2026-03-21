@@ -92,6 +92,8 @@ export interface Note {
   is_grace?: boolean;
   /** Explicit accidental from MusicXML (courtesy/editorial — always display) */
   has_explicit_accidental?: boolean;
+  /** Explicit stem direction from MusicXML: true=down, false=up */
+  stem_down?: boolean;
 }
 
 // ============================================================================

@@ -200,6 +200,8 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
             ...(note.is_grace ? { is_grace: true } : {}),
             // Forward explicit accidental flag (courtesy/editorial — always display)
             ...(note.has_explicit_accidental ? { has_explicit_accidental: true } : {}),
+            // Forward explicit stem direction from MusicXML for staccato placement
+            ...(note.stem_down !== undefined ? { stem_down: note.stem_down } : {}),
           })),
           // Forward rest events so the layout engine can produce rest glyphs
           ...(voice.rest_events && voice.rest_events.length > 0
