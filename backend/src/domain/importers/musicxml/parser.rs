@@ -1251,18 +1251,21 @@ impl MusicXMLParser {
                         // Read text content (the digit)
                         if let Ok(Event::Text(text)) = reader.read_event_into(&mut buf) {
                             let value = text.unescape().unwrap_or_default();
-                            if let Ok(digit) = value.trim().parse::<u8>() {
-                                if digit > 0 {
-                                    let above = placement_above.unwrap_or(note.staff <= 1);
-                                    note.fingering.push(
-                                        crate::domain::events::note::FingeringAnnotation {
-                                            digit,
-                                            above,
-                                        },
-                                    );
+                            let above = placement_above.unwrap_or(note.staff <= 1);
+                            // Handle both single-digit ("3") and multi-line
+                            // ("1\n3\n5") fingering text from MusicXML editors.
+                            for token in value.split_whitespace() {
+                                if let Ok(digit) = token.parse::<u8>() {
+                                    if digit > 0 {
+                                        note.fingering.push(
+                                            crate::domain::events::note::FingeringAnnotation {
+                                                digit,
+                                                above,
+                                            },
+                                        );
+                                    }
                                 }
                             }
-                            // Non-numeric or zero content: silently discard (FR-008)
                         }
                     }
                 }

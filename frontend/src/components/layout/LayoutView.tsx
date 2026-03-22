@@ -204,10 +204,11 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
             ...(note.is_grace ? { is_grace: true } : {}),
             // Forward explicit accidental flag (courtesy/editorial — always display)
             ...(note.has_explicit_accidental ? { has_explicit_accidental: true } : {}),
-            // NOTE: MusicXML <stem> direction is NOT forwarded to the layout engine.
-            // The engine computes stem direction from pitch position and voice index,
-            // which is more reliable than editor-specific engraving choices embedded
-            // in MusicXML files (e.g. La Candeur has stem=down on all RH notes).
+            // Forward MusicXML <stem> direction so the layout engine can honour
+            // the engraver's intent for borderline cases (e.g. notes balanced
+            // around the middle line).  The engine's cascade is:
+            //   forced_stem_down (multi-voice) → explicit stem_down → auto heuristic
+            ...(note.stem_down !== undefined ? { stem_down: note.stem_down } : {}),
             // Forward fingering annotations for fingering glyph rendering
             ...(note.fingering && note.fingering.length > 0 ? { fingering: note.fingering } : {}),
           })),

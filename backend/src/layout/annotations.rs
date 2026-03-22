@@ -148,9 +148,21 @@ fn render_notation_dots(
     let dot_radius = 0.18 * units_per_space;
     let num_voices = staff_data.voices.len();
     for (dot_voice_idx, voice) in staff_data.voices.iter().enumerate() {
-        // Multi-voice stem rule for dot placement
+        // Multi-voice stem rule for dot placement — only force when another
+        // voice actually has notes in the current tick range (same fix as
+        // note_layout::position_glyphs_for_staff).
         let forced_stem_down: Option<bool> = if num_voices > 1 {
-            Some(dot_voice_idx > 0)
+            let other_voice_has_notes = staff_data.voices.iter().enumerate().any(|(vi, v)| {
+                vi != dot_voice_idx
+                    && v.notes.iter().any(|n| {
+                        n.start_tick >= tick_range.start_tick && n.start_tick < tick_range.end_tick
+                    })
+            });
+            if other_voice_has_notes {
+                Some(dot_voice_idx > 0)
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -374,6 +386,10 @@ fn render_notation_dots(
 /// Each fingering annotation produces a `FingeringGlyph` positioned vertically
 /// outside the staff lines (above or below the notehead). Multiple fingerings on
 /// the same note are stacked with 1.5 × units_per_space increments.
+///
+/// For notes that are part of a chord (multiple notes at the same tick),
+/// fingering is placed to the right of the notehead at the note's Y level
+/// to avoid overlapping with neighbouring chord tones.
 fn render_fingering_glyphs(
     staff_data: &StaffData,
     tick_range: &TickRange,
@@ -383,6 +399,14 @@ fn render_fingering_glyphs(
 ) -> Vec<types::FingeringGlyph> {
     let mut glyphs = Vec::new();
     for voice in &staff_data.voices {
+        // Pre-compute how many notes each tick has so we can detect chords.
+        let mut tick_note_count: HashMap<u32, usize> = HashMap::new();
+        for note in &voice.notes {
+            if note.start_tick >= tick_range.start_tick && note.start_tick < tick_range.end_tick {
+                *tick_note_count.entry(note.start_tick).or_insert(0) += 1;
+            }
+        }
+
         for note in &voice.notes {
             if note.start_tick < tick_range.start_tick || note.start_tick >= tick_range.end_tick {
                 continue;
@@ -400,19 +424,35 @@ fn render_fingering_glyphs(
             ) + staff_vertical_offset;
             let visual_y = notehead_y + 0.5 * units_per_space;
 
+            let is_chord = tick_note_count.get(&note.start_tick).copied().unwrap_or(1) > 1;
+
             for (idx, fa) in note.fingering.iter().enumerate() {
-                let offset = (1.8 + idx as f32 * 1.5) * units_per_space;
-                let y = if fa.above {
-                    visual_y - offset
+                if is_chord {
+                    // Chord note: place to the right of the notehead at
+                    // the note's own Y level so it doesn't overlap with
+                    // neighbouring chord tones.
+                    let right_offset =
+                        stems::Stem::NOTEHEAD_WIDTH + (1.0 + idx as f32 * 1.2) * units_per_space;
+                    glyphs.push(types::FingeringGlyph {
+                        x: note_x + right_offset,
+                        y: visual_y,
+                        digit: fa.digit,
+                        above: fa.above,
+                    });
                 } else {
-                    visual_y + offset
-                };
-                glyphs.push(types::FingeringGlyph {
-                    x: note_x,
-                    y,
-                    digit: fa.digit,
-                    above: fa.above,
-                });
+                    let offset = (1.8 + idx as f32 * 1.5) * units_per_space;
+                    let y = if fa.above {
+                        visual_y - offset
+                    } else {
+                        visual_y + offset
+                    };
+                    glyphs.push(types::FingeringGlyph {
+                        x: note_x,
+                        y,
+                        digit: fa.digit,
+                        above: fa.above,
+                    });
+                }
             }
         }
     }

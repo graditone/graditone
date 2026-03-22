@@ -80,9 +80,7 @@ describe('convertScoreToLayoutFormat — note field forwarding', () => {
       slur_above: true,
       is_grace: true,
       has_explicit_accidental: true,
-      // NOTE: stem_down is intentionally NOT forwarded — the layout engine
-      // computes stem direction from pitch position and voice index, which is
-      // more reliable than MusicXML editor-specific engraving choices.
+      stem_down: true,
       fingering: [{ digit: 3, above: true }],
     };
 
@@ -119,8 +117,8 @@ describe('convertScoreToLayoutFormat — note field forwarding', () => {
     // Accidental flag
     expect(outputNote).toHaveProperty('has_explicit_accidental', true);
 
-    // stem_down is intentionally NOT forwarded (layout engine auto-computes)
-    expect(outputNote).not.toHaveProperty('stem_down');
+    // MusicXML <stem> direction forwarded for borderline-heuristic cases
+    expect(outputNote).toHaveProperty('stem_down', true);
 
     // Fingering annotations (the field that caused the 2026-03 bug)
     expect(outputNote).toHaveProperty('fingering');
