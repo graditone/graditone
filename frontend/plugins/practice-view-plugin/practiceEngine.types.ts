@@ -19,7 +19,7 @@ export type PracticeNoteEntry = PluginPracticeNoteEntry;
 // ---------------------------------------------------------------------------
 
 /** Outcome of a single note during practice. */
-export type NoteOutcome = 'correct' | 'correct-late' | 'wrong' | 'pending' | 'early-release';
+export type NoteOutcome = 'correct' | 'correct-late' | 'wrong' | 'pending' | 'early-release' | 'auto-advanced';
 
 /** Recorded result for one note entry in the practice session. */
 export interface PracticeNoteResult {

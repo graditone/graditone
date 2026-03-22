@@ -156,21 +156,21 @@ describe('PracticeToolbar — Staff selector', () => {
     expect(screen.getByRole('combobox', { name: /select staff/i })).toBeTruthy();
   });
 
-  it('has correct number of options when staffCount === 3 (3 staves + Both Clefs)', () => {
+  it('has correct number of options when staffCount === 3 (3 staves + Both Hands)', () => {
     render(<PracticeToolbar {...makeDefaultProps({ staffCount: 3 })} />);
     const select = screen.getByRole('combobox', { name: /select staff/i });
-    // staffCount individual options + 1 "Both Clefs" option
+    // staffCount individual options + 1 "Both Hands" option
     expect(select.querySelectorAll('option').length).toBe(4);
   });
 
-  it('includes a "Both Clefs" option when staffCount === 2', () => {
+  it('includes a "Both Hands" option when staffCount === 2', () => {
     render(<PracticeToolbar {...makeDefaultProps({ staffCount: 2 })} />);
     const select = screen.getByRole('combobox', { name: /select staff/i });
     const options = Array.from(select.querySelectorAll('option'));
-    expect(options.some((o) => o.textContent === 'Both Clefs')).toBe(true);
+    expect(options.some((o) => o.textContent === 'Both Hands')).toBe(true);
   });
 
-  it('calls onStaffChange with -1 when "Both Clefs" is selected', () => {
+  it('calls onStaffChange with -1 when "Both Hands" is selected', () => {
     const onStaffChange = vi.fn();
     render(
       <PracticeToolbar {...makeDefaultProps({ staffCount: 2, onStaffChange })} />,

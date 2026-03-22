@@ -213,10 +213,10 @@ export function PracticeToolbar({
         >
           {Array.from({ length: staffCount }, (_, i) => (
             <option key={i} value={i}>
-              {i === 0 ? 'Treble Clef' : i === 1 ? 'Bass Clef' : `Staff ${i + 1}`}
+              {i === 0 ? 'Right Hand' : i === 1 ? 'Left Hand' : `Staff ${i + 1}`}
             </option>
           ))}
-          <option value={-1}>Both Clefs</option>
+          <option value={-1}>Both Hands</option>
         </select>
       )}
 

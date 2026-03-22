@@ -32,6 +32,10 @@ export interface ScoreViewerProps {
   sourceToNoteIdMap?: Map<string, string>;
   /** Long-press pinned note IDs — rendered with permanent green highlight */
   pinnedNoteIds?: Set<string>;
+  /** Error note IDs — rendered with red highlight (auto-advance flash) */
+  errorNoteIds?: Set<string>;
+  /** Expected note IDs — rendered with green at low opacity ("play this") */
+  expectedNoteIds?: Set<string>;
   /** Note IDs for auto-scroll targeting; overrides highlightedNoteIds for scroll only */
   scrollTargetNoteIds?: Set<string>;
   /** Loop region for overlay rect and rAF loop-back */
@@ -823,6 +827,8 @@ export class ScoreViewer extends Component<ScoreViewerProps, ScoreViewerState> {
                 notes={this.props.notes}
                 rawNotes={this.props.rawNotes}
                 pinnedNoteIds={this.props.pinnedNoteIds}
+                errorNoteIds={this.props.errorNoteIds}
+                expectedNoteIds={this.props.expectedNoteIds}
                 loopRegion={this.props.loopRegion}
                 hideMeasureNumbers={this.props.hideMeasureNumbers}
               />

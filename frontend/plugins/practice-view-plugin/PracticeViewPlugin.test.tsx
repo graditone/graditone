@@ -1216,3 +1216,73 @@ describe('Feature 042 — US3: early-release scoring (T028, T029, T030)', () => 
     vi.useRealTimers();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Feature 001-fix-practice-midi-detection — T004: Pin retry after EARLY_RELEASE
+// ---------------------------------------------------------------------------
+
+describe('Feature 001 — T004: HL+HR chord pin retry after EARLY_RELEASE', () => {
+  let originalRAF: typeof requestAnimationFrame;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // Capture rAF callbacks so the hold-timer loop is controlled by the test.
+    originalRAF = window.requestAnimationFrame;
+  });
+
+  afterEach(() => {
+    window.requestAnimationFrame = originalRAF;
+    vi.useRealTimers();
+  });
+
+  it('re-pressing only released note completes chord when other notes still held', () => {
+    // Install rAF interceptor before render so we capture every hold-timer callback.
+    let rafCb: FrameRequestCallback | null = null;
+    window.requestAnimationFrame = (cb: FrameRequestCallback) => { rafCb = cb; return 1; };
+
+    // HL+HR chord: LH = 48 (C3), RH = 60 (C4) — requires hold
+    const chordNote = { midiPitches: [48, 60], noteIds: ['lh1', 'rh1'], tick: 0, durationTicks: 3840 };
+    const finalNote = { midiPitches: [62], noteIds: ['n2'], tick: 3840, durationTicks: 0 };
+    const ctx = createMockContext({ status: 'ready', staffCount: 1, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [chordNote, finalNote],
+      totalAvailable: 2,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />);
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Press both keys (LH=48, RH=60) → chord complete → enters 'holding' mode
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 48 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    // Release only the RH note (60) → triggers EARLY_RELEASE → mode back to 'active'
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 60 }); });
+
+    // LH note (48) is still physically held.
+    // Reset rafCb so we capture the NEW hold-timer callback after retry.
+    rafCb = null;
+
+    // Re-press RH note (60) → the engine should recognise that LH is still held
+    // (pinned by useEffect) and complete the chord, entering 'holding' mode again.
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    // Session should NOT have completed yet — still in holding mode.
+    expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
+
+    // Now complete the hold: advance time past 90% threshold and fire rAF
+    const baseTime = Date.now();
+    vi.setSystemTime(baseTime + 4000); // 4000ms > 90% of 3840-tick hold at 120 BPM
+    act(() => { if (rafCb) rafCb(performance.now()); });
+
+    // After the hold completes, the engine should advance to the next note.
+    // Complete the second note to finish the session.
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+
+    // Results overlay should appear (session complete)
+    const overlay = screen.queryByRole('region', { name: /practice results/i });
+    // If pin logic is currently broken, the session gets stuck and no overlay appears
+    expect(overlay).toBeTruthy();
+  });
+});

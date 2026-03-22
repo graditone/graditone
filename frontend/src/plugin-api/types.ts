@@ -589,6 +589,10 @@ export interface PluginScoreRendererProps {
   loopRegion: { readonly startTick: number; readonly endTick: number } | null;
   /** Note IDs carrying a pin marker (green indicator). 0–2 IDs. */
   pinnedNoteIds: ReadonlySet<string>;
+  /** Note IDs to highlight in red (auto-advance error flash). Empty set when none. */
+  errorNoteIds?: ReadonlySet<string>;
+  /** Note IDs to show as the expected target (green, low opacity). */
+  expectedNoteIds?: ReadonlySet<string>;
   /**
    * Note IDs that auto-scroll should track. When set, ScoreViewer scrolls
    * to keep these notes visible instead of `highlightedNoteIds`.

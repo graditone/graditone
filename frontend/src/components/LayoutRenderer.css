@@ -94,6 +94,28 @@ text.layout-glyph {
 /* Pinned notehead scale is also applied via JS SVG attribute (see applyNoteheadScale). */
 
 /**
+ * Feature 001: Green "expected" guide for the current target beat.
+ * Uses the same green as .pinned but at reduced opacity so the player can
+ * see what note/chord is expected without it looking like a confirmation.
+ */
+.layout-glyph.expected {
+  fill: #5AC481 !important;
+  stroke: #5AC481 !important;
+  opacity: 0.4;
+}
+
+/**
+ * Feature 001: Red highlight for auto-advanced (failed) notes.
+ * Declared AFTER .pinned so error wins when both classes are present.
+ * Uses the theme's --color-danger (= --ls-accent) so the flash colour
+ * matches the active landing theme instead of a fixed red.
+ */
+.layout-glyph.error {
+  fill: var(--color-danger, #E55353) !important;
+  stroke: var(--color-danger, #E55353) !important;
+}
+
+/**
  * Loop region overlay rect drawn behind notes.
  * Semi-transparent green tint highlights the section that will repeat.
  */

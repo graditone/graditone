@@ -55,6 +55,10 @@ export interface LayoutRendererProps {
   selectedNoteId?: string;
   /** Long-press pinned note IDs — rendered with permanent green highlight */
   pinnedNoteIds?: Set<string>;
+  /** Error note IDs — rendered with red highlight (auto-advance flash) */
+  errorNoteIds?: Set<string>;
+  /** Expected note IDs — rendered with green at low opacity ("play this") */
+  expectedNoteIds?: Set<string>;
   /** Loop region: when both pins are active, draws a semi-transparent overlay rect.
    * startTick and endTick are the absolute tick positions of the two pinned notes. */
   loopRegion?: { startTick: number; endTick: number } | null;
@@ -102,6 +106,10 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
   private prevHighlightedIds = new Set<string>();
   /** Previous pinned note IDs for diff computation */
   private prevPinnedIds = new Set<string>();
+  /** Previous error note IDs for diff computation */
+  private prevErrorIds = new Set<string>();
+  /** Previous expected note IDs for diff computation */
+  private prevExpectedIds = new Set<string>();
   /** Target interval between highlight frames (33ms mobile / 16ms desktop) */
   private frameInterval = 16;
   /** Pre-sorted note index for O(log n) highlight queries */
@@ -168,6 +176,8 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       nextProps.sourceToNoteIdMap !== this.props.sourceToNoteIdMap ||
       nextProps.selectedNoteId !== this.props.selectedNoteId ||
       nextProps.pinnedNoteIds !== this.props.pinnedNoteIds ||
+      nextProps.errorNoteIds !== this.props.errorNoteIds ||
+      nextProps.expectedNoteIds !== this.props.expectedNoteIds ||
       nextProps.loopRegion !== this.props.loopRegion
     );
   }
@@ -242,6 +252,16 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
     // Apply pinned highlight when pinnedNoteIds prop changes
     if (prevProps.pinnedNoteIds !== this.props.pinnedNoteIds) {
       this.updatePinnedHighlights();
+    }
+
+    // Apply error highlight when errorNoteIds prop changes
+    if (prevProps.errorNoteIds !== this.props.errorNoteIds) {
+      this.updateErrorHighlights();
+    }
+
+    // Apply expected highlight when expectedNoteIds prop changes
+    if (prevProps.expectedNoteIds !== this.props.expectedNoteIds) {
+      this.updateExpectedHighlights();
     }
 
     // Re-render SVG when loop region changes (overlay rect must be redrawn)
@@ -345,6 +365,59 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
     }
   }
 
+  private updateErrorHighlights(): void {
+    const svg = this.svgRef.current;
+    if (!svg) return;
+    const rawError = this.props.errorNoteIds ?? new Set<string>();
+    const currentError = new Set([...rawError].map(id => id.replace(/-r\d+$/, '')));
+
+    for (const id of this.prevErrorIds) {
+      if (!currentError.has(id)) {
+        svg.querySelectorAll(`.layout-glyph[data-note-id="${id}"]`).forEach(el => {
+          el.classList.remove('error');
+          if (!el.classList.contains('pinned') && !el.classList.contains('highlighted')) {
+            this.applyNoteheadScale(el, 1);
+          }
+        });
+      }
+    }
+    for (const id of currentError) {
+      svg.querySelectorAll(`.layout-glyph[data-note-id="${id}"]`).forEach(el => {
+        el.classList.add('error');
+        el.classList.remove('highlighted');
+        el.classList.remove('pinned');
+        this.applyNoteheadScale(el, 1.2);
+      });
+    }
+    this.prevErrorIds = new Set(currentError);
+  }
+
+  private updateExpectedHighlights(): void {
+    const svg = this.svgRef.current;
+    if (!svg) return;
+    const rawExpected = this.props.expectedNoteIds ?? new Set<string>();
+    const currentExpected = new Set([...rawExpected].map(id => id.replace(/-r\d+$/, '')));
+
+    for (const id of this.prevExpectedIds) {
+      if (!currentExpected.has(id)) {
+        svg.querySelectorAll(`.layout-glyph[data-note-id="${id}"]`).forEach(el => {
+          el.classList.remove('expected');
+          if (!el.classList.contains('pinned') && !el.classList.contains('highlighted') && !el.classList.contains('error')) {
+            this.applyNoteheadScale(el, 1);
+          }
+        });
+      }
+    }
+    for (const id of currentExpected) {
+      svg.querySelectorAll(`.layout-glyph[data-note-id="${id}"]`).forEach(el => {
+        el.classList.add('expected');
+        el.classList.remove('highlighted');
+        this.applyNoteheadScale(el, 1.2);
+      });
+    }
+    this.prevExpectedIds = new Set(currentExpected);
+  }
+
   private updatePinnedHighlights(): void {
     const svg = this.svgRef.current;
     if (!svg) return;
@@ -356,20 +429,27 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
 
     // Remove .pinned from ALL matching layout-glyph elements for IDs no longer pinned.
     // Scoped to .layout-glyph to skip hit-rects (transparent overlays) and beams.
+    const currentExpected = this.prevExpectedIds;
     for (const id of this.prevPinnedIds) {
       if (!currentPinned.has(id)) {
         svg.querySelectorAll(`.layout-glyph[data-note-id="${id}"]`).forEach(el => {
           el.classList.remove('pinned');
-          this.applyNoteheadScale(el, 1);
+          // Restore expected class if this note is still in the expected set
+          if (currentExpected.has(id)) {
+            el.classList.add('expected');
+          } else {
+            this.applyNoteheadScale(el, 1);
+          }
         });
       }
     }
     // Add .pinned to all layout-glyph elements for this note (notehead + accidental + stem)
-    // and strip any stale orange highlight so green is visible immediately.
+    // and strip any stale orange/expected highlight so full green is visible.
     for (const id of currentPinned) {
       svg.querySelectorAll(`.layout-glyph[data-note-id="${id}"]`).forEach(el => {
         el.classList.add('pinned');
         el.classList.remove('highlighted');
+        el.classList.remove('expected');
         this.applyNoteheadScale(el, 1.2);
       });
     }
@@ -410,14 +490,14 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
     for (const id of patch.removed) {
       svg.querySelectorAll(`.layout-glyph[data-note-id="${id}"]`).forEach(el => {
         el.classList.remove('highlighted');
-        // Only remove scale if element is not also pinned
-        if (!el.classList.contains('pinned')) this.applyNoteheadScale(el, 1);
+        // Only remove scale if element is not also pinned, error, or expected
+        if (!el.classList.contains('pinned') && !el.classList.contains('error') && !el.classList.contains('expected')) this.applyNoteheadScale(el, 1);
       });
     }
     for (const id of patch.added) {
-      // Skip elements that are pinned — green takes priority, orange must not overwrite
+      // Skip elements that are pinned, error, or expected — green/red/guide take priority
       svg.querySelectorAll(`.layout-glyph[data-note-id="${id}"]`).forEach(el => {
-        if (!el.classList.contains('pinned')) {
+        if (!el.classList.contains('pinned') && !el.classList.contains('error') && !el.classList.contains('expected')) {
           el.classList.add('highlighted');
           this.applyNoteheadScale(el, 1.2);
         }
@@ -464,7 +544,7 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
     // Scoped to .layout-glyph — skips hit-rects and beams (same reasoning as updateHighlights).
     for (const id of baseIds) {
       svg.querySelectorAll(`.layout-glyph[data-note-id="${id}"]`).forEach(el => {
-        if (!el.classList.contains('pinned')) {
+        if (!el.classList.contains('pinned') && !el.classList.contains('error') && !el.classList.contains('expected')) {
           el.classList.add('highlighted');
           this.applyNoteheadScale(el, 1.2);
         }
@@ -473,6 +553,10 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
 
     // Re-apply pinned highlights after structural render
     this.updatePinnedHighlights();
+    // Re-apply error highlights after structural render
+    this.updateErrorHighlights();
+    // Re-apply expected highlights after structural render
+    this.updateExpectedHighlights();
   }
 
   /**

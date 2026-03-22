@@ -483,10 +483,10 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
         }
       }
 
-      // Staccato: halve duration (standard musical convention)
+      // Staccato: no hold required — pitch-only validation (FR-004)
       for (const entry of sorted) {
         if (entry.hasStaccato) {
-          entry.durationTicks = Math.round(entry.durationTicks * 0.5);
+          entry.durationTicks = 0;
         }
       }
 

@@ -177,6 +177,13 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // Shown when practice completes; dismissed only via the × button.
   const [resultsOverlayVisible, setResultsOverlayVisible] = useState(false);
 
+  // ─── Auto-advance error flash ─────────────────────────────────────────────
+  // When the engine auto-advances after MAX_CONSECUTIVE_WRONG wrong presses,
+  // briefly highlight the failed beat in red so the player sees which note
+  // was skipped before the target jumps to the next beat.
+  const [errorNoteIds, setErrorNoteIds] = useState<ReadonlySet<string>>(new Set());
+  const errorFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // ─── Replay state (038-practice-replay) ────────────────────────────────────
   const [performanceRecord, setPerformanceRecord] = useState<PerformanceRecord | null>(null);
   const [isReplaying, setIsReplaying] = useState(false);
@@ -221,6 +228,26 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       setIsReplaying(false);
     }
   }, [practiceState.mode]);
+
+  // Flash the auto-advanced note IDs in red for 600 ms when the engine skips a beat.
+  useEffect(() => {
+    const results = practiceState.noteResults;
+    if (results.length === 0) return;
+    const last = results[results.length - 1];
+    if (last.outcome !== 'auto-advanced') return;
+    // Determine the note IDs of the skipped beat from the notes array.
+    const skippedEntry = practiceState.notes[last.noteIndex];
+    if (!skippedEntry) return;
+    const ids = new Set<string>(skippedEntry.noteIds as string[]);
+    setErrorNoteIds(ids);
+    // Clear any previous flash timer.
+    if (errorFlashTimerRef.current !== null) clearTimeout(errorFlashTimerRef.current);
+    errorFlashTimerRef.current = setTimeout(() => {
+      setErrorNoteIds(new Set());
+      errorFlashTimerRef.current = null;
+    }, 600);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [practiceState.noteResults]);
 
   useEffect(() => {
     if (playerState.status !== 'paused') setPendingPlay(false);
@@ -415,35 +442,44 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // rolling window. Reset each time the target note entry changes (either
   // by advancing on CORRECT_MIDI or by SEEK / STOP / DEACTIVATE).
   const chordDetectorRef = useRef(new ChordDetector());
+  const prevPracticeIndexRef = useRef(-1);
 
   useEffect(() => {
     const ps = practiceStateRef.current;
     if (ps.mode === 'active' || ps.mode === 'waiting') {
+      const isNewBeat = ps.currentIndex !== prevPracticeIndexRef.current;
+      prevPracticeIndexRef.current = ps.currentIndex;
+
       const entry = ps.notes[ps.currentIndex];
       if (entry) {
         const onset = entry.midiPitches as number[];
         const sustained = (entry.sustainedPitches ?? []) as number[];
         // Require both onset and sustained pitches for chord completion
         chordDetectorRef.current.reset([...onset, ...sustained]);
-        // Pin pitches that carry over from the previous entry (sustained
-        // across voice boundaries) and that the user is already holding,
-        // so they count as collected without a new press.
-        const prevEntry = ps.currentIndex > 0 ? ps.notes[ps.currentIndex - 1] : null;
-        const prevPitches = prevEntry ? (prevEntry.midiPitches as number[]) : [];
-        for (const pitch of onset) {
-          if (prevPitches.includes(pitch) && heldMidiKeysRef.current.has(pitch)) {
-            chordDetectorRef.current.pin(pitch);
-          }
-        }
+        // Always pin sustained pitches that are physically held from a prior onset.
         for (const pitch of sustained) {
           if (heldMidiKeysRef.current.has(pitch)) {
             chordDetectorRef.current.pin(pitch);
+          }
+        }
+        // On a RETRY (early-release on the SAME beat, index unchanged): also
+        // pin onset pitches the player is still holding so re-pressing only
+        // the released note completes the chord.
+        // On a NEW beat (index advanced): do NOT pin onset pitches — the player
+        // must press them fresh.  Without this guard, consecutive identical
+        // chords (e.g. Arabesque M1→M2 triads) would auto-complete.
+        if (!isNewBeat) {
+          for (const pitch of onset) {
+            if (heldMidiKeysRef.current.has(pitch)) {
+              chordDetectorRef.current.pin(pitch);
+            }
           }
         }
       } else {
         chordDetectorRef.current.reset([]);
       }
     } else {
+      prevPracticeIndexRef.current = ps.currentIndex;
       chordDetectorRef.current.reset([]);
     }
   // practiceState.currentIndex and practiceState.mode are the triggers:
@@ -480,6 +516,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // MIDI-pressed note IDs — cleared on key release, merged into highlightedNoteIds
   const [midiPressedNoteIds, setMidiPressedNoteIds] = useState<ReadonlySet<string>>(new Set());
+  // Counter that increments on every MIDI attack/release — used purely as a
+  // reactivity trigger so memos that read heldMidiKeysRef always recompute.
+  const [midiEventTick, setMidiEventTick] = useState(0);
 
   // ─── Held MIDI keys tracking (multi-voice sustained notes) ────────────────
   // Tracks which MIDI keys are physically held down (attack adds, release removes).
@@ -495,6 +534,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       // Replay cleanup (038-practice-replay, T017)
       replayTimersRef.current.forEach(clearTimeout);
       replayTimersRef.current = [];
+      // Error flash cleanup
+      if (errorFlashTimerRef.current !== null) clearTimeout(errorFlashTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -508,6 +549,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         // Relay release for natural key-up audio and clear visual highlight
         context.playNote({ midiNote: event.midiNote, timestamp: event.timestamp, type: 'release' });
         setMidiPressedNoteIds(new Set());
+        setMidiEventTick(t => t + 1);
 
         // ─── Hold enforcement (feature 042, T016) ─────────────────────────
         // If the engine is waiting for the user to sustain a note and one of
@@ -529,6 +571,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
       // Track held keys — add on attack
       heldMidiKeysRef.current.add(event.midiNote);
+      setMidiEventTick(t => t + 1);
 
       // Play the note through the host audio engine
       context.playNote({
@@ -582,6 +625,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         return;
       }
       if (chordResult.complete) {
+        // Immediately clear the detector so remaining note-on events from the
+        // same physical chord press (piano sends one per key) don't re-trigger
+        // completion before the useEffect resets it for the next beat.
+        chordDetectorRef.current.reset([]);
+
         // All chord notes collected — advance.
         // Deferred start: if in 'waiting' mode, set the start time NOW
         // (first correct note begins the clock).
@@ -1009,6 +1057,43 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     return new Set<string>();
   }, [practiceActive, practiceState.notes, practiceState.currentIndex]);
 
+  // Notes the user is pressing that match the current target — full green confirmation.
+  // Derived directly from the practice entry's parallel midiPitches/noteIds arrays
+  // and the set of physically-held MIDI keys (not from the tick-window visual lookup,
+  // which uses the playhead position and may produce different noteId strings).
+  const confirmedNoteIds = useMemo<ReadonlySet<string>>(() => {
+    if (!practiceActive || practiceState.currentIndex >= practiceState.notes.length) {
+      return new Set<string>();
+    }
+    const entry = practiceState.notes[practiceState.currentIndex];
+    const pitches = entry.midiPitches as number[];
+    const ids = entry.noteIds as string[];
+    const confirmed = new Set<string>();
+    for (let i = 0; i < pitches.length; i++) {
+      if (heldMidiKeysRef.current.has(pitches[i]) && i < ids.length) {
+        confirmed.add(ids[i]);
+      }
+    }
+    return confirmed;
+    // midiPressedNoteIds is used as a change-trigger: it updates on every
+    // attack/release, which is exactly when we need to recompute.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [practiceActive, practiceState.notes, practiceState.currentIndex, midiPressedNoteIds]);
+
+  // Pressed vs expected pitch labels — for the real-time note display.
+  // Reacts to midiPressedNoteIds (changes on every attack/release).
+  const pressedPitchLabels = useMemo<string[]>(() => {
+    if (!practiceActive && !practiceWaiting) return [];
+    return Array.from(heldMidiKeysRef.current).sort((a, b) => a - b).map(midiToLabel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [practiceActive, practiceWaiting, midiEventTick]);
+
+  const expectedPitchLabels = useMemo<string[]>(() => {
+    if ((!practiceActive && !practiceWaiting) || practiceState.currentIndex >= practiceState.notes.length) return [];
+    const pitches = practiceState.notes[practiceState.currentIndex].midiPitches as number[];
+    return [...pitches].sort((a, b) => a - b).map(midiToLabel);
+  }, [practiceActive, practiceWaiting, practiceState.notes, practiceState.currentIndex]);
+
   const isLoaded = ['ready', 'playing', 'paused'].includes(playerState.status);
 
   // ─── Results computation ───────────────────────────────────────────────────
@@ -1139,14 +1224,37 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         </div>
       )}
 
+      {/* Real-time note display — pressed vs expected (visible during practice) */}
+      {(practiceActive || practiceWaiting) && (
+        <div className="practice-plugin__note-display" aria-live="polite">
+          <span className="practice-plugin__note-display-label">Expected:</span>
+          <span className="practice-plugin__note-display-notes practice-plugin__note-display-notes--expected">
+            {expectedPitchLabels.length > 0 ? expectedPitchLabels.join(', ') : '—'}
+          </span>
+          <span className="practice-plugin__note-display-sep">|</span>
+          <span className="practice-plugin__note-display-label">Playing:</span>
+          <span className={`practice-plugin__note-display-notes ${
+            pressedPitchLabels.length > 0
+              ? pressedPitchLabels.join(',') === expectedPitchLabels.join(',')
+                ? 'practice-plugin__note-display-notes--correct'
+                : 'practice-plugin__note-display-notes--wrong'
+              : ''
+          }`}>
+            {pressedPitchLabels.length > 0 ? pressedPitchLabels.join(', ') : '—'}
+          </span>
+        </div>
+      )}
+
       {/* Score */}
       <div className="practice-plugin__score-area">
         <ScoreRenderer
           currentTick={playerState.currentTick}
           highlightedNoteIds={highlightedNoteIds}
+          errorNoteIds={errorNoteIds}
+          expectedNoteIds={practiceActive ? targetNoteIds : undefined}
           pinnedNoteIds={
             practiceActive
-              ? targetNoteIds    // green = "play this note" during practice
+              ? confirmedNoteIds  // full green = keys the user is pressing correctly
               : (practiceState.mode === 'waiting' ? new Set<string>() : pinnedNoteIds)
           }
           scrollTargetNoteIds={practiceActive ? targetNoteIds : undefined}

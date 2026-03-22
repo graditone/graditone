@@ -24,6 +24,12 @@ import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
  */
 const LATE_THRESHOLD_MS = 500;
 
+/**
+ * Number of consecutive wrong MIDI presses on a single beat before the
+ * practice engine auto-advances past it (FR-003a).
+ */
+const MAX_CONSECUTIVE_WRONG = 3;
+
 /** Zero-value hold-context fields shared by states that are not in 'holding' mode. */
 const CLEAR_HOLD = {
   holdStartTimeMs: 0,
@@ -262,9 +268,15 @@ export function reduce(state: PracticeState, action: PracticeAction): PracticeSt
         responseTimeMs: action.responseTimeMs,
         noteIndex: state.currentIndex,
       };
+      const newWrongAttempts = state.currentWrongAttempts + 1;
+
+      // FR-003a (disabled): auto-advance after MAX_CONSECUTIVE_WRONG was removed whilst
+      // score detection is being hardened. Re-enable by restoring the branch here once
+      // the MIDI-detection pipeline is reliable enough that false positives are rare.
+
       return {
         ...state,
-        currentWrongAttempts: state.currentWrongAttempts + 1,
+        currentWrongAttempts: newWrongAttempts,
         wrongNoteEvents: [...state.wrongNoteEvents, wrongEvent],
       };
     }
@@ -331,5 +343,5 @@ function clamp(value: number, min: number, max: number): number {
 // Re-export INITIAL_PRACTICE_STATE for convenience
 export { INITIAL_PRACTICE_STATE };
 
-// Export the late threshold for tests
-export { LATE_THRESHOLD_MS };
+// Export the late threshold and auto-advance threshold for tests
+export { LATE_THRESHOLD_MS, MAX_CONSECUTIVE_WRONG };

@@ -42,6 +42,49 @@
   transition: width 0.05s linear;
 }
 
+/* ─── Real-time note display ──────────────────────────────────────────────── */
+
+.practice-plugin__note-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  background: var(--vscode-editorWidget-background, rgba(0, 0, 0, 0.05));
+  border-bottom: 1px solid var(--vscode-editorWidget-border, rgba(0, 0, 0, 0.08));
+  min-height: 28px;
+  flex-shrink: 0;
+}
+
+.practice-plugin__note-display-label {
+  color: var(--vscode-descriptionForeground, #666);
+  font-weight: 500;
+}
+
+.practice-plugin__note-display-sep {
+  color: var(--vscode-descriptionForeground, #999);
+  margin: 0 2px;
+}
+
+.practice-plugin__note-display-notes {
+  font-weight: 600;
+  min-width: 3em;
+}
+
+.practice-plugin__note-display-notes--expected {
+  color: var(--vscode-charts-green, #5AC481);
+}
+
+.practice-plugin__note-display-notes--correct {
+  color: var(--vscode-charts-green, #5AC481);
+}
+
+.practice-plugin__note-display-notes--wrong {
+  color: var(--color-danger, #E55353);
+}
+
 /* ─── Score area (flex:1 so toolbar gets intrinsic height) ────────────────── */
 
 .practice-plugin__score-area {

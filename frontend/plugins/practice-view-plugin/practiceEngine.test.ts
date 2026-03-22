@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { reduce, isCorrect, LATE_THRESHOLD_MS } from './practiceEngine';
+import { reduce, isCorrect, LATE_THRESHOLD_MS, MAX_CONSECUTIVE_WRONG } from './practiceEngine';
 import type { PracticeState, PracticeNoteEntry } from './practiceEngine.types';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
 
@@ -929,5 +929,51 @@ describe('reduce() — HOLD_COMPLETE and EARLY_RELEASE outside holding mode (T01
 
   it('EARLY_RELEASE in inactive mode is a no-op', () => {
     expect(reduce(INITIAL_PRACTICE_STATE, { type: 'EARLY_RELEASE', holdDurationMs: 500 })).toBe(INITIAL_PRACTICE_STATE);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reduce() — WRONG_MIDI: beat never auto-advances (FR-003a disabled)
+// Feature 001-fix-practice-midi-detection — T003
+// ---------------------------------------------------------------------------
+
+describe('reduce() — WRONG_MIDI stays on current beat (FR-003a disabled)', () => {
+  it('stays on the same note no matter how many wrong presses', () => {
+    let s = activeState(THREE_NOTES, 0);
+    for (let i = 0; i < MAX_CONSECUTIVE_WRONG * 3; i++) {
+      s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 500 + i * 100 });
+    }
+    // Never advances — stays on index 0
+    expect(s.currentIndex).toBe(0);
+    expect(s.mode).toBe('active');
+    expect(s.noteResults).toHaveLength(0);
+    expect(s.currentWrongAttempts).toBe(MAX_CONSECUTIVE_WRONG * 3);
+  });
+
+  it('accumulates wrongNoteEvents without advancing', () => {
+    let s = activeState(THREE_NOTES, 0);
+    for (let i = 0; i < MAX_CONSECUTIVE_WRONG; i++) {
+      s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 500 + i * 100 });
+    }
+    expect(s.currentIndex).toBe(0);
+    expect(s.wrongNoteEvents).toHaveLength(MAX_CONSECUTIVE_WRONG);
+    expect(s.noteResults).toHaveLength(0);
+  });
+
+  it('still advances correctly when the RIGHT note is pressed after wrong presses', () => {
+    let s = activeState(THREE_NOTES, 0);
+    for (let i = 0; i < MAX_CONSECUTIVE_WRONG * 2; i++) {
+      s = reduce(s, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 500 + i * 100 });
+    }
+    // Now press the correct note
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 1200, expectedTimeMs: 0, requiredHoldMs: 0 });
+    expect(s.currentIndex).toBe(1);
+    expect(s.mode).toBe('active');
+    expect(s.noteResults).toHaveLength(1);
+    expect(s.currentWrongAttempts).toBe(0);
+  });
+
+  it('MAX_CONSECUTIVE_WRONG is exported and equals 3', () => {
+    expect(MAX_CONSECUTIVE_WRONG).toBe(3);
   });
 });

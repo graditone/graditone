@@ -273,8 +273,8 @@ export class MetronomeEngine {
         // Regular beat within the measure
         this._upbeatSynth?.triggerAttackRelease('G4', '32n');
       } else {
-        // Subdivision tick (8th or 16th): very brief, high-pitched click
-        this._upbeatSynth?.triggerAttackRelease('C6', '64n');
+        // Subdivision tick (8th or 16th): same pitch as regular beat
+        this._upbeatSynth?.triggerAttackRelease('G4', '32n');
       }
     } catch {
       // Swallow audio errors — beat should still count even if synth fails

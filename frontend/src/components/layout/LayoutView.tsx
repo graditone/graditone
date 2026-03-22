@@ -89,6 +89,10 @@ interface LayoutViewProps {
   rawNotes?: ReadonlyArray<{ id: string; start_tick: number; duration_ticks: number }>;
   /** Green pinned highlight note IDs — permanent until unpinned */
   pinnedNoteIds?: Set<string>;
+  /** Error note IDs — rendered with red highlight (auto-advance flash) */
+  errorNoteIds?: Set<string>;
+  /** Expected note IDs — rendered with green at low opacity */
+  expectedNoteIds?: Set<string>;
   /** Note IDs for auto-scroll targeting (overrides highlightedNoteIds for scroll) */
   scrollTargetNoteIds?: Set<string>;
   /** Current pinned note ID (null = not pinned) — forwarded to pages/ScoreViewer for unpin detection */
@@ -244,7 +248,7 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
   };
 }
 
-export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playbackStatus, onNoteClick, selectedNoteId, tickSourceRef, allNotes, rawNotes, pinnedNoteIds, scrollTargetNoteIds, pinnedNoteId, onPin, onSeekAndPlay, loopRegion, scrollContainerRef }: LayoutViewProps) {
+export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playbackStatus, onNoteClick, selectedNoteId, tickSourceRef, allNotes, rawNotes, pinnedNoteIds, errorNoteIds, expectedNoteIds, scrollTargetNoteIds, pinnedNoteId, onPin, onSeekAndPlay, loopRegion, scrollContainerRef }: LayoutViewProps) {
   const [layout, setLayout] = useState<GlobalLayout | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -403,6 +407,8 @@ export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playba
         notes={allNotes}
         rawNotes={rawNotes}
         pinnedNoteIds={pinnedNoteIds}
+        errorNoteIds={errorNoteIds}
+        expectedNoteIds={expectedNoteIds}
         scrollTargetNoteIds={scrollTargetNoteIds}
         pinnedNoteId={pinnedNoteId}
         onPin={onPin}

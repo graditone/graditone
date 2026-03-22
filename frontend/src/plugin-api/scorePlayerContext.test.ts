@@ -755,6 +755,50 @@ describe('useScorePlayerContext', () => {
       expect(notes[3].midiPitches).toContain(79); // G5 required (sustained)
     });
   });
+
+  // ─── Staccato durationTicks = 0 (FR-004, Feature 001-fix-practice-midi-detection — T008) ──
+
+  describe('extractPracticeNotes() — staccato notes have durationTicks = 0', () => {
+    it('staccato-marked notes are extracted with durationTicks === 0', async () => {
+      const staccatoScore = {
+        ...mockScore,
+        instruments: [{
+          ...mockScore.instruments[0],
+          staves: [{
+            ...mockScore.instruments[0].staves[0],
+            voices: [{
+              id: 'v1',
+              interval_events: [
+                { id: 'n1', start_tick: 0, duration_ticks: 960, pitch: 60, staccato: true },
+                { id: 'n2', start_tick: 960, duration_ticks: 960, pitch: 62, staccato: false },
+              ],
+            }],
+          }],
+        }],
+      };
+      mockImportFile.mockResolvedValueOnce({
+        ...mockImportResult,
+        score: staccatoScore,
+        metadata: { format: 'MusicXML', work_title: 'Staccato Test', file_name: 'staccato.mxl' },
+      });
+
+      const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+      await act(async () => {
+        await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
+      });
+
+      const pitches = result.current.extractPracticeNotes(0);
+      expect(pitches).not.toBeNull();
+      const notes = pitches!.notes;
+      expect(notes).toHaveLength(2);
+
+      // Staccato note: durationTicks MUST be 0 (no hold required)
+      expect(notes[0].durationTicks).toBe(0);
+
+      // Non-staccato note: durationTicks preserved (960)
+      expect(notes[1].durationTicks).toBe(960);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
