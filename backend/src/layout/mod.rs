@@ -605,6 +605,7 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     notation_dots: ann.notation_dots,
                     tie_arcs: ann.tie_arcs,
                     slur_arcs: ann.slur_arcs,
+                    fingering_glyphs: ann.fingering_glyphs,
                 };
 
                 staves.push(staff);

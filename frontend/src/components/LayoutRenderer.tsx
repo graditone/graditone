@@ -1179,6 +1179,22 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       staffElement.appendChild(path);
     }
 
+    // Render fingering annotations (digits near noteheads)
+    const fingeringGlyphs = staff.fingering_glyphs ?? [];
+    for (const fg of fingeringGlyphs) {
+      const text = createSVGElement('text');
+      text.setAttribute('x', fg.x.toString());
+      text.setAttribute('y', fg.y.toString());
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'middle');
+      text.setAttribute('font-family', 'serif');
+      text.setAttribute('font-size', (this.props.layout!.units_per_space * 1.4).toString());
+      text.setAttribute('fill', config.glyphColor);
+      text.classList.add('fingering-glyph');
+      text.textContent = fg.digit.toString();
+      staffElement.appendChild(text);
+    }
+
     return staffElement;
   }
 

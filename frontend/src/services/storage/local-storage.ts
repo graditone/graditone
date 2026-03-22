@@ -13,7 +13,7 @@ const SCORES_STORE = 'scores';
  * v4: repeat_barlines added
  * v6: pickup_ticks added for anacrusis/pickup measure support
  */
-export const CURRENT_SCHEMA_VERSION = 8;
+export const CURRENT_SCHEMA_VERSION = 9;
 
 /**
  * Initialize IndexedDB database

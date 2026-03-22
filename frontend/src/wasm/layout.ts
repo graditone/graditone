@@ -167,6 +167,8 @@ export interface Staff {
   tie_arcs?: TieArc[];
   /** Slur arcs (phrase marks) between slurred noteheads */
   slur_arcs?: TieArc[];
+  /** Fingering annotations positioned near noteheads */
+  fingering_glyphs?: FingeringGlyph[];
 }
 
 /**
@@ -197,6 +199,16 @@ export interface NotationDot {
   x: number;
   y: number;
   radius: number;
+}
+
+/**
+ * A fingering annotation positioned near a notehead
+ */
+export interface FingeringGlyph {
+  x: number;
+  y: number;
+  digit: number;
+  above: boolean;
 }
 
 /**

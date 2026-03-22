@@ -169,6 +169,7 @@ mod tests {
             notation_dots: vec![],
             tie_arcs: vec![],
             slur_arcs: vec![],
+            fingering_glyphs: vec![],
         };
 
         let staff_1 = Staff {
@@ -180,6 +181,7 @@ mod tests {
             notation_dots: vec![],
             tie_arcs: vec![],
             slur_arcs: vec![],
+            fingering_glyphs: vec![],
         };
 
         let staves = vec![staff_0, staff_1];
@@ -236,6 +238,7 @@ mod tests {
             notation_dots: vec![],
             tie_arcs: vec![],
             slur_arcs: vec![],
+            fingering_glyphs: vec![],
         };
 
         let staff_1 = Staff {
@@ -247,6 +250,7 @@ mod tests {
             notation_dots: vec![],
             tie_arcs: vec![],
             slur_arcs: vec![],
+            fingering_glyphs: vec![],
         };
 
         let staves = vec![staff_0, staff_1];

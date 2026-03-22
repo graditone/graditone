@@ -204,8 +204,13 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
             ...(note.is_grace ? { is_grace: true } : {}),
             // Forward explicit accidental flag (courtesy/editorial — always display)
             ...(note.has_explicit_accidental ? { has_explicit_accidental: true } : {}),
-            // Forward explicit stem direction from MusicXML for staccato placement
+            // Forward MusicXML <stem> direction so the layout engine can honour
+            // the engraver's intent for borderline cases (e.g. notes balanced
+            // around the middle line).  The engine's cascade is:
+            //   forced_stem_down (multi-voice) → explicit stem_down → auto heuristic
             ...(note.stem_down !== undefined ? { stem_down: note.stem_down } : {}),
+            // Forward fingering annotations for fingering glyph rendering
+            ...(note.fingering && note.fingering.length > 0 ? { fingering: note.fingering } : {}),
           })),
           // Forward rest events so the layout engine can produce rest glyphs
           ...(voice.rest_events && voice.rest_events.length > 0

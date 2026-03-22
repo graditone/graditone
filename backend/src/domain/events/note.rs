@@ -31,6 +31,15 @@ pub struct NoteBeamData {
     pub beam_type: NoteBeamType,
 }
 
+/// Fingering annotation from MusicXML `<technical><fingering>` element.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FingeringAnnotation {
+    /// Finger number (1–5 for standard piano; other values passed through as-is)
+    pub digit: u8,
+    /// Placement direction: true = above notehead, false = below
+    pub above: bool,
+}
+
 /// Note represents a musical note with timing and pitch
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Note {
@@ -72,6 +81,9 @@ pub struct Note {
     /// `Some(true)` = stem down, `Some(false)` = stem up, `None` = not specified.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stem_down: Option<bool>,
+    /// Fingering annotations from MusicXML `<technical><fingering>` elements
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fingering: Vec<FingeringAnnotation>,
 }
 
 fn is_zero_u8(v: &u8) -> bool {
@@ -100,6 +112,7 @@ impl Note {
             is_grace: false,
             has_explicit_accidental: false,
             stem_down: None,
+            fingering: Vec::new(),
         })
     }
 
@@ -148,6 +161,12 @@ impl Note {
     /// Set explicit stem direction from MusicXML (builder pattern)
     pub fn with_stem_down(mut self, down: bool) -> Self {
         self.stem_down = Some(down);
+        self
+    }
+
+    /// Set fingering annotations (builder pattern)
+    pub fn with_fingering(mut self, fingering: Vec<FingeringAnnotation>) -> Self {
+        self.fingering = fingering;
         self
     }
 

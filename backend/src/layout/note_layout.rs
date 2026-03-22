@@ -253,8 +253,23 @@ pub(crate) fn position_glyphs_for_staff(
     let num_voices = staff_data.voices.len();
 
     for (voice_index, voice) in staff_data.voices.iter().enumerate() {
+        // Only force stem direction when another voice actually has notes
+        // in the current system's tick range.  This avoids forcing stems up
+        // for voice 0 in passages where voice 1 is empty (e.g., La Candeur
+        // M1-M4 are single-voice melody, but voices 0+1 both exist because
+        // later measures use two voices).
         let forced_stem_down: Option<bool> = if num_voices > 1 {
-            Some(voice_index > 0)
+            let other_voice_has_notes = staff_data.voices.iter().enumerate().any(|(vi, v)| {
+                vi != voice_index
+                    && v.notes.iter().any(|n| {
+                        n.start_tick >= tick_range.start_tick && n.start_tick < tick_range.end_tick
+                    })
+            });
+            if other_voice_has_notes {
+                Some(voice_index > 0)
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -1188,6 +1203,7 @@ mod tests {
                     is_grace: false,
                     has_explicit_accidental: false,
                     stem_down: None,
+                    fingering: Vec::new(),
                 }],
                 rests: vec![],
             }],
@@ -1236,6 +1252,7 @@ mod tests {
                     is_grace: false,
                     has_explicit_accidental: false,
                     stem_down: None,
+                    fingering: Vec::new(),
                 }],
                 rests: vec![],
             }],
@@ -1992,5 +2009,67 @@ mod tests {
             1,
             "Should have 1 flag glyph for the eighth-note chord"
         );
+    }
+
+    /// Regression: two voices declared on a staff, but only voice 0 has notes
+    /// in the current system.  Stems should follow the geometric heuristic
+    /// (high notes → stems down), NOT be forced up by the multi-voice rule.
+    #[test]
+    fn test_stem_direction_two_voices_one_empty_uses_auto() {
+        // Voice 0: two high eighth notes (above middle line → stems should be DOWN).
+        // Voice 1: empty (no notes in this system's tick range).
+        let score = serde_json::json!({
+            "instruments": [{
+                "id": "piano",
+                "staves": [{
+                    "clef": "Treble",
+                    "time_signature": { "numerator": 4, "denominator": 4 },
+                    "key_signature": { "sharps": 0 },
+                    "voices": [
+                        {
+                            "notes": [
+                                { "pitch": 84, "tick": 0, "duration": 480,
+                                  "beams": [{"number": 1, "beam_type": "Begin"}] },
+                                { "pitch": 86, "tick": 480, "duration": 480,
+                                  "beams": [{"number": 1, "beam_type": "End"}] }
+                            ]
+                        },
+                        {
+                            "notes": []
+                        }
+                    ]
+                }]
+            }]
+        });
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&score, &config);
+
+        let staff = &layout.systems[0].staff_groups[0].staves[0];
+        let all_glyphs: Vec<_> = staff
+            .glyph_runs
+            .iter()
+            .flat_map(|run| run.glyphs.iter())
+            .collect();
+
+        let stem_glyphs: Vec<_> = all_glyphs
+            .iter()
+            .filter(|g| g.codepoint == "\u{0000}")
+            .collect();
+        assert_eq!(stem_glyphs.len(), 2, "Should have 2 stems");
+
+        // High notes (C6, D6) are well above the middle line → auto heuristic
+        // gives stems DOWN.  Before the fix, forced_stem_down incorrectly
+        // forced them UP because num_voices > 1.
+        for stem in &stem_glyphs {
+            let stem_bottom = stem.bounding_box.y + stem.bounding_box.height;
+            assert!(
+                stem_bottom > stem.position.y,
+                "High notes with empty second voice should still get stems DOWN \
+                 (stem_bottom {} > position.y {})",
+                stem_bottom,
+                stem.position.y
+            );
+        }
     }
 }

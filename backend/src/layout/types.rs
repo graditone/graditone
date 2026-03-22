@@ -182,6 +182,9 @@ pub struct Staff {
     /// Slur arcs: cubic Bézier curves connecting slurred notes (phrase marks)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub slur_arcs: Vec<TieArc>,
+    /// Fingering glyphs: positioned numerals (1–5) above or below noteheads
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fingering_glyphs: Vec<FingeringGlyph>,
 }
 
 /// Short horizontal line for notes outside the 5-line staff range
@@ -211,6 +214,21 @@ pub struct NotationDot {
     /// Dot radius in logical units
     #[serde(serialize_with = "round_f32")]
     pub radius: f32,
+}
+
+/// A positioned fingering numeral in the rendered score layout.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FingeringGlyph {
+    /// Horizontal centre of the numeral (same x as notehead)
+    #[serde(serialize_with = "round_f32")]
+    pub x: f32,
+    /// Vertical position of the numeral; always outside staff lines
+    #[serde(serialize_with = "round_f32")]
+    pub y: f32,
+    /// Finger number to display (1–5 for standard piano, other values possible)
+    pub digit: u8,
+    /// true = numeral above notehead, false = numeral below notehead
+    pub above: bool,
 }
 
 /// A cubic Bézier curve connecting two tied notes.

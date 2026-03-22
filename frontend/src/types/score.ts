@@ -71,6 +71,11 @@ export interface NoteBeamData {
   beam_type: 'Begin' | 'Continue' | 'End' | 'ForwardHook' | 'BackwardHook';
 }
 
+export interface FingeringAnnotation {
+  digit: number;
+  above: boolean;
+}
+
 export interface Note {
   id: string; // UUID
   start_tick: Tick;
@@ -94,6 +99,8 @@ export interface Note {
   has_explicit_accidental?: boolean;
   /** Explicit stem direction from MusicXML: true=down, false=up */
   stem_down?: boolean;
+  /** Fingering annotations from MusicXML <technical>/<fingering> elements */
+  fingering?: FingeringAnnotation[];
 }
 
 // ============================================================================

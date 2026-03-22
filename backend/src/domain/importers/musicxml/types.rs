@@ -300,6 +300,9 @@ pub struct NoteData {
     /// Explicit stem direction from `<stem>down</stem>` or `<stem>up</stem>`.
     /// `Some(true)` = stem down, `Some(false)` = stem up, `None` = not specified.
     pub stem_down: Option<bool>,
+
+    /// Fingering annotations from `<notations><technical><fingering>` elements
+    pub fingering: Vec<crate::domain::events::note::FingeringAnnotation>,
 }
 
 /// Pitch from <pitch> element

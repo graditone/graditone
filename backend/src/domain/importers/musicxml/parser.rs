@@ -970,6 +970,7 @@ impl MusicXMLParser {
             has_explicit_accidental: false,
             is_measure_rest: false,
             stem_down: None,
+            fingering: Vec::new(),
         };
 
         let mut buf = Vec::new();
@@ -1139,6 +1140,9 @@ impl MusicXMLParser {
                     b"articulations" => {
                         Self::parse_articulations(reader, note)?;
                     }
+                    b"technical" => {
+                        Self::parse_technical(reader, note)?;
+                    }
                     b"staccato" => {
                         // <staccato/> can also appear directly under <notations>
                         note.staccato = true;
@@ -1215,6 +1219,57 @@ impl MusicXMLParser {
                     _ => {}
                 },
                 Ok(Event::End(e)) if e.name().as_ref() == b"notations" => break,
+                Ok(Event::Eof) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+        Ok(())
+    }
+
+    /// Parses `<technical>` element for fingering annotations.
+    fn parse_technical<B: BufRead>(
+        reader: &mut Reader<B>,
+        note: &mut NoteData,
+    ) -> Result<(), ImportError> {
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) => {
+                    if e.name().as_ref() == b"fingering" {
+                        // Read placement attribute
+                        let mut placement_above: Option<bool> = None;
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"placement" {
+                                match attr.value.as_ref() {
+                                    b"above" => placement_above = Some(true),
+                                    b"below" => placement_above = Some(false),
+                                    _ => {}
+                                }
+                            }
+                        }
+                        // Read text content (the digit)
+                        if let Ok(Event::Text(text)) = reader.read_event_into(&mut buf) {
+                            let value = text.unescape().unwrap_or_default();
+                            let above = placement_above.unwrap_or(note.staff <= 1);
+                            // Handle both single-digit ("3") and multi-line
+                            // ("1\n3\n5") fingering text from MusicXML editors.
+                            for token in value.split_whitespace() {
+                                if let Ok(digit) = token.parse::<u8>() {
+                                    if digit > 0 {
+                                        note.fingering.push(
+                                            crate::domain::events::note::FingeringAnnotation {
+                                                digit,
+                                                above,
+                                            },
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(Event::End(e)) if e.name().as_ref() == b"technical" => break,
                 Ok(Event::Eof) => break,
                 _ => {}
             }

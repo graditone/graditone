@@ -254,6 +254,8 @@ pub(crate) struct NoteEvent {
     /// Explicit stem direction from MusicXML `<stem>` element.
     /// `Some(true)` = stem down, `Some(false)` = stem up, `None` = not specified.
     pub(crate) stem_down: Option<bool>,
+    /// Fingering annotations from MusicXML `<technical><fingering>` elements
+    pub(crate) fingering: Vec<crate::domain::events::note::FingeringAnnotation>,
 }
 
 pub(crate) fn extract_measures(
@@ -633,6 +635,16 @@ pub(crate) fn extract_instruments(
                                                 .as_bool()
                                                 .unwrap_or(false),
                                         stem_down: note_item["stem_down"].as_bool(),
+                                        fingering: note_item["fingering"]
+                                            .as_array()
+                                            .map(|arr| {
+                                                arr.iter()
+                                                    .filter_map(|v| {
+                                                        serde_json::from_value(v.clone()).ok()
+                                                    })
+                                                    .collect()
+                                            })
+                                            .unwrap_or_default(),
                                     });
                                 }
                             }

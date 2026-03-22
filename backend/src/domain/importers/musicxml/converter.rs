@@ -1629,6 +1629,11 @@ impl MusicXMLConverter {
         } else {
             note
         };
+        let note = if !note_data.fingering.is_empty() {
+            note.with_fingering(note_data.fingering.clone())
+        } else {
+            note
+        };
 
         Ok(note)
     }
@@ -1696,6 +1701,7 @@ mod tests {
                 has_explicit_accidental: false,
                 is_measure_rest: false,
                 stem_down: None,
+                fingering: Vec::new(),
             })],
             start_repeat: false,
             end_repeat: false,
@@ -1774,6 +1780,7 @@ mod tests {
             has_explicit_accidental: false,
             is_measure_rest: false,
             stem_down: None,
+            fingering: Vec::new(),
         };
 
         let result = MusicXMLConverter::convert_note(&note_data, &mut timing_ctx);
@@ -1826,6 +1833,7 @@ mod tests {
                     has_explicit_accidental: false,
                     is_measure_rest: false,
                     stem_down: None,
+                    fingering: Vec::new(),
                 }),
                 MeasureElement::Note(NoteData {
                     pitch: Some(PitchData {
@@ -1848,6 +1856,7 @@ mod tests {
                     has_explicit_accidental: false,
                     is_measure_rest: false,
                     stem_down: None,
+                    fingering: Vec::new(),
                 }),
             ],
             start_repeat: false,
@@ -1911,6 +1920,7 @@ mod tests {
                     has_explicit_accidental: false,
                     is_measure_rest: false,
                     stem_down: None,
+                    fingering: Vec::new(),
                 }),
                 // Second note of chord: F#5 (should start at same tick)
                 MeasureElement::Note(NoteData {
@@ -1934,6 +1944,7 @@ mod tests {
                     has_explicit_accidental: false,
                     is_measure_rest: false,
                     stem_down: None,
+                    fingering: Vec::new(),
                 }),
                 // Third note: C#5 (sequential, after the chord)
                 MeasureElement::Note(NoteData {
@@ -1957,6 +1968,7 @@ mod tests {
                     has_explicit_accidental: false,
                     is_measure_rest: false,
                     stem_down: None,
+                    fingering: Vec::new(),
                 }),
             ],
             start_repeat: false,
@@ -2064,6 +2076,7 @@ mod tests {
                     has_explicit_accidental: false,
                     is_measure_rest: false,
                     stem_down: None,
+                    fingering: Vec::new(),
                 })],
                 start_repeat: false,
                 end_repeat: false,
@@ -2130,6 +2143,7 @@ mod tests {
                     has_explicit_accidental: false,
                     is_measure_rest: false,
                     stem_down: None,
+                    fingering: Vec::new(),
                 })],
                 start_repeat: false,
                 end_repeat: false,
@@ -2196,6 +2210,7 @@ mod tests {
                     has_explicit_accidental: false,
                     is_measure_rest: false,
                     stem_down: None,
+                    fingering: Vec::new(),
                 })],
                 start_repeat: false,
                 end_repeat: false,
@@ -2259,6 +2274,7 @@ mod tests {
                     has_explicit_accidental: false,
                     is_measure_rest: false,
                     stem_down: None,
+                    fingering: Vec::new(),
                 })],
                 start_repeat: false,
                 end_repeat: false,
