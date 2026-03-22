@@ -1237,23 +1237,19 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         </div>
       )}
 
-      {/* Real-time note display — pressed vs expected (visible during practice) */}
-      {(practiceActive || practiceWaiting) && (
+      {/* Real-time note display — pressed vs expected (only on wrong note) */}
+      {(practiceActive || practiceWaiting) &&
+        pressedPitchLabels.length > 0 &&
+        pressedPitchLabels.join(',') !== expectedPitchLabels.join(',') && (
         <div className="practice-plugin__note-display" aria-live="polite">
           <span className="practice-plugin__note-display-label">Expected:</span>
           <span className="practice-plugin__note-display-notes practice-plugin__note-display-notes--expected">
-            {expectedPitchLabels.length > 0 ? expectedPitchLabels.join(', ') : '—'}
+            {expectedPitchLabels.join(', ')}
           </span>
           <span className="practice-plugin__note-display-sep">|</span>
           <span className="practice-plugin__note-display-label">Playing:</span>
-          <span className={`practice-plugin__note-display-notes ${
-            pressedPitchLabels.length > 0
-              ? pressedPitchLabels.join(',') === expectedPitchLabels.join(',')
-                ? 'practice-plugin__note-display-notes--correct'
-                : 'practice-plugin__note-display-notes--wrong'
-              : ''
-          }`}>
-            {pressedPitchLabels.length > 0 ? pressedPitchLabels.join(', ') : '—'}
+          <span className="practice-plugin__note-display-notes practice-plugin__note-display-notes--wrong">
+            {pressedPitchLabels.join(', ')}
           </span>
         </div>
       )}
