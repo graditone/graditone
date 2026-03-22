@@ -1239,8 +1239,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
       {/* Real-time note display — pressed vs expected (only on wrong note) */}
       {(practiceActive || practiceWaiting) &&
-        pressedPitchLabels.length > 0 &&
-        pressedPitchLabels.join(',') !== expectedPitchLabels.join(',') && (
+        practiceState.currentWrongAttempts > 0 && (
         <div className="practice-plugin__note-display" aria-live="polite">
           <span className="practice-plugin__note-display-label">Expected:</span>
           <span className="practice-plugin__note-display-notes practice-plugin__note-display-notes--expected">
