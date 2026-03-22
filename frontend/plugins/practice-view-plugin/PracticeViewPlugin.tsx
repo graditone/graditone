@@ -623,11 +623,28 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       // Only dispatch CORRECT_MIDI once ALL required pitches have been
       // pressed within the 80 ms window. A press of a pitch outside the
       // required set is still a WRONG_MIDI (no advance).
-      const chordResult = chordDetectorRef.current.press(event.midiNote, event.timestamp);
+      let chordResult = chordDetectorRef.current.press(event.midiNote, event.timestamp);
       const isInChord = (currentEntry.midiPitches as number[]).includes(event.midiNote);
       // Sustained pitches (held from a prior onset) are not wrong — the player
       // may re-attack them or they may produce MIDI repeats.  Do not penalise.
       const isSustained = ((currentEntry.sustainedPitches ?? []) as number[]).includes(event.midiNote);
+
+      // Re-pin held pitches: when the rolling window expires (>80 ms between
+      // presses), the detector clears stale entries.  If the player is still
+      // physically holding a required pitch that was evicted, re-pin it so
+      // they don't have to release and re-press keys they're already holding.
+      if (!chordResult.complete && chordResult.missing.length > 0) {
+        let repinned = false;
+        for (const pitch of chordResult.missing) {
+          if (heldMidiKeysRef.current.has(pitch)) {
+            chordDetectorRef.current.pin(pitch);
+            repinned = true;
+          }
+        }
+        if (repinned) {
+          chordResult = chordDetectorRef.current.press(event.midiNote, event.timestamp);
+        }
+      }
       // During hold mode, new attack events don't trigger CORRECT_MIDI (feature 042)
       if (ps.mode === 'holding') {
         if (!isInChord && !isSustained) {
@@ -1239,8 +1256,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
       {/* Real-time note display — pressed vs expected (only on wrong note) */}
       {(practiceActive || practiceWaiting) &&
-        pressedPitchLabels.length > 0 &&
-        pressedPitchLabels.join(',') !== expectedPitchLabels.join(',') && (
+        practiceState.currentWrongAttempts > 0 && (
         <div className="practice-plugin__note-display" aria-live="polite">
           <span className="practice-plugin__note-display-label">Expected:</span>
           <span className="practice-plugin__note-display-notes practice-plugin__note-display-notes--expected">
