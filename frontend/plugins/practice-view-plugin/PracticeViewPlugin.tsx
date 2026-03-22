@@ -415,6 +415,19 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         for (let i = pNotes.length - 1; i >= 0; i--) {
           if (pNotes[i].tick <= currentTick) { idx = i; break; }
         }
+        // Hide phantom when it's ≥ 2 measures ahead of the user's position.
+        const ps = practiceStateRef.current;
+        const userIdx = ps.currentIndex;
+        if (idx >= 0 && userIdx < pNotes.length && idx > userIdx) {
+          const ts = playerStateRef.current.timeSignature;
+          const ticksPerMeasure = ts.numerator * (4 / ts.denominator) * PPQ;
+          const phantomTick = pNotes[idx].tick;
+          const userTick = pNotes[userIdx].tick;
+          if (phantomTick - userTick >= 2 * ticksPerMeasure) {
+            setPhantomIndex(-1);
+            return;
+          }
+        }
         setPhantomIndex(idx);
       }, 50); // ~20 Hz — smooth enough for visual guide
     }
