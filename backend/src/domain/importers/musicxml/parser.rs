@@ -1253,7 +1253,7 @@ impl MusicXMLParser {
                             let value = text.unescape().unwrap_or_default();
                             if let Ok(digit) = value.trim().parse::<u8>() {
                                 if digit > 0 {
-                                    let above = placement_above.unwrap_or_else(|| note.staff <= 1);
+                                    let above = placement_above.unwrap_or(note.staff <= 1);
                                     note.fingering.push(
                                         crate::domain::events::note::FingeringAnnotation {
                                             digit,
