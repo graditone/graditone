@@ -180,3 +180,49 @@ describe('ChordDetector — window boundary', () => {
     expect(result.complete).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pin — held pitches survive window expiry
+// ---------------------------------------------------------------------------
+
+describe('ChordDetector — pin()', () => {
+  it('pinned pitch counts as collected even without a press', () => {
+    const det = new ChordDetector({ windowMs: 80 });
+    det.reset([60, 64]);
+    det.pin(60);
+    const result = det.press(64, T0);
+    expect(result.complete).toBe(true);
+    expect(result.collected).toEqual([60, 64]);
+  });
+
+  it('pinned pitch survives window expiry', () => {
+    const det = new ChordDetector({ windowMs: 80 });
+    det.reset([60, 64, 67]);
+    // Simulate: user holds 60 from a prior beat
+    det.pin(60);
+    // First press: 64 at T0
+    det.press(64, T0);
+    // Second press: 67 at T0 + 200 (outside 80 ms window — clears 64)
+    const result = det.press(67, T0 + 200);
+    // 60 is pinned (survives), 67 just pressed; 64 was evicted
+    expect(result.complete).toBe(false);
+    expect(result.collected).toContain(60);
+    expect(result.collected).toContain(67);
+    expect(result.missing).toEqual([64]);
+  });
+
+  it('re-pinning after window expiry completes the chord', () => {
+    const det = new ChordDetector({ windowMs: 80 });
+    det.reset([63, 79]); // D#5 = 63, G5 = 79
+    // User presses G5 first
+    det.press(79, T0);
+    // 200 ms later presses D#5 — window clears G5
+    let result = det.press(63, T0 + 200);
+    expect(result.complete).toBe(false);
+    // MIDI handler detects G5 is still held → pins it
+    det.pin(79);
+    result = det.press(63, T0 + 200);
+    expect(result.complete).toBe(true);
+    expect(result.collected).toEqual([63, 79]);
+  });
+});
