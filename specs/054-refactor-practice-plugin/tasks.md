@@ -102,10 +102,10 @@
 - [X] T020 [US5] Update `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx` to import and call `usePhantomTempo()`, replacing all extracted inline state/refs/effects with destructured return value (`phantomIndex`)
 - [X] T021 [P] [US5] Create smoke test in `frontend/plugins/practice-view-plugin/usePhantomTempo.test.ts` using `renderHook()` — verify return type shape (`phantomIndex` is a number)
 - [X] T022 [US5] Run full test suite (`cd frontend && npx vitest run`) — all tests must pass. Commit: `refactor(practice): extract usePhantomTempo hook`
-- [ ] T023 [US5] Create `frontend/plugins/practice-view-plugin/useHoldProgress.ts` with `UseHoldProgressParams` / `UseHoldProgressReturn` interfaces per contracts/useHoldProgress.d.ts. Extract from PracticeViewPlugin.tsx: state (`holdProgress`, `rafRef` — L131-132), effects (rAF loop — L337-373, cleanup — L376-383). Accept `practiceState` and `dispatchPractice` as params.
-- [ ] T024 [US5] Update `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx` to import and call `useHoldProgress()`, replacing all extracted inline state/effects with destructured return value (`holdProgress`)
-- [ ] T025 [P] [US5] Create smoke test in `frontend/plugins/practice-view-plugin/useHoldProgress.test.ts` using `renderHook()` — verify return type shape (`holdProgress` is a number)
-- [ ] T026 [US5] Run full test suite (`cd frontend && npx vitest run`) — all tests must pass. Commit: `refactor(practice): extract useHoldProgress hook`
+- [X] T023 [US5] Create `frontend/plugins/practice-view-plugin/useHoldProgress.ts` with `UseHoldProgressParams` / `UseHoldProgressReturn` interfaces per contracts/useHoldProgress.d.ts. Extract from PracticeViewPlugin.tsx: state (`holdProgress`, `rafRef` — L131-132), effects (rAF loop — L337-373, cleanup — L376-383). Accept `practiceState` and `dispatchPractice` as params.
+- [X] T024 [US5] Update `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx` to import and call `useHoldProgress()`, replacing all extracted inline state/effects with destructured return value (`holdProgress`)
+- [X] T025 [P] [US5] Create smoke test in `frontend/plugins/practice-view-plugin/useHoldProgress.test.ts` using `renderHook()` — verify return type shape (`holdProgress` is a number)
+- [X] T026 [US5] Run full test suite (`cd frontend && npx vitest run`) — all tests must pass. Commit: `refactor(practice): extract useHoldProgress hook`
 
 **Checkpoint**: All 6 extractions complete. PracticeViewPlugin.tsx is now a thin orchestrator.
 
