@@ -116,6 +116,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - N/A — data flows in-memory from MXL file through WASM (001-fingering-layout)
 - TypeScript 5 / React 18 + Vitest (unit tests), Playwright (E2E), Vite (053-fix-lacandeur-practice)
 - N/A (practice state is transient, session-only) (053-fix-lacandeur-practice)
+- TypeScript 5, React 18 + React hooks (useState, useEffect, useCallback, useReducer, useRef, useMemo), ChordDetector, PluginContext API (054-refactor-practice-plugin)
+- N/A (pure frontend refactor) (054-refactor-practice-plugin)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -136,9 +138,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 054-refactor-practice-plugin: Added TypeScript 5, React 18 + React hooks (useState, useEffect, useCallback, useReducer, useRef, useMemo), ChordDetector, PluginContext API
+- 054-refactor-practice-plugin: Added TypeScript 5, React 18 + React hooks (useState, useEffect, useCallback, useReducer, useRef, useMemo), ChordDetector, PluginContext API
 - 053-fix-lacandeur-practice: Added TypeScript 5 / React 18 + Vitest (unit tests), Playwright (E2E), Vite
-- 001-fingering-layout: Added Rust (stable, Edition 2024) · TypeScript 5.x + `quick-xml` (streaming MusicXML parser), `serde_json` (layout JSON), `wasm-pack` (WASM compilation), React 18, SVG rendering
-- 001-fix-practice-midi-detection: Added TypeScript 5.x, React 18 + Web MIDI API (browser built-in, no npm package), Vitest (unit tests), Playwright (E2E), React hooks (`useRef`, `useEffect`, `useReducer`).
 
 
 <!-- MANUAL ADDITIONS START -->

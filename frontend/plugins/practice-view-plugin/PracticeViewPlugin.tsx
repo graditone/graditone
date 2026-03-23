@@ -30,12 +30,12 @@ import type {
   PluginPracticeNoteEntry,
 } from '../../src/plugin-api/index';
 import { PracticeToolbar } from './practiceToolbar';
-import { reduce, LATE_THRESHOLD_MS } from './practiceEngine';
+import { reduce } from './practiceEngine';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
 import type { PracticeNoteResult, WrongNoteEvent, PerformanceRecord, PartialPerformanceRecord } from './practiceEngine.types';
-import { ChordDetector } from '../../src/plugin-api/index';
 import { mergePracticeNotesByTick } from './mergePracticeNotesByTick';
 import { usePracticeLoop } from './usePracticeLoop';
+import { usePracticeMidi } from './usePracticeMidi';
 import './PracticeViewPlugin.css';
 
 // ---------------------------------------------------------------------------
@@ -248,6 +248,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const practiceStateRef = useRef(practiceState);
   practiceStateRef.current = practiceState;
 
+  const playerStateRef = useRef<ScorePlayerState>(playerState);
+  playerStateRef.current = playerState;
+
   // ─── rAF hold-timer loop (feature 042, T017) ──────────────────────────────
   // Starts when engine mode becomes 'holding'.
   // Each frame: update holdProgress; dispatch HOLD_COMPLETE at ≥90%.
@@ -380,117 +383,26 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   }, []);
 
   // ─── Just-completed entry tracking (green highlight persistence) ────────────
-  // When CORRECT_MIDI advances currentIndex, the confirmedNoteIds memo would
-  // immediately recompute for the NEW entry, dropping the green highlight for
-  // the just-completed chord. This ref stores the previous entry's pitches +
-  // noteIds so we can keep showing green while those keys are still held.
   const prevCompletedEntryRef = useRef<{ pitches: number[]; noteIds: string[] } | null>(null);
   const confirmedIndexRef = useRef(-1);
 
-  // ─── Chord detector ─────────────────────────────────────────────────────────
-  // A single instance that accumulates MIDI attack events within an 80 ms
-  // rolling window. Reset each time the target note entry changes (either
-  // by advancing on CORRECT_MIDI or by SEEK / STOP / DEACTIVATE).
-  const chordDetectorRef = useRef(new ChordDetector());
-  const prevPracticeIndexRef = useRef(-1);
-
-  useEffect(() => {
-    const ps = practiceStateRef.current;
-    if (ps.mode === 'active' || ps.mode === 'waiting') {
-      const isNewBeat = ps.currentIndex !== prevPracticeIndexRef.current;
-      prevPracticeIndexRef.current = ps.currentIndex;
-
-      const entry = ps.notes[ps.currentIndex];
-      if (entry) {
-        const onset = entry.midiPitches as number[];
-        const sustained = (entry.sustainedPitches ?? []) as number[];
-        // Require both onset and sustained pitches for chord completion
-        chordDetectorRef.current.reset([...onset, ...sustained]);
-        // Always pin sustained pitches that are physically held from a prior onset.
-        for (const pitch of sustained) {
-          if (heldMidiKeysRef.current.has(pitch)) {
-            chordDetectorRef.current.pin(pitch);
-          }
-        }
-        // On a RETRY (early-release on the SAME beat, index unchanged): also
-        // pin onset pitches the player is still holding so re-pressing only
-        // the released note completes the chord.
-        // On a NEW beat (index advanced): pin held onset pitches ONLY when
-        // not ALL required pitches are already held.  This lets the player
-        // sustain a common note across consecutive entries (e.g. G5 single →
-        // G5+D#5 chord: G5 is pinned, only D#5 needs a fresh press) while
-        // still preventing auto-completion of identical consecutive chords
-        // (e.g. Arabesque M1→M2 triads where every pitch is held).
-        if (isNewBeat) {
-          const allRequired = [...onset, ...sustained];
-          const wouldAutoComplete = allRequired.length > 0 && allRequired.every(
-            (p) => heldMidiKeysRef.current.has(p),
-          );
-          if (!wouldAutoComplete) {
-            for (const pitch of onset) {
-              if (heldMidiKeysRef.current.has(pitch)) {
-                chordDetectorRef.current.pin(pitch);
-              }
-            }
-          }
-        } else {
-          for (const pitch of onset) {
-            if (heldMidiKeysRef.current.has(pitch)) {
-              chordDetectorRef.current.pin(pitch);
-            }
-          }
-        }
-      } else {
-        chordDetectorRef.current.reset([]);
-      }
-    } else {
-      prevPracticeIndexRef.current = ps.currentIndex;
-      chordDetectorRef.current.reset([]);
-      prevCompletedEntryRef.current = null;
-    }
-  // practiceState.currentIndex and practiceState.mode are the triggers:
-  // mode change covers START / STOP / DEACTIVATE; currentIndex covers CORRECT / SEEK.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [practiceState.currentIndex, practiceState.mode]);
-
-  // ─── All-notes lookup for MIDI visual highlight ────────────────────────────
-  // Rebuilt whenever a new score is loaded (status → ready/playing/paused).
-  // allNotesRef is a flat list of PracticeNoteEntries from all staves so the
-  // MIDI handler can match (tick ≈ currentTick, midiPitch) → noteId.
-  const allNotesRef = useRef<PluginPracticeNoteEntry[]>([]);
-  const playerStateRef = useRef<ScorePlayerState>(playerState);
-  playerStateRef.current = playerState;
-
-  const prevLoadKeyRef = useRef('');
-  useEffect(() => {
-    const { status, staffCount, title } = playerState;
-    const loadKey = `${status}:${staffCount}:${title ?? ''}`;
-    if (!['ready', 'playing', 'paused'].includes(status) || staffCount === 0) {
-      allNotesRef.current = [];
-      prevLoadKeyRef.current = '';
-      return;
-    }
-    if (loadKey === prevLoadKeyRef.current) return;
-    prevLoadKeyRef.current = loadKey;
-    const all: PluginPracticeNoteEntry[] = [];
-    for (let s = 0; s < staffCount; s++) {
-      const pitches = context.scorePlayer.extractPracticeNotes(s);
-      if (pitches) all.push(...(pitches.notes as PluginPracticeNoteEntry[]));
-    }
-    allNotesRef.current = all;
-  }, [playerState.status, playerState.staffCount, playerState.title, context.scorePlayer]);
-
-  // MIDI-pressed note IDs — cleared on key release, merged into highlightedNoteIds
-  const [midiPressedNoteIds, setMidiPressedNoteIds] = useState<ReadonlySet<string>>(new Set());
-  // Counter that increments on every MIDI attack/release — used purely as a
-  // reactivity trigger so memos that read heldMidiKeysRef always recompute.
-  const [midiEventTick, setMidiEventTick] = useState(0);
-
-  // ─── Held MIDI keys tracking (multi-voice sustained notes) ────────────────
-  // Tracks which MIDI keys are physically held down (attack adds, release removes).
-  // Used to pre-populate the ChordDetector with sustained pitches that are
-  // already held when advancing to the next practice entry.
-  const heldMidiKeysRef = useRef<Set<number>>(new Set());
+  // ─── MIDI logic (extracted hook) ───────────────────────────────────────────
+  const {
+    midiPressedNoteIds, midiEventTick, heldMidiKeysRef, chordDetectorRef,
+  } = usePracticeMidi({
+    context,
+    practiceState,
+    practiceStateRef,
+    playerState,
+    playerStateRef,
+    dispatchPractice,
+    loopRegionRef,
+    loopPracticeRangeRef,
+    loopIterationRef,
+    loopStartTimesRef,
+    practiceStartTimeRef,
+    selectedStaffIndex,
+  });
 
   // ─── Teardown (SC-006) ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -505,216 +417,6 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // ─── MIDI subscription (T032) ──────────────────────────────────────────────
-  useEffect(() => {
-    return context.midi.subscribe((event) => {
-      if (event.type === 'release') {
-        // Track held keys — remove on release
-        heldMidiKeysRef.current.delete(event.midiNote);
-        // Relay release for natural key-up audio and clear visual highlight
-        context.playNote({ midiNote: event.midiNote, timestamp: event.timestamp, type: 'release' });
-        setMidiPressedNoteIds(new Set());
-        setMidiEventTick(t => t + 1);
-
-        // ─── Hold enforcement (feature 042, T016) ─────────────────────────
-        // If the engine is waiting for the user to sustain a note and one of
-        // the required pitches is released, that ends the hold attempt.
-        const holdPs = practiceStateRef.current;
-        if (holdPs.mode === 'holding') {
-          const holdEntry = holdPs.notes[holdPs.currentIndex];
-          if (holdEntry && (
-            (holdEntry.midiPitches as number[]).includes(event.midiNote) ||
-            ((holdEntry.sustainedPitches ?? []) as number[]).includes(event.midiNote)
-          )) {
-            const holdDurationMs = Date.now() - holdPs.holdStartTimeMs;
-            dispatchPractice({ type: 'EARLY_RELEASE', holdDurationMs });
-          }
-        }
-        return;
-      }
-      if (event.type !== 'attack') return;
-
-      // Track held keys — add on attack
-      heldMidiKeysRef.current.add(event.midiNote);
-      setMidiEventTick(t => t + 1);
-
-      // Play the note through the host audio engine
-      context.playNote({
-        midiNote: event.midiNote,
-        timestamp: event.timestamp,
-        type: 'attack',
-        durationMs: event.durationMs ?? 500,
-      });
-
-      // Visual highlight: find notes at/near the current playhead tick
-      // that match the pressed MIDI pitch and show them in the score.
-      const TICK_WINDOW = 240; // ½ beat at 480 ppq — generous tolerance
-      const currentTick = playerStateRef.current.currentTick;
-      const matching = allNotesRef.current.filter(
-        (e) =>
-          Math.abs(e.tick - currentTick) <= TICK_WINDOW &&
-          (e.midiPitches as number[]).includes(event.midiNote),
-      );
-      if (matching.length > 0) {
-        const ids: string[] = [];
-        for (const e of matching) {
-          const idx = (e.midiPitches as number[]).indexOf(event.midiNote);
-          if (idx >= 0 && idx < e.noteIds.length) ids.push(e.noteIds[idx]);
-        }
-        if (ids.length > 0) setMidiPressedNoteIds(new Set(ids));
-      }
-
-      const ps = practiceStateRef.current;
-      // Allow WRONG_MIDI to be recorded during holding mode too (feature 042)
-      if (ps.mode !== 'active' && ps.mode !== 'waiting' && ps.mode !== 'holding') return;
-
-      const currentEntry = ps.notes[ps.currentIndex];
-      if (!currentEntry) return;
-
-      // Sync pins with currently-held keys before evaluating the chord.
-      // Pins were set in the useEffect at beat-change time, but may be
-      // stale if the user has since released those keys.
-      const allRequired = [...(currentEntry.midiPitches as number[]), ...((currentEntry.sustainedPitches ?? []) as number[])];
-      for (const p of allRequired) {
-        if (!heldMidiKeysRef.current.has(p)) {
-          chordDetectorRef.current.unpin(p);
-        }
-      }
-
-      // Chord detection: accumulate this press in the rolling window.
-      // Only dispatch CORRECT_MIDI once ALL required pitches have been
-      // pressed within the 80 ms window. A press of a pitch outside the
-      // required set is still a WRONG_MIDI (no advance).
-      let chordResult = chordDetectorRef.current.press(event.midiNote, event.timestamp);
-      const isInChord = (currentEntry.midiPitches as number[]).includes(event.midiNote);
-      // Sustained pitches (held from a prior onset) are not wrong — the player
-      // may re-attack them or they may produce MIDI repeats.  Do not penalise.
-      const isSustained = ((currentEntry.sustainedPitches ?? []) as number[]).includes(event.midiNote);
-
-      // Re-pin held pitches: when the rolling window expires (>80 ms between
-      // presses), the detector clears stale entries.  If the player is still
-      // physically holding a required pitch that was evicted, re-pin it so
-      // they don't have to release and re-press keys they're already holding.
-      if (!chordResult.complete && chordResult.missing.length > 0) {
-        let repinned = false;
-        for (const pitch of chordResult.missing) {
-          if (heldMidiKeysRef.current.has(pitch)) {
-            chordDetectorRef.current.pin(pitch);
-            repinned = true;
-          }
-        }
-        if (repinned) {
-          chordResult = chordDetectorRef.current.press(event.midiNote, event.timestamp);
-        }
-      }
-      // During hold mode, new attack events don't trigger CORRECT_MIDI (feature 042)
-      if (ps.mode === 'holding') {
-        if (!isInChord && !isSustained) {
-          // Wrong note pressed during hold — still counts as an error
-          const wrongResponseTimeMs = Date.now() - practiceStartTimeRef.current;
-          dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs: wrongResponseTimeMs });
-        }
-        return;
-      }
-      if (chordResult.complete) {
-        // Immediately clear the detector so remaining note-on events from the
-        // same physical chord press (piano sends one per key) don't re-trigger
-        // completion before the useEffect resets it for the next beat.
-        chordDetectorRef.current.reset([]);
-
-        // All chord notes collected — advance.
-        // Deferred start: if in 'waiting' mode, set the start time NOW
-        // (first correct note begins the clock).
-        if (ps.mode === 'waiting') {
-          practiceStartTimeRef.current = Date.now();
-        }
-        // Compute timing data for the result
-        // playerState.bpm already includes tempoMultiplier (scoreTempo × multiplier)
-        const bpm = playerStateRef.current.bpm;
-        const baseExpectedTimeMs = bpm > 0
-          ? (currentEntry.tick / ((bpm / 60) * PPQ)) * 1000
-          : 0;
-        // In multi-loop practice, compute expectedTimeMs relative to the real
-        // wall-clock time when the phantom restarted this loop iteration.
-        // This accounts for the last-note duration that MusicTimeline adds
-        // before wrapping, which is not reflected in loopRegion tick span.
-        const lr = loopRegionRef.current;
-        const loopK = loopIterationRef.current;
-        let expectedTimeMs: number;
-        if (lr && loopK > 0 && bpm > 0) {
-          // Time from loop start tick to this note's tick within the loop
-          const loopStartBaseMs = (lr.startTick / ((bpm / 60) * PPQ)) * 1000;
-          const timeWithinLoop = baseExpectedTimeMs - loopStartBaseMs;
-          // Wall-clock time when this loop iteration started
-          const loopStartMs = loopStartTimesRef.current[loopK] ?? 0;
-          expectedTimeMs = loopStartMs + timeWithinLoop;
-        } else {
-          expectedTimeMs = baseExpectedTimeMs;
-        }
-        const responseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
-
-        // Feature 053 (Bug 5): Inter-onset gap rest enforcement (FR-005a).
-        // If there's a rest gap between the previous entry and this one, and
-        // the player pressed well before the expected time, treat as WRONG_MIDI
-        // instead of advancing.  Exempt waiting mode (clock not started yet)
-        // and entries with no preceding rest gap (consecutive notes).
-        if (ps.mode === 'active' && ps.currentIndex > 0) {
-          const prevEntry = ps.notes[ps.currentIndex - 1];
-          const hasRestGap = prevEntry && (prevEntry.tick + prevEntry.durationTicks < currentEntry.tick);
-          if (hasRestGap && expectedTimeMs - responseTimeMs > LATE_THRESHOLD_MS) {
-            // Restore the detector so the user can retry this beat.
-            // reset([]) above cleared it to prevent double-trigger, but since
-            // we're rejecting the chord (too early), the detector must be
-            // usable again — otherwise required=[] leaves it permanently stuck.
-            chordDetectorRef.current.reset(allRequired);
-            for (const p of allRequired) {
-              if (heldMidiKeysRef.current.has(p)) {
-                chordDetectorRef.current.pin(p);
-              }
-            }
-            dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs });
-            return;
-          }
-        }
-
-        const range = loopPracticeRangeRef.current;
-        // Compute required hold duration: (durationTicks / ticksPerMs) ms (feature 042)
-        // Cap at the gap before the next practice entry so BH merged entries
-        // with a long LH note don't block advancement when RH moves faster.
-        // Don't enforce hold when the capped duration is ≤ a quarter note —
-        // the player needs to advance to the next practice step, and the
-        // sustained pitches are auto-pinned there.
-        let effectiveDurTicks = currentEntry.durationTicks;
-        const nextEntry = ps.notes[ps.currentIndex + 1];
-        if (nextEntry) {
-          const gapTicks = nextEntry.tick - currentEntry.tick;
-          if (gapTicks > 0 && gapTicks < effectiveDurTicks) {
-            effectiveDurTicks = gapTicks;
-          }
-        }
-        const entryRequiredHoldMs = bpm > 0 && effectiveDurTicks > PPQ
-          ? (effectiveDurTicks / ((bpm / 60) * PPQ)) * 1000
-          : 0;
-        dispatchPractice({
-          type: 'CORRECT_MIDI',
-          midiNote: event.midiNote,
-          responseTimeMs,
-          expectedTimeMs,
-          endIndex: range?.endIndex,
-          pressTimeMs: Date.now(),
-          requiredHoldMs: entryRequiredHoldMs,
-        });
-      } else if (!isInChord && !isSustained) {
-        // Pitch outside the required chord and not sustained — treat as wrong note.
-        const wrongResponseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
-        dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs: wrongResponseTimeMs });
-      }
-      // If isInChord but not yet complete: partial chord press — stay silent
-      // (don't penalise the user, just wait for remaining notes).
-      // If isSustained: note is held from prior onset — also stay silent.
-    });
-  }, [context.midi, context]);
 
   // When staff count drops to 1, auto-reset selectedStaffIndex to 0
   useEffect(() => {
