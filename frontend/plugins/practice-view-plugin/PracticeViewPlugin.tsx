@@ -20,7 +20,7 @@
  *   SC-006: context.stopPlayback() and MIDI unsubscribe called on unmount.
  */
 
-import { useState, useEffect, useCallback, useReducer, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useReducer, useRef } from 'react';
 import type {
   PluginContext,
   ScorePlayerState,
@@ -36,19 +36,9 @@ import type { PerformanceRecord, PartialPerformanceRecord } from './practiceEngi
 import { mergePracticeNotesByTick } from './mergePracticeNotesByTick';
 import { usePracticeLoop } from './usePracticeLoop';
 import { usePracticeMidi } from './usePracticeMidi';
+import { usePracticeHighlights } from './usePracticeHighlights';
 import { ResultsOverlay } from './ResultsOverlay';
 import './PracticeViewPlugin.css';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
-function midiToLabel(midi: number): string {
-  const name = NOTE_NAMES[midi % 12];
-  const octave = Math.floor(midi / 12) - 1;
-  return `${name}${octave}`;
-}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -375,10 +365,6 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     };
   }, []);
 
-  // ─── Just-completed entry tracking (green highlight persistence) ────────────
-  const prevCompletedEntryRef = useRef<{ pitches: number[]; noteIds: string[] } | null>(null);
-  const confirmedIndexRef = useRef(-1);
-
   // ─── MIDI logic (extracted hook) ───────────────────────────────────────────
   const {
     midiPressedNoteIds, midiEventTick, heldMidiKeysRef, chordDetectorRef,
@@ -645,127 +631,21 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     setLoopCount(loopCount);
   }, [handlePracticeToggle, loopCount]);
 
-  // ─── Derived values ────────────────────────────────────────────────────────
-
-  // During active practice:
-  //   highlightedNoteIds = phantom tempo position (amber, 50% opacity via CSS)
-  //   pinnedNoteIds      = current target note (green = "play this")
-  // During waiting:
-  //   highlightedNoteIds = target note (amber, full — no phantom yet)
-  // Otherwise:
-  //   highlightedNoteIds = playback engine highlight / MIDI visual highlight
-  // 'holding' is a sub-state of 'active' (note duration being measured) — treat identically for UI.
-  const practiceActive = (practiceState.mode === 'active' || practiceState.mode === 'holding') && practiceState.notes.length > 0;
-  const practiceWaiting = practiceState.mode === 'waiting' && practiceState.notes.length > 0;
-
-  const highlightedNoteIds = isReplaying && replayHighlightedNoteIds.size > 0
-    ? replayHighlightedNoteIds
-    : practiceActive && phantomIndex >= 0 && phantomIndex < practiceState.notes.length
-    ? new Set<string>(practiceState.notes[phantomIndex].noteIds)
-    : practiceWaiting
-      ? new Set<string>(practiceState.notes[practiceState.currentIndex].noteIds)
-      : midiPressedNoteIds.size > 0
-        ? new Set<string>([...playerState.highlightedNoteIds, ...midiPressedNoteIds])
-        : playerState.highlightedNoteIds;
-
-  // Target note IDs (green pinned) — shown only during active practice.
-  const targetNoteIds = useMemo<ReadonlySet<string>>(() => {
-    if (practiceActive && practiceState.currentIndex < practiceState.notes.length) {
-      return new Set<string>(practiceState.notes[practiceState.currentIndex].noteIds);
-    }
-    return new Set<string>();
-  }, [practiceActive, practiceState.notes, practiceState.currentIndex]);
-
-  // Notes the user is pressing that match the current target — full green confirmation.
-  // Derived directly from the practice entry's parallel midiPitches/noteIds arrays
-  // and the set of physically-held MIDI keys (not from the tick-window visual lookup,
-  // which uses the playhead position and may produce different noteId strings).
-  const confirmedNoteIds = useMemo<ReadonlySet<string>>(() => {
-    if (!practiceActive || practiceState.currentIndex >= practiceState.notes.length) {
-      // Keep confirmedIndexRef in sync even when not active (covers waiting mode)
-      if (practiceState.mode === 'waiting' && practiceState.notes.length > 0) {
-        confirmedIndexRef.current = practiceState.currentIndex;
-      } else if (!practiceActive) {
-        confirmedIndexRef.current = -1;
-        prevCompletedEntryRef.current = null;
-      }
-      return new Set<string>();
-    }
-
-    // Detect index advancement: snapshot the just-completed entry so green
-    // highlights persist while the user still holds those keys down.
-    if (practiceState.currentIndex !== confirmedIndexRef.current) {
-      if (confirmedIndexRef.current >= 0 && confirmedIndexRef.current < practiceState.notes.length) {
-        const prev = practiceState.notes[confirmedIndexRef.current];
-        prevCompletedEntryRef.current = {
-          pitches: [...(prev.midiPitches as number[]), ...((prev.sustainedPitches ?? []) as number[])],
-          noteIds: [...prev.noteIds],
-        };
-      }
-      confirmedIndexRef.current = practiceState.currentIndex;
-    }
-
-    const entry = practiceState.notes[practiceState.currentIndex];
-    const pitches = entry.midiPitches as number[];
-    const ids = entry.noteIds as string[];
-    const confirmed = new Set<string>();
-    for (let i = 0; i < pitches.length; i++) {
-      if (heldMidiKeysRef.current.has(pitches[i]) && i < ids.length) {
-        confirmed.add(ids[i]);
-      }
-    }
-    // Green-highlight sustained pitches that are still physically held.
-    // Sustained pitches originate from an earlier entry's onset — resolve
-    // their noteIds by scanning backward through the practice note list.
-    const sustained = (entry.sustainedPitches ?? []) as number[];
-    if (sustained.length > 0) {
-      for (const sp of sustained) {
-        if (!heldMidiKeysRef.current.has(sp)) continue;
-        // Find the noteId from the most recent prior entry whose onset includes this pitch
-        for (let j = practiceState.currentIndex - 1; j >= 0; j--) {
-          const prior = practiceState.notes[j];
-          const idx = (prior.midiPitches as number[]).indexOf(sp);
-          if (idx >= 0 && idx < prior.noteIds.length) {
-            confirmed.add(prior.noteIds[idx]);
-            break;
-          }
-        }
-      }
-    }
-    // Persist green highlights for the just-completed entry while those
-    // keys are still physically held.
-    const prev = prevCompletedEntryRef.current;
-    if (prev) {
-      const anyHeld = prev.pitches.some((p) => heldMidiKeysRef.current.has(p));
-      if (anyHeld) {
-        for (let i = 0; i < prev.pitches.length; i++) {
-          if (heldMidiKeysRef.current.has(prev.pitches[i]) && i < prev.noteIds.length) {
-            confirmed.add(prev.noteIds[i]);
-          }
-        }
-      } else {
-        prevCompletedEntryRef.current = null;
-      }
-    }
-    return confirmed;
-    // midiPressedNoteIds is used as a change-trigger: it updates on every
-    // attack/release, which is exactly when we need to recompute.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [practiceActive, practiceState.notes, practiceState.currentIndex, midiPressedNoteIds]);
-
-  // Pressed vs expected pitch labels — for the real-time note display.
-  // Reacts to midiPressedNoteIds (changes on every attack/release).
-  const pressedPitchLabels = useMemo<string[]>(() => {
-    if (!practiceActive && !practiceWaiting) return [];
-    return Array.from(heldMidiKeysRef.current).sort((a, b) => a - b).map(midiToLabel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [practiceActive, practiceWaiting, midiEventTick]);
-
-  const expectedPitchLabels = useMemo<string[]>(() => {
-    if ((!practiceActive && !practiceWaiting) || practiceState.currentIndex >= practiceState.notes.length) return [];
-    const pitches = practiceState.notes[practiceState.currentIndex].midiPitches as number[];
-    return [...pitches].sort((a, b) => a - b).map(midiToLabel);
-  }, [practiceActive, practiceWaiting, practiceState.notes, practiceState.currentIndex]);
+  // ─── Highlight computation (extracted hook) ─────────────────────────────────
+  const {
+    targetNoteIds, confirmedNoteIds,
+    pressedPitchLabels, expectedPitchLabels,
+    highlightedNoteIds, practiceActive, practiceWaiting,
+  } = usePracticeHighlights({
+    practiceState,
+    playerState,
+    midiPressedNoteIds,
+    midiEventTick,
+    heldMidiKeysRef,
+    phantomIndex,
+    isReplaying,
+    replayHighlightedNoteIds,
+  });
 
   const isLoaded = ['ready', 'playing', 'paused'].includes(playerState.status);
 
