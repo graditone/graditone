@@ -119,11 +119,11 @@
 
 ### Implementation for User Story 6
 
-- [ ] T027 [US6] Verify `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx` line count is ≤ 900 lines (`wc -l`). If over, identify any remaining extractable code and refine.
-- [ ] T028 [US6] Verify acyclic module dependency graph — confirm no extracted hook/component imports another (only orchestrator imports all modules) by checking import statements in all 6 new files
-- [ ] T029 [US6] Run TypeScript build check (`cd frontend && npx tsc --noEmit`) — must complete with zero errors
-- [ ] T030 [US6] Run full E2E test suite (`cd frontend && npx playwright test`) — all E2E tests must pass
-- [ ] T031 [US6] Verify hook call order in orchestrator matches original declaration order: `useHoldProgress` → `usePracticeLoop` → `usePhantomTempo` → `usePracticeMidi` → `usePracticeHighlights` (per R-006)
+- [X] T027 [US6] Verify `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx` line count is ≤ 900 lines (`wc -l`). If over, identify any remaining extractable code and refine.
+- [X] T028 [US6] Verify acyclic module dependency graph — confirm no extracted hook/component imports another (only orchestrator imports all modules) by checking import statements in all 6 new files
+- [X] T029 [US6] Run TypeScript build check (`cd frontend && npx tsc --noEmit`) — must complete with zero errors
+- [X] T030 [US6] Run full E2E test suite (`cd frontend && npx playwright test`) — all E2E tests must pass
+- [X] T031 [US6] Verify hook call order in orchestrator matches original declaration order: `useHoldProgress` → `usePracticeLoop` → `usePhantomTempo` → `usePracticeMidi` → `usePracticeHighlights` (per R-006)
 
 **Checkpoint**: All success criteria (SC-001 through SC-007) verified.
 
@@ -133,9 +133,9 @@
 
 **Purpose**: Documentation updates and final cleanup
 
-- [ ] T032 [P] Update `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx` top-of-file comment to describe its role as orchestrator and list imported modules
-- [ ] T033 [P] Update `FEATURES.md` if practice-view-plugin architecture is documented there
-- [ ] T034 Run quickstart.md validation checklist (all 8 items) in `specs/054-refactor-practice-plugin/quickstart.md`
+- [X] T032 [P] Update `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx` top-of-file comment to describe its role as orchestrator and list imported modules
+- [X] T033 [P] Update `FEATURES.md` if practice-view-plugin architecture is documented there
+- [X] T034 Run quickstart.md validation checklist (all 8 items) in `specs/054-refactor-practice-plugin/quickstart.md`
 
 ---
 

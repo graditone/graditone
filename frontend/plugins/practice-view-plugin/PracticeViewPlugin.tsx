@@ -1,18 +1,17 @@
 /**
- * Practice View Plugin — Root Component (T026, T031–T038)
+ * Practice View Plugin — Orchestrator
  * Feature 037: Practice View Plugin
+ *
+ * Thin orchestrator that wires together extracted hooks and components:
+ *   - useHoldProgress    — rAF hold-timer loop (feature 042)
+ *   - usePracticeLoop    — Loop pin state, loop region, multi-loop counters
+ *   - usePhantomTempo    — Phantom tempo cursor advancing at configured BPM
+ *   - usePracticeMidi    — Chord detection, MIDI subscription, held-key tracking
+ *   - usePracticeHighlights — Target/confirmed/pressed note-ID computation
+ *   - ResultsOverlay     — Complete/partial results display, replay controls
  *
  * Subscribes to scorePlayer state, renders ScoreSelector when idle,
  * and ScoreRenderer + PracticeToolbar when a score is loaded.
- *
- * Practice engine wiring:
- *   T031 — Practice activation (START action)
- *   T032 — MIDI subscription handler (CORRECT_MIDI / WRONG_MIDI)
- *   T033 — Practice deactivation paths (DEACTIVATE, STOP, complete cleanup)
- *   T034 — Staff selection flow (staffCount > 1 picker)
- *   T035 — No-MIDI-device notice (FR-012)
- *   T036 — Seek-based initial practice position (FR-010 US3 AC-1)
- *   T037 — Seek-while-active handler (FR-010 US3 AC-2)
  *
  * Constitution compliance:
  *   Principle VI: no coordinate arithmetic — only integer tick, MIDI (0-127),
