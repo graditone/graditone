@@ -14,7 +14,7 @@ import {
 
 export interface UseUserScoresResult {
   userScores: UserScore[];
-  addUserScore: (id: string, rawDisplayName: string) => UserScore;
+  addUserScore: (id: string, rawDisplayName: string) => { entry: UserScore; evictedIds: string[] };
   removeUserScore: (id: string) => void;
   refreshUserScores: () => void;
 }
@@ -30,10 +30,10 @@ export function useUserScores(): UseUserScoresResult {
   );
 
   const addUserScore = useCallback(
-    (id: string, rawDisplayName: string): UserScore => {
-      const entry = indexAdd(id, rawDisplayName);
+    (id: string, rawDisplayName: string): { entry: UserScore; evictedIds: string[] } => {
+      const result = indexAdd(id, rawDisplayName);
       setUserScores(listUserScores());
-      return entry;
+      return result;
     },
     []
   );

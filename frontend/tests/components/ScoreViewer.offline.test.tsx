@@ -158,6 +158,7 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
     // Setup WASM mocks
     mockWasmCreateScore = vi.fn();
     vi.mocked(wasmEngine.createScore).mockImplementation(mockWasmCreateScore);
+    vi.mocked(wasmEngine.getSchemaVersion).mockResolvedValue(9);
   });
 
   afterEach(() => {
@@ -173,14 +174,14 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
   describe('loadScore() - offline behavior', () => {
     it('should load score from IndexedDB without calling REST API', async () => {
       // Arrange: Set up IndexedDB to return a score
-      mockLoadScoreFromIndexedDB.mockResolvedValue(mockScore);
+      mockLoadScoreFromIndexedDB.mockResolvedValue({ kind: 'loaded', score: mockScore });
 
       // Act: Render ScoreViewer with a score ID
       render(<ScoreViewer scoreId="test-score-123" />);
 
       // Assert: Wait for score to load
       await waitFor(() => {
-        expect(mockLoadScoreFromIndexedDB).toHaveBeenCalledWith('test-score-123');
+        expect(mockLoadScoreFromIndexedDB).toHaveBeenCalledWith('test-score-123', 9);
       });
 
       // Assert: Should NOT call REST API (offline parity)
@@ -191,8 +192,8 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
     });
 
     it('should NOT fall back to REST API if score not in IndexedDB', async () => {
-      // Arrange: Set up IndexedDB to return null (score not found)
-      mockLoadScoreFromIndexedDB.mockResolvedValue(null);
+      // Arrange: Set up IndexedDB to return not-found
+      mockLoadScoreFromIndexedDB.mockResolvedValue({ kind: 'not-found' });
       
       // Arrange: Set up REST API mock (should NOT be called)
       mockApiClientGetScore.mockResolvedValue(mockScore);
@@ -202,7 +203,7 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
 
       // Assert: IndexedDB should be checked
       await waitFor(() => {
-        expect(mockLoadScoreFromIndexedDB).toHaveBeenCalledWith('test-score-456');
+        expect(mockLoadScoreFromIndexedDB).toHaveBeenCalledWith('test-score-456', 9);
       });
 
       // Assert: REST API should NOT be called (offline parity requirement)
@@ -218,15 +219,15 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
    */
   describe('loadScore() - error handling', () => {
     it('should show "Score not found in local storage" error when score missing', async () => {
-      // Arrange: Set up IndexedDB to return null
-      mockLoadScoreFromIndexedDB.mockResolvedValue(null);
+      // Arrange: Set up IndexedDB to return not-found
+      mockLoadScoreFromIndexedDB.mockResolvedValue({ kind: 'not-found' });
 
       // Act: Render ScoreViewer
       render(<ScoreViewer scoreId="missing-score" />);
 
       // Assert: Wait for error message
       await waitFor(() => {
-        expect(mockLoadScoreFromIndexedDB).toHaveBeenCalledWith('missing-score');
+        expect(mockLoadScoreFromIndexedDB).toHaveBeenCalledWith('missing-score', 9);
       });
 
       // Assert: Error message should mention local storage (not generic "failed to load")
@@ -332,21 +333,21 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
       const score2: Score = { ...mockScore, id: 'score-2' };
       
       mockLoadScoreFromIndexedDB
-        .mockResolvedValueOnce(score1)
-        .mockResolvedValueOnce(score2);
+        .mockResolvedValueOnce({ kind: 'loaded', score: score1 })
+        .mockResolvedValueOnce({ kind: 'loaded', score: score2 });
 
       // Act: Load first score
       const { rerender } = render(<ScoreViewer scoreId="score-1" />);
 
       await waitFor(() => {
-        expect(mockLoadScoreFromIndexedDB).toHaveBeenCalledWith('score-1');
+        expect(mockLoadScoreFromIndexedDB).toHaveBeenCalledWith('score-1', 9);
       });
 
       // Act: Switch to second score
       rerender(<ScoreViewer scoreId="score-2" />);
 
       await waitFor(() => {
-        expect(mockLoadScoreFromIndexedDB).toHaveBeenCalledWith('score-2');
+        expect(mockLoadScoreFromIndexedDB).toHaveBeenCalledWith('score-2', 9);
       });
 
       // Assert: All operations used IndexedDB only

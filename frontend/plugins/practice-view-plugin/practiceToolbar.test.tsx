@@ -143,31 +143,32 @@ describe('PracticeToolbar — Practice button', () => {
 describe('PracticeToolbar — Staff selector', () => {
   it('is NOT rendered when staffCount === 1', () => {
     render(<PracticeToolbar {...makeDefaultProps({ staffCount: 1 })} />);
-    expect(screen.queryByRole('combobox', { name: /select staff/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /select hand/i })).toBeNull();
   });
 
   it('is NOT rendered when staffCount === 0', () => {
     render(<PracticeToolbar {...makeDefaultProps({ staffCount: 0 })} />);
-    expect(screen.queryByRole('combobox', { name: /select staff/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /select hand/i })).toBeNull();
   });
 
   it('is rendered when staffCount === 2', () => {
     render(<PracticeToolbar {...makeDefaultProps({ staffCount: 2 })} />);
-    expect(screen.getByRole('combobox', { name: /select staff/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /select hand/i })).toBeTruthy();
   });
 
   it('has correct number of options when staffCount === 3 (3 staves + Both Hands)', () => {
     render(<PracticeToolbar {...makeDefaultProps({ staffCount: 3 })} />);
-    const select = screen.getByRole('combobox', { name: /select staff/i });
-    // staffCount individual options + 1 "Both Hands" option
-    expect(select.querySelectorAll('option').length).toBe(4);
+    // Open the menu
+    fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
+    // 3 staves + Both Hands = 4 menu items
+    expect(screen.getAllByRole('option').length).toBe(4);
   });
 
   it('includes a "Both Hands" option when staffCount === 2', () => {
     render(<PracticeToolbar {...makeDefaultProps({ staffCount: 2 })} />);
-    const select = screen.getByRole('combobox', { name: /select staff/i });
-    const options = Array.from(select.querySelectorAll('option'));
-    expect(options.some((o) => o.textContent === 'Both Hands')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
+    const options = screen.getAllByRole('option');
+    expect(options.some((o) => o.textContent?.includes('Both Hands'))).toBe(true);
   });
 
   it('calls onStaffChange with -1 when "Both Hands" is selected', () => {
@@ -175,8 +176,8 @@ describe('PracticeToolbar — Staff selector', () => {
     render(
       <PracticeToolbar {...makeDefaultProps({ staffCount: 2, onStaffChange })} />,
     );
-    const select = screen.getByRole('combobox', { name: /select staff/i });
-    fireEvent.change(select, { target: { value: '-1' } });
+    fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
+    fireEvent.click(screen.getByRole('option', { name: /both hands/i }));
     expect(onStaffChange).toHaveBeenCalledWith(-1);
   });
 
@@ -185,8 +186,8 @@ describe('PracticeToolbar — Staff selector', () => {
     render(
       <PracticeToolbar {...makeDefaultProps({ staffCount: 2, onStaffChange })} />,
     );
-    const select = screen.getByRole('combobox', { name: /select staff/i });
-    fireEvent.change(select, { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
+    fireEvent.click(screen.getByRole('option', { name: /left hand/i }));
     expect(onStaffChange).toHaveBeenCalledWith(1);
   });
 });

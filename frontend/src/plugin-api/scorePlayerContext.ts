@@ -31,9 +31,10 @@ import { useNoteHighlight } from '../services/highlight/useNoteHighlight';
 import { MusicXMLImportService } from '../services/import/MusicXMLImportService';
 import { PRELOADED_CATALOG } from '../data/preloadedScores';
 import type { PreloadedScore } from '../data/preloadedScores';
-import { loadScoreFromIndexedDB } from '../services/storage/local-storage';
+import { loadScoreFromIndexedDB, deleteScoreFromIndexedDB } from '../services/storage/local-storage';
 import { ScoreCache } from '../services/score-cache';
 import { addUserScore, getUserScore } from '../services/userScoreIndex';
+import { getSchemaVersion } from '../services/wasm/music-engine';
 import type { Note, Score } from '../types/score';
 import { expandNotesWithRepeats } from '../services/playback/RepeatNoteExpander';
 
@@ -302,21 +303,40 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
         scoreObject = result.score;
         parsedTitle = result.metadata?.work_title ?? null;
 
-        // Feature 045: Persist uploaded score to IndexedDB + metadata index
+        // Feature 045: Persist uploaded score + raw blob to IndexedDB + metadata index
         const fileName = result.metadata?.file_name;
         const strippedName = fileName ? fileName.replace(/\.[^.]+$/, '') : null;
         const rawDisplayName = parsedTitle ?? strippedName;
         try {
-          await ScoreCache.cache(scoreObject);
+          await ScoreCache.cache(scoreObject, result.rawFileBlob);
           if (rawDisplayName) {
-            addUserScore(scoreObject.id, rawDisplayName);
+            const { evictedIds } = addUserScore(scoreObject.id, rawDisplayName);
+            for (const evictedId of evictedIds) {
+              deleteScoreFromIndexedDB(evictedId).catch(() => {});
+            }
           }
         } catch {
           // Quota exceeded or storage error — don't block playback
         }
       } else {
-        // Feature 045: Load user-uploaded score directly from IndexedDB (no WASM re-parse)
-        scoreObject = await loadScoreFromIndexedDB(source.scoreId);
+        // Feature 045: Load user-uploaded score from IndexedDB.
+        // If schema is stale but a raw MXL blob was stored, re-parse it.
+        const schemaVersion = await getSchemaVersion();
+        const loadResult = await loadScoreFromIndexedDB(source.scoreId, schemaVersion);
+
+        if (loadResult.kind === 'loaded') {
+          scoreObject = loadResult.score;
+        } else if (loadResult.kind === 'stale') {
+          // Re-parse from the stored raw MXL blob
+          const blob = new Blob([loadResult.rawMxlBlob], { type: 'application/vnd.recordare.musicxml+xml' });
+          const file = new File([blob], 'score.mxl', { type: blob.type });
+          const service = new MusicXMLImportService();
+          const result = await service.importFile(file);
+          scoreObject = result.score;
+          // Re-cache with the updated schema, preserving the raw blob
+          await ScoreCache.cache(scoreObject, loadResult.rawMxlBlob);
+        }
+
         if (!scoreObject) {
           throw new Error(`User score not found in local storage: "${source.scoreId}"`);
         }

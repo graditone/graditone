@@ -563,3 +563,55 @@ describe('[T022] BUG: STAFF_LINE_STROKE_WIDTH must be ≥ 1.5 for tablet readabi
   });
 });
 
+// ============================================================================
+// [US3] Feature 053: Green dot persistence on system change
+//
+// Root cause: After renderSVG() rebuilds the DOM on a system transition,
+// reapplyHighlights() runs once, but a transient empty expectedNoteIds
+// window between engine currentIndex advance and the next rAF memo
+// causes the highlights to be cleared. A deferred second
+// reapplyHighlights() on the next animation frame closes this race window.
+//
+// This test FAILS before T013 (no deferred re-highlight).
+// This test PASSES after T013 (deferred reapplyHighlights scheduled).
+// ============================================================================
+
+describe('[US3] Feature 053: deferred reapplyHighlights after renderSVG', () => {
+  it('schedules a deferred reapplyHighlights after renderSVG and reapplyHighlights', async () => {
+    const { LayoutRenderer } = await import('./LayoutRenderer');
+
+    // Track calls to reapplyHighlights
+    let reapplyCallCount = 0;
+    const origReapply = LayoutRenderer.prototype['reapplyHighlights'];
+    LayoutRenderer.prototype['reapplyHighlights'] = function (this: InstanceType<typeof LayoutRenderer>) {
+      reapplyCallCount++;
+      // Call the original
+      origReapply.call(this);
+    };
+
+    // Create a minimal instance (no mounting)
+    const instance = Object.create(LayoutRenderer.prototype);
+    instance.svgRef = { current: null }; // null SVG ref — reapplyHighlights is a no-op
+    instance.props = makeMinimalProps();
+    instance.prevHighlightedIds = new Set<string>();
+    instance.prevExpectedIds = new Set<string>();
+    instance.prevPinnedIds = new Set<string>();
+    instance.prevErrorIds = new Set<string>();
+    instance.deferredReapplyId = 0;
+
+    // Count before
+    reapplyCallCount = 0;
+
+    // Call reapplyHighlights synchronously
+    instance.reapplyHighlights();
+    const syncCount = reapplyCallCount;
+    expect(syncCount).toBeGreaterThanOrEqual(1);
+
+    // Verify a deferred call is scheduled (deferredReapplyId should be set)
+    expect(instance.deferredReapplyId).not.toBe(0);
+
+    // Restore prototype
+    LayoutRenderer.prototype['reapplyHighlights'] = origReapply;
+  });
+});
+

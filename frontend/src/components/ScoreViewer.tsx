@@ -6,6 +6,7 @@ import type { ImportResult } from "../services/import/MusicXMLImportService";
 import { MusicXMLImportService } from "../services/import/MusicXMLImportService";
 import { loadScoreFromIndexedDB, deleteScoreFromIndexedDB } from "../services/storage/local-storage";
 import { ScoreCache } from "../services/score-cache";
+import { getSchemaVersion } from "../services/wasm/music-engine";
 import { LoadScoreDialog } from "./load-score/LoadScoreDialog";
 import { PRELOADED_SCORES } from "../data/preloadedScores";
 import { LandingScreen } from "./LandingScreen";
@@ -150,11 +151,26 @@ export function ScoreViewer({
     setLoading(true);
     setError(null);
     try {
-      const indexedDBScore = await loadScoreFromIndexedDB(id);
-      if (indexedDBScore) {
+      const schemaVersion = await getSchemaVersion();
+      const loadResult = await loadScoreFromIndexedDB(id, schemaVersion);
+      if (loadResult.kind === 'loaded') {
         console.log(`[ScoreViewer] Loaded score from IndexedDB: ${id}`);
-        setScore(indexedDBScore);
-        setScoreTitle(indexedDBScore.instruments[0]?.name ?? null);
+        setScore(loadResult.score);
+        setScoreTitle(loadResult.score.instruments[0]?.name ?? null);
+        setIsFileSourced(false);
+        return;
+      }
+      if (loadResult.kind === 'stale') {
+        // Re-parse from stored raw MXL blob
+        console.log(`[ScoreViewer] Re-parsing stale score from raw blob: ${id}`);
+        const blob = new Blob([loadResult.rawMxlBlob], { type: 'application/vnd.recordare.musicxml+xml' });
+        const file = new File([blob], 'score.mxl', { type: blob.type });
+        const service = new MusicXMLImportService();
+        const result = await service.importFile(file);
+        // Re-cache with updated schema, preserving the raw blob
+        await ScoreCache.cache(result.score, loadResult.rawMxlBlob);
+        setScore(result.score);
+        setScoreTitle(result.score.instruments[0]?.name ?? null);
         setIsFileSourced(false);
         return;
       }
@@ -197,9 +213,15 @@ export function ScoreViewer({
 
     // Feature 045: Persist score to IndexedDB; update metadata index.
     try {
-      await ScoreCache.cache(result.score);
+      await ScoreCache.cache(result.score, result.rawFileBlob);
       if (rawDisplayName) {
-        addUserScore(result.score.id, rawDisplayName);
+        const { evictedIds } = addUserScore(result.score.id, rawDisplayName);
+        // Clean up IndexedDB entries for evicted scores
+        for (const evictedId of evictedIds) {
+          deleteScoreFromIndexedDB(evictedId).catch((err) => {
+            console.error('[ScoreViewer] Failed to delete evicted score:', err);
+          });
+        }
       }
     } catch (err) {
       // Handle storage quota exceeded (FR-007): warn but don't block current session.

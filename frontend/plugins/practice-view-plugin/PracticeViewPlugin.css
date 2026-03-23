@@ -244,17 +244,88 @@
   min-width: 2.5ch;
 }
 
-/* ─── Staff selector ──────────────────────────────────────────────────────── */
+/* ─── Staff selector (custom themed dropdown, mirrors metronome) ─────────── */
 
-.practice-plugin__staff-select {
+.practice-plugin__staff-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.practice-plugin__staff-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--ls-accent, #7c3aed);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0 12px;
   font-size: 0.8rem;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: var(--ls-bg, #fff);
-  color: var(--ls-heading, #222);
+  min-height: 36px;
   cursor: pointer;
-  max-width: 120px;
+  white-space: nowrap;
+  transition: filter 0.12s;
+}
+
+.practice-plugin__staff-btn:hover:not(:disabled) {
+  filter: brightness(1.18);
+}
+
+.practice-plugin__staff-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.practice-plugin__staff-chevron {
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+.practice-plugin__staff-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 140px;
+  background: color-mix(in srgb, var(--ls-accent, #7c3aed) 15%, #111);
+  border: 1px solid var(--ls-accent, #7c3aed);
+  border-radius: 8px;
+  padding: 4px 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  z-index: 200;
+}
+
+.practice-plugin__staff-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: #e2d9f3;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.practice-plugin__staff-menu-item:hover {
+  background: color-mix(in srgb, var(--ls-accent, #7c3aed) 25%, transparent);
+}
+
+.practice-plugin__staff-menu-item--active {
+  color: #fff;
+  font-weight: 700;
+}
+
+.practice-plugin__staff-menu-check {
+  color: var(--ls-accent, #a78bfa);
+  font-size: 0.8rem;
+  width: 12px;
+  flex-shrink: 0;
 }
 
 /* ─── Metronome group ────────────────────────────────────────────────────── */

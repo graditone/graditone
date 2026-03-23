@@ -140,6 +140,34 @@ export function PracticeToolbar({
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [metroMenuOpen]);
 
+  const [staffMenuOpen, setStaffMenuOpen] = useState(false);
+  const staffGroupRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!staffMenuOpen) return;
+    function handleOutside(e: MouseEvent) {
+      if (staffGroupRef.current && !staffGroupRef.current.contains(e.target as Node)) {
+        setStaffMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [staffMenuOpen]);
+
+  function staffIndexLabel(index: number): string {
+    if (index === -1) return 'Both Hands';
+    if (index === 0) return 'Right Hand';
+    if (index === 1) return 'Left Hand';
+    return `Staff ${index + 1}`;
+  }
+
+  const staffOptions: { value: number; label: string }[] = [
+    ...Array.from({ length: staffCount }, (_, i) => ({
+      value: i,
+      label: staffIndexLabel(i),
+    })),
+    { value: -1, label: 'Both Hands' },
+  ];
+
   // Practice button label and CSS class
   // 'holding' is a sub-state of active (note duration being measured) — show Stop button during both
   const practiceRunning = practiceMode === 'active' || practiceMode === 'holding' || practiceMode === 'waiting';
@@ -205,19 +233,43 @@ export function PracticeToolbar({
 
       {/* Staff selector — only shown when score has more than 1 staff */}
       {staffCount > 1 && (
-        <select
-          className="practice-plugin__staff-select"
-          value={selectedStaffIndex}
-          onChange={(e) => onStaffChange(Number(e.target.value))}
-          aria-label="Select staff"
-        >
-          {Array.from({ length: staffCount }, (_, i) => (
-            <option key={i} value={i}>
-              {i === 0 ? 'Right Hand' : i === 1 ? 'Left Hand' : `Staff ${i + 1}`}
-            </option>
-          ))}
-          <option value={-1}>Both Hands</option>
-        </select>
+        <div className="practice-plugin__staff-group" ref={staffGroupRef}>
+          <button
+            className="practice-plugin__staff-btn"
+            onClick={() => setStaffMenuOpen((o) => !o)}
+            aria-haspopup="listbox"
+            aria-expanded={staffMenuOpen}
+            aria-label="Select hand"
+            disabled={!isLoaded}
+          >
+            {staffIndexLabel(selectedStaffIndex)}
+            <span className="practice-plugin__staff-chevron">▾</span>
+          </button>
+          {staffMenuOpen && (
+            <div className="practice-plugin__staff-menu" role="listbox">
+              {staffOptions.map(({ value, label }) => (
+                <button
+                  key={value}
+                  role="option"
+                  aria-selected={selectedStaffIndex === value}
+                  className={
+                    'practice-plugin__staff-menu-item' +
+                    (selectedStaffIndex === value ? ' practice-plugin__staff-menu-item--active' : '')
+                  }
+                  onClick={() => {
+                    onStaffChange(value);
+                    setStaffMenuOpen(false);
+                  }}
+                >
+                  {selectedStaffIndex === value && (
+                    <span className="practice-plugin__staff-menu-check">✓</span>
+                  )}
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Inline staff picker prompt — shown when Practice button was pressed

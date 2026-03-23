@@ -24,6 +24,9 @@ export interface UserScore {
 /** localStorage key for the JSON-serialised UserScore[] index. */
 export const USER_SCORES_INDEX_KEY = 'graditone-user-scores-index';
 
+/** Maximum number of user-uploaded scores to keep. Oldest are evicted first. */
+export const MAX_USER_SCORES = 20;
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -59,11 +62,14 @@ export function listUserScores(): UserScore[] {
  * Deduplication: if an entry with the same base display name already exists,
  * a numeric suffix is appended: "Song", "Song (2)", "Song (3)", …
  *
+ * Eviction: if the index exceeds MAX_USER_SCORES, the oldest entries are
+ * removed. Their IDs are returned so callers can clean up IndexedDB.
+ *
  * @param id - UUID of the score (matches IndexedDB key).
  * @param rawDisplayName - Proposed display name (work_title or filename).
- * @returns The newly created UserScore entry.
+ * @returns Object with the new entry and any evicted score IDs.
  */
-export function addUserScore(id: string, rawDisplayName: string): UserScore {
+export function addUserScore(id: string, rawDisplayName: string): { entry: UserScore; evictedIds: string[] } {
   const index = readIndex();
   const displayName = deduplicateName(rawDisplayName, index);
   const entry: UserScore = {
@@ -73,8 +79,16 @@ export function addUserScore(id: string, rawDisplayName: string): UserScore {
   };
   // Insert at head (newest first)
   index.unshift(entry);
+
+  // Evict oldest entries beyond the limit
+  const evictedIds: string[] = [];
+  while (index.length > MAX_USER_SCORES) {
+    const removed = index.pop();
+    if (removed) evictedIds.push(removed.id);
+  }
+
   writeIndex(index);
-  return entry;
+  return { entry, evictedIds };
 }
 
 /**

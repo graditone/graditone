@@ -91,6 +91,16 @@ export class ChordDetector {
   }
 
   /**
+   * Remove a pitch from the pinned set.
+   *
+   * Call when a previously-pinned key is released so it no longer counts
+   * as collected. Safe to call for pitches that aren't pinned (no-op).
+   */
+  unpin(midiNote: number): void {
+    this.pinned.delete(midiNote);
+  }
+
+  /**
    * Record a MIDI attack event and return the current accumulation state.
    *
    * Pitches not in `required` are silently ignored (callers decide whether

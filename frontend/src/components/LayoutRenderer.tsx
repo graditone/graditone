@@ -110,6 +110,8 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
   private prevErrorIds = new Set<string>();
   /** Previous expected note IDs for diff computation */
   private prevExpectedIds = new Set<string>();
+  /** Feature 053: deferred reapplyHighlights rAF handle for system-change race fix */
+  private deferredReapplyId = 0;
   /** Target interval between highlight frames (33ms mobile / 16ms desktop) */
   private frameInterval = 16;
   /** Pre-sorted note index for O(log n) highlight queries */
@@ -204,6 +206,7 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
    */
   componentWillUnmount(): void {
     this.stopHighlightLoop();
+    if (this.deferredReapplyId) cancelAnimationFrame(this.deferredReapplyId);
     this.svgRef.current?.removeEventListener('click', this.handleSVGClick);
     this.highlightIndex?.clear();
     this.frameBudgetMonitor.reset();
@@ -516,8 +519,22 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
    * prevHighlightedIds may reference notes that are no longer playing.
    */
   private reapplyHighlights(): void {
+    // Feature 053 (Bug 3): Cancel any previously scheduled deferred reapply.
+    if (this.deferredReapplyId) {
+      cancelAnimationFrame(this.deferredReapplyId);
+      this.deferredReapplyId = 0;
+    }
+
     const svg = this.svgRef.current;
-    if (!svg) return;
+    if (!svg) {
+      // Even without an SVG element, schedule the deferred reapply —
+      // the SVG may be created between now and the next animation frame.
+      this.deferredReapplyId = requestAnimationFrame(() => {
+        this.deferredReapplyId = 0;
+        this.reapplyHighlights();
+      });
+      return;
+    }
 
     // Recompute current highlights from tick source (not from stale prevHighlightedIds)
     // Read live tick data from ref (bypasses shouldComponentUpdate freezing)
@@ -539,8 +556,6 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
     // Update prevHighlightedIds to match what we're applying
     this.prevHighlightedIds = new Set(baseIds);
 
-    if (baseIds.length === 0) return;
-
     // Scoped to .layout-glyph — skips hit-rects and beams (same reasoning as updateHighlights).
     for (const id of baseIds) {
       svg.querySelectorAll(`.layout-glyph[data-note-id="${id}"]`).forEach(el => {
@@ -557,6 +572,18 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
     this.updateErrorHighlights();
     // Re-apply expected highlights after structural render
     this.updateExpectedHighlights();
+
+    // Feature 053 (Bug 3): Schedule a deferred second reapply on the next
+    // animation frame. During system transitions, expectedNoteIds can
+    // transiently empty between the engine's currentIndex advance and the
+    // next rAF memo recomputation. The deferred call catches this race.
+    if (this.deferredReapplyId) cancelAnimationFrame(this.deferredReapplyId);
+    this.deferredReapplyId = requestAnimationFrame(() => {
+      this.deferredReapplyId = 0;
+      this.updatePinnedHighlights();
+      this.updateErrorHighlights();
+      this.updateExpectedHighlights();
+    });
   }
 
   /**

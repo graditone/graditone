@@ -977,3 +977,68 @@ describe('reduce() — WRONG_MIDI stays on current beat (FR-003a disabled)', () 
     expect(MAX_CONSECUTIVE_WRONG).toBe(3);
   });
 });
+
+// ---------------------------------------------------------------------------
+// [US5] Feature 053: Rest enforcement & semi-strict extra-notes policy
+// ---------------------------------------------------------------------------
+
+describe('[US5] Feature 053: inter-onset gap wrong-note detection', () => {
+  it('WRONG_MIDI in holding mode does not advance currentIndex (rest enforcement)', () => {
+    // Simulates pressing a wrong key during an inter-onset gap while
+    // the previous note is being held — the engine must not advance.
+    const notes = [makeHoldNote([60], 3840), makeNote([62])];
+    const state = holdingState(notes, 0, 50000, 2000);
+    const next = reduce(state, { type: 'WRONG_MIDI', midiNote: 65, responseTimeMs: 51000 });
+    expect(next.currentIndex).toBe(0);
+    expect(next.mode).toBe('holding');
+    expect(next.currentWrongAttempts).toBe(1);
+    expect(next.wrongNoteEvents).toHaveLength(1);
+  });
+
+  it('WRONG_MIDI in waiting mode does not advance currentIndex (rest enforcement)', () => {
+    // Simulates pressing a wrong key while waiting for the first correct note
+    const state = waitingState(THREE_NOTES, 0);
+    const next = reduce(state, { type: 'WRONG_MIDI', midiNote: 65, responseTimeMs: 100 });
+    expect(next.currentIndex).toBe(0);
+    expect(next.mode).toBe('waiting');
+    expect(next.currentWrongAttempts).toBe(1);
+  });
+
+  it('WRONG_MIDI in active mode does not advance currentIndex', () => {
+    const state = activeState(THREE_NOTES, 1);
+    const next = reduce(state, { type: 'WRONG_MIDI', midiNote: 65, responseTimeMs: 500 });
+    expect(next.currentIndex).toBe(1);
+    expect(next.mode).toBe('active');
+  });
+});
+
+describe('[US5] Feature 053: semi-strict extra-notes policy (engine level)', () => {
+  it('WRONG_MIDI followed by CORRECT_MIDI still advances (extra note does not block)', () => {
+    // Semi-strict policy: extra notes fire WRONG_MIDI but the subsequent
+    // correct note still advances. Full credit at engine level.
+    let s = activeState(THREE_NOTES, 0);
+    // Extra note (wrong)
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 65, responseTimeMs: 900 });
+    expect(s.currentIndex).toBe(0);
+    // Correct note
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 1000, expectedTimeMs: 1000 });
+    expect(s.currentIndex).toBe(1);
+    expect(s.noteResults).toHaveLength(1);
+    expect(s.noteResults[0].outcome).toBe('correct');
+    // wrongAttempts recorded in the result
+    expect(s.noteResults[0].wrongAttempts).toBe(1);
+  });
+
+  it('multiple extra notes before correct note still advances with full credit', () => {
+    let s = activeState(THREE_NOTES, 0);
+    // 3 extra notes
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 65, responseTimeMs: 800 });
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 67, responseTimeMs: 850 });
+    s = reduce(s, { type: 'WRONG_MIDI', midiNote: 69, responseTimeMs: 900 });
+    // Correct note
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 1000, expectedTimeMs: 1000 });
+    expect(s.currentIndex).toBe(1);
+    expect(s.noteResults[0].outcome).toBe('correct');
+    expect(s.noteResults[0].wrongAttempts).toBe(3);
+  });
+});
