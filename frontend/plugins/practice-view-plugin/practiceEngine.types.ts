@@ -238,6 +238,28 @@ export type PracticeAction =
     };
 
 // ---------------------------------------------------------------------------
+// Replay types (moved from PracticeViewPlugin.tsx — 054-refactor-practice-plugin)
+// ---------------------------------------------------------------------------
+
+/** Frozen snapshot of a completed practice exercise for replay. */
+export interface PerformanceRecord {
+  notes: PluginPracticeNoteEntry[];
+  noteResults: PracticeNoteResult[];
+  wrongNoteEvents: WrongNoteEvent[];
+  bpmAtCompletion: number;
+}
+
+/** Snapshot captured when user stops practice mid-session (US7). */
+export interface PartialPerformanceRecord {
+  notes: ReadonlyArray<PluginPracticeNoteEntry>;
+  noteResults: ReadonlyArray<PracticeNoteResult>;
+  wrongNoteEvents: ReadonlyArray<WrongNoteEvent>;
+  bpmAtCompletion: number;
+  stoppedAtIndex: number;
+  totalNoteCount: number;
+}
+
+// ---------------------------------------------------------------------------
 // Initial State
 // ---------------------------------------------------------------------------
 
