@@ -747,6 +747,16 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           const prevEntry = ps.notes[ps.currentIndex - 1];
           const hasRestGap = prevEntry && (prevEntry.tick + prevEntry.durationTicks < currentEntry.tick);
           if (hasRestGap && expectedTimeMs - responseTimeMs > LATE_THRESHOLD_MS) {
+            // Restore the detector so the user can retry this beat.
+            // reset([]) above cleared it to prevent double-trigger, but since
+            // we're rejecting the chord (too early), the detector must be
+            // usable again — otherwise required=[] leaves it permanently stuck.
+            chordDetectorRef.current.reset(allRequired);
+            for (const p of allRequired) {
+              if (heldMidiKeysRef.current.has(p)) {
+                chordDetectorRef.current.pin(p);
+              }
+            }
             dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs });
             return;
           }

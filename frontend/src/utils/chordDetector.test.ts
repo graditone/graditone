@@ -277,3 +277,58 @@ describe('ChordDetector — unpin()', () => {
     expect(result.missing).toEqual(expect.arrayContaining([48, 52, 55]));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Reset recovery — simulates the rest-gap WRONG_MIDI scenario
+// ---------------------------------------------------------------------------
+
+describe('ChordDetector — reset recovery after premature reset([])', () => {
+  it('is permanently stuck after reset([]): press always returns incomplete', () => {
+    const det = new ChordDetector();
+    det.reset([60, 67]);
+    // Chord completes
+    det.press(60, T0);
+    const r1 = det.press(67, T0 + 10);
+    expect(r1.complete).toBe(true);
+    // Premature reset — detector disabled
+    det.reset([]);
+    // Any press now returns incomplete (required is empty)
+    const r2 = det.press(60, T0 + 100);
+    expect(r2.complete).toBe(false);
+    const r3 = det.press(67, T0 + 110);
+    expect(r3.complete).toBe(false);
+  });
+
+  it('recovers after reset([]) followed by reset(requiredPitches)', () => {
+    const det = new ChordDetector();
+    det.reset([60, 67]);
+    det.press(60, T0);
+    const r1 = det.press(67, T0 + 10);
+    expect(r1.complete).toBe(true);
+    // Premature reset
+    det.reset([]);
+    // Restore required pitches (as the fix does)
+    det.reset([60, 67]);
+    // Chord works again on retry
+    det.press(60, T0 + 200);
+    const r2 = det.press(67, T0 + 210);
+    expect(r2.complete).toBe(true);
+  });
+
+  it('recovers with pin after reset(requiredPitches) for held sustained note', () => {
+    const det = new ChordDetector();
+    det.reset([60, 67]);
+    det.press(60, T0);
+    const r1 = det.press(67, T0 + 10);
+    expect(r1.complete).toBe(true);
+    // Premature reset then restore
+    det.reset([]);
+    det.reset([60, 67]);
+    // Pin a held pitch (simulating re-pin of sustained note)
+    det.pin(67);
+    // Only pressing the remaining note completes
+    const r2 = det.press(60, T0 + 300);
+    expect(r2.complete).toBe(true);
+    expect(r2.collected).toEqual([60, 67]);
+  });
+});
