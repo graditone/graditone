@@ -9,6 +9,7 @@ import {
   removeUserScore,
   getUserScore,
   USER_SCORES_INDEX_KEY,
+  MAX_USER_SCORES,
 } from '../../services/userScoreIndex';
 
 // ── localStorage mock ──────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ describe('listUserScores', () => {
 
 describe('addUserScore', () => {
   it('adds an entry and returns it', () => {
-    const entry = addUserScore('abc-123', 'My Sonata');
+    const { entry } = addUserScore('abc-123', 'My Sonata');
     expect(entry.id).toBe('abc-123');
     expect(entry.displayName).toBe('My Sonata');
     expect(entry.uploadedAt).toBeTruthy();
@@ -62,7 +63,7 @@ describe('addUserScore', () => {
 
   it('stores uploadedAt as ISO 8601 string', () => {
     const before = new Date().toISOString();
-    const entry = addUserScore('id-x', 'Test');
+    const { entry } = addUserScore('id-x', 'Test');
     const after = new Date().toISOString();
     expect(entry.uploadedAt >= before).toBe(true);
     expect(entry.uploadedAt <= after).toBe(true);
@@ -70,15 +71,15 @@ describe('addUserScore', () => {
 
   it('deduplicates display name with numeric suffix when same base name exists', () => {
     addUserScore('id-1', 'Nocturne');
-    const second = addUserScore('id-2', 'Nocturne');
+    const { entry: second } = addUserScore('id-2', 'Nocturne');
     expect(second.displayName).toBe('Nocturne (2)');
-    const third = addUserScore('id-3', 'Nocturne');
+    const { entry: third } = addUserScore('id-3', 'Nocturne');
     expect(third.displayName).toBe('Nocturne (3)');
   });
 
   it('does not suffix when base name is unique', () => {
     addUserScore('id-1', 'Nocturne');
-    const entry = addUserScore('id-2', 'Arabesque');
+    const { entry } = addUserScore('id-2', 'Arabesque');
     expect(entry.displayName).toBe('Arabesque');
   });
 
@@ -127,14 +128,36 @@ describe('getUserScore', () => {
   });
 });
 
+describe('addUserScore eviction', () => {
+  it('evicts oldest entries when exceeding MAX_USER_SCORES', () => {
+    // Fill to capacity
+    for (let i = 1; i <= MAX_USER_SCORES; i++) {
+      addUserScore(`id-${i}`, `Score ${i}`);
+    }
+    expect(listUserScores()).toHaveLength(MAX_USER_SCORES);
+
+    // Add one more → oldest (id-1) should be evicted
+    const { evictedIds } = addUserScore('id-overflow', 'Overflow Score');
+    expect(evictedIds).toEqual(['id-1']);
+    expect(listUserScores()).toHaveLength(MAX_USER_SCORES);
+    expect(getUserScore('id-1')).toBeUndefined();
+    expect(getUserScore('id-overflow')).toBeDefined();
+  });
+
+  it('returns empty evictedIds when under the limit', () => {
+    const { evictedIds } = addUserScore('id-1', 'Solo Score');
+    expect(evictedIds).toEqual([]);
+  });
+});
+
 describe('index stored sorted descending', () => {
   it('newest entry is always at index 0', () => {
     const first = addUserScore('id-1', 'First');
     const second = addUserScore('id-2', 'Second');
     const third = addUserScore('id-3', 'Third');
     const list = listUserScores();
-    expect(list[0].id).toBe(third.id);
-    expect(list[1].id).toBe(second.id);
-    expect(list[2].id).toBe(first.id);
+    expect(list[0].id).toBe(third.entry.id);
+    expect(list[1].id).toBe(second.entry.id);
+    expect(list[2].id).toBe(first.entry.id);
   });
 });

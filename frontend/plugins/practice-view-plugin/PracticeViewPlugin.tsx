@@ -30,7 +30,7 @@ import type {
   PluginPracticeNoteEntry,
 } from '../../src/plugin-api/index';
 import { PracticeToolbar } from './practiceToolbar';
-import { reduce } from './practiceEngine';
+import { reduce, LATE_THRESHOLD_MS } from './practiceEngine';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
 import type { PracticeNoteResult, WrongNoteEvent } from './practiceEngine.types';
 import { ChordDetector } from '../../src/plugin-api/index';
@@ -47,6 +47,16 @@ interface PerformanceRecord {
   noteResults: PracticeNoteResult[];
   wrongNoteEvents: WrongNoteEvent[];
   bpmAtCompletion: number;
+}
+
+/** Snapshot captured when user stops practice mid-session (US7). */
+interface PartialPerformanceRecord {
+  notes: ReadonlyArray<PluginPracticeNoteEntry>;
+  noteResults: ReadonlyArray<PracticeNoteResult>;
+  wrongNoteEvents: ReadonlyArray<WrongNoteEvent>;
+  bpmAtCompletion: number;
+  stoppedAtIndex: number;
+  totalNoteCount: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -188,6 +198,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const [performanceRecord, setPerformanceRecord] = useState<PerformanceRecord | null>(null);
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayHighlightedNoteIds, setReplayHighlightedNoteIds] = useState<ReadonlySet<string>>(new Set());
+
+  // ─── Partial results on Stop (US7, 053-fix-lacandeur-practice) ─────────────
+  const [partialPerformanceRecord, setPartialPerformanceRecord] = useState<PartialPerformanceRecord | null>(null);
   const replayTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // ─── Multi-loop practice state ─────────────────────────────────────────────
@@ -450,6 +463,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     };
   }, []);
 
+  // ─── Just-completed entry tracking (green highlight persistence) ────────────
+  // When CORRECT_MIDI advances currentIndex, the confirmedNoteIds memo would
+  // immediately recompute for the NEW entry, dropping the green highlight for
+  // the just-completed chord. This ref stores the previous entry's pitches +
+  // noteIds so we can keep showing green while those keys are still held.
+  const prevCompletedEntryRef = useRef<{ pitches: number[]; noteIds: string[] } | null>(null);
+  const confirmedIndexRef = useRef(-1);
+
   // ─── Chord detector ─────────────────────────────────────────────────────────
   // A single instance that accumulates MIDI attack events within an 80 ms
   // rolling window. Reset each time the target note entry changes (either
@@ -478,10 +499,25 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         // On a RETRY (early-release on the SAME beat, index unchanged): also
         // pin onset pitches the player is still holding so re-pressing only
         // the released note completes the chord.
-        // On a NEW beat (index advanced): do NOT pin onset pitches — the player
-        // must press them fresh.  Without this guard, consecutive identical
-        // chords (e.g. Arabesque M1→M2 triads) would auto-complete.
-        if (!isNewBeat) {
+        // On a NEW beat (index advanced): pin held onset pitches ONLY when
+        // not ALL required pitches are already held.  This lets the player
+        // sustain a common note across consecutive entries (e.g. G5 single →
+        // G5+D#5 chord: G5 is pinned, only D#5 needs a fresh press) while
+        // still preventing auto-completion of identical consecutive chords
+        // (e.g. Arabesque M1→M2 triads where every pitch is held).
+        if (isNewBeat) {
+          const allRequired = [...onset, ...sustained];
+          const wouldAutoComplete = allRequired.length > 0 && allRequired.every(
+            (p) => heldMidiKeysRef.current.has(p),
+          );
+          if (!wouldAutoComplete) {
+            for (const pitch of onset) {
+              if (heldMidiKeysRef.current.has(pitch)) {
+                chordDetectorRef.current.pin(pitch);
+              }
+            }
+          }
+        } else {
           for (const pitch of onset) {
             if (heldMidiKeysRef.current.has(pitch)) {
               chordDetectorRef.current.pin(pitch);
@@ -494,6 +530,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     } else {
       prevPracticeIndexRef.current = ps.currentIndex;
       chordDetectorRef.current.reset([]);
+      prevCompletedEntryRef.current = null;
     }
   // practiceState.currentIndex and practiceState.mode are the triggers:
   // mode change covers START / STOP / DEACTIVATE; currentIndex covers CORRECT / SEEK.
@@ -619,6 +656,16 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       const currentEntry = ps.notes[ps.currentIndex];
       if (!currentEntry) return;
 
+      // Sync pins with currently-held keys before evaluating the chord.
+      // Pins were set in the useEffect at beat-change time, but may be
+      // stale if the user has since released those keys.
+      const allRequired = [...(currentEntry.midiPitches as number[]), ...((currentEntry.sustainedPitches ?? []) as number[])];
+      for (const p of allRequired) {
+        if (!heldMidiKeysRef.current.has(p)) {
+          chordDetectorRef.current.unpin(p);
+        }
+      }
+
       // Chord detection: accumulate this press in the rolling window.
       // Only dispatch CORRECT_MIDI once ALL required pitches have been
       // pressed within the 80 ms window. A press of a pitch outside the
@@ -673,10 +720,38 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           expectedTimeMs = baseExpectedTimeMs;
         }
         const responseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
+
+        // Feature 053 (Bug 5): Inter-onset gap rest enforcement (FR-005a).
+        // If there's a rest gap between the previous entry and this one, and
+        // the player pressed well before the expected time, treat as WRONG_MIDI
+        // instead of advancing.  Exempt waiting mode (clock not started yet)
+        // and entries with no preceding rest gap (consecutive notes).
+        if (ps.mode === 'active' && ps.currentIndex > 0) {
+          const prevEntry = ps.notes[ps.currentIndex - 1];
+          const hasRestGap = prevEntry && (prevEntry.tick + prevEntry.durationTicks < currentEntry.tick);
+          if (hasRestGap && expectedTimeMs - responseTimeMs > LATE_THRESHOLD_MS) {
+            dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs });
+            return;
+          }
+        }
+
         const range = loopPracticeRangeRef.current;
         // Compute required hold duration: (durationTicks / ticksPerMs) ms (feature 042)
-        const entryRequiredHoldMs = bpm > 0 && currentEntry.durationTicks > 0
-          ? (currentEntry.durationTicks / ((bpm / 60) * PPQ)) * 1000
+        // Cap at the gap before the next practice entry so BH merged entries
+        // with a long LH note don't block advancement when RH moves faster.
+        // Don't enforce hold when the capped duration is ≤ a quarter note —
+        // the player needs to advance to the next practice step, and the
+        // sustained pitches are auto-pinned there.
+        let effectiveDurTicks = currentEntry.durationTicks;
+        const nextEntry = ps.notes[ps.currentIndex + 1];
+        if (nextEntry) {
+          const gapTicks = nextEntry.tick - currentEntry.tick;
+          if (gapTicks > 0 && gapTicks < effectiveDurTicks) {
+            effectiveDurTicks = gapTicks;
+          }
+        }
+        const entryRequiredHoldMs = bpm > 0 && effectiveDurTicks > PPQ
+          ? (effectiveDurTicks / ((bpm / 60) * PPQ)) * 1000
           : 0;
         dispatchPractice({
           type: 'CORRECT_MIDI',
@@ -737,11 +812,24 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const handlePlay = useCallback(() => context.scorePlayer.play(), [context.scorePlayer]);
   const handlePause = useCallback(() => context.scorePlayer.pause(), [context.scorePlayer]);
   const handleStop = useCallback(() => {
+    // US7: Snapshot partial results before STOP clears engine state
+    const ps = practiceStateRef.current;
+    if (ps.mode === 'active' || ps.mode === 'waiting' || ps.mode === 'holding') {
+      setPartialPerformanceRecord({
+        notes: [...ps.notes],
+        noteResults: [...ps.noteResults],
+        wrongNoteEvents: [...ps.wrongNoteEvents],
+        bpmAtCompletion: playerState.bpm,
+        stoppedAtIndex: ps.currentIndex,
+        totalNoteCount: ps.notes.length,
+      });
+      setResultsOverlayVisible(true);
+    }
     dispatchPractice({ type: 'STOP' });
     context.scorePlayer.stop();
     const lr = loopRegionRef.current;
     context.scorePlayer.seekToTick(lr ? lr.startTick : 0);
-  }, [context.scorePlayer]);
+  }, [context.scorePlayer, playerState.bpm]);
 
   const handleTempoChange = useCallback(
     (m: number) => {
@@ -776,6 +864,16 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     const ps = practiceStateRef.current;
 
     if (ps.mode === 'active' || ps.mode === 'waiting' || ps.mode === 'holding') {
+      // US7: Snapshot partial results before STOP clears engine state
+      setPartialPerformanceRecord({
+        notes: [...ps.notes],
+        noteResults: [...ps.noteResults],
+        wrongNoteEvents: [...ps.wrongNoteEvents],
+        bpmAtCompletion: playerState.bpm,
+        stoppedAtIndex: ps.currentIndex,
+        totalNoteCount: ps.notes.length,
+      });
+      setResultsOverlayVisible(true);
       // Stop practice — full reset so restarting begins from the beginning.
       dispatchPractice({ type: 'STOP' });
       const lr = loopRegionRef.current;
@@ -854,24 +952,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // Note short-tap handler (US3 / T037)
   // Mirrors play-score two-tap seek-then-play state machine:
-  //   • Practice active  → SEEK to nearest note entry
+  //   • Practice running → blocked entirely (Feature 053, Bug 6 — position lock)
   //   • Not playing      → seekToTick; second tap while paused → also play()
   //   • Playing          → seekToTick (mid-playback navigation)
   const handleNoteShortTap = useCallback(
     (tick: number, _noteId: string) => {
-      if (practiceStateRef.current.mode === 'active' || practiceStateRef.current.mode === 'waiting') {
-        // Find nearest note entry by tick
-        const notes = practiceStateRef.current.notes;
-        let bestIndex = 0;
-        let bestDiff = Infinity;
-        for (let i = 0; i < notes.length; i++) {
-          const diff = Math.abs(notes[i].tick - tick);
-          if (diff < bestDiff) {
-            bestDiff = diff;
-            bestIndex = i;
-          }
-        }
-        dispatchPractice({ type: 'SEEK', index: bestIndex });
+      const mode = practiceStateRef.current.mode;
+      // Feature 053 (Bug 6): Block all position navigation during active practice.
+      if (mode === 'active' || mode === 'waiting' || mode === 'holding') {
         return;
       }
 
@@ -934,7 +1022,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   );
 
   // Return to start — respects loop start pin when set
+  // Feature 053 (Bug 6): Blocked during active practice (position lock).
   const handleReturnToStart = useCallback(() => {
+    const mode = practiceStateRef.current.mode;
+    if (mode === 'active' || mode === 'waiting' || mode === 'holding') return;
     context.scorePlayer.seekToTick(loopStart?.tick ?? 0);
   }, [context.scorePlayer, loopStart]);
 
@@ -1029,6 +1120,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const handleRepractice = useCallback(() => {
     if (isReplaying) handleReplayStop();
     setResultsOverlayVisible(false);
+    setPartialPerformanceRecord(null);
     handlePracticeToggle();
     // Override the loop refs AFTER handlePracticeToggle (which resets them to
     // single-loop defaults). Repractice preserves the user's slider loopCount.
@@ -1076,8 +1168,29 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // which uses the playhead position and may produce different noteId strings).
   const confirmedNoteIds = useMemo<ReadonlySet<string>>(() => {
     if (!practiceActive || practiceState.currentIndex >= practiceState.notes.length) {
+      // Keep confirmedIndexRef in sync even when not active (covers waiting mode)
+      if (practiceState.mode === 'waiting' && practiceState.notes.length > 0) {
+        confirmedIndexRef.current = practiceState.currentIndex;
+      } else if (!practiceActive) {
+        confirmedIndexRef.current = -1;
+        prevCompletedEntryRef.current = null;
+      }
       return new Set<string>();
     }
+
+    // Detect index advancement: snapshot the just-completed entry so green
+    // highlights persist while the user still holds those keys down.
+    if (practiceState.currentIndex !== confirmedIndexRef.current) {
+      if (confirmedIndexRef.current >= 0 && confirmedIndexRef.current < practiceState.notes.length) {
+        const prev = practiceState.notes[confirmedIndexRef.current];
+        prevCompletedEntryRef.current = {
+          pitches: [...(prev.midiPitches as number[]), ...((prev.sustainedPitches ?? []) as number[])],
+          noteIds: [...prev.noteIds],
+        };
+      }
+      confirmedIndexRef.current = practiceState.currentIndex;
+    }
+
     const entry = practiceState.notes[practiceState.currentIndex];
     const pitches = entry.midiPitches as number[];
     const ids = entry.noteIds as string[];
@@ -1085,6 +1198,39 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     for (let i = 0; i < pitches.length; i++) {
       if (heldMidiKeysRef.current.has(pitches[i]) && i < ids.length) {
         confirmed.add(ids[i]);
+      }
+    }
+    // Green-highlight sustained pitches that are still physically held.
+    // Sustained pitches originate from an earlier entry's onset — resolve
+    // their noteIds by scanning backward through the practice note list.
+    const sustained = (entry.sustainedPitches ?? []) as number[];
+    if (sustained.length > 0) {
+      for (const sp of sustained) {
+        if (!heldMidiKeysRef.current.has(sp)) continue;
+        // Find the noteId from the most recent prior entry whose onset includes this pitch
+        for (let j = practiceState.currentIndex - 1; j >= 0; j--) {
+          const prior = practiceState.notes[j];
+          const idx = (prior.midiPitches as number[]).indexOf(sp);
+          if (idx >= 0 && idx < prior.noteIds.length) {
+            confirmed.add(prior.noteIds[idx]);
+            break;
+          }
+        }
+      }
+    }
+    // Persist green highlights for the just-completed entry while those
+    // keys are still physically held.
+    const prev = prevCompletedEntryRef.current;
+    if (prev) {
+      const anyHeld = prev.pitches.some((p) => heldMidiKeysRef.current.has(p));
+      if (anyHeld) {
+        for (let i = 0; i < prev.pitches.length; i++) {
+          if (heldMidiKeysRef.current.has(prev.pitches[i]) && i < prev.noteIds.length) {
+            confirmed.add(prev.noteIds[i]);
+          }
+        }
+      } else {
+        prevCompletedEntryRef.current = null;
       }
     }
     return confirmed;
@@ -1147,6 +1293,50 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     };
   }, [practiceState.noteResults]);
 
+  // ─── Partial results computation (US7) ─────────────────────────────────────
+  const partialReport = useMemo(() => {
+    if (!partialPerformanceRecord) return null;
+    const { noteResults, stoppedAtIndex, totalNoteCount } = partialPerformanceRecord;
+
+    // Zero-progress stop: no notes played
+    if (noteResults.length === 0) {
+      return { zeroProgress: true as const, stoppedAtIndex, totalNoteCount };
+    }
+
+    const totalNotes = noteResults.length;
+    const correctCount = noteResults.filter((r) => r.outcome === 'correct').length;
+    const lateCount = noteResults.filter((r) => r.outcome === 'correct-late').length;
+    const earlyReleaseCount = noteResults.filter((r) => r.outcome === 'early-release').length;
+    const totalWrongAttempts = noteResults.reduce((sum, r) => sum + r.wrongAttempts, 0);
+
+    const rawScore =
+      totalNotes > 0
+        ? Math.round(
+            ((correctCount + (lateCount + earlyReleaseCount) * 0.5) / totalNotes) * 100 -
+              Math.min(totalWrongAttempts * 2, 30),
+          )
+        : 0;
+    const score = Math.max(0, Math.min(100, rawScore));
+
+    const lastResult = noteResults[noteResults.length - 1];
+    const practiceTimeMs = lastResult.responseTimeMs;
+    const scoreTimeMs = lastResult.expectedTimeMs;
+
+    return {
+      zeroProgress: false as const,
+      totalNotes,
+      correctCount,
+      lateCount,
+      totalWrongAttempts,
+      score,
+      practiceTimeMs,
+      scoreTimeMs,
+      results: noteResults,
+      stoppedAtIndex,
+      totalNoteCount,
+    };
+  }, [partialPerformanceRecord]);
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   const { ScoreSelector, ScoreRenderer } = context.components;
@@ -1171,7 +1361,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   }
 
   return (
-    <div className={`practice-plugin${practiceActive ? ' practice-plugin--phantom' : ''}${practiceState.mode === 'complete' && resultsOverlayVisible ? ' practice-plugin--results' : ''}`}>
+    <div className={`practice-plugin${practiceActive ? ' practice-plugin--phantom' : ''}${(practiceState.mode === 'complete' && resultsOverlayVisible) || (partialReport && resultsOverlayVisible) ? ' practice-plugin--results' : ''}`}>
       {/* Toolbar — top */}
       <PracticeToolbar
         scoreTitle={playerState.title}
@@ -1579,6 +1769,92 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
                   aria-label="Number of loops to practice"
                 />
               </div>
+            )}
+
+            <p className="practice-results__hint">
+              Press <strong>♩ Practice</strong> to try again
+            </p>
+          </div>
+        </>
+      )}
+
+      {/* Partial results overlay — shown when Stop is pressed mid-session (US7) */}
+      {partialReport && resultsOverlayVisible && practiceState.mode !== 'complete' && (
+        <>
+          <div className="practice-results__backdrop" />
+          <div
+            className="practice-results"
+            role="region"
+            aria-label="Practice results"
+          >
+            <button
+              className="practice-results__close"
+              aria-label="Close results"
+              onClick={() => { setResultsOverlayVisible(false); setPartialPerformanceRecord(null); }}
+            >
+              ×
+            </button>
+
+            {partialReport.zeroProgress ? (
+              <div className="practice-results__zero-progress">
+                <p>No notes played — session stopped before any input.</p>
+              </div>
+            ) : (
+              <>
+                {/* Stopped-at badge */}
+                <div className="practice-results__stopped-badge">
+                  Stopped at note {partialReport.stoppedAtIndex} of {partialReport.totalNoteCount}
+                </div>
+
+                {/* Score headline */}
+                <div className="practice-results__score-block">
+                  <div className="practice-results__score-ring">
+                    <span
+                      className="practice-results__score-number"
+                      style={{
+                        color:
+                          partialReport.score >= 90 ? '#2e7d32'
+                          : partialReport.score >= 60 ? '#f57f17'
+                          : '#c62828',
+                      }}
+                    >
+                      {partialReport.score}
+                    </span>
+                    <span className="practice-results__score-label">/ 100</span>
+                  </div>
+                </div>
+
+                {/* Summary stats */}
+                <div className="practice-results__stats">
+                  <div className="practice-results__stat">
+                    <span className="practice-results__stat-value">{partialReport.totalNotes}</span>
+                    <span className="practice-results__stat-label">Notes</span>
+                  </div>
+                  <div className="practice-results__stat">
+                    <span className="practice-results__stat-value">{partialReport.correctCount}</span>
+                    <span className="practice-results__stat-label">Correct</span>
+                  </div>
+                  <div className="practice-results__stat">
+                    <span className="practice-results__stat-value practice-results__stat-value--warn">
+                      {partialReport.lateCount}
+                    </span>
+                    <span className="practice-results__stat-label">Off-beat</span>
+                  </div>
+                  <div className="practice-results__stat">
+                    <span className="practice-results__stat-value practice-results__stat-value--error">
+                      {partialReport.totalWrongAttempts}
+                    </span>
+                    <span className="practice-results__stat-label">Wrong</span>
+                  </div>
+                </div>
+
+                {/* Time comparison */}
+                <div className="practice-results__time-comparison">
+                  <span>Your time: <strong>{formatTimeMs(partialReport.practiceTimeMs)}</strong></span>
+                  <span className="practice-results__time-separator">vs</span>
+                  <span>Score time: <strong>{formatTimeMs(partialReport.scoreTimeMs)}</strong></span>
+                </div>
+              </>
             )}
 
             <p className="practice-results__hint">

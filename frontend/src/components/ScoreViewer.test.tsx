@@ -22,8 +22,16 @@ import type { Score } from '../types/score';
 // ─── Module mocks ──────────────────────────────────────────────────────────
 
 vi.mock('../services/storage/local-storage', () => ({
-  loadScoreFromIndexedDB: vi.fn().mockResolvedValue(null),
+  loadScoreFromIndexedDB: vi.fn().mockResolvedValue({ kind: 'not-found' }),
   saveScoreToIndexedDB: vi.fn(),
+  deleteScoreFromIndexedDB: vi.fn(),
+}));
+
+vi.mock('../services/wasm/music-engine', () => ({
+  parseScore: vi.fn(),
+  addInstrument: vi.fn(),
+  getScore: vi.fn(),
+  getSchemaVersion: vi.fn().mockResolvedValue(9),
 }));
 
 vi.mock('../services/score-api', () => ({
@@ -108,7 +116,7 @@ describe('Landing screen', () => {
 describe('Instruments view', () => {
   async function renderWithScore() {
     const { loadScoreFromIndexedDB } = await import('../services/storage/local-storage');
-    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue(makeScore());
+    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue({ kind: 'loaded', score: makeScore() as unknown as Score });
 
     render(
       <TestWrapper>
@@ -117,7 +125,7 @@ describe('Instruments view', () => {
     );
 
     await waitFor(() => {
-      expect(loadScoreFromIndexedDB).toHaveBeenCalledWith('test-score-id');
+      expect(loadScoreFromIndexedDB).toHaveBeenCalledWith('test-score-id', 9);
     });
   }
 

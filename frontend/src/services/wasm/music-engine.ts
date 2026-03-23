@@ -42,6 +42,24 @@ function handleWasmError(error: unknown): never {
 }
 
 // ============================================================================
+// Schema version — single source of truth from WASM
+// ============================================================================
+
+/**
+ * Return the current score schema version from the WASM backend.
+ * Use this instead of a hardcoded constant so frontend and backend
+ * can never go out of sync.
+ */
+export async function getSchemaVersion(): Promise<number> {
+  await ensureWasmInitialized();
+  const wasmModule = getWasmModule();
+  if (!wasmModule) {
+    throw new WasmEngineError('WASM module not initialized');
+  }
+  return wasmModule.get_schema_version() as number;
+}
+
+// ============================================================================
 // Phase 3: User Story 1 - MusicXML Parsing
 // ============================================================================
 

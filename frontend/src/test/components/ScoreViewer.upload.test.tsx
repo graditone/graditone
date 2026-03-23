@@ -25,11 +25,12 @@ vi.mock('../../services/wasm/music-engine', () => ({
   parseScore: vi.fn(),
   addInstrument: vi.fn(),
   getScore: vi.fn(),
+  getSchemaVersion: vi.fn().mockResolvedValue(9),
 }));
 
 // ── Mock IndexedDB storage ────────────────────────────────────────────────────
 vi.mock('../../services/storage/local-storage', () => ({
-  loadScoreFromIndexedDB: vi.fn().mockResolvedValue(null),
+  loadScoreFromIndexedDB: vi.fn().mockResolvedValue({ kind: 'not-found' }),
   saveScoreToIndexedDB: vi.fn().mockResolvedValue(undefined),
   deleteScoreFromIndexedDB: vi.fn().mockResolvedValue(undefined),
 }));
@@ -38,7 +39,7 @@ vi.mock('../../services/storage/local-storage', () => ({
 vi.mock('../../services/score-cache', () => ({
   ScoreCache: {
     cache: vi.fn().mockResolvedValue(undefined),
-    get: vi.fn().mockResolvedValue(null),
+    get: vi.fn().mockResolvedValue({ kind: 'not-found' }),
   },
 }));
 
@@ -48,9 +49,12 @@ vi.mock('../../services/userScoreIndex', async (importOriginal) => {
   return {
     ...actual,
     addUserScore: vi.fn((id: string, name: string) => ({
-      id,
-      displayName: name,
-      uploadedAt: new Date().toISOString(),
+      entry: {
+        id,
+        displayName: name,
+        uploadedAt: new Date().toISOString(),
+      },
+      evictedIds: [],
     })),
     removeUserScore: vi.fn(),
     listUserScores: vi.fn().mockReturnValue([]),
@@ -144,7 +148,7 @@ describe('ScoreViewer — upload path (T009)', () => {
     // loadScoreFromIndexedDB is already mocked in the vi.mock call above.
     // We need it to return a score so ScoreViewer shows the instruments view.
     const { loadScoreFromIndexedDB } = await import('../../services/storage/local-storage');
-    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue(makeMockScore('initial-id'));
+    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue({ kind: 'loaded', score: makeMockScore('initial-id') });
   };
 
   beforeEach(() => {
@@ -243,7 +247,7 @@ describe('ScoreViewer — LoadScoreDialog props (T013)', () => {
 
   it('passes userScores array to LoadScoreDialog', async () => {
     const { loadScoreFromIndexedDB } = await import('../../services/storage/local-storage');
-    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue(makeMockScore('initial-id'));
+    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue({ kind: 'loaded', score: makeMockScore('initial-id') });
 
     render(
       <TestWrapper>
@@ -262,7 +266,7 @@ describe('ScoreViewer — LoadScoreDialog props (T013)', () => {
 
   it('passes onSelectUserScore callback to LoadScoreDialog', async () => {
     const { loadScoreFromIndexedDB } = await import('../../services/storage/local-storage');
-    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue(makeMockScore('initial-id'));
+    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue({ kind: 'loaded', score: makeMockScore('initial-id') });
 
     render(
       <TestWrapper>
@@ -281,7 +285,7 @@ describe('ScoreViewer — LoadScoreDialog props (T013)', () => {
 
   it('passes onDeleteUserScore callback to LoadScoreDialog', async () => {
     const { loadScoreFromIndexedDB } = await import('../../services/storage/local-storage');
-    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue(makeMockScore('initial-id'));
+    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue({ kind: 'loaded', score: makeMockScore('initial-id') });
 
     render(
       <TestWrapper>
@@ -319,7 +323,7 @@ describe('ScoreViewer — delete with undo (T020)', () => {
     vi.mocked(listUserScores).mockReturnValue([userScoreEntry]);
 
     const { loadScoreFromIndexedDB } = await import('../../services/storage/local-storage');
-    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue(makeMockScore('initial-id'));
+    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue({ kind: 'loaded', score: makeMockScore('initial-id') });
   }
 
   beforeEach(async () => {

@@ -61,15 +61,10 @@ export function mergePracticeNotesByTick(
     }
   }
 
-  // Truncate each entry's durationTicks to the gap before the next onset so
-  // long cross-staff notes don't block practice advancement (same logic as
-  // extractPracticeNotes within a single staff).
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const gap = sorted[i + 1].tick - sorted[i].tick;
-    if (gap > 0 && gap < sorted[i].durationTicks) {
-      sorted[i].durationTicks = gap;
-    }
-  }
+  // Note: Gap truncation is NOT applied here. Each staff's durations are
+  // already correctly bounded by extractPracticeNotes() (per-staff gap
+  // truncation). Re-truncating the merged list would incorrectly clamp
+  // cross-staff notes using the other hand's onsets (Bug 1/2, Feature 053).
 
   return sorted;
 }

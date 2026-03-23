@@ -44,14 +44,15 @@ describe('useUserScores — addUserScore', () => {
   it('adds to state and returns the new entry', () => {
     const { result } = renderHook(() => useUserScores());
 
-    let entry: ReturnType<typeof result.current.addUserScore>;
+    let addResult: ReturnType<typeof result.current.addUserScore>;
     act(() => {
-      entry = result.current.addUserScore('score-1', 'My Waltz');
+      addResult = result.current.addUserScore('score-1', 'My Waltz');
     });
 
     expect(result.current.userScores).toHaveLength(1);
     expect(result.current.userScores[0].id).toBe('score-1');
-    expect(entry!.displayName).toBe('My Waltz');
+    expect(addResult!.entry.displayName).toBe('My Waltz');
+    expect(addResult!.evictedIds).toEqual([]);
   });
 
   it('updates the underlying localStorage index', () => {

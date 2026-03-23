@@ -264,13 +264,13 @@ describe('PracticeViewPlugin — staff selector visibility', () => {
   it('staff selector NOT shown when staffCount === 1', () => {
     const ctx = createMockContext({ status: 'ready', staffCount: 1 });
     render(<PracticeViewPlugin context={ctx.context} />);
-    expect(screen.queryByRole('combobox', { name: /select staff/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /select hand/i })).toBeNull();
   });
 
   it('staff selector IS shown when staffCount === 2', () => {
     const ctx = createMockContext({ status: 'ready', staffCount: 2 });
     render(<PracticeViewPlugin context={ctx.context} />);
-    expect(screen.getByRole('combobox', { name: /select staff/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /select hand/i })).toBeTruthy();
   });
 });
 
@@ -1284,5 +1284,411 @@ describe('Feature 001 — T004: HL+HR chord pin retry after EARLY_RELEASE', () =
     const overlay = screen.queryByRole('region', { name: /practice results/i });
     // If pin logic is currently broken, the session gets stuck and no overlay appears
     expect(overlay).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 053 — M1 BH: hold duration capped to gap before next practice step.
+// When LH whole note (dur=1920) is merged with RH quarter (dur=240), the
+// hold should be capped to the gap (240 ticks) so the user isn't stuck.
+// ---------------------------------------------------------------------------
+
+describe('Feature 053 — M1 BH: hold capped to gap before next entry', () => {
+  it('BH merged entry advances without long hold when next onset is close', () => {
+    // M1 BH: tick 0 = LH whole chord (1920) + RH quarter (240) → merged dur=1920
+    // tick 240 = next RH note. Hold should be capped to 240 ticks (250ms at 120 BPM).
+    // Since 240 ticks ≤ quarter note (960), no hold enforcement → immediate advance.
+    const note0 = { midiPitches: [48, 52, 55, 79], noteIds: ['lh1', 'lh2', 'lh3', 'rh1'], tick: 0, durationTicks: 1920 };
+    const note1 = { midiPitches: [76], sustainedPitches: [48, 52, 55], noteIds: ['rh2'], tick: 240, durationTicks: 240 };
+    const note2 = { midiPitches: [74], sustainedPitches: [48, 52, 55], noteIds: ['rh3'], tick: 480, durationTicks: 0 };
+
+    const ctx = createMockContext({ status: 'ready', staffCount: 2, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [note0, note1, note2],
+      totalAvailable: 3,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />);
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Press all 4 notes of the chord → should advance immediately (no long hold)
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 48 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 52 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 55 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 79 }); });
+
+    // Engine should have advanced past note 0. Complete remaining notes.
+    // Release RH G5 to play next note E5
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 79 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 76 }); });
+
+    // Release E5, play D5 (note 2)
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 76 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 74 }); });
+
+    // Results overlay should appear (session complete)
+    const overlay = screen.queryByRole('region', { name: /practice results/i });
+    expect(overlay).toBeTruthy();
+  });
+  it('chord notes get green (pinned) highlights while keys are still held after advancement', () => {
+    let lastPinned: Set<string> | undefined;
+    const MockRenderer = (props: PluginScoreRendererProps) => {
+      lastPinned = props.pinnedNoteIds;
+      return <div data-testid="score-renderer" />;
+    };
+
+    const note0 = { midiPitches: [48, 52, 55, 79], noteIds: ['lh1', 'lh2', 'lh3', 'rh1'], tick: 0, durationTicks: 1920 };
+    const note1 = { midiPitches: [76], sustainedPitches: [48, 52, 55], noteIds: ['rh2'], tick: 240, durationTicks: 240 };
+    const note2 = { midiPitches: [74], sustainedPitches: [48, 52, 55], noteIds: ['rh3'], tick: 480, durationTicks: 0 };
+
+    const ctx = createMockContext({ status: 'ready', staffCount: 2, bpm: 120 }, MockRenderer);
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [note0, note1, note2],
+      totalAvailable: 3,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />);
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Press all 4 chord notes → CORRECT_MIDI → advance to note 1
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 48 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 52 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 55 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 79 }); });
+
+    // All 4 keys are still held → their noteIds should be in pinnedNoteIds (green)
+    expect(lastPinned).toBeDefined();
+    expect(lastPinned!.has('lh1')).toBe(true);
+    expect(lastPinned!.has('lh2')).toBe(true);
+    expect(lastPinned!.has('lh3')).toBe(true);
+    expect(lastPinned!.has('rh1')).toBe(true);
+  });
+
+  it('sustained LH chord notes stay green while held across multiple RH melody entries', () => {
+    let lastPinned: Set<string> | undefined;
+    const MockRenderer = (props: PluginScoreRendererProps) => {
+      lastPinned = props.pinnedNoteIds;
+      return <div data-testid="score-renderer" />;
+    };
+
+    // M1 BH scenario: LH whole chord sustained across RH melody
+    const note0 = { midiPitches: [48, 52, 55, 79], noteIds: ['lh1', 'lh2', 'lh3', 'rh1'], tick: 0, durationTicks: 1920 };
+    const note1 = { midiPitches: [76], sustainedPitches: [48, 52, 55], noteIds: ['rh2'], tick: 240, durationTicks: 240 };
+    const note2 = { midiPitches: [74], sustainedPitches: [48, 52, 55], noteIds: ['rh3'], tick: 480, durationTicks: 0 };
+
+    const ctx = createMockContext({ status: 'ready', staffCount: 2, bpm: 120 }, MockRenderer);
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [note0, note1, note2],
+      totalAvailable: 3,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />);
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Press all 4 chord notes → advance to note 1
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 48 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 52 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 55 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 79 }); });
+
+    // Release G5, press E5 → advance to note 2. LH keys still held.
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 79 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 76 }); });
+
+    // At note 2: LH chord (48,52,55) is sustained and still held → should be green
+    // RH E5 (76) just completed note 1 and is still held → should also be green
+    expect(lastPinned).toBeDefined();
+    // LH sustained notes must remain green
+    expect(lastPinned!.has('lh1')).toBe(true);  // C3
+    expect(lastPinned!.has('lh2')).toBe(true);  // E3
+    expect(lastPinned!.has('lh3')).toBe(true);  // G3
+  });
+
+  it('releasing chord after beat change prevents melody-only from advancing', () => {
+    // M1 BH: entry 0 = chord+G5, entry 1 = G5 + sustained chord, entry 2 = E5 + sustained chord
+    const note0 = { midiPitches: [48, 52, 55, 79], noteIds: ['lh1', 'lh2', 'lh3', 'rh1'], tick: 0, durationTicks: 1920 };
+    const note1 = { midiPitches: [79], sustainedPitches: [48, 52, 55], noteIds: ['rh2'], tick: 240, durationTicks: 240 };
+    const note2 = { midiPitches: [76], sustainedPitches: [48, 52, 55], noteIds: ['rh3'], tick: 480, durationTicks: 0 };
+
+    const ctx = createMockContext({ status: 'ready', staffCount: 2, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [note0, note1, note2],
+      totalAvailable: 3,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />);
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Play entry 0 correctly: chord + G5
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 48 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 52 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 55 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 79 }); });
+    // Now at entry 1. Chord is held, G5 held.
+
+    // Release chord keys (stale pins should be removed on next press)
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 48 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 52 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 55 }); });
+
+    // Release G5 and re-press: should NOT advance (sustained chord not held)
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 79 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 79 }); });
+
+    // Try pressing E5 (entry 2 pitch) — should be wrong (still at entry 1)
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 79 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 76 }); });
+
+    // Session should NOT be complete — stuck at entry 1 or 2 without chord
+    expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
+
+    // Now hold chord + press G5 → should complete entry 1
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 76 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 48 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 52 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 55 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 79 }); });
+
+    // Then E5 to complete entry 2
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 79 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 76 }); });
+
+    // Now session should be complete
+    expect(screen.queryByRole('region', { name: /practice results/i })).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 053 — M13 held-note chord detection: held onset pitch from prior
+// note should count toward the next chord when not ALL pitches are held.
+// ---------------------------------------------------------------------------
+
+describe('Feature 053 — M13: held onset pitch counts toward next chord', () => {
+  it('holding G5 from note 0 and pressing D#5 completes the G5+D#5 chord at note 1', () => {
+    // La Candeur M13: note[0] = G5 single, note[1] = G5+D#5 chord
+    const note0 = { midiPitches: [79], noteIds: ['n0'], tick: 0, durationTicks: 0 };
+    const note1 = { midiPitches: [79, 75], noteIds: ['n1a', 'n1b'], tick: 480, durationTicks: 0 };
+    const note2 = { midiPitches: [64], noteIds: ['n2'], tick: 960, durationTicks: 0 };
+
+    const ctx = createMockContext({ status: 'ready', staffCount: 1, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [note0, note1, note2],
+      totalAvailable: 3,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />);
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Press G5 → completes note 0 → engine advances to note 1 (G5+D#5 chord)
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 79 }); });
+
+    // G5 is still held (no release). Press D#5 → chord should complete.
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 75 }); });
+
+    // Complete the final note to finish the session.
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 79 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 75 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+
+    // Results overlay must appear — the chord was detected and session completed.
+    const overlay = screen.queryByRole('region', { name: /practice results/i });
+    expect(overlay).toBeTruthy();
+  });
+
+  it('consecutive identical single notes still require re-press (no auto-advance)', () => {
+    // Same pitch repeated: G5 → G5. Holding G5 should NOT auto-advance.
+    const note0 = { midiPitches: [79], noteIds: ['n0'], tick: 0, durationTicks: 0 };
+    const note1 = { midiPitches: [79], noteIds: ['n1'], tick: 480, durationTicks: 0 };
+    const note2 = { midiPitches: [64], noteIds: ['n2'], tick: 960, durationTicks: 0 };
+
+    const ctx = createMockContext({ status: 'ready', staffCount: 1, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [note0, note1, note2],
+      totalAvailable: 3,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />);
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Press G5 → completes note 0. G5 held but note 1 is also [79] → must NOT auto-complete.
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 79 }); });
+
+    // Without a second press of 79, session should NOT be complete yet.
+    // Try pressing note 2 pitch (64) — it should be wrong since we're stuck at note 1.
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+
+    // No results overlay — session not complete (stuck at note 1).
+    expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// [US6] Feature 053: Position lock during active practice
+// ---------------------------------------------------------------------------
+
+describe('[US6] Feature 053: position lock during active practice', () => {
+  it('tapping a note during active practice does NOT change practice position (SEEK blocked)', () => {
+    let capturedOnNoteShortTap: ((tick: number, noteId: string) => void) | undefined;
+    const MockRenderer = (props: PluginScoreRendererProps) => {
+      capturedOnNoteShortTap = props.onNoteShortTap;
+      return <div data-testid="score-renderer" />;
+    };
+
+    const notes = [
+      { midiPitches: [60], noteIds: ['n1'], tick: 0 },
+      { midiPitches: [62], noteIds: ['n2'], tick: 960 },
+      { midiPitches: [64], noteIds: ['n3'], tick: 1920 },
+    ];
+
+    const ctx = createMockContext(
+      { status: 'ready', staffCount: 1, currentTick: 0 },
+      MockRenderer,
+    );
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes,
+      totalAvailable: 3,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />);
+
+    // Start practice — engine now at waiting/active, currentIndex = 0
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Tap a note at tick 1920 — this would seek to index 2 if SEEK were dispatched
+    act(() => {
+      capturedOnNoteShortTap?.(1920, 'n3');
+    });
+
+    // Position should NOT have changed — play the note at index 0 and verify
+    // that it advances (proving the engine was still at index 0, not 2).
+    act(() => {
+      ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 });
+    });
+
+    // If SEEK had been dispatched, the engine would be at index 2 (E4),
+    // so playing C4 (midi 60) would not complete practice.
+    // With SEEK blocked, engine stays at index 0, C4 advances to index 1.
+    // Now play D4 and E4 to complete.
+    act(() => {
+      ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 });
+    });
+    act(() => {
+      ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 });
+    });
+
+    // Practice should complete — results overlay appears with 100% score
+    // (proving SEEK was blocked; if SEEK had moved to index 2, score would be ~33%)
+    const overlay = screen.getByRole('region', { name: /practice results/i });
+    expect(overlay).toBeTruthy();
+    expect(screen.getByText('100')).toBeTruthy();
+  });
+
+  it('Return-to-Start does NOT seek when practice is running', () => {
+    let capturedOnReturnToStart: (() => void) | undefined;
+    const MockRenderer = (props: PluginScoreRendererProps) => {
+      capturedOnReturnToStart = props.onReturnToStart;
+      return <div data-testid="score-renderer" />;
+    };
+
+    const notes = [
+      { midiPitches: [60], noteIds: ['n1'], tick: 0 },
+      { midiPitches: [62], noteIds: ['n2'], tick: 960 },
+    ];
+
+    const ctx = createMockContext(
+      { status: 'ready', staffCount: 1, currentTick: 0 },
+      MockRenderer,
+    );
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes,
+      totalAvailable: 2,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />);
+
+    // Start practice
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Try Return-to-Start during active practice
+    act(() => {
+      capturedOnReturnToStart?.();
+    });
+
+    // seekToTick should NOT have been called — position lock active
+    expect(ctx.mockSeekToTick).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// [US7] Feature 053: Partial results on Stop
+// ---------------------------------------------------------------------------
+
+describe('[US7] Feature 053: partial results on Stop', () => {
+  it('T026: Stop after playing some notes shows results overlay with score and stopped-at label', () => {
+    const notes = [
+      { midiPitches: [60], noteIds: ['n1'], tick: 0 },
+      { midiPitches: [62], noteIds: ['n2'], tick: 960 },
+      { midiPitches: [64], noteIds: ['n3'], tick: 1920 },
+    ];
+
+    const ctx = createMockContext({ status: 'ready', staffCount: 1, currentTick: 0 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes,
+      totalAvailable: 3,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />);
+
+    // Start practice
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Play 1 correct note — advances currentIndex to 1
+    act(() => {
+      ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 });
+    });
+
+    // Press Stop — should snapshot partial results before STOP resets state
+    fireEvent.click(screen.getByRole('button', { name: /^Stop$/ }));
+
+    // Results overlay should appear with partial results
+    const overlay = screen.getByRole('region', { name: /practice results/i });
+    expect(overlay).toBeTruthy();
+
+    // Should show a "stopped at" label indicating partial completion (1 of 3)
+    expect(screen.getByText(/stopped/i)).toBeTruthy();
+  });
+
+  it('T027: Stop with zero notes played shows no-results message', () => {
+    const notes = [
+      { midiPitches: [60], noteIds: ['n1'], tick: 0 },
+      { midiPitches: [62], noteIds: ['n2'], tick: 960 },
+    ];
+
+    const ctx = createMockContext({ status: 'ready', staffCount: 1, currentTick: 0 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes,
+      totalAvailable: 2,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />);
+
+    // Start practice
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Immediately press Stop — no notes played
+    fireEvent.click(screen.getByRole('button', { name: /^Stop$/ }));
+
+    // Should show a message about no notes played (not crash or empty)
+    expect(screen.getByText(/no notes played/i)).toBeTruthy();
   });
 });

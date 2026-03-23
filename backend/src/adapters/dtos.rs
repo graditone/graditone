@@ -73,7 +73,8 @@ impl From<&Instrument> for InstrumentDto {
 /// v6: pickup_ticks added to ScoreDto (044-time-signatures)
 /// v7: volta_brackets added to ScoreDto (047-repeat-volta-playback)
 /// v8: octave_shift_regions added to ScoreDto (050-fix-layout-preloaded-scores)
-const SCORE_SCHEMA_VERSION: u32 = 8;
+/// v9: fingering annotations added to Note (fingering-layout)
+pub const SCORE_SCHEMA_VERSION: u32 = 9;
 
 /// DTO for Score containing InstrumentDtos with schema versioning
 #[derive(Debug, Serialize, Deserialize)]

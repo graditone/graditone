@@ -7,13 +7,24 @@ const DB_NAME = 'graditone-db';
 const DB_VERSION = 1;
 const SCORES_STORE = 'scores';
 
-/**
- * Current schema version - must match backend SCORE_SCHEMA_VERSION
- * Increment when data structure changes (e.g., v2 added active_clef)
- * v4: repeat_barlines added
- * v6: pickup_ticks added for anacrusis/pickup measure support
- */
-export const CURRENT_SCHEMA_VERSION = 9;
+/** Result from loadScoreFromIndexedDB when the cached schema is stale but a raw blob exists. */
+export interface StaleScoreResult {
+  readonly kind: 'stale';
+  readonly rawMxlBlob: ArrayBuffer;
+}
+
+/** Successful score load. */
+export interface LoadedScoreResult {
+  readonly kind: 'loaded';
+  readonly score: Score;
+}
+
+/** Score not found at all. */
+export interface NotFoundScoreResult {
+  readonly kind: 'not-found';
+}
+
+export type ScoreLoadResult = LoadedScoreResult | StaleScoreResult | NotFoundScoreResult;
 
 /**
  * Initialize IndexedDB database
@@ -45,24 +56,27 @@ async function openDB(): Promise<IDBDatabase> {
 }
 
 /**
- * Save a score to IndexedDB
- * @param score - Score object to save
- * @returns Promise<void>
+ * Save a score to IndexedDB, optionally with the original MXL blob.
+ * When rawMxlBlob is provided the blob is stored alongside the parsed score
+ * so that stale-schema scores can be re-parsed from the original file.
  */
-export async function saveScoreToIndexedDB(score: Score): Promise<void> {
+export async function saveScoreToIndexedDB(score: Score, rawMxlBlob?: ArrayBuffer): Promise<void> {
   try {
     const db = await openDB();
     const transaction = db.transaction([SCORES_STORE], 'readwrite');
     const store = transaction.objectStore(SCORES_STORE);
 
     // Add metadata for tracking
-    const scoreWithMetadata = {
+    const record: Record<string, unknown> = {
       ...score,
       lastModified: new Date().toISOString(),
     };
+    if (rawMxlBlob) {
+      record.rawMxlBlob = rawMxlBlob;
+    }
 
     await new Promise<void>((resolve, reject) => {
-      const request = store.put(scoreWithMetadata);
+      const request = store.put(record);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(new Error(`Failed to save score: ${request.error?.message}`));
     });
@@ -76,48 +90,49 @@ export async function saveScoreToIndexedDB(score: Score): Promise<void> {
 }
 
 /**
- * Load a score from IndexedDB
- * Returns null if score has incompatible schema version
- * @param scoreId - UUID of the score to load
- * @returns Promise<Score | null>
+ * Load a score from IndexedDB.
+ *
+ * Returns a discriminated-union result:
+ * - `loaded`   — schema is current, score is ready to use.
+ * - `stale`    — schema is outdated but a rawMxlBlob is available for re-parse.
+ * - `not-found`— no record for this ID.
  */
-export async function loadScoreFromIndexedDB(scoreId: string): Promise<Score | null> {
+export async function loadScoreFromIndexedDB(scoreId: string, currentSchemaVersion: number): Promise<ScoreLoadResult> {
   try {
     const db = await openDB();
     const transaction = db.transaction([SCORES_STORE], 'readonly');
     const store = transaction.objectStore(SCORES_STORE);
 
-    const score = await new Promise<Score | null>((resolve, reject) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const record = await new Promise<any>((resolve, reject) => {
       const request = store.get(scoreId);
-      request.onsuccess = () => {
-        const result = request.result;
-        resolve(result || null);
-      };
+      request.onsuccess = () => resolve(request.result ?? null);
       request.onerror = () => reject(new Error(`Failed to load score: ${request.error?.message}`));
     });
 
     db.close();
 
-    if (score) {
-      const scoreVersion = score.schema_version ?? 1;
-      
-      // If old schema, delete it and return null to force re-fetch
-      // Migration is unreliable without complete ClefEvent data
-      if (scoreVersion < CURRENT_SCHEMA_VERSION) {
-        console.warn(`[IndexedDB] Score ${scoreId} has incompatible schema v${scoreVersion} (current: v${CURRENT_SCHEMA_VERSION})`);
-        console.warn('[IndexedDB] Deleting cached score to force re-fetch with correct schema');
-        await deleteScoreFromIndexedDB(scoreId);
-        return null;
-      }
+    if (!record) return { kind: 'not-found' };
 
-      console.log(`[IndexedDB] Score ${scoreId} loaded successfully`);
-      // Remove metadata before returning
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { lastModified: _lastModified, ...scoreWithoutMetadata } = score as Score & { lastModified?: string };
-      return scoreWithoutMetadata;
+    const scoreVersion: number = record.schema_version ?? 1;
+
+    if (scoreVersion < currentSchemaVersion) {
+      // Schema is stale — if we have the original blob, offer it for re-parse
+      if (record.rawMxlBlob instanceof ArrayBuffer) {
+        console.warn(`[IndexedDB] Score ${scoreId} schema v${scoreVersion} stale (current: v${currentSchemaVersion}), raw blob available for re-parse`);
+        return { kind: 'stale', rawMxlBlob: record.rawMxlBlob };
+      }
+      // No blob — delete the useless record and report not found
+      console.warn(`[IndexedDB] Score ${scoreId} schema v${scoreVersion} stale, no raw blob — deleting`);
+      await deleteScoreFromIndexedDB(scoreId);
+      return { kind: 'not-found' };
     }
 
-    return null;
+    console.log(`[IndexedDB] Score ${scoreId} loaded successfully`);
+    // Strip internal metadata before returning
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { lastModified: _lm, rawMxlBlob: _blob, ...scoreOnly } = record;
+    return { kind: 'loaded', score: scoreOnly as Score };
   } catch (error) {
     console.error('[IndexedDB] Error loading score:', error);
     throw error;
@@ -179,9 +194,8 @@ export async function getAllScoresFromIndexedDBUnfiltered(): Promise<Score[]> {
  * Get all scores from IndexedDB
  * Feature 013: Added for demo score detection
  * Filters out scores with incompatible schema versions
- * @returns Promise<Score[]>
  */
-export async function getAllScoresFromIndexedDB(): Promise<Score[]> {
+export async function getAllScoresFromIndexedDB(currentSchemaVersion: number): Promise<Score[]> {
   try {
     const db = await openDB();
     const transaction = db.transaction([SCORES_STORE], 'readonly');
@@ -199,13 +213,13 @@ export async function getAllScoresFromIndexedDB(): Promise<Score[]> {
 
     for (const score of allScores) {
       const scoreVersion = score.schema_version ?? 1;
-      const isCompatible = scoreVersion >= CURRENT_SCHEMA_VERSION;
+      const isCompatible = scoreVersion >= currentSchemaVersion;
       
       if (isCompatible) {
         compatibleScores.push(score);
       } else {
         incompatibleScores.push(score);
-        console.warn(`[IndexedDB] Score ${score.id} has incompatible schema v${scoreVersion} (current: v${CURRENT_SCHEMA_VERSION})`);
+        console.warn(`[IndexedDB] Score ${score.id} has incompatible schema v${scoreVersion} (current: v${currentSchemaVersion})`);
       }
     }
 

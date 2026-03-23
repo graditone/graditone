@@ -441,6 +441,16 @@ export function create_score(_title) {
 }
 
 /**
+ * Return the current score schema version so the frontend can validate
+ * cached scores without maintaining a duplicate constant.
+ * @returns {number}
+ */
+export function get_schema_version() {
+    const ret = wasm.get_schema_version();
+    return ret >>> 0;
+}
+
+/**
  * Parse MusicXML content and return ImportResult with Score, metadata, statistics, and warnings
  *
  * # Arguments

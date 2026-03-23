@@ -34,6 +34,8 @@ export interface ImportResult {
   warnings: ImportWarning[];
   /** True if some content was skipped due to unrecoverable errors */
   partial_import: boolean;
+  /** Raw file bytes (for persisting the original MXL/MusicXML to IndexedDB). */
+  rawFileBlob?: ArrayBuffer;
 }
 
 /**
@@ -134,6 +136,9 @@ export class MusicXMLImportService {
     }
 
     try {
+      // Read raw bytes for persistence (IndexedDB blob)
+      const rawFileBlob = await file.arrayBuffer();
+
       // Extract XML content from file
       let xmlContent: string;
       
@@ -155,6 +160,7 @@ export class MusicXMLImportService {
         statistics: wasmResult.statistics,
         warnings: wasmResult.warnings,
         partial_import: wasmResult.partial_import,
+        rawFileBlob,
       };
 
       return result;

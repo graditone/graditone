@@ -2,7 +2,7 @@
 // Exports Rust functions to JavaScript using wasm-bindgen
 
 use super::error_handling::import_error_to_js;
-use crate::adapters::dtos::ScoreDto;
+use crate::adapters::dtos::{SCORE_SCHEMA_VERSION, ScoreDto};
 use crate::domain::importers::musicxml::{ImportContext, MusicXMLConverter, MusicXMLParser};
 use crate::ports::importers::{ImportMetadata, ImportStatistics};
 use serde::{Deserialize, Serialize};
@@ -21,6 +21,17 @@ pub struct WasmImportResult {
     pub warnings: Vec<crate::domain::importers::musicxml::ImportWarning>,
     /// Indicates if import was partial (some content skipped due to errors)
     pub partial_import: bool,
+}
+
+// ============================================================================
+// Schema version — single source of truth for frontend cache validation
+// ============================================================================
+
+/// Return the current score schema version so the frontend can validate
+/// cached scores without maintaining a duplicate constant.
+#[wasm_bindgen]
+pub fn get_schema_version() -> u32 {
+    SCORE_SCHEMA_VERSION
 }
 
 // ============================================================================

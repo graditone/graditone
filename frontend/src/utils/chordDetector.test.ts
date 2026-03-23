@@ -180,3 +180,54 @@ describe('ChordDetector — window boundary', () => {
     expect(result.complete).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Unpin behaviour
+// ---------------------------------------------------------------------------
+
+describe('ChordDetector — unpin()', () => {
+  it('unpinning a pinned pitch makes chord incomplete again', () => {
+    const det = new ChordDetector();
+    det.reset([60, 64, 67]);
+    det.pin(60);
+    det.pin(64);
+    // With 60 and 64 pinned, pressing 67 would complete the chord
+    let result = det.press(67, T0);
+    expect(result.complete).toBe(true);
+
+    // Reset and re-pin, then unpin 64
+    det.reset([60, 64, 67]);
+    det.pin(60);
+    det.pin(64);
+    det.unpin(64);
+    result = det.press(67, T0);
+    expect(result.complete).toBe(false);
+    expect(result.missing).toContain(64);
+  });
+
+  it('unpin is a no-op for pitches not pinned', () => {
+    const det = new ChordDetector();
+    det.reset([60, 64]);
+    det.unpin(60); // Not pinned — should not throw
+    const result = det.press(60, T0);
+    expect(result.collected).toContain(60);
+  });
+
+  it('stale pin scenario: pin then unpin sustained pitch before press', () => {
+    const det = new ChordDetector();
+    // Chord: [79] onset + [48, 52, 55] sustained
+    det.reset([79, 48, 52, 55]);
+    // Pin sustained pitches (simulating useEffect at beat start)
+    det.pin(48);
+    det.pin(52);
+    det.pin(55);
+    // User releases chord keys — unpin them
+    det.unpin(48);
+    det.unpin(52);
+    det.unpin(55);
+    // Now pressing only 79 should NOT complete
+    const result = det.press(79, T0);
+    expect(result.complete).toBe(false);
+    expect(result.missing).toEqual(expect.arrayContaining([48, 52, 55]));
+  });
+});

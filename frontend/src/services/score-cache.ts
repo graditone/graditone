@@ -2,6 +2,7 @@
 // Automatically saves scores to IndexedDB for offline persistence
 
 import type { Score } from '../types/score';
+import type { ScoreLoadResult } from './storage/local-storage';
 import {
   saveScoreToIndexedDB,
   loadScoreFromIndexedDB,
@@ -14,12 +15,12 @@ import {
  */
 export class ScoreCache {
   /**
-   * Save score to cache (IndexedDB)
-   * @param score - Score to cache
+   * Save score to cache (IndexedDB), optionally with the raw MXL blob
+   * so that stale-schema scores can be re-parsed later.
    */
-  static async cache(score: Score): Promise<void> {
+  static async cache(score: Score, rawMxlBlob?: ArrayBuffer): Promise<void> {
     try {
-      await saveScoreToIndexedDB(score);
+      await saveScoreToIndexedDB(score, rawMxlBlob);
       console.log(`[ScoreCache] Score ${score.id} cached successfully`);
     } catch (error) {
       console.error('[ScoreCache] Failed to cache score:', error);
@@ -28,20 +29,15 @@ export class ScoreCache {
   }
 
   /**
-   * Get score from cache
-   * @param scoreId - UUID of score to retrieve
-   * @returns Score or null if not found
+   * Get score from cache (schema-aware).
+   * Returns a discriminated-union result: loaded | stale | not-found.
    */
-  static async get(scoreId: string): Promise<Score | null> {
+  static async get(scoreId: string, currentSchemaVersion: number): Promise<ScoreLoadResult> {
     try {
-      const score = await loadScoreFromIndexedDB(scoreId);
-      if (score) {
-        console.log(`[ScoreCache] Score ${scoreId} retrieved from cache`);
-      }
-      return score;
+      return await loadScoreFromIndexedDB(scoreId, currentSchemaVersion);
     } catch (error) {
       console.error('[ScoreCache] Failed to retrieve score from cache:', error);
-      return null;
+      return { kind: 'not-found' };
     }
   }
 
@@ -72,13 +68,11 @@ export class ScoreCache {
   }
 
   /**
-   * Check if a score is cached
-   * @param scoreId - UUID of score to check
-   * @returns true if score exists in cache
+   * Check if a score is cached and compatible
    */
-  static async has(scoreId: string): Promise<boolean> {
-    const cached = await ScoreCache.get(scoreId);
-    return cached !== null;
+  static async has(scoreId: string, currentSchemaVersion: number): Promise<boolean> {
+    const result = await ScoreCache.get(scoreId, currentSchemaVersion);
+    return result.kind === 'loaded';
   }
 }
 

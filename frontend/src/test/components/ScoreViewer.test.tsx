@@ -27,27 +27,14 @@ vi.mock("../../services/wasm/music-engine", () => ({
   parseScore: vi.fn(),
   addInstrument: vi.fn(),
   getScore: vi.fn(),
+  getSchemaVersion: vi.fn().mockResolvedValue(9),
 }));
 
 // Mock IndexedDB storage (Feature 025)
 vi.mock("../../services/storage/local-storage", () => ({
-  loadScoreFromIndexedDB: vi.fn(),
+  loadScoreFromIndexedDB: vi.fn().mockResolvedValue({ kind: 'not-found' }),
   saveScoreToIndexedDB: vi.fn(),
-}));
-
-// Mock API client
-vi.mock("../../services/score-api", () => ({
-  apiClient: {
-    getScore: vi.fn(),
-    createScore: vi.fn(),
-    addInstrument: vi.fn(),
-  },
-}));
-
-// Mock storage service
-vi.mock("../../services/storage/local-storage", () => ({
-  loadScoreFromIndexedDB: vi.fn().mockResolvedValue(null),
-  saveScoreToIndexedDB: vi.fn(),
+  deleteScoreFromIndexedDB: vi.fn(),
 }));
 
 // Wrapper component for providers
@@ -97,7 +84,7 @@ describe("ScoreViewer - Editing UI Removal", () => {
       ],
     };
 
-    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue(mockScore);
+    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue({ kind: 'loaded', score: mockScore as unknown as Score });
 
     render(
       <TestWrapper>
@@ -107,7 +94,7 @@ describe("ScoreViewer - Editing UI Removal", () => {
 
     // Wait for score to load from IndexedDB (Feature 025)
     await waitFor(() => {
-      expect(loadScoreFromIndexedDB).toHaveBeenCalledWith("test-id");
+      expect(loadScoreFromIndexedDB).toHaveBeenCalledWith("test-id", 9);
     });
 
     // Query for Save button
@@ -142,7 +129,7 @@ describe("ScoreViewer - Editing UI Removal", () => {
       ],
     };
 
-    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue(mockScore);
+    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue({ kind: 'loaded', score: mockScore as unknown as Score });
 
     render(
       <TestWrapper>
@@ -151,7 +138,7 @@ describe("ScoreViewer - Editing UI Removal", () => {
     );
 
     await waitFor(() => {
-      expect(loadScoreFromIndexedDB).toHaveBeenCalledWith("test-id");
+      expect(loadScoreFromIndexedDB).toHaveBeenCalledWith("test-id", 9);
     });
 
     // Query for filename input by placeholder text
@@ -205,7 +192,7 @@ describe("ScoreViewer - Editing UI Removal", () => {
       ],
     };
 
-    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue(mockScore);
+    vi.mocked(loadScoreFromIndexedDB).mockResolvedValue({ kind: 'loaded', score: mockScore as unknown as Score });
 
     render(
       <TestWrapper>
@@ -214,7 +201,7 @@ describe("ScoreViewer - Editing UI Removal", () => {
     );
 
     await waitFor(() => {
-      expect(loadScoreFromIndexedDB).toHaveBeenCalledWith("test-id");
+      expect(loadScoreFromIndexedDB).toHaveBeenCalledWith("test-id", 9);
     });
 
     // Query for New button (shorter label in header)

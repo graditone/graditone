@@ -18,6 +18,8 @@ interface WasmModule {
   add_key_signature_event: (score: unknown, staffId: string, tick: number, key: string) => unknown;
   // Layout Engine - returns JsValue (JavaScript object) via serde-wasm-bindgen
   compute_layout_wasm: (scoreJson: string, configJson: string) => unknown;
+  // Schema version
+  get_schema_version: () => number;
 }
 
 let wasmModule: WasmModule | null = null;
