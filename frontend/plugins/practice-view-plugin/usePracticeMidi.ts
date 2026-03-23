@@ -53,7 +53,7 @@ export function usePracticeMidi({
   loopIterationRef,
   loopStartTimesRef,
   practiceStartTimeRef,
-  selectedStaffIndex,
+  selectedStaffIndex: _selectedStaffIndex,
 }: UsePracticeMidiParams): UsePracticeMidiReturn {
   // ─── Chord detector ─────────────────────────────────────────────────────────
   const chordDetectorRef = useRef(new ChordDetector());
@@ -133,6 +133,7 @@ export function usePracticeMidi({
       if (pitches) all.push(...(pitches.notes as PluginPracticeNoteEntry[]));
     }
     allNotesRef.current = all;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerState.status, playerState.staffCount, playerState.title, context.scorePlayer]);
 
   // ─── MIDI subscription ─────────────────────────────────────────────────────

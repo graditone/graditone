@@ -83,6 +83,7 @@ export function usePracticeLoop({
   }, [loopStart, loopEndPin]);
 
   const loopRegionRef = useRef(loopRegion);
+  // eslint-disable-next-line react-hooks/refs -- writer-owns-ref pattern: keep ref in sync for consumers
   loopRegionRef.current = loopRegion;
 
   // ─── Practice loop index range ──────────────────────────────────────────────
@@ -100,6 +101,7 @@ export function usePracticeLoop({
   }, [loopRegion, practiceState.notes]);
 
   const loopPracticeRangeRef = useRef<LoopRange | null>(loopPracticeRange);
+  // eslint-disable-next-line react-hooks/refs -- writer-owns-ref pattern: keep ref in sync for consumers
   loopPracticeRangeRef.current = loopPracticeRange;
 
   // ─── Loop-restart on complete ──────────────────────────────────────────────

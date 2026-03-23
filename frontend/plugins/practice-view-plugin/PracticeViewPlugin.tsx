@@ -169,7 +169,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // ─── Loop logic (extracted hook) ───────────────────────────────────────────
   const {
-    loopStart, loopEndPin, loopCount, setLoopCount,
+    loopStart, loopEndPin: _loopEndPin, loopCount, setLoopCount,
     pinnedNoteIds, loopRegion, loopPracticeRange,
     loopRegionRef, loopPracticeRangeRef, loopIterationRef,
     loopStartTimesRef, remainingLoopsRef, handleNoteLongPress,
@@ -243,7 +243,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // ─── MIDI logic (extracted hook) ───────────────────────────────────────────
   const {
-    midiPressedNoteIds, midiEventTick, heldMidiKeysRef, chordDetectorRef,
+    midiPressedNoteIds, midiEventTick, heldMidiKeysRef, chordDetectorRef: _chordDetectorRef,
   } = usePracticeMidi({
     context,
     practiceState,
@@ -326,6 +326,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     context.scorePlayer.stop();
     const lr = loopRegionRef.current;
     context.scorePlayer.seekToTick(lr ? lr.startTick : 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.scorePlayer, playerState.bpm]);
 
   const handleTempoChange = useCallback(
@@ -440,6 +441,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     });
     // practiceStartTimeRef is set later — when the first correct note is played
     // (deferred start: the clock doesn't start until the user hits the first note).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     context.scorePlayer,
     selectedStaffIndex,
@@ -505,6 +507,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     loopStartTimesRef.current = [0];
     // Also restore loopCount since handlePracticeToggle sets it to 1.
     setLoopCount(loopCount);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handlePracticeToggle, loopCount]);
 
   // ─── Highlight computation (extracted hook) ─────────────────────────────────

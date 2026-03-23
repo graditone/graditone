@@ -6,7 +6,7 @@
  * loop count slider, note-by-note details, and timing deviation graph.
  */
 
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useCallback, useRef, useEffect, useMemo } from 'react';
 import type { PluginContext, ScorePlayerState } from '../../src/plugin-api/index';
 import type {
   PracticeState,
