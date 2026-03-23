@@ -32,32 +32,11 @@ import type {
 import { PracticeToolbar } from './practiceToolbar';
 import { reduce, LATE_THRESHOLD_MS } from './practiceEngine';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
-import type { PracticeNoteResult, WrongNoteEvent } from './practiceEngine.types';
+import type { PracticeNoteResult, WrongNoteEvent, PerformanceRecord, PartialPerformanceRecord } from './practiceEngine.types';
 import { ChordDetector } from '../../src/plugin-api/index';
 import { mergePracticeNotesByTick } from './mergePracticeNotesByTick';
+import { usePracticeLoop } from './usePracticeLoop';
 import './PracticeViewPlugin.css';
-
-// ---------------------------------------------------------------------------
-// Replay types (T002 — 038-practice-replay)
-// ---------------------------------------------------------------------------
-
-/** Frozen snapshot of a completed practice exercise for replay. */
-interface PerformanceRecord {
-  notes: PluginPracticeNoteEntry[];
-  noteResults: PracticeNoteResult[];
-  wrongNoteEvents: WrongNoteEvent[];
-  bpmAtCompletion: number;
-}
-
-/** Snapshot captured when user stops practice mid-session (US7). */
-interface PartialPerformanceRecord {
-  notes: ReadonlyArray<PluginPracticeNoteEntry>;
-  noteResults: ReadonlyArray<PracticeNoteResult>;
-  wrongNoteEvents: ReadonlyArray<WrongNoteEvent>;
-  bpmAtCompletion: number;
-  stoppedAtIndex: number;
-  totalNoteCount: number;
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -203,44 +182,30 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const [partialPerformanceRecord, setPartialPerformanceRecord] = useState<PartialPerformanceRecord | null>(null);
   const replayTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // ─── Multi-loop practice state ─────────────────────────────────────────────
-  const [loopCount, setLoopCount] = useState(1);
-  const remainingLoopsRef = useRef(0);
-  /** Completed loop iterations so far (0 = first loop). Used to offset expectedTimeMs. */
-  const loopIterationRef = useRef(0);
-  /**
-   * Wall-clock timestamp (relative to practiceStartTime) when the phantom restarts
-   * each loop. Recorded at each LOOP_RESTART so the next iteration can compute
-   * the real loop period for expectedTimeMs offset. Index 0 = loop 0 start = 0.
-   */
-  const loopStartTimesRef = useRef<number[]>([0]);
+  // Practice session start time (ms since epoch) for timing analysis
+  const practiceStartTimeRef = useRef(0);
 
-  // Show overlay each time practice enters 'complete' mode, capture PerformanceRecord (T005)
-  useEffect(() => {
-    if (practiceState.mode === 'complete') {
-      // Multi-loop: if remaining loops > 0, restart at the loop start
-      if (remainingLoopsRef.current > 0) {
-        remainingLoopsRef.current -= 1;
-        loopIterationRef.current += 1;
-        // Record the wall-clock time when this new loop starts (relative to practice start)
-        const loopStartMs = Date.now() - practiceStartTimeRef.current;
-        loopStartTimesRef.current.push(loopStartMs);
-        const range = loopPracticeRangeRef.current;
-        if (range) {
-          dispatchPractice({ type: 'LOOP_RESTART', startIndex: range.startIndex });
-          return; // Don't show results yet
-        }
-      }
-      setResultsOverlayVisible(true);
-      setPerformanceRecord({
-        notes: [...practiceState.notes],
-        noteResults: [...practiceState.noteResults],
-        wrongNoteEvents: [...practiceState.wrongNoteEvents],
-        bpmAtCompletion: playerState.bpm,
-      });
+  // ─── Loop logic (extracted hook) ───────────────────────────────────────────
+  const {
+    loopStart, loopEndPin, loopCount, setLoopCount,
+    pinnedNoteIds, loopRegion, loopPracticeRange,
+    loopRegionRef, loopPracticeRangeRef, loopIterationRef,
+    loopStartTimesRef, remainingLoopsRef, handleNoteLongPress,
+    resetLoopTracking,
+  } = usePracticeLoop({
+    practiceState,
+    dispatchPractice,
+    playerState,
+    practiceStartTimeRef,
+    context,
+    onComplete: (record) => {
+      setPerformanceRecord(record);
       setIsReplaying(false);
-    }
-  }, [practiceState.mode]);
+    },
+    onResultsShow: () => {
+      setResultsOverlayVisible(true);
+    },
+  });
 
   // Flash the auto-advanced note IDs in red for 600 ms when the engine skips a beat.
   useEffect(() => {
@@ -277,53 +242,6 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       setSelectedStaffIndex(0);
     }
   }, [playerState.status]);
-
-  // ─── Pin / loop state (mirrors play-score) ──────────────────────────────────
-  type PinState = { tick: number; noteId: string };
-  const [loopStart, setLoopStart] = useState<PinState | null>(null);
-  const [loopEndPin, setLoopEndPin] = useState<PinState | null>(null);
-
-  const pinnedNoteIds = useMemo<ReadonlySet<string>>(() => {
-    const ids = new Set<string>();
-    if (loopStart) ids.add(loopStart.noteId);
-    if (loopEndPin) ids.add(loopEndPin.noteId);
-    return ids;
-  }, [loopStart, loopEndPin]);
-
-  const loopRegion = useMemo(() => {
-    if (!loopStart || !loopEndPin || loopStart.tick === loopEndPin.tick) return null;
-    return {
-      startTick: Math.min(loopStart.tick, loopEndPin.tick),
-      endTick: Math.max(loopStart.tick, loopEndPin.tick),
-    };
-  }, [loopStart, loopEndPin]);
-
-  // Keep a ref so the MIDI handler (closed over once) always sees the current
-  // loop region without needing to re-subscribe.
-  const loopRegionRef = useRef(loopRegion);
-  loopRegionRef.current = loopRegion;
-
-  // ─── Practice loop index range ──────────────────────────────────────────────
-  // When a loop region is pinned and practice is active, wrap at the last note
-  // inside the region instead of advancing past it.
-  // Indices into practiceState.notes[], recomputed whenever loop or notes change.
-  type LoopRange = { startIndex: number; endIndex: number };
-  const loopPracticeRange = useMemo<LoopRange | null>(() => {
-    const notes = practiceState.notes;
-    if (!loopRegion || notes.length === 0) return null;
-    const startIndex = notes.findIndex((n) => n.tick >= loopRegion.startTick);
-    if (startIndex === -1) return null;
-    let endIndex = startIndex;
-    for (let i = startIndex; i < notes.length; i++) {
-      if (notes[i].tick <= loopRegion.endTick) endIndex = i;
-      else break;
-    }
-    return { startIndex, endIndex };
-  }, [loopRegion, practiceState.notes]);
-
-  // Ref mirror for MIDI handler (runs inside useEffect closure, needs sync access).
-  const loopPracticeRangeRef = useRef<LoopRange | null>(loopPracticeRange);
-  loopPracticeRangeRef.current = loopPracticeRange;
 
   // Keep a ref to practiceState so MIDI handler always sees latest state
   // without needing to re-subscribe.
@@ -382,8 +300,6 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     };
   }, []);
 
-  // Practice session start time (ms since epoch) for timing analysis
-  const practiceStartTimeRef = useRef(0);
   // PPQ constant for tick→ms conversion
   const PPQ = 960;
 
@@ -924,9 +840,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     setLoopCount(1);
 
     // Reset loop iteration tracking so the progress counter starts from 1/N.
-    remainingLoopsRef.current = 0;
-    loopIterationRef.current = 0;
-    loopStartTimesRef.current = [0];
+    resetLoopTracking();
 
     // Start practice — staff is always already selected via the toolbar dropdown
     const ps2 = playerStateRef.current;
@@ -1006,46 +920,6 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       context.scorePlayer.seekToTick(tick);
     },
     [context.scorePlayer, playerState.status, pendingPlay],
-  );
-
-  // Long press — pin/loop state machine (mirrors play-score)
-  const handleNoteLongPress = useCallback(
-    (tick: number, noteId: string | null) => {
-      const isPlaying = playerState.status === 'playing';
-
-      // Tap inside active loop region → clear all pins
-      if (loopRegion && tick >= loopRegion.startTick && tick <= loopRegion.endTick) {
-        setLoopStart(null);
-        setLoopEndPin(null);
-        context.scorePlayer.setPinnedStart(null);
-        context.scorePlayer.setLoopEnd(null);
-        return;
-      }
-
-      if (loopStart === null) {
-        // First long-press: pin the start
-        const id = noteId ?? '';
-        setLoopStart({ tick, noteId: id });
-        if (!isPlaying) context.scorePlayer.setPinnedStart(tick);
-      } else if (loopStart.noteId === noteId || loopStart.tick === tick) {
-        // Same note / same tick: unpin
-        setLoopStart(null);
-        setLoopEndPin(null);
-        context.scorePlayer.setPinnedStart(null);
-        context.scorePlayer.setLoopEnd(null);
-      } else {
-        // Second long-press on a different note: create loop end
-        const id = noteId ?? '';
-        setLoopEndPin({ tick, noteId: id });
-        if (!isPlaying) {
-          const regionStart = Math.min(loopStart.tick, tick);
-          const regionEnd = Math.max(loopStart.tick, tick);
-          context.scorePlayer.setPinnedStart(regionStart);
-          context.scorePlayer.setLoopEnd(regionEnd);
-        }
-      }
-    },
-    [context.scorePlayer, loopStart, loopRegion, playerState.status],
   );
 
   // Return to start — respects loop start pin when set
