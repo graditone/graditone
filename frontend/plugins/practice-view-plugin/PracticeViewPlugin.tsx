@@ -160,6 +160,15 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const [performanceRecord, setPerformanceRecord] = useState<PerformanceRecord | null>(null);
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayHighlightedNoteIds, setReplayHighlightedNoteIds] = useState<ReadonlySet<string>>(new Set());
+  const wasReplayingRef = useRef(false);
+
+  // Restore results overlay when replay finishes (natural end or stop)
+  useEffect(() => {
+    if (wasReplayingRef.current && !isReplaying) {
+      setResultsOverlayVisible(true);
+    }
+    wasReplayingRef.current = isReplaying;
+  }, [isReplaying]);
 
   // ─── Partial results on Stop (US7, 053-fix-lacandeur-practice) ─────────────
   const [partialPerformanceRecord, setPartialPerformanceRecord] = useState<PartialPerformanceRecord | null>(null);
@@ -309,6 +318,13 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const handlePlay = useCallback(() => context.scorePlayer.play(), [context.scorePlayer]);
   const handlePause = useCallback(() => context.scorePlayer.pause(), [context.scorePlayer]);
   const handleStop = useCallback(() => {
+    // If a replay is in progress, stop audio and reset replay state
+    if (isReplaying) {
+      context.stopPlayback();
+      setIsReplaying(false);
+      setReplayHighlightedNoteIds(new Set());
+      return;
+    }
     // US7: Snapshot partial results before STOP clears engine state
     const ps = practiceStateRef.current;
     if (ps.mode === 'active' || ps.mode === 'waiting' || ps.mode === 'holding') {
@@ -327,7 +343,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     const lr = loopRegionRef.current;
     context.scorePlayer.seekToTick(lr ? lr.startTick : 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context.scorePlayer, playerState.bpm]);
+  }, [context, context.scorePlayer, playerState.bpm, isReplaying]);
 
   const handleTempoChange = useCallback(
     (m: number) => {

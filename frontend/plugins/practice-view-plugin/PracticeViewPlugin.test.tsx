@@ -497,29 +497,34 @@ describe('PracticeViewPlugin — Replay (038-practice-replay)', () => {
     expect(screen.getByRole('button', { name: /replay your performance/i })).toBeTruthy();
   });
 
-  // T008: Replay button replaced by Stop button when Replay pressed
-  it('T008: replaces Replay with Stop button when Replay is pressed', () => {
+  // T008: Replay hides overlay when pressed
+  it('T008: hides results overlay when Replay is pressed', () => {
     const { ctx } = setupCompletedPractice();
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
     const replayBtn = screen.getByRole('button', { name: /replay your performance/i });
     act(() => {
       fireEvent.click(replayBtn);
     });
-    expect(screen.queryByRole('button', { name: /replay your performance/i })).toBeNull();
-    expect(screen.getByRole('button', { name: /stop replay/i })).toBeTruthy();
+    // Overlay is hidden during replay
+    expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
   });
 
-  // T009: Stop button cancels playback and restores Replay button
-  it('T009: Stop cancels playback and restores Replay button', () => {
+  // T009: Toolbar Stop button cancels replay and restores overlay
+  it('T009: Stop cancels playback and restores results overlay', () => {
     const { ctx } = setupCompletedPractice();
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: /replay your performance/i }));
     });
+    // Overlay hidden during replay
+    expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
+    // Use toolbar Stop button to cancel replay
     act(() => {
-      fireEvent.click(screen.getByRole('button', { name: /stop replay/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^Stop$/ }));
     });
     expect(ctx.mockStopPlayback).toHaveBeenCalled();
+    // Overlay reappears with Replay button
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /replay your performance/i })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /stop replay/i })).toBeNull();
   });
 
   // T010: context.playNote called N times with offsetMs = real responseTimeMs
@@ -683,11 +688,10 @@ describe('PracticeViewPlugin — Replay (038-practice-replay)', () => {
     });
 
     expect(ctx.mockStopPlayback).toHaveBeenCalled();
+    // Overlay reappears after natural replay end
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /replay your performance/i })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /stop replay/i })).toBeNull();
   });
-
-  // T013: unmount during replay clears all timers
   it('T013: clears timers on unmount during replay', () => {
     const notes = [
       { midiPitches: [60], noteIds: ['n1'], tick: 0 },
@@ -862,8 +866,15 @@ describe('PracticeViewPlugin — Replay (038-practice-replay)', () => {
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: /replay your performance/i }));
     });
-    expect(screen.getByRole('button', { name: /stop replay/i })).toBeTruthy();
+    // Overlay is hidden during replay
+    expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
 
+    // Stop replay via toolbar, which restores the overlay
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: /^Stop$/ }));
+    });
+
+    // Now click repractice in the restored overlay
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: /repractice/i }));
     });

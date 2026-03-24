@@ -86,6 +86,15 @@ export function ResultsOverlay({
     };
   }, []);
 
+  // Clean up replay timers when isReplaying is set to false externally (e.g. stop button)
+  useEffect(() => {
+    if (!isReplaying && replayTimersRef.current.length > 0) {
+      context.stopPlayback();
+      replayTimersRef.current.forEach(clearTimeout);
+      replayTimersRef.current = [];
+    }
+  }, [isReplaying, context]);
+
   const handleReplayStop = useCallback(() => {
     context.stopPlayback();
     replayTimersRef.current.forEach(clearTimeout);
@@ -155,7 +164,10 @@ export function ResultsOverlay({
     timers.push(finishTimer);
 
     replayTimersRef.current = timers;
-  }, [context, performanceRecord, isReplaying, setIsReplaying, setReplayHighlightedNoteIds]);
+
+    // Hide the results overlay so the score is visible during replay
+    onDismiss();
+  }, [context, performanceRecord, isReplaying, setIsReplaying, setReplayHighlightedNoteIds, onDismiss]);
 
   const handleRepractice = useCallback(() => {
     if (isReplaying) handleReplayStop();
