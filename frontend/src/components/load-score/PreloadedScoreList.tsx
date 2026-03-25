@@ -1,10 +1,14 @@
 import type { PreloadedScore } from '../../data/preloadedScores';
+import type { DifficultyLevel } from '../../types/score';
+import { DifficultyTag } from './DifficultyTag';
 
 interface PreloadedScoreListProps {
   scores: ReadonlyArray<PreloadedScore>;
   selectedId?: string;
   disabled?: boolean;
   onSelect: (score: PreloadedScore) => void;
+  /** Map of score ID → difficulty level, built from cached scores in IndexedDB (Feature 055) */
+  difficultyLevels?: Readonly<Record<string, DifficultyLevel>>;
 }
 
 /**
@@ -16,6 +20,7 @@ export function PreloadedScoreList({
   selectedId,
   disabled = false,
   onSelect,
+  difficultyLevels = {},
 }: PreloadedScoreListProps) {
   return (
     <ul className="preloaded-score-list" role="list">
@@ -30,6 +35,7 @@ export function PreloadedScoreList({
               onClick={() => onSelect(score)}
             >
               {score.displayName}
+              <DifficultyTag level={difficultyLevels[score.id]} />
             </button>
           </li>
         );

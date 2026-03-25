@@ -14,3 +14,6 @@ pub mod repeat;
 
 // Importers module (Feature 006)
 pub mod importers;
+
+// Difficulty computation module (Feature 055)
+pub mod difficulty;

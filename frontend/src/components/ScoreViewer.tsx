@@ -169,6 +169,12 @@ export function ScoreViewer({
         const result = await service.importFile(file);
         // Re-cache with updated schema, preserving the raw blob
         await ScoreCache.cache(result.score, loadResult.rawMxlBlob);
+        // Backfill difficulty level in user score index (Feature 055)
+        const diffLevel = result.score.difficulty_rating?.level;
+        if (diffLevel !== undefined) {
+          const { updateUserScoreDifficulty } = await import('../services/userScoreIndex');
+          updateUserScoreDifficulty(id, diffLevel);
+        }
         setScore(result.score);
         setScoreTitle(result.score.instruments[0]?.name ?? null);
         setIsFileSourced(false);
@@ -215,7 +221,7 @@ export function ScoreViewer({
     try {
       await ScoreCache.cache(result.score, result.rawFileBlob);
       if (rawDisplayName) {
-        const { evictedIds } = addUserScore(result.score.id, rawDisplayName);
+        const { evictedIds } = addUserScore(result.score.id, rawDisplayName, result.score.difficulty_rating?.level);
         // Clean up IndexedDB entries for evicted scores
         for (const evictedId of evictedIds) {
           deleteScoreFromIndexedDB(evictedId).catch((err) => {
@@ -317,7 +323,7 @@ export function ScoreViewer({
     const { entry } = undoDeleteRef.current;
     undoDeleteRef.current = null;
     // Re-add the entry to the metadata index
-    addUserScore(entry.id, entry.displayName);
+    addUserScore(entry.id, entry.displayName, entry.difficulty_level);
     setSuccessMessage(null);
   }, [addUserScore]);
 

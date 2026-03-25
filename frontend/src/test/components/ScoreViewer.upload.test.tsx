@@ -210,7 +210,7 @@ describe('ScoreViewer — upload path (T009)', () => {
     await userEvent.click(triggerBtn);
 
     await waitFor(() => {
-      expect(addUserScore).toHaveBeenCalledWith('score-uuid-1', 'My Sonata');
+      expect(addUserScore).toHaveBeenCalledWith('score-uuid-1', 'My Sonata', undefined);
     });
   });
 
@@ -463,6 +463,6 @@ describe('ScoreViewer — delete with undo (T020)', () => {
       undoBtn.click();
     });
 
-    expect(addUserScore).toHaveBeenCalledWith(SCORE_ID, DISPLAY_NAME);
+    expect(addUserScore).toHaveBeenCalledWith(SCORE_ID, DISPLAY_NAME, undefined);
   });
 });

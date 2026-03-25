@@ -19,7 +19,8 @@ import { useRef, useMemo } from 'react';
 import type { PluginScoreSelectorProps } from '../../plugin-api/types';
 import { UserScoreList } from '../load-score/UserScoreList';
 import { ScoreGroupList } from '../load-score/ScoreGroupList';
-import { PRELOADED_CATALOG } from '../../data/preloadedScores';
+import { DifficultyTag } from '../load-score/DifficultyTag';
+import { PRELOADED_CATALOG, PRELOADED_DIFFICULTY_LEVELS } from '../../data/preloadedScores';
 import { useUserScores } from '../../hooks/useUserScores';
 import { deleteScoreFromIndexedDB } from '../../services/storage/local-storage';
 import './ScoreSelectorPlugin.css';
@@ -42,6 +43,15 @@ export function ScoreSelectorPlugin({
     []
   );
   const ungroupedCatalogue = catalogue.filter((e) => !groupedIds.has(e.id));
+
+  // Sort ungrouped scores by difficulty: Easy first, then Medium, then Hard
+  const sortedCatalogue = useMemo(
+    () =>
+      [...ungroupedCatalogue].sort(
+        (a, b) => (PRELOADED_DIFFICULTY_LEVELS[a.id] ?? 0) - (PRELOADED_DIFFICULTY_LEVELS[b.id] ?? 0),
+      ),
+    [ungroupedCatalogue],
+  );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -91,7 +101,7 @@ export function ScoreSelectorPlugin({
           <>
             <div className="score-selector-scroll">
               <ul className="score-selector-list" role="listbox" aria-label="Preloaded scores">
-                {ungroupedCatalogue.map((entry) => (
+                {sortedCatalogue.map((entry) => (
                   <li key={entry.id} role="none" className="score-selector-item">
                     <button
                       type="button"
@@ -100,6 +110,7 @@ export function ScoreSelectorPlugin({
                       onClick={() => onSelectScore(entry.id)}
                     >
                       {entry.displayName}
+                      <DifficultyTag level={PRELOADED_DIFFICULTY_LEVELS[entry.id]} />
                     </button>
                   </li>
                 ))}
@@ -111,6 +122,7 @@ export function ScoreSelectorPlugin({
                   key={group.id}
                   group={group}
                   onSelect={(score) => onSelectScore(score.id)}
+                  difficultyLevels={PRELOADED_DIFFICULTY_LEVELS}
                 />
               ))}
 

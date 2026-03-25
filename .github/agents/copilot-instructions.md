@@ -118,6 +118,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - N/A (practice state is transient, session-only) (053-fix-lacandeur-practice)
 - TypeScript 5, React 18 + React hooks (useState, useEffect, useCallback, useReducer, useRef, useMemo), ChordDetector, PluginContext API (054-refactor-practice-plugin)
 - N/A (pure frontend refactor) (054-refactor-practice-plugin)
+- Rust (stable) — backend computation; TypeScript — frontend display + wasm-bindgen (WASM/JS interop); React 18 + Vitest (frontend); Cargo (Rust testing) (055-score-difficulty-density)
+- IndexedDB (`graditone-db`, `scores` store) via `ScoreCache`; `UserScore` index in `localStorage` (055-score-difficulty-density)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -138,9 +140,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 055-score-difficulty-density: Added Rust (stable) — backend computation; TypeScript — frontend display + wasm-bindgen (WASM/JS interop); React 18 + Vitest (frontend); Cargo (Rust testing)
 - 054-refactor-practice-plugin: Added TypeScript 5, React 18 + React hooks (useState, useEffect, useCallback, useReducer, useRef, useMemo), ChordDetector, PluginContext API
 - 054-refactor-practice-plugin: Added TypeScript 5, React 18 + React hooks (useState, useEffect, useCallback, useReducer, useRef, useMemo), ChordDetector, PluginContext API
-- 053-fix-lacandeur-practice: Added TypeScript 5 / React 18 + Vitest (unit tests), Playwright (E2E), Vite
 
 
 <!-- MANUAL ADDITIONS START -->

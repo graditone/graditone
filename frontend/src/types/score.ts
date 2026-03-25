@@ -4,6 +4,15 @@
 // Value Objects
 // ============================================================================
 
+/** Difficulty level: 1=Easy, 2=Medium, 3=Hard (Feature 055) */
+export type DifficultyLevel = 1 | 2 | 3;
+
+/** Computed difficulty rating for a score based on note density (Feature 055) */
+export interface DifficultyRating {
+  density_rate: number;
+  level: DifficultyLevel;
+}
+
 /** Tick represents a time position at 960 PPQ (Pulses Per Quarter note) */
 export type Tick = number;
 
@@ -165,6 +174,9 @@ export interface Score {
 
   /** Actual cumulative tick at end of each measure, for shortened measures */
   measure_end_ticks?: number[];
+
+  /** Computed difficulty rating based on note density (Feature 055) */
+  difficulty_rating?: DifficultyRating;
 }
 
 /** An octave-shift region (8va/8vb) for display pitch transposition */

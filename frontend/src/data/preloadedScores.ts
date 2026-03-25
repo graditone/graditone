@@ -11,6 +11,8 @@
  */
 export type { UserScore } from '../services/userScoreIndex';
 
+import type { DifficultyLevel } from '../types/score';
+
 export interface PreloadedScore {
   id: string;
   displayName: string;
@@ -128,4 +130,18 @@ export const SCALE_SCORE_GROUP: ScoreGroup = {
 export const PRELOADED_CATALOG: PreloadedCatalog = {
   ungrouped: PRELOADED_SCORES,
   groups: [SCALE_SCORE_GROUP].filter((g) => g.scores.length > 0),
+};
+
+/**
+ * Feature 055: Pre-computed difficulty levels for bundled scores.
+ * Values determined by running compute_difficulty() on each .mxl file in the backend.
+ * See specs/055-score-difficulty-density/research.md "Reference Score Calibration".
+ */
+export const PRELOADED_DIFFICULTY_LEVELS: Readonly<Record<string, DifficultyLevel>> = {
+  'bach-invention-1': 2,
+  'beethoven-fur-elise': 3,
+  'burgmuller-arabesque': 2,
+  'burgmuller-la-candeur': 1,
+  'chopin-nocturne-op9-2': 3,
+  'pachelbel-canon-d': 1,
 };

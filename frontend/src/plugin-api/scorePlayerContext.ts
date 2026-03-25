@@ -310,7 +310,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
         try {
           await ScoreCache.cache(scoreObject, result.rawFileBlob);
           if (rawDisplayName) {
-            const { evictedIds } = addUserScore(scoreObject.id, rawDisplayName);
+            const { evictedIds } = addUserScore(scoreObject.id, rawDisplayName, scoreObject.difficulty_rating?.level);
             for (const evictedId of evictedIds) {
               deleteScoreFromIndexedDB(evictedId).catch(() => {});
             }
@@ -335,6 +335,12 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
           scoreObject = result.score;
           // Re-cache with the updated schema, preserving the raw blob
           await ScoreCache.cache(scoreObject, loadResult.rawMxlBlob);
+          // Backfill difficulty level in user score index
+          const diffLevel = scoreObject.difficulty_rating?.level;
+          if (diffLevel !== undefined) {
+            const { updateUserScoreDifficulty } = await import('../services/userScoreIndex');
+            updateUserScoreDifficulty(source.scoreId, diffLevel);
+          }
         }
 
         if (!scoreObject) {

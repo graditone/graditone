@@ -1,4 +1,6 @@
 import type { ScoreGroup, PreloadedScore } from '../../data/preloadedScores';
+import type { DifficultyLevel } from '../../types/score';
+import { DifficultyTag } from './DifficultyTag';
 import './ScoreGroupList.css';
 
 interface ScoreGroupListProps {
@@ -6,6 +8,8 @@ interface ScoreGroupListProps {
   selectedId?: string;
   disabled?: boolean;
   onSelect: (score: PreloadedScore) => void;
+  /** Map of score ID → difficulty level (Feature 055) */
+  difficultyLevels?: Readonly<Record<string, DifficultyLevel>>;
 }
 
 /**
@@ -19,6 +23,7 @@ export function ScoreGroupList({
   selectedId,
   disabled = false,
   onSelect,
+  difficultyLevels = {},
 }: ScoreGroupListProps) {
   if (group.scores.length === 0) return null;
 
@@ -37,6 +42,7 @@ export function ScoreGroupList({
                 onClick={() => onSelect(score)}
               >
                 {score.displayName}
+                <DifficultyTag level={difficultyLevels[score.id]} />
               </button>
             </li>
           );

@@ -3,6 +3,7 @@
 
 use super::error_handling::import_error_to_js;
 use crate::adapters::dtos::{SCORE_SCHEMA_VERSION, ScoreDto};
+use crate::domain::difficulty::density::compute_difficulty;
 use crate::domain::importers::musicxml::{ImportContext, MusicXMLConverter, MusicXMLParser};
 use crate::ports::importers::{ImportMetadata, ImportStatistics};
 use serde::{Deserialize, Serialize};
@@ -64,7 +65,10 @@ pub fn parse_musicxml(xml_content: &str) -> Result<JsValue, JsValue> {
     let composer = doc.composer.clone();
 
     // Convert MusicXMLDocument to domain Score
-    let score = MusicXMLConverter::convert(doc, &mut context).map_err(import_error_to_js)?;
+    let mut score = MusicXMLConverter::convert(doc, &mut context).map_err(import_error_to_js)?;
+
+    // Feature 055: Compute difficulty rating from note density
+    score.difficulty_rating = compute_difficulty(&score);
 
     // Extract warnings and counts from context
     let skipped_element_count = context.skipped_element_count();

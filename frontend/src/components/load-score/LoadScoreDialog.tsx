@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { PRELOADED_SCORES, PRELOADED_CATALOG } from '../../data/preloadedScores';
+import { PRELOADED_SCORES, PRELOADED_CATALOG, PRELOADED_DIFFICULTY_LEVELS } from '../../data/preloadedScores';
 import type { PreloadedScore } from '../../data/preloadedScores';
 import type { ImportResult } from '../../services/import/MusicXMLImportService';
 import { useImportMusicXML } from '../../hooks/useImportMusicXML';
@@ -151,6 +151,7 @@ export function LoadScoreDialog({
             selectedId={selectedId}
             disabled={isBusy}
             onSelect={loadPresetScore}
+            difficultyLevels={PRELOADED_DIFFICULTY_LEVELS}
           />
           {/* Feature 001: Scales group — collapsible subfolder group */}
           {PRELOADED_CATALOG.groups.map((group) => (
@@ -160,6 +161,7 @@ export function LoadScoreDialog({
               selectedId={selectedId}
               disabled={isBusy}
               onSelect={loadPresetScore}
+              difficultyLevels={PRELOADED_DIFFICULTY_LEVELS}
             />
           ))}
           {/* Feature 045: User-uploaded scores below built-in catalogue */}

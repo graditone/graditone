@@ -1,4 +1,5 @@
 use crate::domain::{
+    difficulty::DifficultyRating,
     errors::DomainError,
     events::{
         global::GlobalStructuralEvent, tempo::TempoEvent, time_signature::TimeSignatureEvent,
@@ -46,6 +47,9 @@ pub struct Score {
     /// Octave-shift regions (8va/8vb brackets) per staff
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub octave_shift_regions: Vec<OctaveShiftRegion>,
+    /// Computed difficulty rating based on note density (Feature 055)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub difficulty_rating: Option<DifficultyRating>,
 }
 
 impl Score {
@@ -60,6 +64,7 @@ impl Score {
             pickup_ticks: 0,
             measure_end_ticks: Vec::new(),
             octave_shift_regions: Vec::new(),
+            difficulty_rating: None,
         };
 
         // Add default tempo (120 BPM) at tick 0

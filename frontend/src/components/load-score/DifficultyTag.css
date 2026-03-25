@@ -1,0 +1,28 @@
+/* Feature 055: Difficulty badge shown next to score entries */
+
+.difficulty-tag {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+.difficulty-tag--easy {
+  background: rgba(76, 175, 80, 0.15);
+  color: #2e7d32;
+}
+
+.difficulty-tag--medium {
+  background: rgba(255, 152, 0, 0.15);
+  color: #e65100;
+}
+
+.difficulty-tag--hard {
+  background: rgba(244, 67, 54, 0.15);
+  color: #c62828;
+}
