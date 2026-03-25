@@ -54,6 +54,12 @@ export interface ResultsOverlayProps {
   replayHighlightedNoteIds: ReadonlySet<string>;
   setIsReplaying: React.Dispatch<React.SetStateAction<boolean>>;
   setReplayHighlightedNoteIds: React.Dispatch<React.SetStateAction<ReadonlySet<string>>>;
+  /** Feature 056: Save callback — saves the current practice to storage. */
+  onSave?: () => void;
+  /** Feature 056: Whether the current practice has been saved this session. */
+  isSaved?: boolean;
+  /** Feature 056: Error message if save failed (e.g. storage full). */
+  saveError?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,6 +80,9 @@ export function ResultsOverlay({
   isReplaying,
   setIsReplaying,
   setReplayHighlightedNoteIds,
+  onSave,
+  isSaved,
+  saveError,
 }: ResultsOverlayProps) {
   // ─── Replay internals ────────────────────────────────────────────────────────
   const replayTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -176,7 +185,11 @@ export function ResultsOverlay({
 
   // ─── Results computation ───────────────────────────────────────────────────
   const practiceReport = useMemo(() => {
-    const results = practiceState.noteResults;
+    // Use engine state results when available (live practice);
+    // fall back to loaded performanceRecord (saved practice loaded from storage).
+    const results = practiceState.noteResults.length > 0
+      ? practiceState.noteResults
+      : performanceRecord?.noteResults ?? [];
     if (results.length === 0) return null;
 
     const totalNotes = results.length;
@@ -208,7 +221,7 @@ export function ResultsOverlay({
       scoreTimeMs,
       results,
     };
-  }, [practiceState.noteResults]);
+  }, [practiceState.noteResults, performanceRecord]);
 
   const partialReport = useMemo(() => {
     if (!partialPerformanceRecord) return null;
@@ -254,8 +267,10 @@ export function ResultsOverlay({
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
-  // Complete results overlay
-  const completeOverlay = practiceState.mode === 'complete' && resultsOverlayVisible && practiceReport && (
+  // Complete results overlay — shown after practice completion OR when loading a saved complete practice
+  const showComplete = resultsOverlayVisible && practiceReport &&
+    (practiceState.mode === 'complete' || (practiceState.mode === 'inactive' && !!performanceRecord));
+  const completeOverlay = showComplete && (
     <>
       <div className="practice-results__backdrop" />
       <div
@@ -509,7 +524,7 @@ export function ResultsOverlay({
           );
         })()}
 
-        {/* Replay / Stop button */}
+        {/* Replay / Stop / Save buttons */}
         {performanceRecord && (
           <div className="practice-results__replay-row">
             <button
@@ -535,6 +550,19 @@ export function ResultsOverlay({
               >
                 ■ Stop
               </button>
+            )}
+            {onSave && (
+              <button
+                className={`practice-results__save-btn${isSaved ? ' practice-results__save-btn--saved' : ''}`}
+                onClick={onSave}
+                disabled={isSaved}
+                aria-label={isSaved ? 'Practice saved' : 'Save practice'}
+              >
+                {isSaved ? '✓ Saved' : '💾 Save'}
+              </button>
+            )}
+            {saveError && (
+              <span className="practice-results__save-error" role="alert">{saveError}</span>
             )}
           </div>
         )}
@@ -565,8 +593,8 @@ export function ResultsOverlay({
     </>
   );
 
-  // Partial results overlay (shown when Stop is pressed mid-session)
-  const partialOverlay = partialReport && resultsOverlayVisible && practiceState.mode !== 'complete' && (
+  // Partial results overlay (shown when Stop is pressed mid-session, or loading a saved partial practice)
+  const partialOverlay = partialReport && resultsOverlayVisible && !showComplete && (
     <>
       <div className="practice-results__backdrop" />
       <div

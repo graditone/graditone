@@ -1,0 +1,149 @@
+/* SavedPracticeList.css — "Saved Practices" collapsible section
+ * Feature 056: Save and Load Practices
+ * Uses --dialog-* tokens (App.css) — adapts to all landing themes.
+ * Follows UserScoreList.css pattern.
+ */
+
+/* ── Section wrapper (collapsible) ──────────────────────────────────────── */
+.saved-practice-list {
+  border-top: 1px solid var(--dialog-border);
+  padding-top: 0.5rem;
+  flex-shrink: 0;
+}
+
+.saved-practice-list__summary {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dialog-subtext);
+  margin: 0;
+  padding: 0 1rem 0.25rem;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.saved-practice-list__summary::-webkit-details-marker {
+  display: none;
+}
+
+.saved-practice-list__summary::before {
+  content: '▸ ';
+  display: inline-block;
+  transition: transform 0.15s;
+}
+
+.saved-practice-list[open] > .saved-practice-list__summary::before {
+  transform: rotate(90deg);
+}
+
+/* ── Item list ──────────────────────────────────────────────────────────── */
+.saved-practice-list__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Each row: left button grows, right × is subtle */
+.saved-practice-item {
+  display: flex;
+  align-items: stretch;
+  padding: 0.125rem 1rem;
+  gap: 0.25rem;
+}
+
+/* ── Practice button — same pill shape as catalogue entries ─────────────── */
+.saved-practice-item__btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  font-family: inherit;
+  color: var(--dialog-text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.saved-practice-item__btn:hover:not(:disabled) {
+  background: var(--dialog-surface);
+}
+
+.saved-practice-item__btn:active:not(:disabled) {
+  background: var(--dialog-surface-hover);
+}
+
+.saved-practice-item__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.saved-practice-item__name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  color: inherit;
+}
+
+.saved-practice-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.saved-practice-item__date {
+  font-size: 0.7rem;
+  color: var(--dialog-subtext);
+}
+
+/* ── Partial badge ──────────────────────────────────────────────────────── */
+.saved-practice-item__badge--partial {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  background: rgba(255, 167, 38, 0.2);
+  color: #f57c00;
+}
+
+/* ── Delete button ──────────────────────────────────────────────────────── */
+.saved-practice-item__delete-btn {
+  flex-shrink: 0;
+  align-self: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--dialog-surface-active);
+  transition: color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.saved-practice-item__delete-btn:hover:not(:disabled) {
+  color: var(--dialog-danger-text);
+  background: var(--dialog-danger-bg);
+}
+
+.saved-practice-item__delete-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}

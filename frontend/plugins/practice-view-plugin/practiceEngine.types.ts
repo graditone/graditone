@@ -6,7 +6,7 @@
  * No side effects, no coordinate calculations (Principle VI).
  */
 
-import type { PluginPracticeNoteEntry } from '../../src/plugin-api/index';
+import type { PluginPracticeNoteEntry } from '../../src/plugin-api/types';
 
 // ---------------------------------------------------------------------------
 // Re-export — PracticeNoteEntry is a direct alias for the v6 plugin API type
