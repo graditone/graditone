@@ -11,10 +11,11 @@ import {
   removeUserScore as indexRemove,
   type UserScore,
 } from '../services/userScoreIndex';
+import type { DifficultyLevel } from '../types/score';
 
 export interface UseUserScoresResult {
   userScores: UserScore[];
-  addUserScore: (id: string, rawDisplayName: string) => { entry: UserScore; evictedIds: string[] };
+  addUserScore: (id: string, rawDisplayName: string, difficulty_level?: DifficultyLevel) => { entry: UserScore; evictedIds: string[] };
   removeUserScore: (id: string) => void;
   refreshUserScores: () => void;
 }
@@ -30,8 +31,8 @@ export function useUserScores(): UseUserScoresResult {
   );
 
   const addUserScore = useCallback(
-    (id: string, rawDisplayName: string): { entry: UserScore; evictedIds: string[] } => {
-      const result = indexAdd(id, rawDisplayName);
+    (id: string, rawDisplayName: string, difficulty_level?: DifficultyLevel): { entry: UserScore; evictedIds: string[] } => {
+      const result = indexAdd(id, rawDisplayName, difficulty_level);
       setUserScores(listUserScores());
       return result;
     },

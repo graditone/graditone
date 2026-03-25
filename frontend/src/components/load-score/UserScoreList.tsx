@@ -6,6 +6,7 @@
  * Returns null when the scores list is empty.
  */
 import type { UserScore } from '../../services/userScoreIndex';
+import { DifficultyTag } from './DifficultyTag';
 import './UserScoreList.css';
 
 interface UserScoreListProps {
@@ -50,6 +51,7 @@ export function UserScoreList({
               >
                 <span className="user-score-item__name">{score.displayName}</span>
                 <span className="user-score-item__date">{uploadedDate}</span>
+                <DifficultyTag level={score.difficulty_level} />
               </button>
               <button
                 className="user-score-item__delete-btn"

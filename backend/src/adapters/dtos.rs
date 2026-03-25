@@ -2,6 +2,7 @@
 // These DTOs add computed fields like active_clef to domain entities
 
 use crate::domain::{
+    difficulty::DifficultyRating,
     events::{global::GlobalStructuralEvent, staff::StaffStructuralEvent},
     instrument::Instrument,
     repeat::{RepeatBarline, VoltaBracket},
@@ -74,7 +75,24 @@ impl From<&Instrument> for InstrumentDto {
 /// v7: volta_brackets added to ScoreDto (047-repeat-volta-playback)
 /// v8: octave_shift_regions added to ScoreDto (050-fix-layout-preloaded-scores)
 /// v9: fingering annotations added to Note (fingering-layout)
-pub const SCORE_SCHEMA_VERSION: u32 = 9;
+/// v10: difficulty_rating added to ScoreDto (055-score-difficulty-density)
+pub const SCORE_SCHEMA_VERSION: u32 = 10;
+
+/// DTO for difficulty rating serialization (Feature 055)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DifficultyRatingDto {
+    pub density_rate: f64,
+    pub level: u8,
+}
+
+impl From<&DifficultyRating> for DifficultyRatingDto {
+    fn from(rating: &DifficultyRating) -> Self {
+        Self {
+            density_rate: rating.density_rate,
+            level: rating.level as u8,
+        }
+    }
+}
 
 /// DTO for Score containing InstrumentDtos with schema versioning
 #[derive(Debug, Serialize, Deserialize)]
@@ -107,6 +125,9 @@ pub struct ScoreDto {
     /// Octave-shift regions (8va/8vb brackets) per staff (Feature 050)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub octave_shift_regions: Vec<OctaveShiftRegion>,
+    /// Computed difficulty rating based on note density (Feature 055)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub difficulty_rating: Option<DifficultyRatingDto>,
 }
 
 impl From<&Score> for ScoreDto {
@@ -121,6 +142,10 @@ impl From<&Score> for ScoreDto {
             pickup_ticks: score.pickup_ticks,
             measure_end_ticks: score.measure_end_ticks.clone(),
             octave_shift_regions: score.octave_shift_regions.clone(),
+            difficulty_rating: score
+                .difficulty_rating
+                .as_ref()
+                .map(DifficultyRatingDto::from),
         }
     }
 }

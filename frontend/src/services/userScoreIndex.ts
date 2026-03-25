@@ -6,6 +6,7 @@
  * Full Score data lives separately in IndexedDB (via ScoreCache / saveScoreToIndexedDB).
  * All functions are synchronous over localStorage.
  */
+import type { DifficultyLevel } from '../types/score';
 
 /** Lightweight display metadata for a user-uploaded score. */
 export interface UserScore {
@@ -19,6 +20,8 @@ export interface UserScore {
   displayName: string;
   /** ISO 8601 timestamp of when the score was uploaded. */
   uploadedAt: string;
+  /** Difficulty level computed from note density (Feature 055). Absent for legacy entries. */
+  difficulty_level?: DifficultyLevel;
 }
 
 /** localStorage key for the JSON-serialised UserScore[] index. */
@@ -69,13 +72,18 @@ export function listUserScores(): UserScore[] {
  * @param rawDisplayName - Proposed display name (work_title or filename).
  * @returns Object with the new entry and any evicted score IDs.
  */
-export function addUserScore(id: string, rawDisplayName: string): { entry: UserScore; evictedIds: string[] } {
+export function addUserScore(
+  id: string,
+  rawDisplayName: string,
+  difficulty_level?: DifficultyLevel,
+): { entry: UserScore; evictedIds: string[] } {
   const index = readIndex();
   const displayName = deduplicateName(rawDisplayName, index);
   const entry: UserScore = {
     id,
     displayName,
     uploadedAt: new Date().toISOString(),
+    ...(difficulty_level !== undefined && { difficulty_level }),
   };
   // Insert at head (newest first)
   index.unshift(entry);
@@ -97,6 +105,19 @@ export function addUserScore(id: string, rawDisplayName: string): { entry: UserS
  */
 export function removeUserScore(id: string): void {
   const index = readIndex().filter((s) => s.id !== id);
+  writeIndex(index);
+}
+
+/**
+ * Update the difficulty_level for an existing user score entry.
+ * Used when a stale-schema score is re-parsed and gains a difficulty rating.
+ * No-op if the id is not found.
+ */
+export function updateUserScoreDifficulty(id: string, level: DifficultyLevel): void {
+  const index = readIndex();
+  const entry = index.find((s) => s.id === id);
+  if (!entry) return;
+  entry.difficulty_level = level;
   writeIndex(index);
 }
 
