@@ -47,3 +47,8 @@ export { PLUGIN_API_VERSION } from './types';
 // Utility classes exposed to plugins (no API version bump — additive)
 export { ChordDetector } from '../utils/chordDetector';
 export type { ChordDetectorOptions, ChordResult } from '../utils/chordDetector';
+
+// Feature 056: Saved practice types and storage services
+export type { ScoreRef, SavedPractice, SavedPerformanceData, SavedPracticeIndexEntry } from '../services/savedPractice.types';
+export { savePracticeToIndexedDB, generatePracticeName, loadPracticeFromIndexedDB, deletePracticeFromIndexedDB } from '../services/savedPracticeStorage';
+export { addSavedPracticeIndex, listSavedPractices, removeSavedPracticeIndex } from '../services/savedPracticeIndex';

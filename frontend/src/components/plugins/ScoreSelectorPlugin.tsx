@@ -18,6 +18,7 @@
 import { useRef, useMemo } from 'react';
 import type { PluginScoreSelectorProps } from '../../plugin-api/types';
 import { UserScoreList } from '../load-score/UserScoreList';
+import { SavedPracticeList } from '../load-score/SavedPracticeList';
 import { ScoreGroupList } from '../load-score/ScoreGroupList';
 import { DifficultyTag } from '../load-score/DifficultyTag';
 import { PRELOADED_CATALOG, PRELOADED_DIFFICULTY_LEVELS } from '../../data/preloadedScores';
@@ -33,6 +34,9 @@ export function ScoreSelectorPlugin({
   onLoadFile,
   onCancel,
   onSelectUserScore,
+  savedPractices,
+  onSelectSavedPractice,
+  onDeleteSavedPractice,
 }: PluginScoreSelectorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { userScores, removeUserScore } = useUserScores();
@@ -135,6 +139,15 @@ export function ScoreSelectorPlugin({
                     removeUserScore(id);
                     deleteScoreFromIndexedDB(id).catch(() => {});
                   }}
+                />
+              )}
+
+              {/* Feature 056: Saved Practices section */}
+              {savedPractices && savedPractices.length > 0 && onSelectSavedPractice && onDeleteSavedPractice && (
+                <SavedPracticeList
+                  practices={savedPractices}
+                  onSelect={onSelectSavedPractice}
+                  onDelete={onDeleteSavedPractice}
                 />
               )}
             </div>

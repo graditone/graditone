@@ -806,6 +806,53 @@
   background: #1b5e20;
 }
 
+/* ── Save button (056-save-load-practices) ─────────────────────────────────── */
+
+.practice-results__save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #6a1b9a;
+  color: #fff;
+  transition: background 0.15s ease;
+}
+
+.practice-results__save-btn:hover {
+  background: #4a148c;
+}
+
+.practice-results__save-btn:active {
+  background: #38006b;
+}
+
+.practice-results__save-btn--saved {
+  background: #7cb342;
+  cursor: default;
+}
+
+.practice-results__save-btn--saved:hover {
+  background: #7cb342;
+}
+
+.practice-results__save-btn:disabled {
+  opacity: 0.85;
+  cursor: default;
+}
+
+.practice-results__save-error {
+  font-size: 0.75rem;
+  color: #e53935;
+  white-space: nowrap;
+}
+
 /* ── Loop count slider (multi-loop practice) ───────────────────────────────── */
 
 .practice-results__loop-slider-row {

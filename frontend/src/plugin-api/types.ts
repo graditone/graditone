@@ -391,6 +391,19 @@ export interface PluginScoreSelectorProps {
    * User scores and delete are managed internally by the host component.
    */
   onSelectUserScore?: (id: string) => void;
+  /**
+   * Feature 056: Saved practices to show in the "Saved Practices" section.
+   * Lightweight index entries sorted newest-first.
+   */
+  savedPractices?: ReadonlyArray<import('../services/savedPractice.types').SavedPracticeIndexEntry>;
+  /**
+   * Feature 056: Called when the user selects a saved practice to load.
+   */
+  onSelectSavedPractice?: (practice: import('../services/savedPractice.types').SavedPracticeIndexEntry) => void;
+  /**
+   * Feature 056: Called when the user deletes a saved practice.
+   */
+  onDeleteSavedPractice?: (id: string) => void;
 }
 
 // ---------------------------------------------------------------------------

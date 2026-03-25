@@ -7,7 +7,9 @@ import { PreloadedScoreList } from './PreloadedScoreList';
 import { ScoreGroupList } from './ScoreGroupList';
 import { UserScoreList } from './UserScoreList';
 import type { UserScore } from '../../services/userScoreIndex';
+import type { SavedPracticeIndexEntry } from '../../services/savedPractice.types';
 import { LoadNewScoreButton } from './LoadNewScoreButton';
+import { SavedPracticeList } from './SavedPracticeList';
 import './LoadScoreDialog.css';
 
 interface LoadScoreDialogProps {
@@ -24,6 +26,12 @@ interface LoadScoreDialogProps {
   onSelectUserScore?: (id: string) => void;
   /** Feature 045: Called when user deletes one of their uploaded scores. */
   onDeleteUserScore?: (id: string) => void;
+  /** Feature 056: Saved practices to show in the "Saved Practices" section. */
+  savedPractices?: ReadonlyArray<SavedPracticeIndexEntry>;
+  /** Feature 056: Called when user selects a saved practice to load. */
+  onSelectSavedPractice?: (practice: SavedPracticeIndexEntry) => void;
+  /** Feature 056: Called when user deletes a saved practice. */
+  onDeleteSavedPractice?: (id: string) => void;
 }
 
 /**
@@ -41,6 +49,9 @@ export function LoadScoreDialog({
   userScores = [],
   onSelectUserScore,
   onDeleteUserScore,
+  savedPractices = [],
+  onSelectSavedPractice,
+  onDeleteSavedPractice,
 }: LoadScoreDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -172,6 +183,15 @@ export function LoadScoreDialog({
             onSelect={(score) => onSelectUserScore?.(score.id)}
             onDelete={(id) => onDeleteUserScore?.(id)}
           />
+          {/* Feature 056: Saved Practices section */}
+          {savedPractices.length > 0 && onSelectSavedPractice && onDeleteSavedPractice && (
+            <SavedPracticeList
+              practices={savedPractices}
+              disabled={isBusy}
+              onSelect={onSelectSavedPractice}
+              onDelete={onDeleteSavedPractice}
+            />
+          )}
         </section>
 
         {/* Right panel — file picker */}

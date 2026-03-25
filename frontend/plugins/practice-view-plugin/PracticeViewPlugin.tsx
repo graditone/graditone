@@ -26,8 +26,8 @@ import type {
   PluginPlaybackStatus,
   MetronomeState,
   MetronomeSubdivision,
-  PluginPracticeNoteEntry,
 } from '../../src/plugin-api/index';
+import type { PluginPracticeNoteEntry } from '../../src/plugin-api/types';
 import { PracticeToolbar } from './practiceToolbar';
 import { reduce } from './practiceEngine';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
@@ -39,6 +39,9 @@ import { usePracticeHighlights } from './usePracticeHighlights';
 import { usePhantomTempo } from './usePhantomTempo';
 import { useHoldProgress } from './useHoldProgress';
 import { ResultsOverlay } from './ResultsOverlay';
+import type { ScoreRef, SavedPractice, SavedPerformanceData, SavedPracticeIndexEntry } from '../../src/plugin-api/index';
+import { savePracticeToIndexedDB, generatePracticeName, loadPracticeFromIndexedDB, deletePracticeFromIndexedDB } from '../../src/plugin-api/index';
+import { addSavedPracticeIndex, listSavedPractices, removeSavedPracticeIndex } from '../../src/plugin-api/index';
 import './PracticeViewPlugin.css';
 
 // ---------------------------------------------------------------------------
@@ -173,6 +176,78 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // ─── Partial results on Stop (US7, 053-fix-lacandeur-practice) ─────────────
   const [partialPerformanceRecord, setPartialPerformanceRecord] = useState<PartialPerformanceRecord | null>(null);
 
+  // ─── Feature 056: Saved practice state ─────────────────────────────────────
+  const [isSaved, setIsSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const loadedScoreRefRef = useRef<ScoreRef | null>(null);
+  const [savedPractices, setSavedPractices] = useState<SavedPracticeIndexEntry[]>(() => listSavedPractices());
+  // Pending saved practice to restore once the score finishes loading
+  const pendingSavedPracticeRef = useRef<SavedPractice | null>(null);
+
+  // Feature 056: Apply pending saved practice once the score is ready.
+  // This runs in a useEffect so the state updates happen in the same React
+  // render cycle as the playerState transition to 'ready', avoiding the race
+  // where setResultsOverlayVisible(true) fires before the score view mounts.
+  useEffect(() => {
+    const saved = pendingSavedPracticeRef.current;
+    if (!saved || playerState.status !== 'ready') return;
+    pendingSavedPracticeRef.current = null;
+
+    setSelectedStaffIndex(saved.staffIndex);
+    setTempoMultiplier(saved.tempoMultiplier);
+    context.scorePlayer.setTempoMultiplier(saved.tempoMultiplier);
+    setLoopCount(saved.loopCount);
+
+    // Re-extract fresh notes from the newly loaded score so that noteIds
+    // (opaque DOM IDs) are valid for the current rendering. The saved notes
+    // have stale noteIds from the original session.
+    let freshNotes: PluginPracticeNoteEntry[] = saved.performanceData.notes as PluginPracticeNoteEntry[];
+    const staffIndex = saved.staffIndex;
+    if (staffIndex === -1) {
+      // Both Clefs: merge from all staves
+      const all: PluginPracticeNoteEntry[] = [];
+      for (let s = 0; s < playerState.staffCount; s++) {
+        const p = context.scorePlayer.extractPracticeNotes(s);
+        if (p) all.push(...(p.notes as PluginPracticeNoteEntry[]));
+      }
+      freshNotes = mergePracticeNotesByTick(all);
+    } else {
+      const pitches = context.scorePlayer.extractPracticeNotes(staffIndex);
+      if (pitches && pitches.notes.length > 0) {
+        freshNotes = pitches.notes as PluginPracticeNoteEntry[];
+      }
+    }
+
+    // Build the notes array with fresh noteIds, falling back to saved entries
+    // for any index beyond what was re-extracted (shouldn't happen for same score).
+    const notesWithFreshIds = saved.performanceData.notes.map((savedNote, i) =>
+      i < freshNotes.length ? freshNotes[i] : savedNote,
+    );
+
+    if (saved.completionStatus === 'complete') {
+      setPerformanceRecord({
+        notes: notesWithFreshIds,
+        noteResults: saved.performanceData.noteResults,
+        wrongNoteEvents: saved.performanceData.wrongNoteEvents,
+        bpmAtCompletion: saved.performanceData.bpmAtCompletion,
+      });
+      setPartialPerformanceRecord(null);
+    } else {
+      setPartialPerformanceRecord({
+        notes: notesWithFreshIds,
+        noteResults: saved.performanceData.noteResults,
+        wrongNoteEvents: saved.performanceData.wrongNoteEvents,
+        bpmAtCompletion: saved.performanceData.bpmAtCompletion,
+        stoppedAtIndex: saved.performanceData.stoppedAtIndex ?? 0,
+        totalNoteCount: saved.performanceData.totalNoteCount ?? saved.performanceData.notes.length,
+      });
+      setPerformanceRecord(null);
+    }
+    setResultsOverlayVisible(true);
+    setIsSaved(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerState.status]);
+
   // Practice session start time (ms since epoch) for timing analysis
   const practiceStartTimeRef = useRef(0);
 
@@ -296,6 +371,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // Select a catalogue score
   const handleSelectScore = useCallback(
     (catalogueId: string) => {
+      loadedScoreRefRef.current = { type: 'preloaded', id: catalogueId };
       context.scorePlayer.loadScore({ kind: 'catalogue', catalogueId });
     },
     [context.scorePlayer],
@@ -304,6 +380,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // Load a file
   const handleLoadFile = useCallback(
     (file: File) => {
+      loadedScoreRefRef.current = null; // File loads can't be reliably reloaded
       context.scorePlayer.loadScore({ kind: 'file', file });
     },
     [context.scorePlayer],
@@ -375,6 +452,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // Practice toggle (T031, T033, T034)
   const handlePracticeToggle = useCallback(() => {
+    setIsSaved(false); // Reset save state for new practice session
+    setSaveError(null);
     const ps = practiceStateRef.current;
 
     if (ps.mode === 'active' || ps.mode === 'waiting' || ps.mode === 'holding') {
@@ -526,6 +605,111 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handlePracticeToggle, loopCount]);
 
+  // ─── Feature 056: Save practice handler ──────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    const scoreRef = loadedScoreRefRef.current;
+    if (!scoreRef) return;
+
+    const isComplete = practiceState.mode === 'complete' && !!performanceRecord;
+    const isPartial = !!partialPerformanceRecord;
+    if (!isComplete && !isPartial) return;
+
+    const now = new Date();
+    const id = crypto.randomUUID();
+    const scoreTitle = playerState.title ?? 'Untitled';
+    const lr = loopRegion
+      ? { startTick: loopRegion.startTick, endTick: loopRegion.endTick }
+      : null;
+
+    const performanceData: SavedPerformanceData = isComplete
+      ? {
+          notes: [...performanceRecord!.notes],
+          noteResults: [...performanceRecord!.noteResults],
+          wrongNoteEvents: [...performanceRecord!.wrongNoteEvents],
+          bpmAtCompletion: performanceRecord!.bpmAtCompletion,
+          stoppedAtIndex: null,
+          totalNoteCount: null,
+        }
+      : {
+          notes: [...partialPerformanceRecord!.notes],
+          noteResults: [...partialPerformanceRecord!.noteResults],
+          wrongNoteEvents: [...partialPerformanceRecord!.wrongNoteEvents],
+          bpmAtCompletion: partialPerformanceRecord!.bpmAtCompletion,
+          stoppedAtIndex: partialPerformanceRecord!.stoppedAtIndex,
+          totalNoteCount: partialPerformanceRecord!.totalNoteCount,
+        };
+
+    const practice: SavedPractice = {
+      id,
+      name: generatePracticeName(scoreTitle, selectedStaffIndex, lr, now),
+      savedAt: now.toISOString(),
+      scoreRef,
+      scoreTitle,
+      staffIndex: selectedStaffIndex,
+      loopRegion: lr,
+      tempoMultiplier,
+      loopCount,
+      completionStatus: isComplete ? 'complete' : 'partial',
+      performanceData,
+    };
+
+    try {
+      await savePracticeToIndexedDB(practice);
+      const { evictedIds } = addSavedPracticeIndex({
+        id,
+        name: practice.name,
+        savedAt: practice.savedAt,
+        completionStatus: practice.completionStatus,
+        scoreTitle,
+      });
+      // Clean up evicted entries from IndexedDB
+      for (const evictedId of evictedIds) {
+        await deletePracticeFromIndexedDB(evictedId);
+      }
+      setIsSaved(true);
+      setSaveError(null);
+      setSavedPractices(listSavedPractices());
+    } catch (e) {
+      console.error('[PracticeViewPlugin] Failed to save practice:', e);
+      const isQuota = e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22);
+      setSaveError(isQuota ? 'Storage full — delete some saved practices and try again.' : 'Failed to save practice.');
+    }
+  }, [
+    practiceState.mode, performanceRecord, partialPerformanceRecord,
+    playerState.title, loopRegion, selectedStaffIndex,
+    tempoMultiplier, loopCount,
+  ]);
+
+  // ─── Feature 056: Delete saved practice handler ─────────────────────────────
+  const handleDeleteSavedPractice = useCallback(async (practiceId: string) => {
+    removeSavedPracticeIndex(practiceId);
+    await deletePracticeFromIndexedDB(practiceId);
+    setSavedPractices(listSavedPractices());
+  }, []);
+
+  // ─── Feature 056: Load saved practice handler ──────────────────────────────
+  const handleSelectSavedPractice = useCallback(async (entry: SavedPracticeIndexEntry) => {
+    const saved = await loadPracticeFromIndexedDB(entry.id);
+    if (!saved) {
+      console.warn('[PracticeViewPlugin] Saved practice not found in IndexedDB:', entry.id);
+      return;
+    }
+
+    // Track score ref for potential re-save
+    loadedScoreRefRef.current = saved.scoreRef;
+
+    // Store the saved practice for the useEffect to apply once the score is ready
+    pendingSavedPracticeRef.current = saved;
+
+    // Load the referenced score — the useEffect watching playerState.status
+    // will restore settings and show the results overlay when status becomes 'ready'.
+    if (saved.scoreRef.type === 'preloaded') {
+      context.scorePlayer.loadScore({ kind: 'catalogue', catalogueId: saved.scoreRef.id });
+    } else {
+      context.scorePlayer.loadScore({ kind: 'userScore', scoreId: saved.scoreRef.id });
+    }
+  }, [context.scorePlayer]);
+
   // ─── Highlight computation (extracted hook) ─────────────────────────────────
   const {
     targetNoteIds, confirmedNoteIds,
@@ -560,15 +744,19 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           onLoadFile={handleLoadFile}
           onCancel={handleSelectorCancel}
           onSelectUserScore={(scoreId) => {
+            loadedScoreRefRef.current = { type: 'user', id: scoreId };
             context.scorePlayer.loadScore({ kind: 'userScore', scoreId });
           }}
+          savedPractices={savedPractices}
+          onSelectSavedPractice={handleSelectSavedPractice}
+          onDeleteSavedPractice={handleDeleteSavedPractice}
         />
       </div>
     );
   }
 
   return (
-    <div className={`practice-plugin${practiceActive ? ' practice-plugin--phantom' : ''}${(practiceState.mode === 'complete' && resultsOverlayVisible) || (partialPerformanceRecord && resultsOverlayVisible) ? ' practice-plugin--results' : ''}`}>
+    <div className={`practice-plugin${practiceActive ? ' practice-plugin--phantom' : ''}${((practiceState.mode === 'complete' || (practiceState.mode === 'inactive' && performanceRecord)) && resultsOverlayVisible) || (partialPerformanceRecord && resultsOverlayVisible) ? ' practice-plugin--results' : ''}`}>
       {/* Toolbar — top */}
       <PracticeToolbar
         scoreTitle={playerState.title}
@@ -688,6 +876,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         replayHighlightedNoteIds={replayHighlightedNoteIds}
         setIsReplaying={setIsReplaying}
         setReplayHighlightedNoteIds={setReplayHighlightedNoteIds}
+        onSave={loadedScoreRefRef.current ? handleSave : undefined}
+        isSaved={isSaved}
+        saveError={saveError}
       />
     </div>
   );
