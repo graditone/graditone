@@ -120,6 +120,12 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - N/A (pure frontend refactor) (054-refactor-practice-plugin)
 - Rust (stable) — backend computation; TypeScript — frontend display + wasm-bindgen (WASM/JS interop); React 18 + Vitest (frontend); Cargo (Rust testing) (055-score-difficulty-density)
 - IndexedDB (`graditone-db`, `scores` store) via `ScoreCache`; `UserScore` index in `localStorage` (055-score-difficulty-density)
+- TypeScript 5.x (frontend), React 18+ + React, Vitest (testing), Vite (bundler) (056-save-load-practices)
+- IndexedDB (`graditone-db`, new `practices` object store) + localStorage (lightweight index) (056-save-load-practices)
+- Rust (latest stable), Cargo workspace + quick-xml (streaming XML parser), zip (MXL decompression), wasm-bindgen (WASM interop) (057-refactor-musicxml-importer)
+- N/A (stateless import pipeline — file in, domain Score out) (057-refactor-musicxml-importer)
+- TypeScript 5.x, React 18+ (class component) + React, vitest, @testing-library/reac (058-refactor-svg-renderer)
+- N/A (frontend-only refactoring) (058-refactor-svg-renderer)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -140,9 +146,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
-- 055-score-difficulty-density: Added Rust (stable) — backend computation; TypeScript — frontend display + wasm-bindgen (WASM/JS interop); React 18 + Vitest (frontend); Cargo (Rust testing)
-- 054-refactor-practice-plugin: Added TypeScript 5, React 18 + React hooks (useState, useEffect, useCallback, useReducer, useRef, useMemo), ChordDetector, PluginContext API
-- 054-refactor-practice-plugin: Added TypeScript 5, React 18 + React hooks (useState, useEffect, useCallback, useReducer, useRef, useMemo), ChordDetector, PluginContext API
+- 058-refactor-svg-renderer: Added TypeScript 5.x, React 18+ (class component) + React, vitest, @testing-library/reac
+- 057-refactor-musicxml-importer: Added Rust (latest stable), Cargo workspace + quick-xml (streaming XML parser), zip (MXL decompression), wasm-bindgen (WASM interop)
+- 056-save-load-practices: Added TypeScript 5.x (frontend), React 18+ + React, Vitest (testing), Vite (bundler)
 
 
 <!-- MANUAL ADDITIONS START -->

@@ -215,7 +215,7 @@ describe('[T029] BUG: highlighted note fill must be amber #F5A340, not blue #4A9
 
 describe('[T033] Brace renders as SVG path, Bracket renders as SVG lines', () => {
   it('renderBracket with Brace type produces an SVG <path> element spanning topY→bottomY', async () => {
-    const { LayoutRenderer } = await import('./LayoutRenderer');
+    const { RenderingPipeline } = await import('./renderer/RenderingPipeline');
 
     const minimalStaffGroup = {
       instrument_id: 'piano',
@@ -243,12 +243,11 @@ describe('[T033] Brace renders as SVG path, Bracket renders as SVG lines', () =>
       glyphColor: '#000000',
     };
 
-    const receiver: any = { props: { config: minimalConfig } };
-    receiver.renderGlyph = LayoutRenderer.prototype.renderGlyph.bind(receiver);
+    const pipeline = new RenderingPipeline();
 
-    const bracketGroup = LayoutRenderer.prototype.renderBracket.call(
-      receiver,
-      minimalStaffGroup,
+    const bracketGroup = pipeline.renderBracket(
+      minimalStaffGroup as any,
+      minimalConfig as any,
     ) as SVGGElement | null;
 
     expect(bracketGroup).not.toBeNull();
@@ -260,7 +259,7 @@ describe('[T033] Brace renders as SVG path, Bracket renders as SVG lines', () =>
   });
 
   it('renderBracket with Bracket type produces SVG line primitives (no path)', async () => {
-    const { LayoutRenderer } = await import('./LayoutRenderer');
+    const { RenderingPipeline } = await import('./renderer/RenderingPipeline');
 
     const minimalStaffGroup = {
       instrument_id: 'piano',
@@ -288,12 +287,11 @@ describe('[T033] Brace renders as SVG path, Bracket renders as SVG lines', () =>
       glyphColor: '#000000',
     };
 
-    const receiver: any = { props: { config: minimalConfig } };
-    receiver.renderGlyph = LayoutRenderer.prototype.renderGlyph.bind(receiver);
+    const pipeline = new RenderingPipeline();
 
-    const bracketGroup = LayoutRenderer.prototype.renderBracket.call(
-      receiver,
-      minimalStaffGroup,
+    const bracketGroup = pipeline.renderBracket(
+      minimalStaffGroup as any,
+      minimalConfig as any,
     ) as SVGGElement | null;
 
     expect(bracketGroup).not.toBeNull();
@@ -319,7 +317,7 @@ describe('[T033] Brace renders as SVG path, Bracket renders as SVG lines', () =>
 
 describe('[T013] BUG: renderGlyphRun must emit transparent hit-rect overlay per notehead', () => {
   it('renderGlyphRun emits a <rect> with data-note-id, fill=transparent for each note glyph', async () => {
-    const { LayoutRenderer } = await import('./LayoutRenderer');
+    const { RenderingPipeline } = await import('./renderer/RenderingPipeline');
 
     // Minimal glyph run with one notehead glyph that has a source_reference and bounding_box
     const noteSourceRef = {
@@ -359,22 +357,14 @@ describe('[T013] BUG: renderGlyphRun must emit transparent hit-rect overlay per 
       glyphColor: '#000000',
     };
 
-    // Build receiver with all methods renderGlyphRun calls
-     
-    const receiver: any = {
-      props: {
-        config: minimalConfig,
-        sourceToNoteIdMap,
-        selectedNoteId: undefined,
-      },
-    };
-    receiver.renderGlyph = LayoutRenderer.prototype.renderGlyph.bind(receiver);
+    const pipeline = new RenderingPipeline();
 
     const systemIndex = 0;
-    const glyphRunGroup = LayoutRenderer.prototype.renderGlyphRun.call(
-      receiver,
-      minimalGlyphRun,
+    const glyphRunGroup = pipeline.renderGlyphRun(
+      minimalGlyphRun as any,
       systemIndex,
+      minimalConfig as any,
+      { sourceToNoteIdMap, selectedNoteId: undefined },
     ) as SVGGElement;
 
     expect(glyphRunGroup).not.toBeNull();
@@ -407,7 +397,7 @@ describe('[T013] BUG: renderGlyphRun must emit transparent hit-rect overlay per 
 
 describe('[T014] US2: hit-rect overlay width/height must be >= MIN_TOUCH_PX / renderScale', () => {
   it('small bounding_box (< 44px) gets clamped to MIN_TOUCH_PX (44) at renderScale=1', async () => {
-    const { LayoutRenderer } = await import('./LayoutRenderer');
+    const { RenderingPipeline } = await import('./renderer/RenderingPipeline');
 
     // Use a small glyph (10x10 — well below 44px minimum)
     const minimalGlyphRun = {
@@ -443,20 +433,13 @@ describe('[T014] US2: hit-rect overlay width/height must be >= MIN_TOUCH_PX / re
       glyphColor: '#000000',
     };
 
-     
-    const receiver: any = {
-      props: {
-        config: minimalConfig,
-        sourceToNoteIdMap,
-        selectedNoteId: undefined,
-      },
-    };
-    receiver.renderGlyph = LayoutRenderer.prototype.renderGlyph.bind(receiver);
+    const pipeline = new RenderingPipeline();
 
-    const glyphRunGroup = LayoutRenderer.prototype.renderGlyphRun.call(
-      receiver,
-      minimalGlyphRun,
+    const glyphRunGroup = pipeline.renderGlyphRun(
+      minimalGlyphRun as any,
       0,
+      minimalConfig as any,
+      { sourceToNoteIdMap, selectedNoteId: undefined },
     ) as SVGGElement;
 
     const hitRects = glyphRunGroup.querySelectorAll('rect[data-note-id]');
@@ -473,7 +456,7 @@ describe('[T014] US2: hit-rect overlay width/height must be >= MIN_TOUCH_PX / re
   });
 
   it('large bounding_box (> 44px) uses actual bounding_box dimensions', async () => {
-    const { LayoutRenderer } = await import('./LayoutRenderer');
+    const { RenderingPipeline } = await import('./renderer/RenderingPipeline');
 
     const minimalGlyphRun = {
       font_family: 'Bravura',
@@ -508,20 +491,13 @@ describe('[T014] US2: hit-rect overlay width/height must be >= MIN_TOUCH_PX / re
       glyphColor: '#000000',
     };
 
-     
-    const receiver: any = {
-      props: {
-        config: minimalConfig,
-        sourceToNoteIdMap,
-        selectedNoteId: undefined,
-      },
-    };
-    receiver.renderGlyph = LayoutRenderer.prototype.renderGlyph.bind(receiver);
+    const pipeline = new RenderingPipeline();
 
-    const glyphRunGroup = LayoutRenderer.prototype.renderGlyphRun.call(
-      receiver,
-      minimalGlyphRun,
+    const glyphRunGroup = pipeline.renderGlyphRun(
+      minimalGlyphRun as any,
       0,
+      minimalConfig as any,
+      { sourceToNoteIdMap, selectedNoteId: undefined },
     ) as SVGGElement;
 
     const hitRects = glyphRunGroup.querySelectorAll('rect[data-note-id]');
@@ -579,6 +555,7 @@ describe('[T022] BUG: STAFF_LINE_STROKE_WIDTH must be ≥ 1.5 for tablet readabi
 describe('[US3] Feature 053: deferred reapplyHighlights after renderSVG', () => {
   it('schedules a deferred reapplyHighlights after renderSVG and reapplyHighlights', async () => {
     const { LayoutRenderer } = await import('./LayoutRenderer');
+    const { HighlightController } = await import('./renderer/HighlightController');
 
     // Track calls to reapplyHighlights
     let reapplyCallCount = 0;
@@ -591,13 +568,9 @@ describe('[US3] Feature 053: deferred reapplyHighlights after renderSVG', () => 
 
     // Create a minimal instance (no mounting)
     const instance = Object.create(LayoutRenderer.prototype);
-    instance.svgRef = { current: null }; // null SVG ref — reapplyHighlights is a no-op
+    instance.svgRef = { current: null }; // null SVG ref — reapplyHighlights delegates to controller
     instance.props = makeMinimalProps();
-    instance.prevHighlightedIds = new Set<string>();
-    instance.prevExpectedIds = new Set<string>();
-    instance.prevPinnedIds = new Set<string>();
-    instance.prevErrorIds = new Set<string>();
-    instance.deferredReapplyId = 0;
+    instance.highlightCtrl = new HighlightController(16, 12);
 
     // Count before
     reapplyCallCount = 0;
@@ -607,8 +580,8 @@ describe('[US3] Feature 053: deferred reapplyHighlights after renderSVG', () => 
     const syncCount = reapplyCallCount;
     expect(syncCount).toBeGreaterThanOrEqual(1);
 
-    // Verify a deferred call is scheduled (deferredReapplyId should be set)
-    expect(instance.deferredReapplyId).not.toBe(0);
+    // Verify a deferred call is scheduled (deferredReapplyId should be set on controller)
+    expect((instance.highlightCtrl as any).deferredReapplyId).not.toBe(0);
 
     // Restore prototype
     LayoutRenderer.prototype['reapplyHighlights'] = origReapply;
