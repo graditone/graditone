@@ -2,16 +2,7 @@
 
 **🚀 Live App**: [https://graditone.com/](https://graditone.com/)
 
-### Play view gestures
-
-| Gesture | Action |
-|---|---|
-| **Tap** a note | Seek playback to that note and highlight it |
-| **Long-press** a note | Pin the note (green highlight) — sets the loop start point |
-| **Long-press** a second note | Define a loop region between the two pinned notes (green overlay) |
-| **Tap inside** the loop region | Clear the loop and return to free playback |
-
-A tablet-native app for interactive scores, designed for practice and performance.
+A tablet-first **practice app** for interactive music scores — play along, loop sections, and train your sight-reading. Works on desktops, laptops, tablets, and mobile phones.
 
 [![Rust](https://img.shields.io/badge/Rust-1.93-orange)](https://www.rust-lang.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
@@ -22,9 +13,54 @@ A tablet-native app for interactive scores, designed for practice and performanc
 
 ## Overview
 
-Graditone is a tablet-native app for interactive scores, designed for practice and performance. Built as a Progressive Web Application (PWA) with Rust music engine compiled to WebAssembly, implementing a hierarchical domain model with precise timing (960 PPQ) and comprehensive validation. Delivers offline-capable, tablet-optimized experience following constitutional principles of domain-driven design, hexagonal architecture, and test-first practices.
+Graditone is a tablet-first Progressive Web Application for **music practice with interactive scores**. Load any MusicXML score, follow the highlighted notes during playback, loop difficult passages, and use the built-in practice tools to improve. Built with a Rust music engine compiled to WebAssembly, it implements a hierarchical domain model with precise timing (960 PPQ) and comprehensive validation. Delivers an offline-capable, cross-device experience following constitutional principles of domain-driven design, hexagonal architecture, and test-first practices.
 
-**For a quick feature overview**, see [FEATURES.md](FEATURES.md).
+**For a quick feature overview**, see [FEATURES.md](FEATURES.md). For detailed architecture, see [docs/architecture.md](docs/architecture.md).
+
+## Architecture
+
+```mermaid
+flowchart TD
+    MXL["MusicXML File (.mxl/.xml)"]
+    IMPORT["MusicXML Importer<br/>(Rust)"]
+    DOMAIN["Domain Model<br/>(Score → Instrument → Staff → Voice → Note)"]
+    LAYOUT["Layout Engine<br/>(Rust/WASM)"]
+    RENDERER["SVG Renderer<br/>(React/TypeScript)"]
+    PLUGINS["Plugin System<br/>(Plugin API v4)"]
+    PWA["PWA Shell<br/>(Service Worker, IndexedDB)"]
+    BROWSER["Browser<br/>(Tablet/Desktop)"]
+
+    MXL -->|"XML/MXL bytes"| IMPORT
+    IMPORT -->|"Score (domain entity)"| DOMAIN
+    DOMAIN -->|"CompiledScore JSON"| LAYOUT
+    LAYOUT -->|"GlobalLayout JSON"| RENDERER
+    RENDERER -->|"SVG DOM"| BROWSER
+    PLUGINS -->|"Plugin API events"| RENDERER
+    PWA -->|"Offline cache"| BROWSER
+    DOMAIN -->|"Score data"| PLUGINS
+```
+
+> For detailed subsystem diagrams, see [docs/architecture.md](docs/architecture.md).
+
+## Feature Highlights
+
+- � **Practice View** ⭐ — The core experience: follow along with highlighted notes, set loop regions over difficult passages, control tempo, and use practice plugins (training mode, virtual keyboard). See [FEATURES.md](FEATURES.md)
+- 🎼 **Score Display** — High-fidelity staff notation with SMuFL font (Bravura), ledger lines, beams, ties, slurs
+- ▶️ **Playback** — Web Audio API playback with auto-scroll, tempo control, and loop practice regions
+- 🎹 **Virtual Keyboard** — On-screen piano keyboard for note visualization. See [PLUGINS.md](PLUGINS.md)
+- 📱 **Progressive Web App** — Offline-first, installable on any device, auto-updates on refresh
+- 🎵 **MusicXML Import** — Drag-and-drop .mxl/.xml import with error recovery and voice splitting
+- ⚡ **WASM Layout Engine** — 120 KB Rust engine computes all layout geometry at 60fps
+- 🔌 **Plugin System** — Extensible Plugin API v4 for practice tools and custom views. See [PLUGINS.md](PLUGINS.md)
+
+### Play and Practice View Gestures
+
+| Gesture | Action |
+|---|---|
+| **Tap** a note | Seek playback to that note and highlight it |
+| **Long-press** a note | Pin the note (green highlight) — sets the loop start point |
+| **Long-press** a second note | Define a loop region between the two pinned notes (green overlay) |
+| **Tap inside** the loop region | Clear the loop and return to free playback |
 
 ### Features
 
@@ -102,10 +138,16 @@ Graditone is a tablet-native app for interactive scores, designed for practice a
 
 **🚀 [Launch Graditone](https://graditone.com/)**
 
-- Works on tablets (iPad, Surface, Android)
-- No installation required
+- Works on tablets (iPad, Surface, Android), desktops, laptops, and mobile phones
+- No installation required — runs in any modern browser
 - Offline-capable after first visit
 - Add to home screen for app-like experience
+
+> **Platform note**: MIDI input is not available on iOS Safari due to browser limitations. All other features work across all platforms.
+
+### Updates
+
+Graditone is delivered as a Progressive Web App (PWA). To get the latest version, simply **refresh the app** in your browser. There are no app store downloads — updates are deployed directly to [graditone.com](https://graditone.com/) and cached automatically by the Service Worker.
 
 ### Local Development
 
@@ -199,60 +241,6 @@ graditone/
 └── README.md               # This file
 ```
 
-## Architecture
-
-### PWA Architecture
-
-```
-┌───────────────────────────────────────────────┐
-│         Browser (Tablet/Desktop)               │
-│  ┌─────────────────────────────────────────┐  │
-│  │       React PWA (Frontend)            │  │
-│  │   Components │ Services │ Storage   │  │
-│  └────────────┬──────────────────────────┘  │
-│                 │                          │
-│                 ▼ JS Bindings              │
-│  ┌─────────────────────────────────────────┐  │
-│  │     WASM Music Engine (Rust)         │  │
-│  │   MusicXML Parser │ Domain Model   │  │
-│  │   Timeline │ Score │ Validation    │  │
-│  └─────────────────────────────────────────┘  │
-│                                             │
-│  IndexedDB    Service Worker   Web Audio    │
-└───────────────────────────────────────────────┘
-```
-
-### Domain Model (DDD)
-
-- **Aggregate Root**: `Score` controls all mutations
-- **Entities**: `Instrument`, `Staff`, `Voice` with UUID identity
-- **Value Objects**: `Tick`, `BPM`, `Pitch`, `Clef`, `KeySignature` (immutable)
-- **Events**: `TempoEvent`, `TimeSignatureEvent`, `ClefEvent`, `KeySignatureEvent`, `Note`
-- **Validation**: Domain rules enforced (overlap prevention, required defaults)
-
-## Implementation Progress
-
-**Overall: Features 001-016 Complete**
-
-**Recent Features:**
-- ✅ **Feature 016: Rust Layout Engine** - High-performance WASM layout computation (NEW)
-  - **Performance**: 120KB WASM (gzipped), 36KB JSON output, 6.25% glyph batching efficiency
-  - **Capabilities**: System breaking, horizontal spacing, vertical positioning, multi-staff support
-  - **Test Coverage**: 73 tests (26 backend + 47 frontend utilities) - 100% passing
-  - **Documentation**: Comprehensive rustdoc, frontend integration utilities
-- ✅ Feature 015: Resilient MusicXML Import - Error recovery, voice splitting, warning diagnostics
-  - **Validated with**: Moonlight Sonata, Bach Preludes & Inventions, Mozart Piano Sonatas, Chopin Préludes
-  - **Capabilities**: Overlapping note resolution, structural issue recovery, detailed import warnings
-- ✅ Feature 012: PWA Distribution - GitHub Pages deployment, offline-first architecture
-- ✅ Feature 013: Demo & Onboarding - First-run demo score, welcome experience
-- ✅ Feature 014: Remove Editing Interface - Read-only viewer focus
-
-**Foundation Features:**
-- ✅ Feature 001: Score Model - Domain-driven design, hierarchical structure
-- ✅ Feature 006: MusicXML Import - WASM-powered parsing
-- ✅ Feature 009: Playback with Auto-scroll - Web Audio API integration
-- ✅ Feature 010: Stacked Staves View - Piano/multi-staff display
-
 ## Android Distribution
 
 Graditone is available as an Android app on the Google Play Store, packaged as a [Trusted Web Activity (TWA)](https://developer.chrome.com/docs/android/trusted-web-activity) wrapping the existing PWA.
@@ -284,25 +272,29 @@ Android app updates are delivered automatically through Google Play. When a new 
 
 ## Constitutional Principles
 
-This project follows five core principles:
+This project follows seven core principles:
 
-1. ✅ **Domain-Driven Design** - Ubiquitous language, aggregate roots, bounded contexts
-2. ✅ **Hexagonal Architecture** - Domain independent of infrastructure
-3. ✅ **PWA Architecture** - Offline-first, installable, WASM deployment
-4. ✅ **Precision & Fidelity** - 960 PPQ integer arithmetic
-5. ✅ **Test-First Development** - 596 tests, TDD workflow
+1. ✅ **Domain-Driven Design** — Ubiquitous language, aggregate roots, bounded contexts
+2. ✅ **Hexagonal Architecture** — Domain independent of infrastructure
+3. ✅ **PWA Architecture** — Offline-first, installable, WASM deployment
+4. ✅ **Precision & Fidelity** — 960 PPQ integer arithmetic
+5. ✅ **Test-First Development** — TDD workflow, comprehensive test suites
+6. ✅ **Layout Engine Authority** — Rust/WASM is the sole authority for spatial geometry
+7. ✅ **Regression Prevention** — Every bug fix requires a failing test before the fix
 
 ## Documentation
 
-- **Quick Start**: [FEATURES.md](FEATURES.md)
+- **Features**: [FEATURES.md](FEATURES.md)
+- **Plugins**: [PLUGINS.md](PLUGINS.md)
+- **Architecture**: [docs/architecture.md](docs/architecture.md) — system overview with Mermaid diagrams
+  - [Frontend PWA](docs/frontend-pwa.md) | [Rust/WASM Engine](docs/wasm-engine.md) | [Layout Engine](docs/layout-engine.md)
+  - [SVG Renderer](docs/svg-renderer.md) | [Plugin System](docs/plugin-system.md) | [MusicXML Importer](docs/musicxml-importer.md)
 - **Backend**: [backend/README.md](backend/README.md)
 - **Frontend**: [frontend/README.md](frontend/README.md)
-- **Layout Engine**: [specs/016-rust-layout-engine/](specs/016-rust-layout-engine/) (Feature 016)
-  - [Architecture & Design](specs/016-rust-layout-engine/plan.md)
-  - [Task Roadmap](specs/016-rust-layout-engine/tasks.md) (108 tasks)
-  - [API Documentation](backend/target/doc/musicore_backend/layout/index.html) (rustdoc)
 - **Constitution**: [.specify/memory/constitution.md](.specify/memory/constitution.md)
 - **Feature Specifications**: [specs/](specs/)
+- **Documentation Update Checklist**: [docs/doc-update-checklist.md](docs/doc-update-checklist.md)
+- **Local Validation**: [docs/LOCAL-VALIDATION.md](docs/LOCAL-VALIDATION.md)
 
 ## Contributing
 
