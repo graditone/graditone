@@ -202,26 +202,38 @@ T013: Practice-saved broadcast in App.tsx
 
 ---
 
-## Bug Fixes and Regression Prevention
+## Bug Fixes and Post-Implementation Work
 
-**Constitution Requirement**: Principle VII (Regression Prevention) — any bugs discovered during implementation MUST produce a failing test before the fix is applied.
+### BUG-001: Stale activeSessionId ref in useSessionManager
 
-### Bug Fix Template
+- [x] T040 [BUG] `closeSession()` immediately after `startSession()` silently did nothing; likewise `startSession()` after `closeSession()` was blocked by a stale ref.
+  - **Symptom**: Closing a freshly-created session had no effect; starting a new session after closing one failed.
+  - **Root Cause**: `startSession()` and `closeSession()` updated React state (`setActiveSessionId`) but never synced `activeSessionIdRef.current`, which is what the guard conditions (`if (activeSessionIdRef.current)`) read.
+  - **Fix**: Added `activeSessionIdRef.current = id` in `startSession()` and `activeSessionIdRef.current = null` in `closeSession()`.
+  - **Tests**: Two regression cases added to `sessions-plugin.test.tsx` — "startSession works again after closeSession" and "closeSession works immediately after startSession".
 
-When a bug is discovered (production, deployment, testing, code review):
+---
 
-- [ ] TYYY [BUG] Document error: [Brief description of the bug]
-  - **Symptom**: What went wrong
-  - **Root Cause**: Why it happened
-  - **Affected Area**: Where it occurred
+### Post-Implementation Improvements
 
-- [ ] TYYY+1 [BUG] Create regression test that reproduces the error
-  - Test MUST fail before fix is applied
+- [x] T041 Migrate sessions-plugin from `frontend/plugins/` (internal) to `plugins-external/sessions-plugin/` (external plugin with own build pipeline), matching the pattern of `virtual-keyboard-pro`. Added symlink `frontend/plugins/sessions-plugin → ../../plugins-external/sessions-plugin` for local dev. Updated `frontend/plugins/.gitignore` and `plugins-external/README.md`.
 
-- [ ] TYYY+2 [BUG] Implement fix
-  - Ensure regression test now passes
+- [x] T042 Replace `protectedPracticeIds` guard (disabled 🔒 button) with a session link (📋 button) that navigates to the Sessions plugin via `context.openPlugin('sessions-plugin')`.
+  - Added `computeProtectedPracticeMap()` to `sessionStorage.ts` returning `Map<practiceId, sessionName>`.
+  - Added `protectedPracticeMap?: ReadonlyMap<string, string>` and `onViewSessions?: () => void` to `PluginScoreSelectorProps`.
+  - Updated `SavedPracticeList`, `ScoreSelectorPlugin`, and `PracticeViewPlugin` accordingly.
 
-- [ ] TYYY+3 [BUG] Verify all existing tests still pass
+- [x] T043 Add `openPlugin(pluginId, data?)` and `getNavigationData()` to `PluginContext` for cross-plugin navigation; wired in `App.tsx` via `pluginNavDataRef`.
+
+- [x] T044 Write unit test suite for sessions-plugin (`sessions-plugin.test.tsx`): 25 tests covering localStorage index CRUD, MAX_SESSIONS eviction, `addActivityToActiveSession`, `computeProtectedPracticeIds/Map`, and full `useSessionManager` hook lifecycle including stale-ref regression cases.
+
+- [x] T045 Fix CI pipeline issues:
+  - Added `plugins/sessions-plugin/**` to `tsconfig.app.json` exclude list (host tsc was following symlink and failing on `../../frontend/src/...` paths).
+  - Added `plugins/sessions-plugin/**` to `vitest.config.ts` exclude list (host vitest was picking up the external plugin's test file through the symlink).
+  - Added `/* @vite-ignore */` to dynamic `import()` calls in `PracticeViewPlugin.tsx` (Vite's import analysis failed at transform time in CI where the symlink is absent).
+  - Added `@testing-library/dom` to sessions-plugin `devDependencies`.
+
+- [x] T046 Fix offline banner false positive: replaced `navigator.onLine` initialization in `useOfflineDetection.ts` with an optimistic-start + fetch-probe approach. The banner now only shows after a `HEAD /favicon.ico` probe confirms real connectivity loss, avoiding false positives on VPNs, proxied networks, and certain WiFi setups.
 
 ---
 

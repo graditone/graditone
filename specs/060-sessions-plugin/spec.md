@@ -2,7 +2,7 @@
 
 **Feature Branch**: `060-sessions-plugin`  
 **Created**: 2026-03-27  
-**Status**: Draft  
+**Status**: Implemented  
 **Input**: User description: "Sessions Plugin initial development — Create a new plugin to manage practice sessions in Graditone. A practice session groups multiple session activities. A user has an active session; activities within that session track temporal and practice context. Initially the only activity type is score practice (aligned with the existing practice plugin). From the sessions plugin: show all sessions in a list; selecting a session reveals a collapsible list of its activities where opening an activity loads the practice (same flow as the current load dialog); start a new session and set it as active so that all saved practices are linked to it; close a session so no more activities are added."
 
 ## Clarifications
@@ -14,6 +14,8 @@
 - Q: When a session is evicted, what happens to its linked saved practices? → A: The link is released; saved practices become standalone again and are deletable from the load dialog as normal.
 - Q: Can the user rename a session after creation, and from where? → A: Users can rename a session anytime from the sessions list (tap on the session name to edit). No rename at creation time — the default name is assigned automatically.
 - Q: How should the practice plugin communicate a saved practice to the sessions plugin? → A: Via a Plugin API event/hook — the practice save flow emits a notification through the Plugin API that any plugin can subscribe to. No direct coupling between plugins.
+- Q: Should session-linked practices show an icon or a link in the Load dialog? → A: A 📋 button linking to the Sessions plugin (via `context.openPlugin('sessions-plugin')`) replaces the delete button, with a tooltip showing the session name.
+- Q: Should the sessions-plugin live in the internal plugins folder? → A: No — migrated to `plugins-external/sessions-plugin/` with its own build pipeline (esbuild + ZIP), matching the `virtual-keyboard-pro` pattern. Symlinked into `frontend/plugins/` for local dev.
 
 ## User Scenarios & Testing *(mandatory)*
 
