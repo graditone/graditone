@@ -153,6 +153,8 @@ function createMockContext(
         return () => {};
       }),
     },
+    openPlugin: vi.fn(),
+    getNavigationData: vi.fn().mockReturnValue(null),
     manifest: {
       id: 'practice-view-plugin',
       name: 'Practice View Plugin',
@@ -160,7 +162,7 @@ function createMockContext(
       description: 'Practice view',
       type: 'common' as const,
       view: 'window' as const,
-      pluginApiVersion: '6',
+      pluginApiVersion: '8',
     },
   } as unknown as PluginContext;
 

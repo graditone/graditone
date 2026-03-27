@@ -4,9 +4,10 @@
 import type { Score } from '../../types/score';
 
 const DB_NAME = 'graditone-db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const SCORES_STORE = 'scores';
 const PRACTICES_STORE = 'practices';
+const SESSIONS_STORE = 'sessions';
 
 /** Result from loadScoreFromIndexedDB when the cached schema is stale but a raw blob exists. */
 export interface StaleScoreResult {
@@ -58,6 +59,14 @@ export async function openDB(): Promise<IDBDatabase> {
         const practicesStore = db.createObjectStore(PRACTICES_STORE, { keyPath: 'id' });
         practicesStore.createIndex('savedAt', 'savedAt', { unique: false });
         console.log('[IndexedDB] Practices object store created');
+      }
+
+      // Feature 060: Create sessions object store if it doesn't exist
+      if (!db.objectStoreNames.contains(SESSIONS_STORE)) {
+        const sessionsStore = db.createObjectStore(SESSIONS_STORE, { keyPath: 'id' });
+        sessionsStore.createIndex('createdAt', 'createdAt', { unique: false });
+        sessionsStore.createIndex('status', 'status', { unique: false });
+        console.log('[IndexedDB] Sessions object store created');
       }
     };
   });

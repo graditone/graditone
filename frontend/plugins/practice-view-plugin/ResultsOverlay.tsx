@@ -8,6 +8,7 @@
 
 import { useCallback, useRef, useEffect, useMemo } from 'react';
 import type { PluginContext, ScorePlayerState } from '../../src/plugin-api/index';
+import { computePracticeScore } from '../../src/plugin-api/index';
 import type {
   PracticeState,
   PracticeNoteResult,
@@ -190,33 +191,16 @@ export function ResultsOverlay({
     const results = practiceState.noteResults.length > 0
       ? practiceState.noteResults
       : performanceRecord?.noteResults ?? [];
-    if (results.length === 0) return null;
-
-    const totalNotes = results.length;
-    const correctCount = results.filter((r) => r.outcome === 'correct').length;
-    const lateCount = results.filter((r) => r.outcome === 'correct-late').length;
-    const earlyReleaseCount = results.filter((r) => r.outcome === 'early-release').length;
-    const totalWrongAttempts = results.reduce((sum, r) => sum + r.wrongAttempts, 0);
-
-    const rawScore =
-      totalNotes > 0
-        ? Math.round(
-            ((correctCount + (lateCount + earlyReleaseCount) * 0.5) / totalNotes) * 100 -
-              Math.min(totalWrongAttempts * 2, 30),
-          )
-        : 0;
-    const score = Math.max(0, Math.min(100, rawScore));
+    const breakdown = computePracticeScore(results);
+    if (!breakdown) return null;
 
     const lastResult = results[results.length - 1];
     const practiceTimeMs = lastResult.responseTimeMs;
     const scoreTimeMs = lastResult.expectedTimeMs;
 
     return {
-      totalNotes,
-      correctCount,
-      lateCount,
-      totalWrongAttempts,
-      score,
+      ...breakdown,
+      score: breakdown.score,
       practiceTimeMs,
       scoreTimeMs,
       results,
@@ -231,20 +215,10 @@ export function ResultsOverlay({
       return { zeroProgress: true as const, stoppedAtIndex, totalNoteCount };
     }
 
-    const totalNotes = noteResults.length;
-    const correctCount = noteResults.filter((r) => r.outcome === 'correct').length;
-    const lateCount = noteResults.filter((r) => r.outcome === 'correct-late').length;
-    const earlyReleaseCount = noteResults.filter((r) => r.outcome === 'early-release').length;
-    const totalWrongAttempts = noteResults.reduce((sum, r) => sum + r.wrongAttempts, 0);
-
-    const rawScore =
-      totalNotes > 0
-        ? Math.round(
-            ((correctCount + (lateCount + earlyReleaseCount) * 0.5) / totalNotes) * 100 -
-              Math.min(totalWrongAttempts * 2, 30),
-          )
-        : 0;
-    const score = Math.max(0, Math.min(100, rawScore));
+    const breakdown = computePracticeScore(noteResults);
+    if (!breakdown) {
+      return { zeroProgress: true as const, stoppedAtIndex, totalNoteCount };
+    }
 
     const lastResult = noteResults[noteResults.length - 1];
     const practiceTimeMs = lastResult.responseTimeMs;
@@ -252,11 +226,8 @@ export function ResultsOverlay({
 
     return {
       zeroProgress: false as const,
-      totalNotes,
-      correctCount,
-      lateCount,
-      totalWrongAttempts,
-      score,
+      ...breakdown,
+      score: breakdown.score,
       practiceTimeMs,
       scoreTimeMs,
       results: noteResults,

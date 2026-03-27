@@ -40,6 +40,8 @@ export type {
   // v7 additions (Feature 048)
   ListDialogItem,
   OpenListDialogOptions,
+  // v8 additions (Feature 060)
+  PracticeSavedEvent,
 } from './types';
 
 export { PLUGIN_API_VERSION } from './types';
@@ -52,3 +54,13 @@ export type { ChordDetectorOptions, ChordResult } from '../utils/chordDetector';
 export type { ScoreRef, SavedPractice, SavedPerformanceData, SavedPracticeIndexEntry } from '../services/savedPractice.types';
 export { savePracticeToIndexedDB, generatePracticeName, loadPracticeFromIndexedDB, deletePracticeFromIndexedDB } from '../services/savedPracticeStorage';
 export { addSavedPracticeIndex, listSavedPractices, removeSavedPracticeIndex } from '../services/savedPracticeIndex';
+
+// Feature 060: Practice-saved event bus (allows plugins to emit/subscribe to practice-save events)
+export { broadcastPracticeSaved } from './practiceSavedBus';
+
+// Feature 060: Sessions plugin needs openDB for session store access
+export { openDB } from '../services/storage/local-storage';
+
+// Feature 060: Shared practice score computation
+export { computePracticeScore } from './computePracticeScore';
+export type { PracticeScoreBreakdown, ScorableNoteResult } from './computePracticeScore';

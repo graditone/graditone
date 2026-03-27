@@ -4,4 +4,6 @@
 #
 # To add a symlink for local dev:
 #   ln -s ../../plugins-external/virtual-keyboard-pro virtual-keyboard-pro
+#   ln -s ../../plugins-external/sessions-plugin sessions-plugin
 virtual-keyboard-pro
+sessions-plugin
