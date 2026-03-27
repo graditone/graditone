@@ -49,13 +49,13 @@ import './PracticeViewPlugin.css';
 // works when the sessions plugin is not installed.
 async function loadProtectedPracticeIds(): Promise<ReadonlySet<string>> {
   try {
-    const mod = await import('../sessions-plugin/sessionStorage');
+    const mod = await import(/* @vite-ignore */ '../sessions-plugin/sessionStorage');
     return mod.computeProtectedPracticeIds();
   } catch { return new Set<string>(); }
 }
 async function loadProtectedPracticeMap(): Promise<ReadonlyMap<string, string>> {
   try {
-    const mod = await import('../sessions-plugin/sessionStorage');
+    const mod = await import(/* @vite-ignore */ '../sessions-plugin/sessionStorage');
     return mod.computeProtectedPracticeMap();
   } catch { return new Map<string, string>(); }
 }
