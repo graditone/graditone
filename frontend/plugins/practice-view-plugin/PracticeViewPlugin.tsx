@@ -47,15 +47,19 @@ import './PracticeViewPlugin.css';
 
 // Sessions plugin is optional — dynamically import so practice-view still
 // works when the sessions plugin is not installed.
+// The path is stored in a variable so Vite's import-analysis plugin cannot
+// statically resolve it — this prevents a build error when the symlink is
+// absent (e.g. in CI where plugins-external/ is not checked out).
+const _sessPath = '../sessions-plugin/sessionStorage';
 async function loadProtectedPracticeIds(): Promise<ReadonlySet<string>> {
   try {
-    const mod = await import(/* @vite-ignore */ '../sessions-plugin/sessionStorage');
+    const mod = await import(/* @vite-ignore */ _sessPath);
     return mod.computeProtectedPracticeIds();
   } catch { return new Set<string>(); }
 }
 async function loadProtectedPracticeMap(): Promise<ReadonlyMap<string, string>> {
   try {
-    const mod = await import(/* @vite-ignore */ '../sessions-plugin/sessionStorage');
+    const mod = await import(/* @vite-ignore */ _sessPath);
     return mod.computeProtectedPracticeMap();
   } catch { return new Map<string, string>(); }
 }
