@@ -126,6 +126,12 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - N/A (stateless import pipeline — file in, domain Score out) (057-refactor-musicxml-importer)
 - TypeScript 5.x, React 18+ (class component) + React, vitest, @testing-library/reac (058-refactor-svg-renderer)
 - N/A (frontend-only refactoring) (058-refactor-svg-renderer)
+- Markdown + Mermaid (GitHub-native rendering) + None (documentation-only; GitHub Mermaid renderer) (059-doc-architecture)
+- N/A (filesystem — markdown files in `docs/`) (059-doc-architecture)
+- TypeScript (strict), React 18+ + Plugin API v8 (new — extends v7 with practice-saved event), existing savedPractice services, IndexedDB, localStorage (060-sessions-plugin)
+- IndexedDB (`sessions` object store in `graditone-db` v3) + localStorage index (`graditone-sessions-index`) (060-sessions-plugin)
+- TypeScript (strict), React 18+, CSS + React (hooks, useState, useCallback, useEffect), Vite bundler, existing plugin API v8 (`PluginContext`, `openPlugin`, `getNavigationData`, `broadcastPracticeSaved`, `onPracticeSaved`) (061-session-task-definition)
+- IndexedDB (`sessions` store — full Session objects) + localStorage (`graditone-sessions-index` — lightweight index). Same dual-layer pattern used by Feature 060. (061-session-task-definition)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -146,9 +152,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
-- 058-refactor-svg-renderer: Added TypeScript 5.x, React 18+ (class component) + React, vitest, @testing-library/reac
-- 057-refactor-musicxml-importer: Added Rust (latest stable), Cargo workspace + quick-xml (streaming XML parser), zip (MXL decompression), wasm-bindgen (WASM interop)
-- 056-save-load-practices: Added TypeScript 5.x (frontend), React 18+ + React, Vitest (testing), Vite (bundler)
+- 061-session-task-definition: Added TypeScript (strict), React 18+, CSS + React (hooks, useState, useCallback, useEffect), Vite bundler, existing plugin API v8 (`PluginContext`, `openPlugin`, `getNavigationData`, `broadcastPracticeSaved`, `onPracticeSaved`)
+- 060-sessions-plugin: Added TypeScript (strict), React 18+ + Plugin API v8 (new — extends v7 with practice-saved event), existing savedPractice services, IndexedDB, localStorage
+- 059-doc-architecture: Added Markdown + Mermaid (GitHub-native rendering) + None (documentation-only; GitHub Mermaid renderer)
 
 
 <!-- MANUAL ADDITIONS START -->

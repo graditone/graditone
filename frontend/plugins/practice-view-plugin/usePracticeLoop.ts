@@ -25,6 +25,10 @@ export interface UsePracticeLoopParams {
   context: PluginContext;
   onComplete: (record: PerformanceRecord) => void;
   onResultsShow: () => void;
+  /** Feature 061: Optional initial loop region start tick (from task config). */
+  initialStartTick?: number | null;
+  /** Feature 061: Optional initial loop region end tick (from task config). */
+  initialEndTick?: number | null;
 }
 
 export interface UsePracticeLoopReturn {
@@ -56,6 +60,8 @@ export function usePracticeLoop({
   context,
   onComplete,
   onResultsShow,
+  initialStartTick,
+  initialEndTick,
 }: UsePracticeLoopParams): UsePracticeLoopReturn {
   // ─── Multi-loop practice state ─────────────────────────────────────────────
   const [loopCount, setLoopCount] = useState(1);
@@ -66,6 +72,23 @@ export function usePracticeLoop({
   // ─── Pin / loop state (mirrors play-score) ──────────────────────────────────
   const [loopStart, setLoopStart] = useState<PinState | null>(null);
   const [loopEndPin, setLoopEndPin] = useState<PinState | null>(null);
+
+  // Feature 061: Initialize loop region from task config (one-time)
+  const initializedRef = useRef(false);
+  useEffect(() => {
+    if (
+      !initializedRef.current &&
+      initialStartTick != null &&
+      initialEndTick != null &&
+      initialStartTick !== initialEndTick
+    ) {
+      initializedRef.current = true;
+      setLoopStart({ tick: initialStartTick, noteId: '__task-start' });
+      setLoopEndPin({ tick: initialEndTick, noteId: '__task-end' });
+      context.scorePlayer.setPinnedStart(Math.min(initialStartTick, initialEndTick));
+      context.scorePlayer.setLoopEnd(Math.max(initialStartTick, initialEndTick));
+    }
+  }, [initialStartTick, initialEndTick, context.scorePlayer]);
 
   const pinnedNoteIds = useMemo<ReadonlySet<string>>(() => {
     const ids = new Set<string>();
