@@ -599,6 +599,13 @@ export interface PluginScorePlayerContext {
    * @param maxCount   Optional cap on returned notes; omit to return all notes.
    */
   extractPracticeNotes(staffIndex: number, maxCount?: number): PluginScorePitches | null;
+
+  /**
+   * Feature 061: Returns the measure_end_ticks array from the loaded score.
+   * Each entry is the end tick of a measure (0-indexed).
+   * Returns null if no score is loaded.
+   */
+  getMeasureEndTicks(): ReadonlyArray<number> | null;
 }
 
 /**
@@ -996,4 +1003,6 @@ export interface PracticeSavedEvent {
   readonly totalNotes: number;
   /** Wall-clock duration of the practice in milliseconds. */
   readonly practiceTimeMs: number;
+  /** Optional task ID when the practice was launched from a session task. */
+  readonly taskId?: string;
 }

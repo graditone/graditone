@@ -537,6 +537,16 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     [pluginStatus, score, expandedNotesByStaff, title],
   );
 
+  // ─── getMeasureEndTicks (Feature 061) ─────────────────────────────────────
+
+  const getMeasureEndTicks = useCallback(
+    (): ReadonlyArray<number> | null => {
+      if (!score || !score.measure_end_ticks || score.measure_end_ticks.length === 0) return null;
+      return score.measure_end_ticks;
+    },
+    [score],
+  );
+
   // ─── Return the bridge object ─────────────────────────────────────────────
 
   const api = useMemo((): PluginScorePlayerContext => ({
@@ -553,6 +563,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     subscribe,
     getCurrentTickLive,
     extractPracticeNotes,
+    getMeasureEndTicks,
   }), [
     getCatalogue,
     loadScore,
@@ -567,6 +578,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     subscribe,
     getCurrentTickLive,
     extractPracticeNotes,
+    getMeasureEndTicks,
   ]);
 
   const internal = useMemo((): ScorePlayerInternal => ({
@@ -637,6 +649,7 @@ export function createNoOpScorePlayer(): PluginScorePlayerContext {
     },
     getCurrentTickLive: () => 0,
     extractPracticeNotes: (_staffIndex: number, _maxCount?: number) => null,
+    getMeasureEndTicks: () => null,
   };
 }
 
@@ -671,5 +684,6 @@ export function createScorePlayerProxy(
     subscribe: (...args) => proxyRef.current.subscribe(...args),
     getCurrentTickLive: (...args) => proxyRef.current.getCurrentTickLive(...args),
     extractPracticeNotes: (...args) => proxyRef.current.extractPracticeNotes(...args),
+    getMeasureEndTicks: () => proxyRef.current.getMeasureEndTicks(),
   };
 }

@@ -65,6 +65,27 @@ async function loadProtectedPracticeMap(): Promise<ReadonlyMap<string, string>> 
 }
 
 // ---------------------------------------------------------------------------
+// Feature 061: Measure-to-tick conversion
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert 1-based measure range to tick range using measure_end_ticks.
+ * Returns null if inputs are out of range.
+ */
+function measureRangeToTicks(
+  startMeasure: number,
+  endMeasure: number,
+  measureEndTicks: ReadonlyArray<number>,
+): { startTick: number; endTick: number } | null {
+  const startIndex = startMeasure - 1; // 0-based
+  const endIndex = endMeasure - 1;     // 0-based
+  if (startIndex < 0 || endIndex >= measureEndTicks.length || startIndex > endIndex) return null;
+  const startTick = startIndex === 0 ? 0 : measureEndTicks[startIndex - 1];
+  const endTick = measureEndTicks[endIndex];
+  return { startTick, endTick };
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -200,6 +221,17 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const [isSaved, setIsSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const loadedScoreRefRef = useRef<ScoreRef | null>(null);
+  // Feature 061: Track taskId when launched from a session task
+  const taskIdRef = useRef<string | null>(null);
+  // Feature 061: Pending task config to apply once score is loaded
+  const pendingTaskConfigRef = useRef<{
+    staffIndex: number;
+    loopCount: number;
+    tempoMultiplier: number;
+    regionType: string;
+    startMeasure: number | null;
+    endMeasure: number | null;
+  } | null>(null);
   const [savedPractices, setSavedPractices] = useState<SavedPracticeIndexEntry[]>(() => listSavedPractices());
   // Feature 060: Protected practice IDs (linked to sessions, cannot be deleted)
   const [protectedPracticeIds, setProtectedPracticeIds] = useState<ReadonlySet<string>>(new Set());
@@ -275,6 +307,33 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerState.status]);
 
+  // Feature 061: Ref to stash loop region ticks computed from task config
+  const pendingTaskLoopRegionRef = useRef<{ startTick: number; endTick: number } | null>(null);
+
+  // Feature 061: Apply pending task config once the score is ready.
+  useEffect(() => {
+    const tc = pendingTaskConfigRef.current;
+    if (!tc || playerState.status !== 'ready') return;
+    pendingTaskConfigRef.current = null;
+
+    setSelectedStaffIndex(tc.staffIndex);
+    setTempoMultiplier(tc.tempoMultiplier);
+    context.scorePlayer.setTempoMultiplier(tc.tempoMultiplier);
+    setLoopCount(tc.loopCount);
+
+    // Compute loop region from measures if applicable
+    if (tc.regionType === 'measures' && tc.startMeasure != null && tc.endMeasure != null) {
+      const measureEndTicks = context.scorePlayer.getMeasureEndTicks();
+      if (measureEndTicks && measureEndTicks.length > 0) {
+        const result = measureRangeToTicks(tc.startMeasure, tc.endMeasure, measureEndTicks);
+        if (result) {
+          pendingTaskLoopRegionRef.current = result;
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerState.status]);
+
   // Practice session start time (ms since epoch) for timing analysis
   const practiceStartTimeRef = useRef(0);
 
@@ -291,6 +350,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     playerState,
     practiceStartTimeRef,
     context,
+    initialStartTick: pendingTaskLoopRegionRef.current?.startTick ?? null,
+    initialEndTick: pendingTaskLoopRegionRef.current?.endTick ?? null,
     onComplete: (record) => {
       setPerformanceRecord(record);
       setIsReplaying(false);
@@ -709,6 +770,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         correctCount: breakdown?.correctCount ?? 0,
         totalNotes: breakdown?.totalNotes ?? 0,
         practiceTimeMs: lastNr?.responseTimeMs ?? 0,
+        ...(taskIdRef.current ? { taskId: taskIdRef.current } : {}),
       });
     } catch (e) {
       console.error('[PracticeViewPlugin] Failed to save practice:', e);
@@ -744,6 +806,27 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           context.scorePlayer.loadScore({ kind: 'userScore', scoreId: saved.scoreRef.id });
         }
       }).catch((err) => console.error('[PracticeViewPlugin] nav data load failed:', err));
+    } else if (navData && navData.taskConfig && typeof navData.taskConfig === 'object') {
+      // Feature 061: Launch from a session task — load score and stash config
+      const tc = navData.taskConfig as Record<string, unknown>;
+      const scoreRef = tc.scoreRef as { type: string; id: string } | undefined;
+      if (scoreRef && scoreRef.id) {
+        taskIdRef.current = (tc.taskId as string) ?? null;
+        loadedScoreRefRef.current = scoreRef as ScoreRef;
+        pendingTaskConfigRef.current = {
+          staffIndex: (tc.staffIndex as number) ?? 0,
+          loopCount: (tc.loopCount as number) ?? 1,
+          tempoMultiplier: (tc.tempoMultiplier as number) ?? 1.0,
+          regionType: (tc.regionType as string) ?? 'all',
+          startMeasure: (tc.startMeasure as number) ?? null,
+          endMeasure: (tc.endMeasure as number) ?? null,
+        };
+        if (scoreRef.type === 'preloaded') {
+          context.scorePlayer.loadScore({ kind: 'catalogue', catalogueId: scoreRef.id });
+        } else {
+          context.scorePlayer.loadScore({ kind: 'userScore', scoreId: scoreRef.id });
+        }
+      }
     }
   // Run once on mount — navData is one-shot (cleared after read).
   // eslint-disable-next-line react-hooks/exhaustive-deps
