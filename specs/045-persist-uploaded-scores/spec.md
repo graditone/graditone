@@ -2,7 +2,7 @@
 
 **Feature Branch**: `045-persist-uploaded-scores`  
 **Created**: 2026-03-11  
-**Status**: Draft  
+**Status**: Implemented  
 **Input**: User description: "When you upload a score persist it and make it available with the preloaded scores at the end of the list"
 
 ## User Scenarios & Testing *(mandatory)*

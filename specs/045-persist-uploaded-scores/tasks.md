@@ -124,6 +124,12 @@
 
 ---
 
+## Phase 7: Post-Implementation Fixes
+
+- [X] T030 [BUG] Fix pre-push hook E2E failures caused by VITE_BASE mismatch — the hook built with `VITE_BASE=/musicore/` (production sub-path) then ran `playwright.config.prod.ts` which serves `dist/` at `http://localhost:4173/` (base `/`), causing all asset requests to 404 and all 5 E2E tests to time out at 30 s. Fix: add a second `VITE_BASE=/ npm run build` step in `.git/hooks/pre-push` immediately before the Playwright run, after the `/musicore/` build gate passes. All 5 E2E tests now pass in ~4 s.
+
+---
+
 ## Dependencies: User Story Completion Order
 
 ```
