@@ -17,6 +17,7 @@ import { PluginManagerDialog } from './components/plugins/PluginManagerDialog'
 import { ListDialog } from './components/plugins/ListDialog'
 import { ScoreSelectorPlugin } from './components/plugins/ScoreSelectorPlugin'
 import type { PluginContext, PluginNoteEvent, GraditonePlugin, OpenListDialogOptions } from './plugin-api/index'
+import { subscribePracticeSaved } from './plugin-api/practiceSavedBus'
 import { PluginStaffViewer } from './plugin-api/PluginStaffViewer'
 import { createNoOpScorePlayer, createScorePlayerProxy } from './plugin-api/scorePlayerContext'
 import { createNoOpMetronome, createMetronomeProxy } from './plugin-api/metronomeContext'
@@ -69,6 +70,8 @@ function App() {
   // Feature 030: Plugin navigation state
   const [allPlugins, setAllPlugins] = useState<BuiltinPluginEntry[]>([])
   const [activePlugin, setActivePlugin] = useState<string | null>(null)
+  // Feature 060: One-shot navigation data for openPlugin → getNavigationData flow.
+  const pluginNavDataRef = useRef<Record<string, unknown> | null>(null)
   // Feature 048: Show/hide unified plugin manager dialog
   const [showPluginManager, setShowPluginManager] = useState(false)
   // Feature 048 / T020: Plugin-requested ListDialog state
@@ -361,6 +364,23 @@ function App() {
             }
             setPluginListDialog(wrappedOptions)
             return () => setPluginListDialog(null)
+          },
+          onPracticeSaved: (handler) => subscribePracticeSaved(handler),
+          openPlugin: (pluginId, data) => {
+            pluginNavDataRef.current = data ?? null
+            setActivePlugin(pluginId)
+            setShowRecording(false)
+            const target = entries.find(e => e.manifest.id === pluginId)
+            if (target?.manifest.view === 'full-screen') {
+              document.body.classList.add('fullscreen-play')
+              document.documentElement.requestFullscreen?.().catch(() => {})
+            }
+            loadToneAdapter().then(adapter => adapter.init()).catch(() => {})
+          },
+          getNavigationData: () => {
+            const data = pluginNavDataRef.current
+            pluginNavDataRef.current = null
+            return data
           },
           manifest,
         }

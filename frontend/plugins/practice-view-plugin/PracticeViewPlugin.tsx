@@ -42,7 +42,27 @@ import { ResultsOverlay } from './ResultsOverlay';
 import type { ScoreRef, SavedPractice, SavedPerformanceData, SavedPracticeIndexEntry } from '../../src/plugin-api/index';
 import { savePracticeToIndexedDB, generatePracticeName, loadPracticeFromIndexedDB, deletePracticeFromIndexedDB } from '../../src/plugin-api/index';
 import { addSavedPracticeIndex, listSavedPractices, removeSavedPracticeIndex } from '../../src/plugin-api/index';
+import { broadcastPracticeSaved, computePracticeScore } from '../../src/plugin-api/index';
 import './PracticeViewPlugin.css';
+
+// Sessions plugin is optional — dynamically import so practice-view still
+// works when the sessions plugin is not installed.
+// The path is stored in a variable so Vite's import-analysis plugin cannot
+// statically resolve it — this prevents a build error when the symlink is
+// absent (e.g. in CI where plugins-external/ is not checked out).
+const _sessPath = '../sessions-plugin/sessionStorage';
+async function loadProtectedPracticeIds(): Promise<ReadonlySet<string>> {
+  try {
+    const mod = await import(/* @vite-ignore */ _sessPath);
+    return mod.computeProtectedPracticeIds();
+  } catch { return new Set<string>(); }
+}
+async function loadProtectedPracticeMap(): Promise<ReadonlyMap<string, string>> {
+  try {
+    const mod = await import(/* @vite-ignore */ _sessPath);
+    return mod.computeProtectedPracticeMap();
+  } catch { return new Map<string, string>(); }
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -181,6 +201,13 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const loadedScoreRefRef = useRef<ScoreRef | null>(null);
   const [savedPractices, setSavedPractices] = useState<SavedPracticeIndexEntry[]>(() => listSavedPractices());
+  // Feature 060: Protected practice IDs (linked to sessions, cannot be deleted)
+  const [protectedPracticeIds, setProtectedPracticeIds] = useState<ReadonlySet<string>>(new Set());
+  const [protectedPracticeMap, setProtectedPracticeMap] = useState<ReadonlyMap<string, string>>(new Map());
+  useEffect(() => {
+    loadProtectedPracticeIds().then(setProtectedPracticeIds).catch(() => {});
+    loadProtectedPracticeMap().then(setProtectedPracticeMap).catch(() => {});
+  }, [savedPractices]);
   // Pending saved practice to restore once the score finishes loading
   const pendingSavedPracticeRef = useRef<SavedPractice | null>(null);
 
@@ -669,6 +696,20 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       setIsSaved(true);
       setSaveError(null);
       setSavedPractices(listSavedPractices());
+      // Feature 060: Notify subscribers (e.g. sessions plugin) that a practice was saved
+      const breakdown = computePracticeScore(performanceData.noteResults);
+      const lastNr = performanceData.noteResults[performanceData.noteResults.length - 1];
+      broadcastPracticeSaved({
+        savedPracticeId: id,
+        practiceName: practice.name,
+        scoreTitle,
+        completionStatus: practice.completionStatus,
+        savedAt: practice.savedAt,
+        practiceScore: breakdown?.score ?? 0,
+        correctCount: breakdown?.correctCount ?? 0,
+        totalNotes: breakdown?.totalNotes ?? 0,
+        practiceTimeMs: lastNr?.responseTimeMs ?? 0,
+      });
     } catch (e) {
       console.error('[PracticeViewPlugin] Failed to save practice:', e);
       const isQuota = e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22);
@@ -688,6 +729,26 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   }, []);
 
   // ─── Feature 056: Load saved practice handler ──────────────────────────────
+  // Feature 060: Auto-load saved practice when navigated from sessions plugin.
+  useEffect(() => {
+    const navData = context.getNavigationData();
+    if (navData && typeof navData.savedPracticeId === 'string') {
+      const id = navData.savedPracticeId;
+      loadPracticeFromIndexedDB(id).then((saved) => {
+        if (!saved) return;
+        loadedScoreRefRef.current = saved.scoreRef;
+        pendingSavedPracticeRef.current = saved;
+        if (saved.scoreRef.type === 'preloaded') {
+          context.scorePlayer.loadScore({ kind: 'catalogue', catalogueId: saved.scoreRef.id });
+        } else {
+          context.scorePlayer.loadScore({ kind: 'userScore', scoreId: saved.scoreRef.id });
+        }
+      }).catch((err) => console.error('[PracticeViewPlugin] nav data load failed:', err));
+    }
+  // Run once on mount — navData is one-shot (cleared after read).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSelectSavedPractice = useCallback(async (entry: SavedPracticeIndexEntry) => {
     const saved = await loadPracticeFromIndexedDB(entry.id);
     if (!saved) {
@@ -750,6 +811,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           savedPractices={savedPractices}
           onSelectSavedPractice={handleSelectSavedPractice}
           onDeleteSavedPractice={handleDeleteSavedPractice}
+          protectedPracticeIds={protectedPracticeIds}
+          protectedPracticeMap={protectedPracticeMap}
+          onViewSessions={() => context.openPlugin('sessions-plugin')}
         />
       </div>
     );

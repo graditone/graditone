@@ -138,6 +138,32 @@
   justify-content: center;
 }
 
+/* ── Session link button (replaces delete for session-linked practices) ── */
+.saved-practice-item__session-link {
+  flex-shrink: 0;
+  align-self: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--dialog-surface-active);
+  transition: color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.saved-practice-item__session-link:hover:not(:disabled) {
+  color: var(--ls-cta-bg, #4caf50);
+  background: rgba(76, 175, 80, 0.1);
+}
+}
+
 .saved-practice-item__delete-btn:hover:not(:disabled) {
   color: var(--dialog-danger-text);
   background: var(--dialog-danger-bg);

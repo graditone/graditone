@@ -16,6 +16,7 @@ export default defineConfig({
       '**/tests/visual/**',     // Playwright visual regression tests — run via `playwright test`
       // External plugins symlinked for local dev — they have their own test suite
       'plugins/virtual-keyboard-pro/**',
+      'plugins/sessions-plugin/**',
     ],
   },
   resolve: {

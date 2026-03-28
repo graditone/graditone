@@ -1,5 +1,5 @@
 /**
- * Graditone Plugin API — Types (v7)
+ * Graditone Plugin API — Types (v8)
  * Feature 030: Plugin Architecture (v1 baseline)
  * Feature 031: Practice View Plugin — adds recording namespace and offsetMs (v2)
  * Feature 033: Play Score Plugin — adds scorePlayer namespace, ScoreRenderer component (v3)
@@ -8,6 +8,8 @@
  * Feature 035: Metronome — adds MetronomeState, PluginMetronomeContext,
  *              context.metronome namespace, ScorePlayerState.timeSignature (v5)
  * Feature 042: Practice Note Duration — adds durationTicks to PluginPracticeNoteEntry (v7)
+ * Feature 060: Sessions Plugin — adds PracticeSavedEvent, onPracticeSaved,
+ *              protectedPracticeIds on ScoreSelector (v8)
  *
  * Defines all public types for the Graditone Plugin API.
  * See specs/030-plugin-architecture/contracts/plugin-api.ts for the v1 canonical contract.
@@ -404,6 +406,22 @@ export interface PluginScoreSelectorProps {
    * Feature 056: Called when the user deletes a saved practice.
    */
   onDeleteSavedPractice?: (id: string) => void;
+  /**
+   * Feature 060: Set of saved practice IDs protected from deletion.
+   * Practices in this set have their delete button disabled.
+   * When undefined or empty, all practices are deletable (v7 behavior).
+   */
+  protectedPracticeIds?: ReadonlySet<string>;
+  /**
+   * Feature 060: Map of savedPracticeId → session name for practices linked
+   * to a session. Used by the load dialog to show a session link.
+   */
+  protectedPracticeMap?: ReadonlyMap<string, string>;
+  /**
+   * Feature 060: Called when the user clicks the session link on a protected
+   * practice. Opens the sessions plugin.
+   */
+  onViewSessions?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -902,6 +920,22 @@ export interface PluginContext {
    * ```
    */
   openListDialog(options: OpenListDialogOptions): () => void;
+  /**
+   * Subscribe to practice-saved events (v8 — Feature 060).
+   * Called after a practice has been successfully persisted to storage.
+   * Returns an unsubscribe function — call it in dispose() or cleanup.
+   */
+  onPracticeSaved(handler: (event: PracticeSavedEvent) => void): () => void;
+  /**
+   * Open another plugin, optionally passing navigation data (v8 — Feature 060).
+   * The target plugin can read the data via `getNavigationData()`.
+   */
+  openPlugin(pluginId: string, data?: Record<string, unknown>): void;
+  /**
+   * Read one-shot navigation data passed by `openPlugin()` (v8 — Feature 060).
+   * Returns the data object and clears it so subsequent calls return `null`.
+   */
+  getNavigationData(): Record<string, unknown> | null;
   /** Read-only manifest for this plugin instance. */
   readonly manifest: Readonly<PluginManifest>;
 }
@@ -938,4 +972,28 @@ export interface GraditonePlugin {
 // ---------------------------------------------------------------------------
 
 /** Major version of the currently running Graditone Plugin API. */
-export const PLUGIN_API_VERSION = '7' as const;
+export const PLUGIN_API_VERSION = '8' as const;
+
+// ---------------------------------------------------------------------------
+// v8 types — Practice Saved Event (Feature 060)
+// ---------------------------------------------------------------------------
+
+/**
+ * Event emitted when a practice is saved through the practice plugin.
+ * Contains snapshotted metadata for session activity creation.
+ */
+export interface PracticeSavedEvent {
+  readonly savedPracticeId: string;
+  readonly practiceName: string;
+  readonly scoreTitle: string;
+  readonly completionStatus: 'complete' | 'partial';
+  readonly savedAt: string;
+  /** Practice score 0–100 computed from noteResults. */
+  readonly practiceScore: number;
+  /** Number of notes the user played correctly. */
+  readonly correctCount: number;
+  /** Total number of notes in the practiced section. */
+  readonly totalNotes: number;
+  /** Wall-clock duration of the practice in milliseconds. */
+  readonly practiceTimeMs: number;
+}

@@ -24,8 +24,8 @@ import {
 
 describe('Plugin API contract', () => {
   describe('PLUGIN_API_VERSION', () => {
-    it('is the string "7" (v7 — adds ListDialogItem, OpenListDialogOptions, context.openListDialog)', () => {
-      expect(PLUGIN_API_VERSION).toBe('7');
+    it('is the string "8" (v8 — adds PracticeSavedEvent, openPlugin, protectedPracticeIds on ScoreSelector)', () => {
+      expect(PLUGIN_API_VERSION).toBe('8');
     });
 
     it('is a string (not a number)', () => {

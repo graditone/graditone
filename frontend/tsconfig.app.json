@@ -34,6 +34,7 @@
     "plugins/**/*.test.tsx",
     "plugins/lint-test/**",
     "plugins/practice-view-plugin/**",
+    "plugins/sessions-plugin/**",
     "plugins/virtual-keyboard-pro/**"
   ]
 }

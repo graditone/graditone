@@ -37,6 +37,9 @@ export function ScoreSelectorPlugin({
   savedPractices,
   onSelectSavedPractice,
   onDeleteSavedPractice,
+  protectedPracticeIds,
+  protectedPracticeMap,
+  onViewSessions,
 }: PluginScoreSelectorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { userScores, removeUserScore } = useUserScores();
@@ -148,6 +151,9 @@ export function ScoreSelectorPlugin({
                   practices={savedPractices}
                   onSelect={onSelectSavedPractice}
                   onDelete={onDeleteSavedPractice}
+                  protectedPracticeIds={protectedPracticeIds}
+                  protectedPracticeMap={protectedPracticeMap}
+                  onViewSessions={onViewSessions}
                 />
               )}
             </div>

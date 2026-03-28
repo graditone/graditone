@@ -14,6 +14,12 @@ export interface SavedPracticeListProps {
   disabled?: boolean;
   onSelect: (practice: SavedPracticeIndexEntry) => void;
   onDelete: (id: string) => void;
+  /** Feature 060: Practices in this set cannot be deleted (linked to a session). */
+  protectedPracticeIds?: ReadonlySet<string>;
+  /** Feature 060: Map of savedPracticeId → session name for protected practices. */
+  protectedPracticeMap?: ReadonlyMap<string, string>;
+  /** Feature 060: Called when the user clicks the session link on a protected practice. */
+  onViewSessions?: () => void;
 }
 
 export function SavedPracticeList({
@@ -21,6 +27,9 @@ export function SavedPracticeList({
   disabled = false,
   onSelect,
   onDelete,
+  protectedPracticeIds,
+  protectedPracticeMap,
+  onViewSessions,
 }: SavedPracticeListProps) {
   if (practices.length === 0) return null;
 
@@ -58,15 +67,28 @@ export function SavedPracticeList({
                   )}
                 </span>
               </button>
-              <button
-                className="saved-practice-item__delete-btn"
-                aria-label={`Delete ${practice.name}`}
-                disabled={disabled}
-                onClick={() => onDelete(practice.id)}
-                type="button"
-              >
-                ×
-              </button>
+              {protectedPracticeIds?.has(practice.id) ? (
+                <button
+                  className="saved-practice-item__session-link"
+                  aria-label={`Linked to session: ${protectedPracticeMap?.get(practice.id) ?? 'session'}`}
+                  disabled={disabled}
+                  onClick={() => onViewSessions?.()}
+                  type="button"
+                  title={`📋 ${protectedPracticeMap?.get(practice.id) ?? 'Session'}`}
+                >
+                  📋
+                </button>
+              ) : (
+                <button
+                  className="saved-practice-item__delete-btn"
+                  aria-label={`Delete ${practice.name}`}
+                  disabled={disabled}
+                  onClick={() => onDelete(practice.id)}
+                  type="button"
+                >
+                  ×
+                </button>
+              )}
             </li>
           );
         })}
