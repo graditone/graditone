@@ -130,6 +130,9 @@ pub struct MeasureData {
 
     /// Tempo from <metronome><per-minute>...</per-minute></metronome> (Feature 001-score-tempo)
     pub metronome_tempo: Option<f64>,
+
+    /// Dynamics velocity from <sound dynamics="N"/> element (Feature 063)
+    pub sound_dynamics: Option<f64>,
 }
 
 /// Timing and notation attributes from <attributes> element
@@ -195,6 +198,26 @@ pub struct OctaveShiftData {
     pub staff: usize,
 }
 
+/// Parsed dynamics data from `<direction-type><dynamics>` element (Feature 063)
+#[derive(Debug, Clone, PartialEq)]
+pub struct DynamicsData {
+    /// Dynamic marking name (e.g. "p", "ff", "mf")
+    pub marking: String,
+    /// Staff number (1-indexed)
+    pub staff: usize,
+}
+
+/// Parsed wedge data from `<direction-type><wedge>` element (Feature 063)
+#[derive(Debug, Clone, PartialEq)]
+pub struct WedgeData {
+    /// "crescendo", "diminuendo", or "stop"
+    pub wedge_type: String,
+    /// Wedge number for matching start/stop pairs (default 1)
+    pub number: u8,
+    /// Staff number (1-indexed)
+    pub staff: usize,
+}
+
 /// Element within a measure (note, rest, or other)
 #[derive(Debug, Clone)]
 pub enum MeasureElement {
@@ -204,6 +227,8 @@ pub enum MeasureElement {
     Forward(i32),                 // Move timing forward by N duration units (rest in voice)
     Attributes(AttributesData),   // Mid-measure attribute changes (clef, key, etc.)
     OctaveShift(OctaveShiftData), // Octave transposition bracket start/stop
+    Dynamics(DynamicsData),       // Dynamic marking (pp, mf, ff, etc.) — Feature 063
+    Wedge(WedgeData),             // Crescendo/diminuendo wedge start/stop — Feature 063
 }
 
 /// The role this note plays in a tie relationship.

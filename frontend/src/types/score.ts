@@ -27,6 +27,28 @@ export interface PhraseRegion {
   end_tick: number;
 }
 
+/** Dynamic level marking (Feature 063) */
+export type DynamicLevel = 'ppp' | 'pp' | 'p' | 'mp' | 'mf' | 'f' | 'ff' | 'fff';
+
+/** Direction of a gradual dynamic change (Feature 063) */
+export type GradualDirection = 'crescendo' | 'diminuendo';
+
+/** A sustained volume instruction at a specific score position (Feature 063) */
+export interface DynamicMarking {
+  marking: DynamicLevel;
+  velocity: number; // 1–127
+  start_tick: Tick;
+  staff: number;    // 1-based
+}
+
+/** A volume transition spanning a range of tick positions (Feature 063) */
+export interface GradualDynamic {
+  direction: GradualDirection;
+  start_tick: Tick;
+  stop_tick: Tick;
+  staff: number; // 1-based
+}
+
 /** Tick represents a time position at 960 PPQ (Pulses Per Quarter note) */
 export type Tick = number;
 
@@ -124,6 +146,8 @@ export interface Note {
   stem_down?: boolean;
   /** Fingering annotations from MusicXML <technical>/<fingering> elements */
   fingering?: FingeringAnnotation[];
+  /** Computed velocity (1–127) from dynamic markings. Undefined = default mf (80). Feature 063. */
+  velocity?: number;
 }
 
 // ============================================================================
@@ -194,6 +218,12 @@ export interface Score {
 
   /** Detected phrase regions per instrument (Feature 062) */
   phrases?: PhraseRegion[];
+
+  /** Dynamic markings extracted from MusicXML (Feature 063) */
+  dynamics?: DynamicMarking[];
+
+  /** Gradual dynamics (crescendo/diminuendo) from MusicXML (Feature 063) */
+  gradual_dynamics?: GradualDynamic[];
 }
 
 /** An octave-shift region (8va/8vb) for display pitch transposition */

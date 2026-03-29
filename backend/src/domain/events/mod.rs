@@ -1,4 +1,5 @@
 pub mod clef;
+pub mod dynamics;
 pub mod global;
 pub mod key_signature;
 pub mod note;

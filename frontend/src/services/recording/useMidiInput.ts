@@ -16,7 +16,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { MidiDevice, MidiNoteEvent, MidiConnectionEvent } from '../../types/recording';
-import { parseMidiNoteOn, parseMidiNoteOff } from './midiUtils';
+import { parseMidiNoteOn, parseMidiNoteOff, parseMidiCC } from './midiUtils';
+import type { MidiCCEvent } from './midiUtils';
 
 const MIDI_ACCESS_TIMEOUT_MS = 3000;
 const CONNECT_DEBOUNCE_MS = 300;
@@ -28,6 +29,8 @@ export interface UseMidiInputCallbacks {
   onNoteOff?: (noteNumber: number) => void;
   /** Called when a device connects or disconnects */
   onConnectionChange: (event: MidiConnectionEvent) => void;
+  /** Called for CC7 (channel volume) and CC11 (expression) messages. Feature 063. */
+  onCC?: (event: MidiCCEvent) => void;
   /** Session start timestamp in ms — used for computing session-relative event times */
   sessionStartMs?: number;
 }
@@ -110,6 +113,12 @@ export function useMidiInput(callbacks: UseMidiInputCallbacks): UseMidiInputResu
         const offNote = parseMidiNoteOff(ev.data as Uint8Array);
         if (offNote !== null && callbacksRef.current.onNoteOff) {
           callbacksRef.current.onNoteOff(offNote);
+          return;
+        }
+        // Feature 063: Route CC7/CC11 to onCC callback
+        const cc = parseMidiCC(ev.data as Uint8Array);
+        if (cc && (cc.controller === 7 || cc.controller === 11) && callbacksRef.current.onCC) {
+          callbacksRef.current.onCC(cc);
         }
       };
     }

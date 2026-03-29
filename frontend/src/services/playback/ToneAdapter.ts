@@ -1,4 +1,5 @@
 import * as Tone from 'tone';
+import { velocityToGain, applyCCScaling, DEFAULT_VELOCITY } from './volumeUtils';
 
 /**
  * ToneAdapter - Singleton wrapper for Tone.js audio synthesis
@@ -29,6 +30,15 @@ export class ToneAdapter {
   private initPromise: Promise<void> | null = null;
   /** Listeners called synchronously BEFORE Transport.start() inside startTransport(). */
   private transportRestartListeners = new Set<() => void>();
+  /** MIDI CC7 Channel Volume (0–127, default 127). Feature 063. */
+  private ccChannelVolume = 127;
+  /** MIDI CC11 Expression (0–127, default 127). Feature 063. */
+  private ccExpression = 127;
+  /** Limiter node to prevent clipping (Feature 063, FR-012). */
+  private limiter: Tone.Limiter | null = null;
+
+  /** localStorage key for master volume persistence (Feature 063). */
+  private static readonly VOLUME_STORAGE_KEY = 'graditone:volume:master';
 
   /**
    * Private constructor - use getInstance() instead
@@ -93,6 +103,11 @@ export class ToneAdapter {
     try {
       // Note: We don't start Tone.Transport here - we'll start it fresh each playback
 
+      // Feature 063: Insert a brick-wall limiter to prevent clipping (FR-012).
+      // Threshold at 0 dBFS — only catches chord peaks where multiple notes sum
+      // above full scale. Single-note dynamics pass through unaffected.
+      this.limiter = new Tone.Limiter(0).toDestination();
+
       if (this.useSampler) {
         // US3: Use Salamander Grand Piano samples for realistic sound
         // Feature 025: Samples are bundled locally (public/audio/salamander/) for full offline support.
@@ -133,8 +148,8 @@ export class ToneAdapter {
             },
             release: 1,
             baseUrl: `${import.meta.env.BASE_URL}audio/salamander/`,
-            volume: -5,
-          }).toDestination();
+            volume: 0,
+          }).connect(this.limiter!);
 
           // CRITICAL: Wait for samples to load before allowing playback
           // Timeout after 5 seconds to avoid hanging offline
@@ -156,17 +171,19 @@ export class ToneAdapter {
         // Fallback: Basic synthesizer (works offline)
         console.log('[ToneAdapter] Using PolySynth for audio playback');
         this.polySynth = new Tone.PolySynth(Tone.Synth, {
-          volume: -8,
+          volume: -3,
           envelope: {
             attack: 0.005,
             decay: 0.1,
             sustain: 0.3,
             release: 1.0,
           },
-        }).toDestination();
+        }).connect(this.limiter!);
       }
 
       this.initialized = true;
+      // Feature 063: Restore persisted master volume
+      this.loadPersistedVolume();
     } catch (error) {
       this.initialized = false;
       throw new Error(`Failed to initialize ToneAdapter: ${error instanceof Error ? error.message : String(error)}`);
@@ -280,7 +297,9 @@ export class ToneAdapter {
       return;
     }
     const noteName = Tone.Frequency(pitch, 'midi').toNote();
-    const gain = (velocity / 127) * 1.0;
+    // Feature 063: logarithmic (sqrt) velocity curve + CC7/CC11 scaling
+    const noteGain = velocityToGain(velocity);
+    const gain = applyCCScaling(noteGain, this.ccChannelVolume, this.ccExpression);
     if (this.sampler) {
       this.sampler.triggerAttack(noteName, Tone.now(), gain);
     } else if (this.polySynth) {
@@ -316,6 +335,7 @@ export class ToneAdapter {
    *                Standard piano range: 21 (A0) to 108 (C8)
    * @param duration - Duration in seconds
    * @param time - Absolute time to play the note (seconds since audio context start)
+   * @param velocity - MIDI velocity (1–127). Defaults to DEFAULT_VELOCITY (80 = mf). Feature 063.
    * 
    * @example
    * ```typescript
@@ -323,7 +343,7 @@ export class ToneAdapter {
    * adapter.playNote(60, 0.5, 1.0);
    * ```
    */
-  public playNote(pitch: number, duration: number, time: number): void {
+  public playNote(pitch: number, duration: number, time: number, velocity?: number): void {
     if (!this.initialized || (!this.sampler && !this.polySynth)) {
       console.warn('ToneAdapter not initialized. Call init() first.');
       return;
@@ -343,12 +363,15 @@ export class ToneAdapter {
     // Convert MIDI pitch to note name (e.g., 60 -> "C4")
     const noteName = Tone.Frequency(pitch, 'midi').toNote();
     
+    // Feature 063: Compute gain from velocity using square-root curve
+    const gain = velocityToGain(velocity ?? DEFAULT_VELOCITY);
+    
     // Schedule the note using Transport for proper timing coordination
     const eventId = Tone.Transport.schedule((scheduleTime) => {
       if (this.sampler) {
-        this.sampler.triggerAttackRelease(noteName, duration, scheduleTime);
+        this.sampler.triggerAttackRelease(noteName, duration, scheduleTime, gain);
       } else if (this.polySynth) {
-        this.polySynth.triggerAttackRelease(noteName, duration, scheduleTime);
+        this.polySynth.triggerAttackRelease(noteName, duration, scheduleTime, gain);
       }
     }, time);
     
@@ -448,5 +471,78 @@ export class ToneAdapter {
     
     // Update Tone.Transport BPM
     Tone.Transport.bpm.value = validBpm;
+  }
+
+  /**
+   * Update MIDI CC state for live playback volume scaling.
+   * Only CC7 (channel volume) and CC11 (expression) are tracked.
+   * Feature 063.
+   *
+   * @param controller - MIDI CC number (7 or 11)
+   * @param value - CC value (0–127)
+   */
+  public handleCC(controller: number, value: number): void {
+    if (controller === 7) {
+      this.ccChannelVolume = Math.max(0, Math.min(127, value));
+    } else if (controller === 11) {
+      this.ccExpression = Math.max(0, Math.min(127, value));
+    }
+  }
+
+  /**
+   * Set the master volume (0–100%). Maps to Tone.Destination.volume in dB.
+   * 0% mutes output completely. 1–100% maps linearly to -60 dB … 0 dB.
+   * Persists value to localStorage. Feature 063.
+   *
+   * @param percent - Volume percentage (0–100)
+   */
+  public setMasterVolume(percent: number): void {
+    const clamped = Math.max(0, Math.min(100, percent));
+    if (clamped === 0) {
+      Tone.Destination.mute = true;
+    } else {
+      Tone.Destination.mute = false;
+      // Linear map: 1% → -60 dB, 100% → 0 dB
+      const dB = -60 + (clamped / 100) * 60;
+      Tone.Destination.volume.value = dB;
+    }
+    try {
+      localStorage.setItem(ToneAdapter.VOLUME_STORAGE_KEY, String(clamped));
+    } catch {
+      // localStorage may be unavailable in some contexts
+    }
+  }
+
+  /**
+   * Get the current master volume as a percentage (0–100).
+   * Reads from Tone.Destination.volume (dB). Feature 063.
+   */
+  public getMasterVolume(): number {
+    if (Tone.Destination.mute) return 0;
+    const dB = Tone.Destination.volume.value;
+    // Inverse of setMasterVolume: percent = ((dB + 60) / 60) * 100
+    const percent = ((dB + 60) / 60) * 100;
+    return Math.round(Math.max(0, Math.min(100, percent)));
+  }
+
+  /**
+   * Load persisted master volume from localStorage and apply it.
+   * Called during init. Feature 063.
+   */
+  public loadPersistedVolume(): void {
+    try {
+      const stored = localStorage.getItem(ToneAdapter.VOLUME_STORAGE_KEY);
+      if (stored !== null) {
+        const parsed = Number(stored);
+        if (!Number.isNaN(parsed)) {
+          this.setMasterVolume(parsed);
+          return;
+        }
+      }
+    } catch {
+      // localStorage unavailable
+    }
+    // Default: 80%
+    this.setMasterVolume(80);
   }
 }

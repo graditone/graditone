@@ -84,6 +84,10 @@ pub struct Note {
     /// Fingering annotations from MusicXML `<technical><fingering>` elements
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fingering: Vec<FingeringAnnotation>,
+    /// Computed velocity (1–127) based on the active dynamic at this note's position.
+    /// None means default (80 = mf). Feature 063.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub velocity: Option<u8>,
 }
 
 fn is_zero_u8(v: &u8) -> bool {
@@ -113,6 +117,7 @@ impl Note {
             has_explicit_accidental: false,
             stem_down: None,
             fingering: Vec::new(),
+            velocity: None,
         })
     }
 
@@ -167,6 +172,12 @@ impl Note {
     /// Set fingering annotations (builder pattern)
     pub fn with_fingering(mut self, fingering: Vec<FingeringAnnotation>) -> Self {
         self.fingering = fingering;
+        self
+    }
+
+    /// Set velocity (builder pattern). Feature 063.
+    pub fn with_velocity(mut self, velocity: u8) -> Self {
+        self.velocity = Some(velocity);
         self
     }
 

@@ -202,7 +202,7 @@ export class PlaybackScheduler {
         durationSeconds = MIN_NOTE_DURATION;
       }
 
-      this.toneAdapter.playNote(note.pitch, durationSeconds, transportTime);
+      this.toneAdapter.playNote(note.pitch, durationSeconds, transportTime, note.velocity);
       this.pendingIndex++;
     }
 
@@ -247,6 +247,7 @@ export class PlaybackScheduler {
       start_tick: r.start_tick,
       duration_ticks: r.combinedDurationTicks,
       staccato: r.staccato,
+      velocity: r.velocity,
     }));
 
     // Filter out notes already past, then sort by start_tick

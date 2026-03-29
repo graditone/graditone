@@ -18,6 +18,8 @@ export interface ResolvedNote {
   combinedDurationTicks: number;
   /** Whether the note has a staccato articulation. */
   staccato?: boolean;
+  /** Velocity from the tie-start note (1–127). Feature 063. */
+  velocity?: number;
 }
 
 /**
@@ -60,6 +62,7 @@ export function resolveTiedNotes(notes: Note[]): ResolvedNote[] {
       start_tick: note.start_tick,
       combinedDurationTicks: totalDuration,
       staccato: note.staccato,
+      velocity: note.velocity,
     });
   }
 

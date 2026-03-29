@@ -38,6 +38,7 @@ pub(super) fn parse_measure<B: BufRead>(
         endings: Vec::new(),
         sound_tempo: None,
         metronome_tempo: None,
+        sound_dynamics: None,
     };
 
     let mut buf = Vec::new();

@@ -38,6 +38,7 @@ A tablet-native app for interactive scores, designed for practice and performanc
 - **Score-defined tempo** - Playback starts at the tempo marked in the score (e.g. 60 BPM for Chopin Nocturne) instead of a fixed 120 BPM default; snap-to-score-tempo action resets both BPM and multiplier to the score's marked tempo
 - **Repeat/navigation** - Jump to any point in the score
 - **Tied note playback** - Tied notes sound as a single sustained note with combined duration, no re-attack at tie boundaries; chords with partial ties sustain only the tied pitch
+- **Dynamic volume** (Feature 063) - MusicXML dynamics (pp–ff, crescendo/diminuendo) parsed in the backend and applied as per-note velocity; square-root gain curve for perceptually even loudness; MIDI CC7 (channel volume) and CC11 (expression) supported for live keyboard input; master volume slider (0–100%) with persistence via localStorage; Tone.Limiter (-1 dB) prevents clipping
 - **Optimized playback rendering** - Zero audio glitches on mobile devices
   - **Incremental highlight updates** - CSS class toggling via rAF, no SVG DOM rebuild
   - **O(log n) note lookup** - Binary search index for real-time highlight computation
