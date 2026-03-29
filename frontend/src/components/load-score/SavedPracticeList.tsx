@@ -16,10 +16,10 @@ export interface SavedPracticeListProps {
   onDelete: (id: string) => void;
   /** Feature 060: Practices in this set cannot be deleted (linked to a session). */
   protectedPracticeIds?: ReadonlySet<string>;
-  /** Feature 060: Map of savedPracticeId → session name for protected practices. */
-  protectedPracticeMap?: ReadonlyMap<string, string>;
+  /** Feature 060: Map of savedPracticeId → session info for protected practices. */
+  protectedPracticeMap?: ReadonlyMap<string, { sessionName: string; sessionId: string; taskId?: string }>;
   /** Feature 060: Called when the user clicks the session link on a protected practice. */
-  onViewSessions?: () => void;
+  onViewSessions?: (sessionId: string, taskId?: string) => void;
 }
 
 export function SavedPracticeList({
@@ -70,11 +70,14 @@ export function SavedPracticeList({
               {protectedPracticeIds?.has(practice.id) ? (
                 <button
                   className="saved-practice-item__session-link"
-                  aria-label={`Linked to session: ${protectedPracticeMap?.get(practice.id) ?? 'session'}`}
+                  aria-label={`Linked to session: ${protectedPracticeMap?.get(practice.id)?.sessionName ?? 'session'}`}
                   disabled={disabled}
-                  onClick={() => onViewSessions?.()}
+                  onClick={() => {
+                    const info = protectedPracticeMap?.get(practice.id);
+                    if (info) onViewSessions?.(info.sessionId, info.taskId);
+                  }}
                   type="button"
-                  title={`📋 ${protectedPracticeMap?.get(practice.id) ?? 'Session'}`}
+                  title={`📋 ${protectedPracticeMap?.get(practice.id)?.sessionName ?? 'Session'}`}
                 >
                   📋
                 </button>

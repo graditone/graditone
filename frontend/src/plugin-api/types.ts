@@ -413,15 +413,15 @@ export interface PluginScoreSelectorProps {
    */
   protectedPracticeIds?: ReadonlySet<string>;
   /**
-   * Feature 060: Map of savedPracticeId → session name for practices linked
+   * Feature 060: Map of savedPracticeId → session info for practices linked
    * to a session. Used by the load dialog to show a session link.
    */
-  protectedPracticeMap?: ReadonlyMap<string, string>;
+  protectedPracticeMap?: ReadonlyMap<string, { sessionName: string; sessionId: string; taskId?: string }>;
   /**
    * Feature 060: Called when the user clicks the session link on a protected
-   * practice. Opens the sessions plugin.
+   * practice. Opens the sessions plugin, optionally expanding the relevant session/task.
    */
-  onViewSessions?: () => void;
+  onViewSessions?: (sessionId: string, taskId?: string) => void;
 }
 
 // ---------------------------------------------------------------------------

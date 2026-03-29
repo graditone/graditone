@@ -29,6 +29,8 @@ export interface UsePracticeLoopParams {
   initialStartTick?: number | null;
   /** Feature 061: Optional initial loop region end tick (from task config). */
   initialEndTick?: number | null;
+  /** Feature 061: When true, the loop region is locked and cannot be changed. */
+  taskLocked?: boolean;
 }
 
 export interface UsePracticeLoopReturn {
@@ -62,6 +64,7 @@ export function usePracticeLoop({
   onResultsShow,
   initialStartTick,
   initialEndTick,
+  taskLocked,
 }: UsePracticeLoopParams): UsePracticeLoopReturn {
   // ─── Multi-loop practice state ─────────────────────────────────────────────
   const [loopCount, setLoopCount] = useState(1);
@@ -117,7 +120,7 @@ export function usePracticeLoop({
     if (startIndex === -1) return null;
     let endIndex = startIndex;
     for (let i = startIndex; i < notes.length; i++) {
-      if (notes[i].tick <= loopRegion.endTick) endIndex = i;
+      if (notes[i].tick < loopRegion.endTick) endIndex = i;
       else break;
     }
     return { startIndex, endIndex };
@@ -154,6 +157,9 @@ export function usePracticeLoop({
   // ─── Long press — pin/loop state machine ───────────────────────────────────
   const handleNoteLongPress = useCallback(
     (tick: number, noteId: string | null) => {
+      // Feature 061: When task-locked, the loop region cannot be changed.
+      if (taskLocked) return;
+
       const isPlaying = playerState.status === 'playing';
 
       if (loopRegion && tick >= loopRegion.startTick && tick <= loopRegion.endTick) {
@@ -184,7 +190,7 @@ export function usePracticeLoop({
         }
       }
     },
-    [context.scorePlayer, loopStart, loopRegion, playerState.status],
+    [context.scorePlayer, loopStart, loopRegion, playerState.status, taskLocked],
   );
 
   // ─── Reset callback for orchestrator ───────────────────────────────────────

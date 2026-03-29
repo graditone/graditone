@@ -198,6 +198,32 @@
   flex-shrink: 1;
 }
 
+/* ─── Task tag badge (Feature 061) ────────────────────────────────────────── */
+
+.practice-plugin__task-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--ls-cta-bg, #1a4a9a);
+  color: var(--ls-cta-text, #fff);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+  flex-shrink: 0;
+  letter-spacing: 0.01em;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+
+.practice-plugin__task-tag:hover {
+  opacity: 0.85;
+}
+
 /* ─── Elapsed timer ───────────────────────────────────────────────────────── */
 
 .practice-plugin__toolbar-timer {
@@ -518,6 +544,20 @@
   color: #555;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.practice-plugin__replay-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #1976d2;
+  white-space: nowrap;
+  flex-shrink: 0;
+  animation: practice-plugin__replay-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes practice-plugin__replay-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 /* ─── Selection screen (reuses play-score approach) ──────────────────────── */
@@ -851,6 +891,33 @@
   font-size: 0.75rem;
   color: #e53935;
   white-space: nowrap;
+}
+
+/* ── Session return button (061-session-task-definition) ───────────────────── */
+
+.practice-results__session-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #00796b;
+  color: #fff;
+  transition: background 0.15s ease;
+}
+
+.practice-results__session-btn:hover {
+  background: #00695c;
+}
+
+.practice-results__session-btn:active {
+  background: #004d40;
 }
 
 /* ── Loop count slider (multi-loop practice) ───────────────────────────────── */

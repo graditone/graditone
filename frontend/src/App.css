@@ -239,6 +239,10 @@ body[data-landing-theme] {
   --color-danger-dark: color-mix(in srgb, var(--ls-accent) 75%, #000);
   --color-danger-bg: color-mix(in srgb, var(--ls-accent) 10%, var(--ls-bg));
 
+  /* Success / done actions */
+  --color-success: var(--ls-success, #4caf50);
+  --color-success-bg: color-mix(in srgb, var(--ls-success, #4caf50) 12%, var(--ls-bg, #fff));
+
   /* Warning / retry actions */
   --color-warning: color-mix(in srgb, var(--ls-accent) 80%, #fff);
   --color-warning-dark: var(--ls-accent);

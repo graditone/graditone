@@ -3,7 +3,7 @@
 **Feature Branch**: `061-session-task-definition`  
 **Created**: 2025-03-28  
 **Status**: Implemented  
-**Completed**: 2026-03-28  
+**Completed**: 2026-03-28 (core T001–T046), 2026-03-29 (enhancements T047–T067)  
 **Input**: User description: "Tasks based Session definition — When you create a new session you need to define the tasks for it."
 
 ## Clarifications

@@ -112,7 +112,7 @@ describe('[T002] BUG: shouldComponentUpdate missing selectedNoteId', () => {
     expect(result).toBe(false);
   });
 
-  it('shouldComponentUpdate still returns false for highlight-only changes (performance guard)', async () => {
+  it('shouldComponentUpdate returns true for highlight-only changes (replay support)', async () => {
     const { LayoutRenderer } = await import('./LayoutRenderer');
 
     // Share the SAME object references for all structural props.
@@ -120,7 +120,7 @@ describe('[T002] BUG: shouldComponentUpdate missing selectedNoteId', () => {
       selectedNoteId: 'note-42',
       highlightedNoteIds: new Set(['note-1']),
     });
-    // Only highlightedNoteIds changes — must NOT trigger structural re-render
+    // Only highlightedNoteIds changes — triggers re-render for replay highlights
     const nextProps: LayoutRendererProps = {
       ...sharedBase,
       highlightedNoteIds: new Set(['note-2']),
@@ -131,7 +131,7 @@ describe('[T002] BUG: shouldComponentUpdate missing selectedNoteId', () => {
       nextProps,
     );
 
-    expect(result).toBe(false);
+    expect(result).toBe(true);
   });
 });
 // ============================================================================
