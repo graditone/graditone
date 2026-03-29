@@ -9,10 +9,12 @@
 import { Component, createRef, type RefObject } from 'react';
 import { LayoutRenderer } from '../components/LayoutRenderer';
 import { createDefaultConfig } from '../utils/renderUtils';
+import { findSystemAtTick } from '../utils/layoutUtils';
 import type { GlobalLayout } from '../wasm/layout';
 import type { RenderConfig } from '../types/RenderConfig';
 import type { Viewport } from '../types/Viewport';
 import type { ITickSource } from '../types/playback';
+import type { PhraseRegion } from '../types/score';
 
 /**
  * Props for ScoreViewer component
@@ -66,6 +68,16 @@ export interface ScoreViewerProps {
   playbackStatus?: 'playing' | 'paused' | 'stopped';
   /** Suppress rendering of measure number labels above each system */
   hideMeasureNumbers?: boolean;
+  /** Feature 062: Phrase regions for overlay rendering */
+  phrases?: readonly PhraseRegion[];
+  /** Feature 062: Whether phrase color bands are visible */
+  phrasesVisible?: boolean;
+  /** Feature 062: Index of the currently selected phrase */
+  selectedPhraseIndex?: number | null;
+  /** Feature 062: Callback when a phrase band is clicked */
+  onPhraseClick?: (phraseIndex: number) => void;
+  /** Feature 062: Tick position to scroll to (e.g. phrase start on navigation) */
+  scrollToTick?: number | null;
   /**
    * Optional scroll container element. When provided, ScoreViewer listens
    * to this element's scroll events and drives scrollTo() on it instead of
@@ -305,6 +317,15 @@ export class ScoreViewer extends Component<ScoreViewerProps, ScoreViewerState> {
       (!scrollIds || scrollIds.size === 0)
     ) {
       this.lastAutoScrollSystemIndex = -1;
+    }
+
+    // Feature 062: Scroll to a tick position (phrase navigation)
+    if (
+      this.props.scrollToTick != null &&
+      this.props.scrollToTick !== prevProps.scrollToTick &&
+      this.props.layout
+    ) {
+      this.scrollToSystemAtTick(this.props.scrollToTick);
     }
   }
 
@@ -752,6 +773,95 @@ export class ScoreViewer extends Component<ScoreViewerProps, ScoreViewerState> {
   }
 
   /**
+   * Feature 062: Scroll to the system containing a given tick.
+   * Re-uses the same scroll animation logic as scrollToHighlightedSystem.
+   */
+  private scrollToSystemAtTick(tick: number): void {
+    const { layout } = this.props;
+    if (!layout) return;
+
+    const targetSystem = findSystemAtTick(layout, tick);
+    if (!targetSystem) return;
+
+    const targetSystemIndex = layout.systems.indexOf(targetSystem);
+
+    const { zoom } = this.state;
+    const renderScale = zoom * BASE_SCALE;
+    const systemTopPx = targetSystem.bounding_box.y * renderScale;
+
+    const container = this.containerRef.current;
+    if (!container) return;
+
+    const scrollEl = this.props.scrollContainerRef?.current;
+    const viewportHeight = scrollEl ? scrollEl.clientHeight : window.innerHeight;
+
+    this.lastAutoScrollSystemIndex = targetSystemIndex;
+    this.autoScrollTargetSystemIndex = targetSystemIndex;
+
+    if (scrollEl) {
+      const currentScroll = scrollEl.scrollTop;
+      const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
+      const targetScroll = Math.min(Math.max(0, systemTopPx - viewportHeight * 0.2), maxScroll);
+      const distance = targetScroll - currentScroll;
+      if (Math.abs(distance) < 2) return;
+
+      if (this.autoScrollAnimationId !== null) {
+        cancelAnimationFrame(this.autoScrollAnimationId);
+        this.autoScrollAnimationId = null;
+      }
+
+      const duration = 400;
+      const startTime = performance.now();
+      const animateScroll = (now: number) => {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        scrollEl.scrollTop = currentScroll + distance * eased;
+        if (progress < 1) {
+          this.autoScrollAnimationId = requestAnimationFrame(animateScroll);
+        } else {
+          this.autoScrollAnimationId = null;
+          this.autoScrollTargetSystemIndex = -1;
+        }
+      };
+      this.autoScrollAnimationId = requestAnimationFrame(animateScroll);
+    } else {
+      const currentPageScroll = window.scrollY || document.documentElement.scrollTop;
+      const containerRect = container.getBoundingClientRect();
+      const containerTopInPage = containerRect.top + currentPageScroll;
+      const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      const targetScroll = Math.min(
+        Math.max(0, containerTopInPage + systemTopPx - viewportHeight * 0.2),
+        maxScroll
+      );
+      const distance = targetScroll - currentPageScroll;
+      if (Math.abs(distance) < 2) return;
+
+      if (this.autoScrollAnimationId !== null) {
+        cancelAnimationFrame(this.autoScrollAnimationId);
+        this.autoScrollAnimationId = null;
+      }
+
+      const startScroll = currentPageScroll;
+      const duration = 400;
+      const startTime = performance.now();
+      const animateScroll = (now: number) => {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        window.scrollTo(0, startScroll + distance * eased);
+        if (progress < 1) {
+          this.autoScrollAnimationId = requestAnimationFrame(animateScroll);
+        } else {
+          this.autoScrollAnimationId = null;
+          this.autoScrollTargetSystemIndex = -1;
+        }
+      };
+      this.autoScrollAnimationId = requestAnimationFrame(animateScroll);
+    }
+  }
+
+  /**
    * Render ScoreViewer UI
    */
   render() {
@@ -831,6 +941,10 @@ export class ScoreViewer extends Component<ScoreViewerProps, ScoreViewerState> {
                 expectedNoteIds={this.props.expectedNoteIds}
                 loopRegion={this.props.loopRegion}
                 hideMeasureNumbers={this.props.hideMeasureNumbers}
+                phrases={this.props.phrases}
+                phrasesVisible={this.props.phrasesVisible}
+                selectedPhraseIndex={this.props.selectedPhraseIndex}
+                onPhraseClick={this.props.onPhraseClick}
               />
             </div>
           </div>

@@ -41,11 +41,12 @@ flowchart TD
 ## Data Flow
 
 1. **Import**: User loads a `.mxl` or `.xml` file → MusicXML Importer parses it into a `Score` domain entity
-2. **Compile**: Score is serialized as `CompiledScore` JSON and passed to the Layout Engine via WASM
-3. **Layout**: Layout Engine computes `GlobalLayout` JSON — all glyph positions, system breaks, and bounding boxes
-4. **Render**: SVG Renderer receives `GlobalLayout`, virtualizes visible systems, and generates SVG DOM
-5. **Interact**: Plugins and user interactions (playback, practice, note selection) communicate through Plugin API events
-6. **Cache**: PWA Shell caches assets and scores for offline access via Service Worker and IndexedDB
+2. **Analyze**: Phrase detection runs on the parsed Score — identifies musical phrases via slurs, rests, structural boundaries, and fallback grouping. Results stored as `PhraseRegion[]` on the Score.
+3. **Compile**: Score (with phrases) is serialized as `CompiledScore` JSON and passed to the Layout Engine via WASM
+4. **Layout**: Layout Engine computes `GlobalLayout` JSON — all glyph positions, system breaks, and bounding boxes
+5. **Render**: SVG Renderer receives `GlobalLayout`, virtualizes visible systems, and generates SVG DOM. Phrase overlay renderer adds semi-transparent color bands when enabled.
+6. **Interact**: Plugins and user interactions (playback, practice, note selection, phrase navigation) communicate through Plugin API events
+7. **Cache**: PWA Shell caches assets and scores for offline access via Service Worker and IndexedDB
 
 ## See Also
 

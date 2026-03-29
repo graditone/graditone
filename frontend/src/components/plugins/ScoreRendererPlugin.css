@@ -1,13 +1,20 @@
+/* Feature 062: Bottom bar with Phrases toggle + Return to start */
+.score-renderer-bottom-bar {
+  display: flex;
+  flex-direction: row;
+  border-top: 1px solid color-mix(in srgb, var(--ls-accent, #1976d2) 20%, transparent);
+}
+
 .score-renderer-return-btn {
   display: block;
-  width: 100%;
+  flex: 1;
   padding: 12px 0;
   font-size: 0.9rem;
   font-weight: bold;
   color: var(--ls-accent, #1976d2);
   background: var(--ls-bg, #fff);
   border: none;
-  border-top: 1px solid color-mix(in srgb, var(--ls-accent, #1976d2) 20%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--ls-accent, #1976d2) 20%, transparent);
   cursor: pointer;
   text-align: center;
   letter-spacing: 0.03em;
@@ -18,5 +25,59 @@
 }
 
 .score-renderer-return-btn:hover {
+  background: color-mix(in srgb, var(--ls-accent, #1976d2) 10%, var(--ls-bg, #fff));
+}
+
+.score-renderer-phrases-btn {
+  display: block;
+  flex: 1;
+  padding: 12px 0;
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: var(--ls-accent, #1976d2);
+  background: var(--ls-bg, #fff);
+  border: none;
+  cursor: pointer;
+  text-align: center;
+  letter-spacing: 0.03em;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+
+.score-renderer-phrases-btn:hover {
+  background: color-mix(in srgb, var(--ls-accent, #1976d2) 10%, var(--ls-bg, #fff));
+}
+
+.score-renderer-phrases-btn.active {
+  background: color-mix(in srgb, var(--ls-accent, #1976d2) 15%, var(--ls-bg, #fff));
+}
+
+.score-renderer-phrases-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.score-renderer-nav-btn {
+  display: block;
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: var(--ls-accent, #1976d2);
+  background: var(--ls-bg, #fff);
+  border: none;
+  border-left: 1px solid color-mix(in srgb, var(--ls-accent, #1976d2) 20%, transparent);
+  cursor: pointer;
+  text-align: center;
+  letter-spacing: 0.03em;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+
+.score-renderer-nav-btn:hover {
   background: color-mix(in srgb, var(--ls-accent, #1976d2) 10%, var(--ls-bg, #fff));
 }

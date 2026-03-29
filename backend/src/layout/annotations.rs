@@ -766,12 +766,11 @@ fn render_ties_and_slurs(
                 let above = match n.slur_above {
                     Some(v) => v,
                     None => {
-                        // Standard engraving: slur on opposite side of stems.
-                        // In multi-voice context, stem direction is forced:
-                        // voice 0 = stem up → slur below; voice 1+ = stem down → slur above.
+                        // Standard engraving: in multi-voice context, slurs go
+                        // away from the other voice (outside the voice group):
+                        // voice 0 = stem up → slur above; voice 1+ = stem down → slur below.
                         if num_voices > 1 {
-                            // voice_idx > 0 → stem down → slur above
-                            voice_idx > 0
+                            voice_idx == 0
                         } else {
                             // Single voice: stem direction determined by chord
                             // (most extreme note from staff middle).
@@ -1016,15 +1015,35 @@ fn render_ties_and_slurs(
                     let arc_start_x = (unified_left_margin - incoming_offset)
                         .min(arc_end_x - 20.0)
                         .max(0.0);
+
+                    // For the start Y, use the first note in this voice within
+                    // the current system so the arc begins at the correct height
+                    // (e.g., high notes at M5) rather than the end note's Y.
+                    let first_note_y = voice
+                        .notes
+                        .iter()
+                        .filter(|vn| {
+                            vn.start_tick >= tick_range.start_tick
+                                && vn.start_tick < tick_range.end_tick
+                                && !vn.note_id.is_empty()
+                        })
+                        .filter_map(|vn| note_lookup.get(vn.note_id.as_str()))
+                        .map(|&(_, vy, _, _)| vy)
+                        .next();
+                    let adj_start_y = match first_note_y {
+                        Some(fy) => fy + y_edge + if above { -endpoint_gap } else { endpoint_gap },
+                        None => adj_end_y,
+                    };
+
                     let span_x = (arc_end_x - arc_start_x).max(1.0);
                     let arc_height = (3.5 * span_x.sqrt()).clamp(12.0, 50.0);
                     let y_offset = if above { -arc_height } else { arc_height };
-                    let mid_y = adj_end_y + y_offset;
+                    let mid_y = (adj_start_y + adj_end_y) / 2.0 + y_offset;
 
                     slur_arcs.push(types::TieArc {
                         start: types::Point {
                             x: arc_start_x,
-                            y: adj_end_y,
+                            y: adj_start_y,
                         },
                         end: types::Point {
                             x: arc_end_x,

@@ -132,6 +132,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - IndexedDB (`sessions` object store in `graditone-db` v3) + localStorage index (`graditone-sessions-index`) (060-sessions-plugin)
 - TypeScript (strict), React 18+, CSS + React (hooks, useState, useCallback, useEffect), Vite bundler, existing plugin API v8 (`PluginContext`, `openPlugin`, `getNavigationData`, `broadcastPracticeSaved`, `onPracticeSaved`) (061-session-task-definition)
 - IndexedDB (`sessions` store — full Session objects) + localStorage (`graditone-sessions-index` — lightweight index). Same dual-layer pattern used by Feature 060. (061-session-task-definition)
+- Rust (latest stable) for backend phrase detection; TypeScript + React 18 for frontend visualization + serde (serialization), wasm-bindgen (WASM bindings), React (frontend UI) (062-score-phrase-detection)
+- Phrases are computed during import and stored in-memory in the Score struct. Cached in IndexedDB along with the score via existing schema versioning (v10 → v11). (062-score-phrase-detection)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -152,9 +154,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 062-score-phrase-detection: Added Rust (latest stable) for backend phrase detection; TypeScript + React 18 for frontend visualization + serde (serialization), wasm-bindgen (WASM bindings), React (frontend UI)
 - 061-session-task-definition: Added TypeScript (strict), React 18+, CSS + React (hooks, useState, useCallback, useEffect), Vite bundler, existing plugin API v8 (`PluginContext`, `openPlugin`, `getNavigationData`, `broadcastPracticeSaved`, `onPracticeSaved`)
 - 060-sessions-plugin: Added TypeScript (strict), React 18+ + Plugin API v8 (new — extends v7 with practice-saved event), existing savedPractice services, IndexedDB, localStorage
-- 059-doc-architecture: Added Markdown + Mermaid (GitHub-native rendering) + None (documentation-only; GitHub Mermaid renderer)
 
 
 <!-- MANUAL ADDITIONS START -->

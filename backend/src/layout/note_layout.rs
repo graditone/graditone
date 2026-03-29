@@ -253,26 +253,16 @@ pub(crate) fn position_glyphs_for_staff(
     let num_voices = staff_data.voices.len();
 
     for (voice_index, voice) in staff_data.voices.iter().enumerate() {
-        // Only force stem direction when another voice actually has notes
-        // in the current system's tick range.  This avoids forcing stems up
-        // for voice 0 in passages where voice 1 is empty (e.g., La Candeur
-        // M1-M4 are single-voice melody, but voices 0+1 both exist because
-        // later measures use two voices).
-        let forced_stem_down: Option<bool> = if num_voices > 1 {
-            let other_voice_has_notes = staff_data.voices.iter().enumerate().any(|(vi, v)| {
-                vi != voice_index
-                    && v.notes.iter().any(|n| {
-                        n.start_tick >= tick_range.start_tick && n.start_tick < tick_range.end_tick
-                    })
-            });
-            if other_voice_has_notes {
-                Some(voice_index > 0)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        // Per-note forced stem direction: only force when the other voice has
+        // notes in the *same measure* as the current note.  The previous
+        // system-wide check incorrectly forced stems for single-voice measures
+        // that happened to share a system with a multi-voice measure (e.g., La
+        // Candeur M14-M15 are single-voice but share a system with M13 which
+        // is multi-voice, causing all stems to be forced UP instead of
+        // honouring the explicit MusicXML <stem> annotations).
+        //
+        // `None` means "don't force — fall through to explicit/auto cascade".
+        // `Some(false)` = voice 0 forced UP, `Some(true)` = voice 1+ forced DOWN.
 
         let notes_in_range: Vec<NoteData> = voice
             .notes
@@ -304,6 +294,52 @@ pub(crate) fn position_glyphs_for_staff(
                 note.start_tick >= tick_range.start_tick && note.start_tick < tick_range.end_tick
             })
             .collect();
+
+        // Build per-note forced_stem_down: check if the other voice(s) have
+        // notes in the same measure as each note.  This is O(n·m) but both
+        // n (notes in range) and m (other-voice notes in range) are small.
+        let forced_stem_downs: Vec<Option<bool>> = if num_voices > 1 {
+            voice_notes_in_range
+                .iter()
+                .map(|note| {
+                    let note_measure = if ticks_per_measure > 0 {
+                        if pickup_ticks > 0 && note.start_tick < pickup_ticks {
+                            0
+                        } else {
+                            let adjusted = note.start_tick.saturating_sub(pickup_ticks);
+                            adjusted / ticks_per_measure + if pickup_ticks > 0 { 1 } else { 0 }
+                        }
+                    } else {
+                        0
+                    };
+                    let other_voice_has_notes_in_measure =
+                        staff_data.voices.iter().enumerate().any(|(vi, v)| {
+                            vi != voice_index
+                                && v.notes.iter().any(|n| {
+                                    let n_measure = if ticks_per_measure > 0 {
+                                        if pickup_ticks > 0 && n.start_tick < pickup_ticks {
+                                            0
+                                        } else {
+                                            let adj = n.start_tick.saturating_sub(pickup_ticks);
+                                            adj / ticks_per_measure
+                                                + if pickup_ticks > 0 { 1 } else { 0 }
+                                        }
+                                    } else {
+                                        0
+                                    };
+                                    n_measure == note_measure
+                                })
+                        });
+                    if other_voice_has_notes_in_measure {
+                        Some(voice_index > 0)
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        } else {
+            vec![None; voice_notes_in_range.len()]
+        };
 
         let horizontal_offsets: Vec<f32> = {
             // Grace notes are not in note_positions (excluded from unified
@@ -520,27 +556,28 @@ pub(crate) fn position_glyphs_for_staff(
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
 
-            let chord_stem_down = if let Some(forced) = forced_stem_down {
-                forced
-            } else {
-                // Use explicit MusicXML stem direction if present
-                let explicit_stem = sorted
-                    .iter()
-                    .find_map(|&idx| voice_notes_in_range[idx].stem_down);
-                if let Some(sd) = explicit_stem {
-                    sd
+            let chord_stem_down =
+                if let Some(forced) = forced_stem_downs.get(sorted[0]).copied().flatten() {
+                    forced
                 } else {
-                    let most_extreme = *sorted
+                    // Use explicit MusicXML stem direction if present
+                    let explicit_stem = sorted
                         .iter()
-                        .max_by(|&&a, &&b| {
-                            let da = (chord_note_y_positions[a] - chord_stem_middle_y).abs();
-                            let db = (chord_note_y_positions[b] - chord_stem_middle_y).abs();
-                            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
-                        })
-                        .unwrap();
-                    chord_note_y_positions[most_extreme] <= chord_stem_middle_y
-                }
-            };
+                        .find_map(|&idx| voice_notes_in_range[idx].stem_down);
+                    if let Some(sd) = explicit_stem {
+                        sd
+                    } else {
+                        let most_extreme = *sorted
+                            .iter()
+                            .max_by(|&&a, &&b| {
+                                let da = (chord_note_y_positions[a] - chord_stem_middle_y).abs();
+                                let db = (chord_note_y_positions[b] - chord_stem_middle_y).abs();
+                                da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                            .unwrap();
+                        chord_note_y_positions[most_extreme] <= chord_stem_middle_y
+                    }
+                };
 
             let anchor_idx = if chord_stem_down {
                 *sorted.last().unwrap()
@@ -652,7 +689,7 @@ pub(crate) fn position_glyphs_for_staff(
             staff_vertical_offset,
             &beamed_note_indices,
             &chord_scale_map,
-            forced_stem_down,
+            &forced_stem_downs,
             &grace_note_indices,
             &explicit_stem_downs,
         );
@@ -807,7 +844,11 @@ pub(crate) fn position_glyphs_for_staff(
             let group_direction = if is_grace_group {
                 // Grace notes always get stems up (music convention).
                 stems::StemDirection::Up
-            } else if let Some(forced) = forced_stem_down {
+            } else if let Some(forced) = group
+                .notes
+                .first()
+                .and_then(|n| forced_stem_downs.get(n.event_index).copied().flatten())
+            {
                 if forced {
                     stems::StemDirection::Down
                 } else {
