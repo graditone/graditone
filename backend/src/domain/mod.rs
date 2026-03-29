@@ -17,3 +17,6 @@ pub mod importers;
 
 // Difficulty computation module (Feature 055)
 pub mod difficulty;
+
+// Phrase detection module (Feature 062)
+pub mod phrases;

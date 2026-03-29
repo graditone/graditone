@@ -23,6 +23,8 @@ import { RenderingPipeline, STAFF_LINE_STROKE_WIDTH, LEDGER_LINE_STROKE_WIDTH } 
 import { HighlightController } from './renderer/HighlightController';
 import { InteractionHandler } from './renderer/InteractionHandler';
 import { LoopOverlayRenderer } from './renderer/LoopOverlayRenderer';
+import { PhraseOverlayRenderer } from './renderer/PhraseOverlayRenderer';
+import type { PhraseRegion } from '../types/score';
 import './LayoutRenderer.css';
 
 // Re-export constants for backward compatibility
@@ -69,6 +71,14 @@ export interface LayoutRendererProps {
   /** Raw (unexpanded) notes — original ticks matching the layout engine.
    * Used for loop overlay tick→x mapping. Falls back to notes if absent. */
   rawNotes?: ReadonlyArray<{ id: string; start_tick: number; duration_ticks: number }>;
+  /** Feature 062: Phrase regions to render as alternating color bands. */
+  phrases?: readonly PhraseRegion[];
+  /** Feature 062: Whether phrase color bands are currently visible. */
+  phrasesVisible?: boolean;
+  /** Feature 062: Index of the currently selected phrase (null = none). */
+  selectedPhraseIndex?: number | null;
+  /** Feature 062: Callback when a phrase band is clicked. */
+  onPhraseClick?: (phraseIndex: number) => void;
 }
 
 /**
@@ -104,6 +114,9 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
   /** Extracted loop overlay renderer */
   private loopOverlay: LoopOverlayRenderer;
 
+  /** Feature 062: Phrase overlay renderer */
+  private phraseOverlay: PhraseOverlayRenderer;
+
   /** Target frame interval for slow-frame warnings */
   private frameInterval: number;
 
@@ -123,6 +136,7 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
     this.frameInterval = profile.targetFrameIntervalMs;
     this.interaction = new InteractionHandler();
     this.loopOverlay = new LoopOverlayRenderer();
+    this.phraseOverlay = new PhraseOverlayRenderer();
 
     // Feature 024: Build highlight index if notes provided
     if (props.notes && props.notes.length > 0) {
@@ -151,7 +165,10 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       nextProps.errorNoteIds !== this.props.errorNoteIds ||
       nextProps.expectedNoteIds !== this.props.expectedNoteIds ||
       nextProps.loopRegion !== this.props.loopRegion ||
-      nextProps.highlightedNoteIds !== this.props.highlightedNoteIds
+      nextProps.highlightedNoteIds !== this.props.highlightedNoteIds ||
+      nextProps.phrasesVisible !== this.props.phrasesVisible ||
+      nextProps.phrases !== this.props.phrases ||
+      nextProps.selectedPhraseIndex !== this.props.selectedPhraseIndex
     );
   }
 
@@ -242,6 +259,16 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       this.reapplyHighlights();
     }
 
+    // Feature 062: Re-render SVG when phrase overlay state changes
+    if (
+      prevProps.phrasesVisible !== this.props.phrasesVisible ||
+      prevProps.phrases !== this.props.phrases ||
+      prevProps.selectedPhraseIndex !== this.props.selectedPhraseIndex
+    ) {
+      this.renderSVG();
+      this.reapplyHighlights();
+    }
+
     // Update note click callback when prop changes
     if (prevProps.onNoteClick !== this.props.onNoteClick) {
       this.interaction.setCallback(this.props.onNoteClick);
@@ -320,6 +347,20 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
           loopRegion: this.props.loopRegion,
           rawNotes: this.props.rawNotes ?? this.props.notes,
           expandedNotes: this.props.notes,
+          sourceToNoteIdMap: this.props.sourceToNoteIdMap,
+        });
+      }
+    }
+
+    // Feature 062: Render phrase overlay — delegated to PhraseOverlayRenderer
+    if (this.props.phrasesVisible && this.props.phrases && this.props.phrases.length > 0) {
+      const svg = this.svgRef.current;
+      if (svg) {
+        this.phraseOverlay.renderOverlays(svg, layout, viewport, {
+          phrases: this.props.phrases,
+          selectedPhraseIndex: this.props.selectedPhraseIndex,
+          onPhraseClick: this.props.onPhraseClick,
+          rawNotes: this.props.rawNotes ?? this.props.notes,
           sourceToNoteIdMap: this.props.sourceToNoteIdMap,
         });
       }

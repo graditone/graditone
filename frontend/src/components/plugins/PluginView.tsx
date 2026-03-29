@@ -147,7 +147,8 @@ export type V3ProxyRefs = {
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export function createBoundScoreRenderer(
-  internalRef: { current: ScorePlayerInternal | null }
+  internalRef: { current: ScorePlayerInternal | null },
+  scorePlayerRef?: { current: PluginScorePlayerContext },
 ): (props: PluginScoreRendererProps) => ReactElement {
   return function BoundScoreRenderer(props: PluginScoreRendererProps) {
     const internal = internalRef.current;
@@ -158,6 +159,18 @@ export function createBoundScoreRenderer(
         </div>
       );
     }
+
+    // Feature 062: Create loop region callback for phrase selection
+    const handleSetLoopRegion = scorePlayerRef
+      ? (startTick: number | null, endTick: number | null) => {
+          scorePlayerRef.current.setPinnedStart(startTick);
+          scorePlayerRef.current.setLoopEnd(endTick);
+          if (startTick != null) {
+            scorePlayerRef.current.seekToTick(startTick);
+          }
+        }
+      : undefined;
+
     return (
       <ScoreRendererPlugin
         {...props}
@@ -166,6 +179,7 @@ export function createBoundScoreRenderer(
         rawNotes={internal.rawNotes}
         tickSourceRef={internal.tickSourceRef}
         playbackStatus={internal.playbackStatus}
+        onSetLoopRegion={handleSetLoopRegion}
       />
     );
   };

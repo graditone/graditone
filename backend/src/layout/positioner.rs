@@ -222,8 +222,8 @@ pub fn position_noteheads(
     // noteheadHalf / noteheadWhole) at the given font_size, scaled so their visual
     // size matches the notehead in the corresponding combined glyph (e.g. noteHalfDown).
     chord_scale_map: &std::collections::HashMap<usize, f32>,
-    // Multi-voice override: Some(true) = stems down, Some(false) = stems up, None = auto
-    forced_stem_down: Option<bool>,
+    // Multi-voice override per note: Some(true) = stems down, Some(false) = stems up, None = auto
+    forced_stem_downs: &[Option<bool>],
     // Grace note indices: these render at 75% of normal size
     grace_note_indices: &std::collections::HashSet<usize>,
     // Explicit stem direction per note from MusicXML <stem> element
@@ -257,7 +257,7 @@ pub fn position_noteheads(
             let stem_down = if grace_note_indices.contains(&i) {
                 // Grace notes always get stems up (music convention).
                 false
-            } else if let Some(forced) = forced_stem_down {
+            } else if let Some(forced) = forced_stem_downs.get(i).copied().flatten() {
                 forced
             } else if let Some(Some(explicit)) = explicit_stem_downs.get(i) {
                 *explicit
@@ -1533,7 +1533,7 @@ mod tests {
             0.0,                               // staff_vertical_offset
             &std::collections::HashSet::new(), // no beamed notes
             &std::collections::HashMap::new(), // no chord scale overrides
-            None,                              // no multi-voice override
+            &vec![None; notes.len()],          // no multi-voice override (per note)
             &std::collections::HashSet::new(), // no grace notes
             &vec![None; notes.len()],          // no explicit stem directions
         );
@@ -1874,7 +1874,7 @@ mod tests {
             0.0,
             &beamed,
             &std::collections::HashMap::new(), // no chord scale overrides
-            None,
+            &vec![None; notes.len()],          // no multi-voice override (per note)
             &std::collections::HashSet::new(), // no grace notes
             &vec![None; notes.len()],          // no explicit stem directions
         );
@@ -1914,7 +1914,7 @@ mod tests {
             0.0,
             &beamed,
             &std::collections::HashMap::new(), // no chord scale overrides
-            None,
+            &vec![None; notes.len()],          // no multi-voice override (per note)
             &std::collections::HashSet::new(), // no grace notes
             &vec![None; notes.len()],          // no explicit stem directions
         );
@@ -1950,7 +1950,7 @@ mod tests {
             0.0,
             &beamed,
             &std::collections::HashMap::new(), // no chord scale overrides
-            None,
+            &vec![None; notes.len()],          // no multi-voice override (per note)
             &std::collections::HashSet::new(), // no grace notes
             &vec![None; notes.len()],          // no explicit stem directions
         );

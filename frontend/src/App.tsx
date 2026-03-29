@@ -255,7 +255,7 @@ function App() {
         // with the real hook-backed useMetronomeBridge API on first render.
         const metronomeRef: V3ProxyRefs['metronomeRef'] = { current: createNoOpMetronome() };
         v3ProxyRefsMap.current.set(manifest.id, { scorePlayerRef, internalRef, metronomeRef });
-        const BoundScoreRenderer = createBoundScoreRenderer(internalRef);
+        const BoundScoreRenderer = createBoundScoreRenderer(internalRef, scorePlayerRef);
 
         const context: PluginContext = {
           emitNote: (event) => {

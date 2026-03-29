@@ -13,6 +13,20 @@ export interface DifficultyRating {
   level: DifficultyLevel;
 }
 
+/** A detected musical phrase region within a score (Feature 062) */
+export interface PhraseRegion {
+  /** 0-based instrument index */
+  instrument_index: number;
+  /** 0-based start measure (inclusive) */
+  start_measure: number;
+  /** 0-based end measure (inclusive) */
+  end_measure: number;
+  /** Start tick derived from measure boundaries */
+  start_tick: number;
+  /** End tick (end of end_measure) */
+  end_tick: number;
+}
+
 /** Tick represents a time position at 960 PPQ (Pulses Per Quarter note) */
 export type Tick = number;
 
@@ -177,6 +191,9 @@ export interface Score {
 
   /** Computed difficulty rating based on note density (Feature 055) */
   difficulty_rating?: DifficultyRating;
+
+  /** Detected phrase regions per instrument (Feature 062) */
+  phrases?: PhraseRegion[];
 }
 
 /** An octave-shift region (8va/8vb) for display pitch transposition */

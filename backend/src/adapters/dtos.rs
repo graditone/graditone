@@ -5,6 +5,7 @@ use crate::domain::{
     difficulty::DifficultyRating,
     events::{global::GlobalStructuralEvent, staff::StaffStructuralEvent},
     instrument::Instrument,
+    phrases::PhraseRegion,
     repeat::{RepeatBarline, VoltaBracket},
     score::{OctaveShiftRegion, Score},
     staff::Staff,
@@ -76,7 +77,8 @@ impl From<&Instrument> for InstrumentDto {
 /// v8: octave_shift_regions added to ScoreDto (050-fix-layout-preloaded-scores)
 /// v9: fingering annotations added to Note (fingering-layout)
 /// v10: difficulty_rating added to ScoreDto (055-score-difficulty-density)
-pub const SCORE_SCHEMA_VERSION: u32 = 10;
+/// v11: phrases added to ScoreDto (062-score-phrase-detection)
+pub const SCORE_SCHEMA_VERSION: u32 = 11;
 
 /// DTO for difficulty rating serialization (Feature 055)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,6 +92,28 @@ impl From<&DifficultyRating> for DifficultyRatingDto {
         Self {
             density_rate: rating.density_rate,
             level: rating.level as u8,
+        }
+    }
+}
+
+/// DTO for phrase region serialization (Feature 062)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhraseRegionDto {
+    pub instrument_index: usize,
+    pub start_measure: usize,
+    pub end_measure: usize,
+    pub start_tick: u32,
+    pub end_tick: u32,
+}
+
+impl From<&PhraseRegion> for PhraseRegionDto {
+    fn from(phrase: &PhraseRegion) -> Self {
+        Self {
+            instrument_index: phrase.instrument_index,
+            start_measure: phrase.start_measure,
+            end_measure: phrase.end_measure,
+            start_tick: phrase.start_tick,
+            end_tick: phrase.end_tick,
         }
     }
 }
@@ -128,6 +152,9 @@ pub struct ScoreDto {
     /// Computed difficulty rating based on note density (Feature 055)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub difficulty_rating: Option<DifficultyRatingDto>,
+    /// Detected phrase regions per instrument (Feature 062)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub phrases: Vec<PhraseRegionDto>,
 }
 
 impl From<&Score> for ScoreDto {
@@ -146,6 +173,7 @@ impl From<&Score> for ScoreDto {
                 .difficulty_rating
                 .as_ref()
                 .map(DifficultyRatingDto::from),
+            phrases: score.phrases.iter().map(PhraseRegionDto::from).collect(),
         }
     }
 }

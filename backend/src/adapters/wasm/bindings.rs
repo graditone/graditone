@@ -5,6 +5,7 @@ use super::error_handling::import_error_to_js;
 use crate::adapters::dtos::{SCORE_SCHEMA_VERSION, ScoreDto};
 use crate::domain::difficulty::density::compute_difficulty;
 use crate::domain::importers::musicxml::{ImportContext, MusicXMLConverter, MusicXMLParser};
+use crate::domain::phrases::detect_phrases;
 use crate::ports::importers::{ImportMetadata, ImportStatistics};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -69,6 +70,9 @@ pub fn parse_musicxml(xml_content: &str) -> Result<JsValue, JsValue> {
 
     // Feature 055: Compute difficulty rating from note density
     score.difficulty_rating = compute_difficulty(&score);
+
+    // Feature 062: Detect musical phrases
+    score.phrases = detect_phrases(&score);
 
     // Extract warnings and counts from context
     let skipped_element_count = context.skipped_element_count();

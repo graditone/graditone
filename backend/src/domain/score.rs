@@ -6,6 +6,7 @@ use crate::domain::{
     },
     ids::ScoreId,
     instrument::Instrument,
+    phrases::PhraseRegion,
     repeat::{RepeatBarline, VoltaBracket},
     value_objects::{BPM, Tick},
 };
@@ -50,6 +51,9 @@ pub struct Score {
     /// Computed difficulty rating based on note density (Feature 055)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub difficulty_rating: Option<DifficultyRating>,
+    /// Detected phrase regions per instrument (Feature 062)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub phrases: Vec<PhraseRegion>,
 }
 
 impl Score {
@@ -65,6 +69,7 @@ impl Score {
             measure_end_ticks: Vec::new(),
             octave_shift_regions: Vec::new(),
             difficulty_rating: None,
+            phrases: Vec::new(),
         };
 
         // Add default tempo (120 BPM) at tick 0

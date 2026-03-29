@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import React from 'react';
-import type { Score, GlobalStructuralEvent, StaffStructuralEvent, ClefEvent, Note } from '../../types/score';
+import type { Score, GlobalStructuralEvent, StaffStructuralEvent, ClefEvent, Note, PhraseRegion } from '../../types/score';
 import type { PlaybackStatus, ITickSource } from '../../types/playback';
 import { ScoreViewer, LABEL_MARGIN } from '../../pages/ScoreViewer';
 import type { GlobalLayout } from '../../wasm/layout';
@@ -103,6 +103,16 @@ interface LayoutViewProps {
   onSeekAndPlay?: (tick: number) => void;
   /** Loop region: when both pins are set, overlay rect + rAF loop-back */
   loopRegion?: { startTick: number; endTick: number } | null;
+  /** Feature 062: Filtered phrase regions (instrument 0 only) */
+  phrases?: readonly PhraseRegion[];
+  /** Feature 062: Whether phrase color bands are visible */
+  phrasesVisible?: boolean;
+  /** Feature 062: Index of the currently selected phrase */
+  selectedPhraseIndex?: number | null;
+  /** Feature 062: Callback when a phrase band is clicked */
+  onPhraseClick?: (phraseIndex: number) => void;
+  /** Feature 062: Tick position to scroll to on phrase navigation */
+  scrollToTick?: number | null;
   /**
    * When the score is inside an overflow:auto container (e.g. plugin view),
    * pass a ref to that container so ScoreViewer can drive scroll on it
@@ -253,7 +263,7 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
   };
 }
 
-export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playbackStatus, onNoteClick, selectedNoteId, tickSourceRef, allNotes, rawNotes, pinnedNoteIds, errorNoteIds, expectedNoteIds, scrollTargetNoteIds, pinnedNoteId, onPin, onSeekAndPlay, loopRegion, scrollContainerRef }: LayoutViewProps) {
+export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playbackStatus, onNoteClick, selectedNoteId, tickSourceRef, allNotes, rawNotes, pinnedNoteIds, errorNoteIds, expectedNoteIds, scrollTargetNoteIds, pinnedNoteId, onPin, onSeekAndPlay, loopRegion, phrases: phrasesProp, phrasesVisible, selectedPhraseIndex, onPhraseClick, scrollToTick, scrollContainerRef }: LayoutViewProps) {
   const [layout, setLayout] = useState<GlobalLayout | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -419,6 +429,11 @@ export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playba
         onPin={onPin}
         onSeekAndPlay={onSeekAndPlay}
         loopRegion={loopRegion}
+        phrases={phrasesVisible ? (phrasesProp ?? score.phrases) : undefined}
+        phrasesVisible={phrasesVisible}
+        selectedPhraseIndex={selectedPhraseIndex}
+        onPhraseClick={onPhraseClick}
+        scrollToTick={scrollToTick}
         scrollContainerRef={scrollContainerRef}
       />
     </div>
