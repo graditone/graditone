@@ -373,7 +373,10 @@ function App() {
             const target = entries.find(e => e.manifest.id === pluginId)
             if (target?.manifest.view === 'full-screen') {
               document.body.classList.add('fullscreen-play')
-              document.documentElement.requestFullscreen?.().catch(() => {})
+              // Note: requestFullscreen is NOT called here because openPlugin
+              // may be invoked programmatically (e.g. auto-open on startup)
+              // outside a user gesture, which browsers reject. The user-initiated
+              // path (handleSelectPlugin) calls requestFullscreen instead.
             }
             loadToneAdapter().then(adapter => adapter.init()).catch(() => {})
           },
