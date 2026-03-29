@@ -76,6 +76,12 @@ export interface PracticeToolbarProps {
   onMetronomeToggle: () => void;
   metronomeSubdivision: MetronomeSubdivision;
   onMetronomeSubdivisionChange: (s: MetronomeSubdivision) => void;
+  /** When true, a replay is running — practice toggle should be disabled. */
+  isReplaying?: boolean;
+  /** Feature 061: Session task tag — when set, config is locked and tag is shown. */
+  taskTag?: { taskNumber: number; sessionName: string } | null;
+  /** Feature 061: Called when the task tag badge is clicked. */
+  onTaskTagClick?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +115,9 @@ export function PracticeToolbar({
   onMetronomeToggle,
   metronomeSubdivision,
   onMetronomeSubdivisionChange,
+  isReplaying,
+  taskTag,
+  onTaskTagClick,
 }: PracticeToolbarProps) {
   const isPlaying = status === 'playing';
   const isLoaded = status === 'ready' || status === 'playing' || status === 'paused';
@@ -201,6 +210,18 @@ export function PracticeToolbar({
         </span>
       )}
 
+      {/* Feature 061: Session task tag — shown when launched from a session task */}
+      {taskTag && (
+        <button
+          className="practice-plugin__task-tag"
+          title={`Session Task ${taskTag.taskNumber}`}
+          onClick={onTaskTagClick}
+          type="button"
+        >
+          Session Task {taskTag.taskNumber}
+        </button>
+      )}
+
       {/* Play / Pause toggle */}
       {isPlaying ? (
         <button
@@ -240,7 +261,7 @@ export function PracticeToolbar({
             aria-haspopup="listbox"
             aria-expanded={staffMenuOpen}
             aria-label="Select hand"
-            disabled={!isLoaded}
+            disabled={!isLoaded || !!taskTag}
           >
             {staffIndexLabel(selectedStaffIndex)}
             <span className="practice-plugin__staff-chevron">▾</span>
@@ -292,7 +313,7 @@ export function PracticeToolbar({
             practiceRunning ? 'Stop practice mode' : 'Start practice mode'
           }
           aria-pressed={practiceRunning}
-          disabled={!isLoaded || midiConnected === false}
+          disabled={!isLoaded || midiConnected === false || !!isReplaying}
         >
           {practiceBtnLabel}
         </button>
@@ -302,6 +323,13 @@ export function PracticeToolbar({
       {practiceRunning && totalPracticeNotes > 0 && (
         <span className="practice-plugin__progress" aria-live="polite">
           {currentPracticeIndex + 1}&nbsp;/&nbsp;{totalPracticeNotes}
+        </span>
+      )}
+
+      {/* Replay mode label */}
+      {isReplaying && (
+        <span className="practice-plugin__replay-label" aria-live="polite">
+          ▶ Replaying…
         </span>
       )}
 
@@ -338,7 +366,7 @@ export function PracticeToolbar({
           }}
           aria-label="Tempo multiplier"
           className="practice-plugin__toolbar-tempo-slider"
-          disabled={status === 'loading'}
+          disabled={status === 'loading' || !!taskTag}
         />
         {bpm > 0 && (
           <span className="practice-plugin__toolbar-bpm">{Math.round(bpm * tempoMultiplier)}</span>

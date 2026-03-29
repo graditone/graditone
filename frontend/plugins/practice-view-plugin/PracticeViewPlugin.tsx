@@ -57,11 +57,12 @@ async function loadProtectedPracticeIds(): Promise<ReadonlySet<string>> {
     return mod.computeProtectedPracticeIds();
   } catch { return new Set<string>(); }
 }
-async function loadProtectedPracticeMap(): Promise<ReadonlyMap<string, string>> {
+type ProtectedPracticeInfo = { sessionName: string; sessionId: string; taskId?: string };
+async function loadProtectedPracticeMap(): Promise<ReadonlyMap<string, ProtectedPracticeInfo>> {
   try {
     const mod = await import(/* @vite-ignore */ _sessPath);
     return mod.computeProtectedPracticeMap();
-  } catch { return new Map<string, string>(); }
+  } catch { return new Map<string, ProtectedPracticeInfo>(); }
 }
 
 // ---------------------------------------------------------------------------
@@ -221,8 +222,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const [isSaved, setIsSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const loadedScoreRefRef = useRef<ScoreRef | null>(null);
-  // Feature 061: Track taskId when launched from a session task
+  // Feature 061: Track taskId and sessionId when launched from a session task
   const taskIdRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  // Feature 061: Task tag info for toolbar display
+  const [taskTag, setTaskTag] = useState<{ taskNumber: number; sessionName: string } | null>(null);
   // Feature 061: Pending task config to apply once score is loaded
   const pendingTaskConfigRef = useRef<{
     staffIndex: number;
@@ -232,10 +236,12 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     startMeasure: number | null;
     endMeasure: number | null;
   } | null>(null);
+  // Feature 061: Auto-start practice after task config + loop region are applied
+  const autoStartPracticeRef = useRef(false);
   const [savedPractices, setSavedPractices] = useState<SavedPracticeIndexEntry[]>(() => listSavedPractices());
   // Feature 060: Protected practice IDs (linked to sessions, cannot be deleted)
   const [protectedPracticeIds, setProtectedPracticeIds] = useState<ReadonlySet<string>>(new Set());
-  const [protectedPracticeMap, setProtectedPracticeMap] = useState<ReadonlyMap<string, string>>(new Map());
+  const [protectedPracticeMap, setProtectedPracticeMap] = useState<ReadonlyMap<string, ProtectedPracticeInfo>>(new Map());
   useEffect(() => {
     loadProtectedPracticeIds().then(setProtectedPracticeIds).catch(() => {});
     loadProtectedPracticeMap().then(setProtectedPracticeMap).catch(() => {});
@@ -256,6 +262,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     setTempoMultiplier(saved.tempoMultiplier);
     context.scorePlayer.setTempoMultiplier(saved.tempoMultiplier);
     setLoopCount(saved.loopCount);
+
+    // Feature 061: Restore saved loop region so Repractice honors the task region.
+    if (saved.loopRegion) {
+      setPendingTaskLoopRegion(saved.loopRegion);
+    }
 
     // Re-extract fresh notes from the newly loaded score so that noteIds
     // (opaque DOM IDs) are valid for the current rendering. The saved notes
@@ -279,6 +290,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
     // Build the notes array with fresh noteIds, falling back to saved entries
     // for any index beyond what was re-extracted (shouldn't happen for same score).
+    // NOTE: Do NOT filter freshNotes by loopRegion here — the saved notes array
+    // and noteResult indices are absolute (cover the full score). We need the
+    // full freshNotes so positional mapping preserves correct noteIds.
     const notesWithFreshIds = saved.performanceData.notes.map((savedNote, i) =>
       i < freshNotes.length ? freshNotes[i] : savedNote,
     );
@@ -307,8 +321,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerState.status]);
 
-  // Feature 061: Ref to stash loop region ticks computed from task config
-  const pendingTaskLoopRegionRef = useRef<{ startTick: number; endTick: number } | null>(null);
+  // Feature 061: State for loop region ticks computed from task config.
+  // Using state (not ref) so that updating it triggers a re-render,
+  // ensuring usePracticeLoop receives the values even when other setState
+  // calls in the same effect are no-ops (e.g. defaults match).
+  const [pendingTaskLoopRegion, setPendingTaskLoopRegion] = useState<{ startTick: number; endTick: number } | null>(null);
 
   // Feature 061: Apply pending task config once the score is ready.
   useEffect(() => {
@@ -327,10 +344,13 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       if (measureEndTicks && measureEndTicks.length > 0) {
         const result = measureRangeToTicks(tc.startMeasure, tc.endMeasure, measureEndTicks);
         if (result) {
-          pendingTaskLoopRegionRef.current = result;
+          setPendingTaskLoopRegion(result);
         }
       }
     }
+
+    // Feature 061: Schedule auto-start of practice mode
+    autoStartPracticeRef.current = true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerState.status]);
 
@@ -350,8 +370,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     playerState,
     practiceStartTimeRef,
     context,
-    initialStartTick: pendingTaskLoopRegionRef.current?.startTick ?? null,
-    initialEndTick: pendingTaskLoopRegionRef.current?.endTick ?? null,
+    initialStartTick: pendingTaskLoopRegion?.startTick ?? null,
+    initialEndTick: pendingTaskLoopRegion?.endTick ?? null,
+    taskLocked: !!taskIdRef.current,
     onComplete: (record) => {
       setPerformanceRecord(record);
       setIsReplaying(false);
@@ -360,6 +381,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       setResultsOverlayVisible(true);
     },
   });
+
+  // Keep a ref to loopCount so callbacks can read the latest value without
+  // being listed in dependency arrays (avoids stale closure in handlePracticeToggle).
+  const loopCountRef = useRef(loopCount);
+  loopCountRef.current = loopCount;
 
   // Flash the auto-advanced note IDs in red for 600 ms when the engine skips a beat.
   useEffect(() => {
@@ -480,7 +506,18 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   }, [context]);
 
   // Playback controls
-  const handlePlay = useCallback(() => context.scorePlayer.play(), [context.scorePlayer]);
+  const handlePlay = useCallback(() => {
+    // If a loop region is set and current position is outside the region,
+    // seek to the region start so playback honours the pinned region.
+    const lr = loopRegionRef.current;
+    if (lr) {
+      const tick = playerStateRef.current.currentTick;
+      if (tick < lr.startTick || tick >= lr.endTick) {
+        context.scorePlayer.seekToTick(lr.startTick);
+      }
+    }
+    context.scorePlayer.play();
+  }, [context.scorePlayer]);
   const handlePause = useCallback(() => context.scorePlayer.pause(), [context.scorePlayer]);
   const handleStop = useCallback(() => {
     // If a replay is in progress, stop audio and reset replay state
@@ -575,10 +612,18 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
     // Reset loop count to 1 for a fresh practice start (repractice preserves
     // the slider value, but a brand-new practice always starts with 1 loop).
-    setLoopCount(1);
+    // Feature 061: When launched from a task, preserve the task's loopCount.
+    if (!taskIdRef.current) {
+      setLoopCount(1);
+    }
 
     // Reset loop iteration tracking so the progress counter starts from 1/N.
     resetLoopTracking();
+
+    // Feature 061: When task-driven, restore remaining loops after reset.
+    if (taskIdRef.current) {
+      remainingLoopsRef.current = loopCountRef.current - 1;
+    }
 
     // Start practice — staff is always already selected via the toolbar dropdown
     const ps2 = playerStateRef.current;
@@ -629,6 +674,25 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     context.scorePlayer,
     selectedStaffIndex,
   ]);
+
+  // Ref to handlePracticeToggle so the auto-start effect can call it without
+  // depending on the callback identity (avoids cleanup-cancels-timeout race).
+  const handlePracticeToggleRef = useRef(handlePracticeToggle);
+  handlePracticeToggleRef.current = handlePracticeToggle;
+
+  // Feature 061: Auto-start practice when entering task mode.
+  // Waits until the loop region is fully applied (for region tasks) or
+  // fires immediately (for whole-score tasks) once the flag is set.
+  useEffect(() => {
+    if (!autoStartPracticeRef.current) return;
+    // For region tasks, wait until loopRegion is established
+    if (pendingTaskLoopRegion && !loopRegion) return;
+    autoStartPracticeRef.current = false;
+    // Delay slightly so the UI renders the score before practice begins
+    const t = setTimeout(() => handlePracticeToggleRef.current(), 100);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loopRegion, pendingTaskLoopRegion]);
 
   // Note short-tap handler (US3 / T037)
   // Mirrors play-score two-tap seek-then-play state machine:
@@ -796,6 +860,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     const navData = context.getNavigationData();
     if (navData && typeof navData.savedPracticeId === 'string') {
       const id = navData.savedPracticeId;
+      // Feature 061: Set task tag if navigated from a task-linked activity
+      if (typeof navData.sessionId === 'string') {
+        sessionIdRef.current = navData.sessionId as string;
+      }
+      if (typeof navData.taskId === 'string' && typeof navData.taskNumber === 'number') {
+        taskIdRef.current = navData.taskId as string;
+        setTaskTag({ taskNumber: navData.taskNumber as number, sessionName: '' });
+      }
       loadPracticeFromIndexedDB(id).then((saved) => {
         if (!saved) return;
         loadedScoreRefRef.current = saved.scoreRef;
@@ -812,6 +884,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       const scoreRef = tc.scoreRef as { type: string; id: string } | undefined;
       if (scoreRef && scoreRef.id) {
         taskIdRef.current = (tc.taskId as string) ?? null;
+        sessionIdRef.current = (tc.sessionId as string) ?? null;
+        if (typeof tc.taskNumber === 'number' && typeof tc.sessionName === 'string') {
+          setTaskTag({ taskNumber: tc.taskNumber as number, sessionName: tc.sessionName as string });
+        }
         loadedScoreRefRef.current = scoreRef as ScoreRef;
         pendingTaskConfigRef.current = {
           staffIndex: (tc.staffIndex as number) ?? 0,
@@ -896,7 +972,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           onDeleteSavedPractice={handleDeleteSavedPractice}
           protectedPracticeIds={protectedPracticeIds}
           protectedPracticeMap={protectedPracticeMap}
-          onViewSessions={() => context.openPlugin('sessions-plugin')}
+          onViewSessions={(sessionId, taskId) => context.openPlugin('sessions-plugin', {
+            expandSessionId: sessionId,
+            expandTaskId: taskId,
+          })}
         />
       </div>
     );
@@ -950,6 +1029,12 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         onMetronomeToggle={handleMetronomeToggle}
         metronomeSubdivision={metronomeSubdivision}
         onMetronomeSubdivisionChange={handleMetronomeSubdivisionChange}
+        taskTag={taskTag}
+        isReplaying={isReplaying}
+        onTaskTagClick={() => context.openPlugin('sessions-plugin', {
+          expandSessionId: sessionIdRef.current,
+          expandTaskId: taskIdRef.current,
+        })}
       />
 
       {/* Hold indicator — visible while player holds a note longer than a quarter note */}
@@ -1026,6 +1111,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         onSave={loadedScoreRefRef.current ? handleSave : undefined}
         isSaved={isSaved}
         saveError={saveError}
+        onReturnToSession={taskTag ? () => context.openPlugin('sessions-plugin', {
+          expandSessionId: sessionIdRef.current,
+          expandTaskId: taskIdRef.current,
+        }) : undefined}
       />
     </div>
   );

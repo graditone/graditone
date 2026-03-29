@@ -61,6 +61,8 @@ export interface ResultsOverlayProps {
   isSaved?: boolean;
   /** Feature 056: Error message if save failed (e.g. storage full). */
   saveError?: string | null;
+  /** Feature 061: Navigate back to the sessions plugin (only shown for task practices). */
+  onReturnToSession?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +86,7 @@ export function ResultsOverlay({
   onSave,
   isSaved,
   saveError,
+  onReturnToSession,
 }: ResultsOverlayProps) {
   // ─── Replay internals ────────────────────────────────────────────────────────
   const replayTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -534,6 +537,15 @@ export function ResultsOverlay({
             )}
             {saveError && (
               <span className="practice-results__save-error" role="alert">{saveError}</span>
+            )}
+            {onReturnToSession && (
+              <button
+                className="practice-results__session-btn"
+                onClick={onReturnToSession}
+                aria-label="Return to session"
+              >
+                ↩ Session
+              </button>
             )}
           </div>
         )}

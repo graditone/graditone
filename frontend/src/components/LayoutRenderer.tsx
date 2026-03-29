@@ -150,7 +150,8 @@ export class LayoutRenderer extends Component<LayoutRendererProps> {
       nextProps.pinnedNoteIds !== this.props.pinnedNoteIds ||
       nextProps.errorNoteIds !== this.props.errorNoteIds ||
       nextProps.expectedNoteIds !== this.props.expectedNoteIds ||
-      nextProps.loopRegion !== this.props.loopRegion
+      nextProps.loopRegion !== this.props.loopRegion ||
+      nextProps.highlightedNoteIds !== this.props.highlightedNoteIds
     );
   }
 

@@ -151,6 +151,34 @@
 
 ---
 
+## Phase 9: Post-Implementation Enhancements
+
+**Purpose**: UX polish, bug fixes, and theming improvements identified during user testing
+
+- [X] T047 [P] Fix practice config locking: ensure `staffIndex`, `tempoMultiplier`, and `loopCount` from task config are locked in practice view and cannot be overridden by user in `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx`
+- [X] T048 [P] Add task/session tag label in practice toolbar showing "Task N · Session Name" when practicing from a session task in `frontend/plugins/practice-view-plugin/practiceToolbar.tsx`
+- [X] T049 [P] Fix CSS class collision between sessions plugin and practice view plugin for `.sessions-plugin__task-*` selectors in `plugins-external/sessions-plugin/SessionsPlugin.css`
+- [X] T050 [P] Fix stale closure in practice toggle: ensure `handlePracticeToggle` captures up-to-date state for task-based loop regions in `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx`
+- [X] T051 [P] Fix replay note highlighting: add `highlightedNoteIds` to `LayoutRenderer.shouldComponentUpdate` comparison so highlights update during replay in `frontend/src/components/LayoutRenderer.tsx`
+- [X] T052 [P] Add "▶ Replaying…" pulse label to practice toolbar when replay is active in `frontend/plugins/practice-view-plugin/practiceToolbar.tsx`
+- [X] T053 [P] Fix iterations field UX: prevent layout jump by using fixed-width input, add increment/decrement buttons in `plugins-external/sessions-plugin/TaskBuilder.tsx`
+- [X] T054 [P] Fix play honors region: ensure play button seeks to region start and respects loop boundaries in `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx`
+- [X] T055 [P] Fix default measures: auto-populate start/end measure from score's measure count when region type is "measures" in `plugins-external/sessions-plugin/TaskBuilder.tsx`
+- [X] T056 [P] Add Session return button: navigate back to sessions plugin from practice toolbar when practicing a session task in `frontend/plugins/practice-view-plugin/practiceToolbar.tsx`
+- [X] T057 [P] Fix Session button visibility: only show session return button when `sessionIdRef` is set in `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx`
+- [X] T058 [P] Add auto-start practice: automatically begin practice when opening from a session task in `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx`
+- [X] T059 [P] Session tree expansion with navigation data: expand session and task rows when returning from practice via `getNavigationData()` in `plugins-external/sessions-plugin/SessionsPlugin.tsx`
+- [X] T060 [P] Fix session tree expansion from saved practices: set `sessionIdRef` when opening saved practices from sessions plugin, pass `sessionId` in nav data in `plugins-external/sessions-plugin/TaskRow.tsx` and `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx`
+- [X] T061 [P] Fix repractice honors task region: restore saved `loopRegion` via `setPendingTaskLoopRegion` when opening a saved practice in `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx`
+- [X] T062 [P] Fix extra measure playback: filter notes by `loopEndTickRef` before scheduling in `play()` and loop-back, simplify `setLoopEnd` to exclusive boundary, revert `measureRangeToTicks` `-1` hack in `frontend/src/services/playback/MusicTimeline.ts` and `frontend/plugins/practice-view-plugin/PracticeViewPlugin.tsx`
+- [X] T063 [P] Task row full-click expand/collapse: make entire task row clickable to toggle expansion instead of only the small arrow in `plugins-external/sessions-plugin/TaskRow.tsx`
+- [X] T064 [P] Show notes correct/total and duration in linked practices: extend `TaskLinkedPractice` with `correctCount`, `totalNotes`, `practiceTimeMs` and display in task detail in `plugins-external/sessions-plugin/sessionTypes.ts`, `plugins-external/sessions-plugin/sessionStorage.ts`, `plugins-external/sessions-plugin/TaskRow.tsx`
+- [X] T065 [P] Green tick for fully completed sessions: show ✓ icon next to session title when all tasks are done, using `allTasksDone` flag in `SessionIndexEntry` for instant display in `plugins-external/sessions-plugin/SessionsPlugin.tsx`, `plugins-external/sessions-plugin/sessionTypes.ts`, `plugins-external/sessions-plugin/sessionStorage.ts`
+- [X] T066 [P] Move close button to active session row and remove "Session Active" disabled button from actions bar in `plugins-external/sessions-plugin/SessionsPlugin.tsx`
+- [X] T067 [P] Add `--ls-success` theme token to all 10 landing themes and wire through `--color-success` bridge for green done indicators in `frontend/src/themes/landing-themes.css` and `frontend/src/App.css`
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

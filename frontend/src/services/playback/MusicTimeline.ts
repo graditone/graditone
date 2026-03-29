@@ -149,7 +149,12 @@ export function usePlayback(notes: Note[], tempo: number): PlaybackState {
         // the new Transport start moment.
         playbackStartTickRef.current = loopStartTick;
         startTimeRef.current = adapter.getCurrentTime();
-        scheduler.scheduleNotes(notes, tempo, loopStartTick, tempoState.tempoMultiplier).catch(() => {});
+        // Filter notes by loop end so the lookahead scheduler doesn't queue
+        // notes beyond the boundary (same as in play()).
+        const loopNotes = loopEndTickRef.current != null
+          ? notes.filter(n => n.start_tick < loopEndTickRef.current!)
+          : notes;
+        scheduler.scheduleNotes(loopNotes, tempo, loopStartTick, tempoState.tempoMultiplier).catch(() => {});
         lastReactTickRef.current = loopStartTick;
         tickSourceRef.current = { currentTick: loopStartTick, status: 'playing' };
         setCurrentTick(loopStartTick);
@@ -237,7 +242,13 @@ export function usePlayback(notes: Note[], tempo: number): PlaybackState {
 
       // US2 T037: Schedule notes for playback
       // Feature 008 - Tempo Change: T015 Pass tempo multiplier to scheduler
-      await scheduler.scheduleNotes(notes, tempo, playbackStartTick, tempoState.tempoMultiplier);
+      // Filter out notes at or beyond the loop end so the lookahead scheduler
+      // never queues them on the Transport (they would play before the rAF
+      // loop can detect the boundary and clear the schedule).
+      const notesToSchedule = loopEndTickRef.current != null
+        ? notes.filter(n => n.start_tick < loopEndTickRef.current!)
+        : notes;
+      await scheduler.scheduleNotes(notesToSchedule, tempo, playbackStartTick, tempoState.tempoMultiplier);
 
       // Calculate when playback will end and auto-stop.
       // Skip the end-timeout when a loop is active — the rAF loop handles looping.
@@ -445,20 +456,11 @@ export function usePlayback(notes: Note[], tempo: number): PlaybackState {
   /**
    * Set (or clear) the loop end tick.
    * When non-null, the rAF tick loop will jump back to pinnedStartTickRef on reaching this tick.
-   * The effective end tick includes the duration of the note at `tick` so it sounds fully.
+   * The tick is treated as an exclusive upper bound: notes starting at this tick are NOT played.
    */
   const setLoopEnd = useCallback((tick: number | null) => {
-    if (tick === null) {
-      loopEndTickRef.current = null;
-      return;
-    }
-    // Find the longest note starting at this tick so it plays fully before looping
-    const noteAtTick = notes.filter(n => n.start_tick === tick);
-    const maxDuration = noteAtTick.length > 0
-      ? Math.max(...noteAtTick.map(n => n.duration_ticks))
-      : 0;
-    loopEndTickRef.current = tick + maxDuration;
-  }, [notes]);
+    loopEndTickRef.current = tick;
+  }, []);
 
   /**
    * Feature 009: Clear pinned start position
