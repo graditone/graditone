@@ -138,6 +138,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - localStorage for master volume preference (follows existing `graditone:tempo:{scoreId}` pattern) (063-midi-volume-control)
 - Markdown (documentation only — no code changes) + None (references existing Rust backend, TypeScript frontend, and WASM bridge) (064-musicxml-processing-docs)
 - N/A (static markdown file in `docs/` directory) (064-musicxml-processing-docs)
+- TypeScript ~5.9.3, React 19.2.0 + React 19, Vite 7.2.4, existing sessions plugin (`plugins-external/sessions-plugin/`) (065-sessions-calendar-view)
+- IndexedDB (`sessions` store via `loadAllSessionsFromIndexedDB()`) + localStorage (`graditone-sessions-index`) (065-sessions-calendar-view)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -158,9 +160,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 065-sessions-calendar-view: Added TypeScript ~5.9.3, React 19.2.0 + React 19, Vite 7.2.4, existing sessions plugin (`plugins-external/sessions-plugin/`)
 - 064-musicxml-processing-docs: Added Markdown (documentation only — no code changes) + None (references existing Rust backend, TypeScript frontend, and WASM bridge)
 - 063-midi-volume-control: Added Rust stable (backend/WASM) + TypeScript 5.x (frontend React) + wasm-bindgen, wasm-pack (backend→WASM); Tone.js, React 18+ (frontend)
-- 062-score-phrase-detection: Added Rust (latest stable) for backend phrase detection; TypeScript + React 18 for frontend visualization + serde (serialization), wasm-bindgen (WASM bindings), React (frontend UI)
 
 
 <!-- MANUAL ADDITIONS START -->
