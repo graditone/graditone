@@ -14,6 +14,7 @@ mod structure;
 mod ties;
 mod voice;
 
+use crate::domain::events::dynamics::{DynamicMarking, GradualDirection, GradualDynamic};
 use crate::domain::events::global::GlobalStructuralEvent;
 use crate::domain::events::note::Note;
 use crate::domain::events::rest::RestEvent;
@@ -31,6 +32,65 @@ use super::errors::ImportError;
 use super::timing::Fraction;
 use super::types::{MeasureData, MusicXMLDocument, NoteData, PartData};
 use std::collections::HashMap;
+
+/// Resolves the velocity for a note at a given tick and staff, considering
+/// active dynamic markings and linear interpolation through gradual dynamics.
+/// Returns 80 (mf default) if no dynamics exist.
+fn resolve_velocity(
+    tick: u32,
+    staff: u8,
+    dynamics: &[DynamicMarking],
+    graduals: &[GradualDynamic],
+) -> u8 {
+    // Find the most recent dynamic marking at or before this tick for this staff
+    let active_marking = dynamics
+        .iter()
+        .filter(|dm| dm.staff == staff && dm.start_tick.value() <= tick)
+        .max_by_key(|dm| dm.start_tick);
+
+    let base_velocity = active_marking.map(|dm| dm.velocity).unwrap_or(80);
+
+    // Check if this note falls within an active gradual dynamic (wedge)
+    let active_gradual = graduals.iter().find(|gd| {
+        gd.staff == staff && gd.start_tick.value() <= tick && tick < gd.stop_tick.value()
+    });
+
+    if let Some(gd) = active_gradual {
+        // Find the velocity at the start of the wedge (the most recent marking before wedge start)
+        let start_vel = dynamics
+            .iter()
+            .filter(|dm| dm.staff == staff && dm.start_tick.value() <= gd.start_tick.value())
+            .max_by_key(|dm| dm.start_tick)
+            .map(|dm| dm.velocity)
+            .unwrap_or(80);
+
+        // Find the velocity at the end of the wedge (the next marking at or after wedge stop)
+        let end_vel = dynamics
+            .iter()
+            .filter(|dm| dm.staff == staff && dm.start_tick.value() >= gd.stop_tick.value())
+            .min_by_key(|dm| dm.start_tick)
+            .map(|dm| dm.velocity)
+            .unwrap_or_else(|| {
+                // No marking after the wedge — infer target based on direction
+                match gd.direction {
+                    GradualDirection::Crescendo => (start_vel as u16 + 16).min(127) as u8,
+                    GradualDirection::Diminuendo => start_vel.saturating_sub(16).max(1),
+                }
+            });
+
+        // Linear interpolation
+        let range = gd.stop_tick.value().saturating_sub(gd.start_tick.value());
+        if range == 0 {
+            return start_vel;
+        }
+        let progress = tick.saturating_sub(gd.start_tick.value());
+        let ratio = progress as f64 / range as f64;
+        let interpolated = start_vel as f64 + (end_vel as f64 - start_vel as f64) * ratio;
+        return (interpolated.round() as u8).clamp(1, 127);
+    }
+
+    base_velocity
+}
 
 /// Compute the start tick of a measure, accounting for pickup/anacrusis.
 fn measure_start_tick(measure_index: usize, pickup_ticks: u32, ticks_per_measure: u32) -> u32 {
@@ -244,6 +304,33 @@ impl MusicXMLConverter {
             })
             .unwrap_or_default();
 
+        // Collect dynamics and gradual dynamics from the first part (Feature 063)
+        let dynamics = doc
+            .parts
+            .first()
+            .map(|first_part| {
+                Self::collect_dynamics(
+                    &first_part.measures,
+                    ticks_per_measure,
+                    pickup_ticks,
+                    &measure_end_ticks,
+                )
+            })
+            .unwrap_or_default();
+
+        let gradual_dynamics = doc
+            .parts
+            .first()
+            .map(|first_part| {
+                Self::collect_gradual_dynamics(
+                    &first_part.measures,
+                    ticks_per_measure,
+                    pickup_ticks,
+                    &measure_end_ticks,
+                )
+            })
+            .unwrap_or_default();
+
         // Convert each part to an Instrument
         for part_data in doc.parts {
             let instrument = Self::convert_part(
@@ -259,9 +346,14 @@ impl MusicXMLConverter {
         score.repeat_barlines = repeat_barlines;
         score.volta_brackets = volta_brackets;
         score.octave_shift_regions = octave_shift_regions;
+        score.dynamics = dynamics;
+        score.gradual_dynamics = gradual_dynamics;
 
         score.pickup_ticks = pickup_ticks;
         score.measure_end_ticks = measure_end_ticks;
+
+        // Feature 063: Assign velocity to each note based on dynamics
+        Self::assign_note_velocities(&mut score);
 
         Ok(score)
     }
@@ -319,6 +411,51 @@ impl MusicXMLConverter {
             pickup_ticks,
             measure_end_ticks,
         )
+    }
+
+    /// Collects dynamic markings — delegates to structure sub-module (Feature 063)
+    fn collect_dynamics(
+        measures: &[MeasureData],
+        ticks_per_measure: u32,
+        pickup_ticks: u32,
+        measure_end_ticks: &[u32],
+    ) -> Vec<DynamicMarking> {
+        structure::collect_dynamics(measures, ticks_per_measure, pickup_ticks, measure_end_ticks)
+    }
+
+    /// Collects gradual dynamics — delegates to structure sub-module (Feature 063)
+    fn collect_gradual_dynamics(
+        measures: &[MeasureData],
+        ticks_per_measure: u32,
+        pickup_ticks: u32,
+        measure_end_ticks: &[u32],
+    ) -> Vec<GradualDynamic> {
+        structure::collect_gradual_dynamics(
+            measures,
+            ticks_per_measure,
+            pickup_ticks,
+            measure_end_ticks,
+        )
+    }
+
+    /// Assigns velocity to every note in the score based on collected dynamics
+    /// and gradual dynamics. Default velocity is 80 (mf) when no dynamics exist.
+    fn assign_note_velocities(score: &mut Score) {
+        let dynamics = &score.dynamics;
+        let graduals = &score.gradual_dynamics;
+
+        for instrument in &mut score.instruments {
+            for (staff_idx, staff) in instrument.staves.iter_mut().enumerate() {
+                let staff_num = (staff_idx + 1) as u8;
+                for voice in &mut staff.voices {
+                    for note in &mut voice.interval_events {
+                        let tick = note.start_tick.value();
+                        let vel = resolve_velocity(tick, staff_num, dynamics, graduals);
+                        *note = note.clone().with_velocity(vel);
+                    }
+                }
+            }
+        }
     }
 
     /// Converts PartData to Instrument
@@ -490,6 +627,7 @@ mod tests {
             endings: vec![],
             sound_tempo: None,
             metronome_tempo: None,
+            sound_dynamics: None,
         };
 
         part.measures.push(measure);
@@ -646,6 +784,7 @@ mod tests {
             endings: vec![],
             sound_tempo: None,
             metronome_tempo: None,
+            sound_dynamics: None,
         }];
 
         let result = MusicXMLConverter::convert_voice(&measures);
@@ -758,6 +897,7 @@ mod tests {
             endings: vec![],
             sound_tempo: None,
             metronome_tempo: None,
+            sound_dynamics: None,
         }];
 
         let result = MusicXMLConverter::convert_voice(&measures);
@@ -865,6 +1005,7 @@ mod tests {
                 endings: vec![],
                 sound_tempo: None,
                 metronome_tempo: None,
+                sound_dynamics: None,
             }],
         };
         doc.parts.push(part);
@@ -932,6 +1073,7 @@ mod tests {
                 endings: vec![],
                 sound_tempo: None,
                 metronome_tempo: None,
+                sound_dynamics: None,
             }],
         };
         doc.parts.push(part);
@@ -999,6 +1141,7 @@ mod tests {
                 endings: vec![],
                 sound_tempo: None,
                 metronome_tempo: None,
+                sound_dynamics: None,
             }],
         };
         doc.parts.push(part);
@@ -1063,6 +1206,7 @@ mod tests {
                 endings: vec![],
                 sound_tempo: None,
                 metronome_tempo: None,
+                sound_dynamics: None,
             }],
         };
         doc.parts.push(part);

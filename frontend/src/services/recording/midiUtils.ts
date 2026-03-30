@@ -87,3 +87,37 @@ export function parseMidiNoteOff(
   if (statusType === 0x90 && velocity === 0) return noteNumber; // velocity-0 note-on
   return null;
 }
+
+/**
+ * Parsed result from a MIDI Control Change (0xB0) message.
+ * Feature 063 — MIDI Volume Control.
+ */
+export interface MidiCCEvent {
+  /** MIDI controller number (0–127). CC7 = channel volume, CC11 = expression. */
+  controller: number;
+  /** Controller value (0–127). */
+  value: number;
+  /** 1-based MIDI channel (1–16). */
+  channel: number;
+}
+
+/**
+ * Parses a MIDI Control Change (0xB0) message.
+ * Returns null for any non-CC status byte or messages shorter than 3 bytes.
+ *
+ * Status byte: 0xBn where n = channel (0–15)
+ * data[1] = controller number, data[2] = value
+ *
+ * @param data - Raw MIDI message bytes
+ * @returns Parsed MidiCCEvent or null
+ */
+export function parseMidiCC(data: Uint8Array): MidiCCEvent | null {
+  if (data.length < 3) return null;
+  const statusType = data[0] & 0xf0;
+  if (statusType !== 0xb0) return null;
+  return {
+    controller: data[1],
+    value: data[2],
+    channel: (data[0] & 0x0f) + 1,
+  };
+}

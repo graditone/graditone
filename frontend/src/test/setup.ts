@@ -178,15 +178,27 @@ if (typeof ImageData === 'undefined') {
 vi.mock('tone', () => ({
   default: {},
   Sampler: vi.fn(),
+  PolySynth: vi.fn(),
+  Synth: vi.fn(),
+  Limiter: vi.fn(() => ({ toDestination: vi.fn(() => ({})) })),
+  Frequency: vi.fn(() => ({ toNote: vi.fn(() => 'C4') })),
+  Destination: {
+    mute: false,
+    volume: { value: -12 },
+  },
   Transport: {
     start: vi.fn(),
     stop: vi.fn(),
     pause: vi.fn(),
     cancel: vi.fn(),
     schedule: vi.fn(),
+    clear: vi.fn(),
     seconds: 0,
+    bpm: { value: 120 },
   },
+  start: vi.fn().mockResolvedValue(undefined),
   now: vi.fn(() => 0),
+  loaded: vi.fn().mockResolvedValue(undefined),
   context: {
     resume: vi.fn().mockResolvedValue(undefined),
   },

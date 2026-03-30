@@ -293,7 +293,9 @@ pub(super) fn add_clef_changes_from_measures(
                         let _ = staff.add_clef_event(clef_event);
                     }
                 }
-                MeasureElement::OctaveShift(_) => {}
+                MeasureElement::OctaveShift(_)
+                | MeasureElement::Dynamics(_)
+                | MeasureElement::Wedge(_) => {}
             }
         }
     }

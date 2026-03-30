@@ -3,7 +3,11 @@
 
 use crate::domain::{
     difficulty::DifficultyRating,
-    events::{global::GlobalStructuralEvent, staff::StaffStructuralEvent},
+    events::{
+        dynamics::{DynamicMarking, GradualDynamic},
+        global::GlobalStructuralEvent,
+        staff::StaffStructuralEvent,
+    },
     instrument::Instrument,
     phrases::PhraseRegion,
     repeat::{RepeatBarline, VoltaBracket},
@@ -78,7 +82,8 @@ impl From<&Instrument> for InstrumentDto {
 /// v9: fingering annotations added to Note (fingering-layout)
 /// v10: difficulty_rating added to ScoreDto (055-score-difficulty-density)
 /// v11: phrases added to ScoreDto (062-score-phrase-detection)
-pub const SCORE_SCHEMA_VERSION: u32 = 11;
+/// v12: dynamics and gradual_dynamics added to ScoreDto (063-midi-volume-control)
+pub const SCORE_SCHEMA_VERSION: u32 = 12;
 
 /// DTO for difficulty rating serialization (Feature 055)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,6 +160,12 @@ pub struct ScoreDto {
     /// Detected phrase regions per instrument (Feature 062)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub phrases: Vec<PhraseRegionDto>,
+    /// Dynamic markings extracted from MusicXML (Feature 063)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dynamics: Vec<DynamicMarking>,
+    /// Gradual dynamics (crescendo/diminuendo) from MusicXML (Feature 063)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gradual_dynamics: Vec<GradualDynamic>,
 }
 
 impl From<&Score> for ScoreDto {
@@ -174,6 +185,8 @@ impl From<&Score> for ScoreDto {
                 .as_ref()
                 .map(DifficultyRatingDto::from),
             phrases: score.phrases.iter().map(PhraseRegionDto::from).collect(),
+            dynamics: score.dynamics.clone(),
+            gradual_dynamics: score.gradual_dynamics.clone(),
         }
     }
 }

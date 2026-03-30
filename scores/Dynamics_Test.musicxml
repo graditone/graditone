@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <work>
+    <work-title>Dynamics Test</work-title>
+  </work>
+  <identification>
+    <creator type="composer">Graditone Test</creator>
+  </identification>
+  <part-list>
+    <score-part id="P1">
+      <part-name>Piano</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <!-- Measure 1: pp (pianissimo) — C major chord, very soft -->
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <direction placement="below">
+        <direction-type><dynamics><pp/></dynamics></direction-type>
+        <sound dynamics="31"/>
+      </direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+    </measure>
+
+    <!-- Measure 2: p (piano) — D minor chord, soft -->
+    <measure number="2">
+      <direction placement="below">
+        <direction-type><dynamics><p/></dynamics></direction-type>
+        <sound dynamics="49"/>
+      </direction>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+    </measure>
+
+    <!-- Measure 3: mp (mezzo-piano) — E minor chord -->
+    <measure number="3">
+      <direction placement="below">
+        <direction-type><dynamics><mp/></dynamics></direction-type>
+        <sound dynamics="64"/>
+      </direction>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+    </measure>
+
+    <!-- Measure 4: mf (mezzo-forte) — F major chord -->
+    <measure number="4">
+      <direction placement="below">
+        <direction-type><dynamics><mf/></dynamics></direction-type>
+        <sound dynamics="80"/>
+      </direction>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+    </measure>
+
+    <!-- Measure 5: f (forte) — G major chord -->
+    <measure number="5">
+      <direction placement="below">
+        <direction-type><dynamics><f/></dynamics></direction-type>
+        <sound dynamics="96"/>
+      </direction>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+    </measure>
+
+    <!-- Measure 6: ff (fortissimo) — A minor chord, loud -->
+    <measure number="6">
+      <direction placement="below">
+        <direction-type><dynamics><ff/></dynamics></direction-type>
+        <sound dynamics="112"/>
+      </direction>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>A</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+    </measure>
+
+    <!-- Measure 7: crescendo from pp to ff over one measure -->
+    <measure number="7">
+      <direction placement="below">
+        <direction-type><dynamics><pp/></dynamics></direction-type>
+        <sound dynamics="31"/>
+      </direction>
+      <direction placement="below">
+        <direction-type><wedge type="crescendo"/></direction-type>
+      </direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <direction placement="below">
+        <direction-type><wedge type="stop"/></direction-type>
+      </direction>
+    </measure>
+
+    <!-- Measure 8: ff then diminuendo back to pp -->
+    <measure number="8">
+      <direction placement="below">
+        <direction-type><dynamics><ff/></dynamics></direction-type>
+        <sound dynamics="112"/>
+      </direction>
+      <direction placement="below">
+        <direction-type><wedge type="diminuendo"/></direction-type>
+      </direction>
+      <note><pitch><step>G</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <direction placement="below">
+        <direction-type><wedge type="stop"/></direction-type>
+      </direction>
+      <direction placement="below">
+        <direction-type><dynamics><pp/></dynamics></direction-type>
+        <sound dynamics="31"/>
+      </direction>
+      <barline location="right"><bar-style>light-heavy</bar-style></barline>
+    </measure>
+
+    <!-- Measure 9: Abrupt contrast — pp then ff alternating each note -->
+    <measure number="9">
+      <direction placement="below">
+        <direction-type><dynamics><pp/></dynamics></direction-type>
+        <sound dynamics="31"/>
+      </direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <direction placement="below">
+        <direction-type><dynamics><ff/></dynamics></direction-type>
+        <sound dynamics="112"/>
+      </direction>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <direction placement="below">
+        <direction-type><dynamics><pp/></dynamics></direction-type>
+        <sound dynamics="31"/>
+      </direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <direction placement="below">
+        <direction-type><dynamics><ff/></dynamics></direction-type>
+        <sound dynamics="112"/>
+      </direction>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type></note>
+    </measure>
+
+    <!-- Measure 10: Two beats pp, two beats ff — same pitch -->
+    <measure number="10">
+      <direction placement="below">
+        <direction-type><dynamics><pp/></dynamics></direction-type>
+        <sound dynamics="31"/>
+      </direction>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <direction placement="below">
+        <direction-type><dynamics><ff/></dynamics></direction-type>
+        <sound dynamics="112"/>
+      </direction>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+    </measure>
+
+    <!-- Measure 11: Full bar ff then full bar pp (same note G4) -->
+    <measure number="11">
+      <direction placement="below">
+        <direction-type><dynamics><ff/></dynamics></direction-type>
+        <sound dynamics="112"/>
+      </direction>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+    </measure>
+
+    <measure number="12">
+      <direction placement="below">
+        <direction-type><dynamics><pp/></dynamics></direction-type>
+        <sound dynamics="31"/>
+      </direction>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <barline location="right"><bar-style>light-heavy</bar-style></barline>
+    </measure>
+  </part>
+</score-partwise>

@@ -17,6 +17,8 @@ import { expandNotesWithRepeats } from "../services/playback/RepeatNoteExpander"
 import { useTempoState } from "../services/state/TempoStateContext";
 import { useUserScores } from "../hooks/useUserScores";
 import type { UserScore } from "../services/userScoreIndex";
+import { VolumeSlider } from "./VolumeSlider";
+import { ToneAdapter } from "../services/playback/ToneAdapter";
 import "./ScoreViewer.css";
 
 interface ScoreViewerProps {
@@ -457,6 +459,10 @@ export function ScoreViewer({
         <span className="playback-tempo">
           {Math.round(initialTempo * tempoState.tempoMultiplier)} BPM
         </span>
+        <VolumeSlider
+          initialValue={ToneAdapter.getInstance().getMasterVolume()}
+          onChange={(v) => ToneAdapter.getInstance().setMasterVolume(v)}
+        />
         {playbackState.error && (
           <span className="playback-error">{playbackState.error}</span>
         )}

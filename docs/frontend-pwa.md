@@ -74,6 +74,23 @@ flowchart TD
 | Hooks | `frontend/src/hooks/` |
 | PWA config | `frontend/vite.config.ts` |
 
+## Dynamics & Volume Pipeline (Feature 063)
+
+MusicXML dynamics (pp–ff) and hairpins (crescendo/diminuendo) are parsed in the Rust backend and assigned as per-note velocity values (1–127). The frontend playback pipeline applies these velocities using a square-root gain curve for perceptually even loudness.
+
+| Layer | Component | Responsibility |
+|-------|-----------|----------------|
+| Backend | `parse_direction()` | Extracts `<dynamics>`, `<sound dynamics>`, `<wedge>` from MusicXML |
+| Backend | `collect_dynamics()` / `collect_gradual_dynamics()` | Builds sorted `DynamicMarking` and `GradualDynamic` arrays |
+| Backend | `resolve_velocity()` | Backward scan + linear interpolation to assign per-note velocity |
+| Frontend | `DynamicsResolver` | Runtime velocity lookup for seek/jump (mirror of backend logic) |
+| Frontend | `volumeUtils.velocityToGain()` | `sqrt(velocity / 127)` gain curve |
+| Frontend | `volumeUtils.applyCCScaling()` | Multiplicative CC7 × CC11 scaling |
+| Frontend | `ToneAdapter.playNote()` | Passes velocity-based gain to `triggerAttackRelease()` |
+| Frontend | `ToneAdapter.attackNote()` | Live MIDI input with sqrt curve + CC scaling |
+| Frontend | `ToneAdapter.setMasterVolume()` | Maps 0–100% to -60…0 dB on `Tone.Destination` |
+| Frontend | `VolumeSlider` | UI component in playback bar, persisted to localStorage |
+
 ## See Also
 
 - [Architecture Overview](architecture.md)

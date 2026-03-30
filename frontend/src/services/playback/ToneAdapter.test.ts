@@ -22,6 +22,7 @@ vi.mock('tone', () => {
       mockPolySynth.toDestination();
       return this;
     }
+    connect() { return this; }
     triggerAttackRelease(...args: any[]) {
       mockPolySynth.triggerAttackRelease(...args);
     }
@@ -36,6 +37,7 @@ vi.mock('tone', () => {
       mockSampler.toDestination();
       return this;
     }
+    connect() { return this; }
     triggerAttackRelease(...args: any[]) {
       mockSampler.triggerAttackRelease(...args);
     }
@@ -47,6 +49,11 @@ vi.mock('tone', () => {
     }
   }
 
+  // Feature 063: Limiter mock
+  class MockLimiter {
+    toDestination() { return this; }
+  }
+
   return {
     start: vi.fn().mockResolvedValue(undefined),
     loaded: vi.fn().mockResolvedValue(undefined), // US3: Mock Tone.loaded() for sampler
@@ -54,6 +61,11 @@ vi.mock('tone', () => {
     PolySynth: MockPolySynth,
     Sampler: MockSampler, // US3: Add Sampler mock
     Synth: vi.fn(),
+    Limiter: MockLimiter, // Feature 063: Limiter mock
+    Destination: {
+      mute: false,
+      volume: { value: -12 },
+    },
     Frequency: vi.fn((pitch: number) => ({
       toFrequency: () => pitch * 10,
       toNote: () => {

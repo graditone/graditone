@@ -2,7 +2,10 @@ use crate::domain::{
     difficulty::DifficultyRating,
     errors::DomainError,
     events::{
-        global::GlobalStructuralEvent, tempo::TempoEvent, time_signature::TimeSignatureEvent,
+        dynamics::{DynamicMarking, GradualDynamic},
+        global::GlobalStructuralEvent,
+        tempo::TempoEvent,
+        time_signature::TimeSignatureEvent,
     },
     ids::ScoreId,
     instrument::Instrument,
@@ -54,6 +57,12 @@ pub struct Score {
     /// Detected phrase regions per instrument (Feature 062)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub phrases: Vec<PhraseRegion>,
+    /// Dynamic markings extracted from MusicXML (Feature 063)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dynamics: Vec<DynamicMarking>,
+    /// Gradual dynamics (crescendo/diminuendo) from MusicXML (Feature 063)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gradual_dynamics: Vec<GradualDynamic>,
 }
 
 impl Score {
@@ -70,6 +79,8 @@ impl Score {
             octave_shift_regions: Vec::new(),
             difficulty_rating: None,
             phrases: Vec::new(),
+            dynamics: Vec::new(),
+            gradual_dynamics: Vec::new(),
         };
 
         // Add default tempo (120 BPM) at tick 0

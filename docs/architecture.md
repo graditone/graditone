@@ -37,6 +37,7 @@ flowchart TD
 | **SVG Renderer** | Renders GlobalLayout JSON to SVG DOM with viewport virtualization and incremental highlight updates | [SVG Renderer](svg-renderer.md) |
 | **Plugin System** | Extensible plugin architecture (Plugin API v4) for practice tools, playback, virtual keyboard, and custom views | [Plugin System](plugin-system.md) |
 | **PWA Shell** | Service Worker, IndexedDB, installable app shell providing offline-first experience across tablets and desktops | [Frontend PWA](frontend-pwa.md) |
+| **MusicXML Processing Pipeline** | End-to-end reference for the MusicXML processing pipeline — from file input through parsing, domain model, layout, rendering, and playback | [MusicXML Processing](musicxml-processing.md) |
 
 ## Data Flow
 
@@ -52,4 +53,5 @@ flowchart TD
 
 - [Local Validation Guide](LOCAL-VALIDATION.md)
 - [Documentation Update Checklist](doc-update-checklist.md) — follow after completing each feature spec
+- [MusicXML Processing Pipeline](musicxml-processing.md) — end-to-end import, layout, rendering, and playback reference
 - [README](../README.md) — project overview and quick start

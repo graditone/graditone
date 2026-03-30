@@ -112,7 +112,10 @@ pub(super) fn collect_notes(
                     // Move timing cursor forward
                     timing_context.advance_by_duration(*duration)?;
                 }
-                MeasureElement::Attributes(_) | MeasureElement::OctaveShift(_) => {}
+                MeasureElement::Attributes(_)
+                | MeasureElement::OctaveShift(_)
+                | MeasureElement::Dynamics(_)
+                | MeasureElement::Wedge(_) => {}
             }
         }
     }
@@ -171,7 +174,10 @@ pub(super) fn convert_voice(measures: &[MeasureData]) -> Result<Voice, ImportErr
                     // Move timing cursor forward
                     timing_context.advance_by_duration(*duration)?;
                 }
-                MeasureElement::Attributes(_) | MeasureElement::OctaveShift(_) => {}
+                MeasureElement::Attributes(_)
+                | MeasureElement::OctaveShift(_)
+                | MeasureElement::Dynamics(_)
+                | MeasureElement::Wedge(_) => {}
             }
         }
     }
@@ -278,7 +284,10 @@ pub(super) fn collect_notes_for_staff(
                     timing_context.advance_by_duration(*duration)?;
                     max_tick_in_measure = max_tick_in_measure.max(timing_context.current_tick);
                 }
-                MeasureElement::Attributes(_) | MeasureElement::OctaveShift(_) => {}
+                MeasureElement::Attributes(_)
+                | MeasureElement::OctaveShift(_)
+                | MeasureElement::Dynamics(_)
+                | MeasureElement::Wedge(_) => {}
             }
         }
 
@@ -361,7 +370,10 @@ pub(super) fn convert_voice_for_staff(
                     timing_context.advance_by_duration(*duration)?;
                     max_tick_in_measure = max_tick_in_measure.max(timing_context.current_tick);
                 }
-                MeasureElement::Attributes(_) | MeasureElement::OctaveShift(_) => {}
+                MeasureElement::Attributes(_)
+                | MeasureElement::OctaveShift(_)
+                | MeasureElement::Dynamics(_)
+                | MeasureElement::Wedge(_) => {}
             }
         }
 

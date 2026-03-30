@@ -164,6 +164,10 @@ function App() {
       midiPluginSubscribersRef.current.forEach(h => h(event))
     },
     onConnectionChange: () => {},
+    // Feature 063: Forward MIDI CC7/CC11 to ToneAdapter for live volume control
+    onCC: (cc) => {
+      _toneAdapter?.handleCC(cc.controller, cc.value);
+    },
   })
   
   // Mobile debug console (eruda) - enable with ?debug=true

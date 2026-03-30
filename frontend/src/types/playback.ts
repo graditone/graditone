@@ -60,6 +60,9 @@ export interface ScheduledNote {
   
   /** Real-time duration in seconds */
   durationSeconds: number;
+  
+  /** Velocity (1–127) for volume scaling. Undefined = default mf (80). Feature 063. */
+  velocity?: number;
 }
 
 /**

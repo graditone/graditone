@@ -134,6 +134,10 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - IndexedDB (`sessions` store — full Session objects) + localStorage (`graditone-sessions-index` — lightweight index). Same dual-layer pattern used by Feature 060. (061-session-task-definition)
 - Rust (latest stable) for backend phrase detection; TypeScript + React 18 for frontend visualization + serde (serialization), wasm-bindgen (WASM bindings), React (frontend UI) (062-score-phrase-detection)
 - Phrases are computed during import and stored in-memory in the Score struct. Cached in IndexedDB along with the score via existing schema versioning (v10 → v11). (062-score-phrase-detection)
+- Rust stable (backend/WASM) + TypeScript 5.x (frontend React) + wasm-bindgen, wasm-pack (backend→WASM); Tone.js, React 18+ (frontend) (063-midi-volume-control)
+- localStorage for master volume preference (follows existing `graditone:tempo:{scoreId}` pattern) (063-midi-volume-control)
+- Markdown (documentation only — no code changes) + None (references existing Rust backend, TypeScript frontend, and WASM bridge) (064-musicxml-processing-docs)
+- N/A (static markdown file in `docs/` directory) (064-musicxml-processing-docs)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -154,9 +158,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 064-musicxml-processing-docs: Added Markdown (documentation only — no code changes) + None (references existing Rust backend, TypeScript frontend, and WASM bridge)
+- 063-midi-volume-control: Added Rust stable (backend/WASM) + TypeScript 5.x (frontend React) + wasm-bindgen, wasm-pack (backend→WASM); Tone.js, React 18+ (frontend)
 - 062-score-phrase-detection: Added Rust (latest stable) for backend phrase detection; TypeScript + React 18 for frontend visualization + serde (serialization), wasm-bindgen (WASM bindings), React (frontend UI)
-- 061-session-task-definition: Added TypeScript (strict), React 18+, CSS + React (hooks, useState, useCallback, useEffect), Vite bundler, existing plugin API v8 (`PluginContext`, `openPlugin`, `getNavigationData`, `broadcastPracticeSaved`, `onPracticeSaved`)
-- 060-sessions-plugin: Added TypeScript (strict), React 18+ + Plugin API v8 (new — extends v7 with practice-saved event), existing savedPractice services, IndexedDB, localStorage
 
 
 <!-- MANUAL ADDITIONS START -->

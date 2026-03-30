@@ -109,7 +109,8 @@ pub(super) fn parse_barline_content<B: BufRead>(
     })
 }
 
-/// Parses a `<direction>` element, looking for `<octave-shift>` children.
+/// Parses a `<direction>` element, extracting `<octave-shift>`, `<dynamics>`,
+/// `<wedge>`, `<sound>` (tempo + dynamics), and `<metronome>` children.
 pub(super) fn parse_direction<B: BufRead>(
     reader: &mut Reader<B>,
     measure: &mut MeasureData,
@@ -117,7 +118,10 @@ pub(super) fn parse_direction<B: BufRead>(
     let mut buf = Vec::new();
     let mut staff: usize = 1;
     let mut octave_shift: Option<OctaveShiftData> = None;
+    let mut dynamics_marking: Option<DynamicsData> = None;
+    let mut wedge_data: Option<WedgeData> = None;
     let mut in_metronome = false;
+    let mut in_dynamics = false;
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -139,7 +143,20 @@ pub(super) fn parse_direction<B: BufRead>(
                         }
                     }
                 }
-                _ => {}
+                // T011: <dynamics> is a Start element wrapping a child like <p/>, <ff/>, etc.
+                b"dynamics" => {
+                    in_dynamics = true;
+                }
+                _ => {
+                    // T011: Inside <dynamics>, child element names are the marking (p, pp, ff, etc.)
+                    if in_dynamics {
+                        let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                        dynamics_marking = Some(DynamicsData {
+                            marking: name,
+                            staff: 1,
+                        });
+                    }
+                }
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
                 b"octave-shift" => {
@@ -166,24 +183,76 @@ pub(super) fn parse_direction<B: BufRead>(
                         });
                     }
                 }
+                // T012: <sound> may carry both tempo and dynamics attributes
                 b"sound" => {
                     for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"tempo" {
-                            if let Ok(tempo_str) = std::str::from_utf8(&attr.value) {
-                                if let Ok(tempo) = tempo_str.parse::<f64>() {
-                                    measure.sound_tempo = Some(tempo);
+                        match attr.key.as_ref() {
+                            b"tempo" => {
+                                if let Ok(tempo_str) = std::str::from_utf8(&attr.value) {
+                                    if let Ok(tempo) = tempo_str.parse::<f64>() {
+                                        measure.sound_tempo = Some(tempo);
+                                    }
                                 }
                             }
+                            b"dynamics" => {
+                                if let Ok(dyn_str) = std::str::from_utf8(&attr.value) {
+                                    if let Ok(dyn_val) = dyn_str.parse::<f64>() {
+                                        measure.sound_dynamics = Some(dyn_val);
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
-                _ => {}
+                // T013: <wedge> is self-closing with type and optional number attributes
+                b"wedge" => {
+                    let mut wtype = String::new();
+                    let mut number: u8 = 1;
+                    for attr in e.attributes().flatten() {
+                        match attr.key.as_ref() {
+                            b"type" => {
+                                wtype = String::from_utf8_lossy(&attr.value).to_string();
+                            }
+                            b"number" => {
+                                if let Ok(s) = std::str::from_utf8(&attr.value) {
+                                    number = s.parse().unwrap_or(1);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    if !wtype.is_empty() {
+                        wedge_data = Some(WedgeData {
+                            wedge_type: wtype,
+                            number,
+                            staff: 1, // placeholder, updated with staff below
+                        });
+                    }
+                }
+                _ => {
+                    // T011: Inside <dynamics>, child element can also be self-closing
+                    if in_dynamics {
+                        let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                        dynamics_marking = Some(DynamicsData {
+                            marking: name,
+                            staff: 1,
+                        });
+                    }
+                }
             },
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"direction" {
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                b"dynamics" => {
+                    in_dynamics = false;
+                }
+                b"metronome" => {
+                    in_metronome = false;
+                }
+                b"direction" => {
                     break;
                 }
-            }
+                _ => {}
+            },
             Ok(Event::Eof) => break,
             Err(_) => break,
             _ => {}
@@ -191,9 +260,22 @@ pub(super) fn parse_direction<B: BufRead>(
         buf.clear();
     }
 
+    // Push octave-shift element with resolved staff
     if let Some(mut os) = octave_shift {
         os.staff = staff;
         measure.elements.push(MeasureElement::OctaveShift(os));
+    }
+
+    // T011: Push dynamics marking with resolved staff
+    if let Some(mut dm) = dynamics_marking {
+        dm.staff = staff;
+        measure.elements.push(MeasureElement::Dynamics(dm));
+    }
+
+    // T013: Push wedge element with resolved staff
+    if let Some(mut wd) = wedge_data {
+        wd.staff = staff;
+        measure.elements.push(MeasureElement::Wedge(wd));
     }
 
     Ok(())
