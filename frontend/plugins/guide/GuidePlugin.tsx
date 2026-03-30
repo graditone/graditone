@@ -30,6 +30,11 @@ export function GuidePlugin() {
           Graditone works fully offline — once loaded, no internet connection is
           required.
         </p>
+        <p>
+          Follow{' '}
+          <a href="https://bsky.app/profile/graditone.bsky.social" target="_blank" rel="noopener noreferrer">Graditone on Bluesky</a>{' '}
+          for the latest project news and updates.
+        </p>
       </section>
 
       {/* ── Section 2: Playing a Score ───────────────────────────────────── */}
