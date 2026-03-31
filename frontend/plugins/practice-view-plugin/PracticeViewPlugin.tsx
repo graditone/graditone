@@ -1111,7 +1111,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         onSave={loadedScoreRefRef.current ? handleSave : undefined}
         isSaved={isSaved}
         saveError={saveError}
-        onReturnToSession={taskTag ? () => context.openPlugin('sessions-plugin', {
+        onReturnToSession={sessionIdRef.current ? () => context.openPlugin('sessions-plugin', {
           expandSessionId: sessionIdRef.current,
           expandTaskId: taskIdRef.current,
         }) : undefined}
