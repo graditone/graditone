@@ -1,5 +1,5 @@
 /**
- * Graditone Plugin API — Types (v8)
+ * Graditone Plugin API — Types (v9)
  * Feature 030: Plugin Architecture (v1 baseline)
  * Feature 031: Practice View Plugin — adds recording namespace and offsetMs (v2)
  * Feature 033: Play Score Plugin — adds scorePlayer namespace, ScoreRenderer component (v3)
@@ -10,6 +10,7 @@
  * Feature 042: Practice Note Duration — adds durationTicks to PluginPracticeNoteEntry (v7)
  * Feature 060: Sessions Plugin — adds PracticeSavedEvent, onPracticeSaved,
  *              protectedPracticeIds on ScoreSelector (v8)
+ * Feature 067: Practice Goals — adds getPhrases() to PluginScorePlayerContext (v9)
  *
  * Defines all public types for the Graditone Plugin API.
  * See specs/030-plugin-architecture/contracts/plugin-api.ts for the v1 canonical contract.
@@ -25,6 +26,7 @@
  */
 
 import type { ComponentType } from 'react';
+import type { PhraseRegion } from '../types/score';
 
 // ---------------------------------------------------------------------------
 // Staff viewer component props (injected via PluginContext.components)
@@ -606,6 +608,13 @@ export interface PluginScorePlayerContext {
    * Returns null if no score is loaded.
    */
   getMeasureEndTicks(): ReadonlyArray<number> | null;
+
+  /**
+   * Feature 067: Returns detected musical phrase regions for the loaded score.
+   * Returns null if no score is loaded (status !== 'ready').
+   * Returns an empty array if the score has no detected phrases.
+   */
+  getPhrases(): ReadonlyArray<PhraseRegion> | null;
 }
 
 /**

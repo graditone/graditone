@@ -140,6 +140,10 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - N/A (static markdown file in `docs/` directory) (064-musicxml-processing-docs)
 - TypeScript ~5.9.3, React 19.2.0 + React 19, Vite 7.2.4, existing sessions plugin (`plugins-external/sessions-plugin/`) (065-sessions-calendar-view)
 - IndexedDB (`sessions` store via `loadAllSessionsFromIndexedDB()`) + localStorage (`graditone-sessions-index`) (065-sessions-calendar-view)
+- TypeScript (frontend), React 18+ components + React, IndexedDB (via sessionStorage.ts), localStorage (066-session-scheduling)
+- IndexedDB (`sessions` store) for full Session objects; localStorage (`graditone-sessions-index`) for SessionIndexEntry[] fast index (066-session-scheduling)
+- TypeScript (React 18+), Rust (stable) for backend WASM + React, existing SessionsPlugin, PluginContext API (v8), wasm-bindgen for phrase detection (067-practice-goals-tab)
+- IndexedDB (`graditone-db`, currently version 3 → version 4 for `goals` store) + localStorage index (067-practice-goals-tab)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -160,9 +164,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 067-practice-goals-tab: Added TypeScript (React 18+), Rust (stable) for backend WASM + React, existing SessionsPlugin, PluginContext API (v8), wasm-bindgen for phrase detection
+- 066-session-scheduling: Added TypeScript (frontend), React 18+ components + React, IndexedDB (via sessionStorage.ts), localStorage
 - 065-sessions-calendar-view: Added TypeScript ~5.9.3, React 19.2.0 + React 19, Vite 7.2.4, existing sessions plugin (`plugins-external/sessions-plugin/`)
-- 064-musicxml-processing-docs: Added Markdown (documentation only — no code changes) + None (references existing Rust backend, TypeScript frontend, and WASM bridge)
-- 063-midi-volume-control: Added Rust stable (backend/WASM) + TypeScript 5.x (frontend React) + wasm-bindgen, wasm-pack (backend→WASM); Tone.js, React 18+ (frontend)
 
 
 <!-- MANUAL ADDITIONS START -->
