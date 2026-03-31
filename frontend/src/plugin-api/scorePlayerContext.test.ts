@@ -936,3 +936,71 @@ function getSubscribedState(scorePlayer: ReturnType<typeof useScorePlayerContext
   unsub();
   return capturedState!;
 }
+
+// ---------------------------------------------------------------------------
+// Feature 067: getPhrases() contract tests
+// ---------------------------------------------------------------------------
+
+describe('getPhrases() — Feature 067', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: vi.fn().mockResolvedValue(new Blob(['fake-mxl-data'], { type: 'application/octet-stream' })),
+    } as unknown as Response);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns null when no score is loaded (idle)', () => {
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+    expect(result.current.getPhrases()).toBeNull();
+  });
+
+  it('returns empty array when score has no phrases', async () => {
+    const scoreWithoutPhrases = { ...mockScore };
+    mockImportFile.mockResolvedValue({ ...mockImportResult, score: scoreWithoutPhrases });
+
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+
+    await act(async () => {
+      await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
+    });
+
+    await waitFor(() => {
+      const state = getSubscribedState(result.current);
+      expect(state.status).toBe('ready');
+    });
+
+    const phrases = result.current.getPhrases();
+    expect(phrases).toEqual([]);
+  });
+
+  it('returns phrase regions when score has detected phrases', async () => {
+    const mockPhrases = [
+      { instrument_index: 0, start_measure: 0, end_measure: 3, start_tick: 0, end_tick: 3840 },
+      { instrument_index: 0, start_measure: 4, end_measure: 7, start_tick: 3840, end_tick: 7680 },
+    ];
+    const scoreWithPhrases = { ...mockScore, phrases: mockPhrases };
+    mockImportFile.mockResolvedValue({ ...mockImportResult, score: scoreWithPhrases });
+
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+
+    await act(async () => {
+      await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
+    });
+
+    await waitFor(() => {
+      const state = getSubscribedState(result.current);
+      expect(state.status).toBe('ready');
+    });
+
+    const phrases = result.current.getPhrases();
+    expect(phrases).toHaveLength(2);
+    expect(phrases![0]).toEqual(mockPhrases[0]);
+    expect(phrases![1]).toEqual(mockPhrases[1]);
+  });
+});
