@@ -340,9 +340,17 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
     // Compute loop region from measures if applicable
     if (tc.regionType === 'measures' && tc.startMeasure != null && tc.endMeasure != null) {
+      // Legacy migration: goalEngine pre-067 fix stored 0-based measures.
+      // 1-based measures never have startMeasure < 1, so this is safe.
+      let startM = tc.startMeasure;
+      let endM = tc.endMeasure;
+      if (startM < 1) {
+        startM += 1;
+        endM += 1;
+      }
       const measureEndTicks = context.scorePlayer.getMeasureEndTicks();
       if (measureEndTicks && measureEndTicks.length > 0) {
-        const result = measureRangeToTicks(tc.startMeasure, tc.endMeasure, measureEndTicks);
+        const result = measureRangeToTicks(startM, endM, measureEndTicks);
         if (result) {
           setPendingTaskLoopRegion(result);
         }
