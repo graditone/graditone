@@ -181,3 +181,22 @@ Built-in documentation plugin (📖 Guide) that appears as the rightmost entry i
 
 **Spec**: `specs/001-docs-plugin/`  
 **Updated**: March 2026
+
+---
+
+## Session Scheduling — Feature 066
+
+Extends the Sessions Plugin with a **scheduled** session state, allowing users to plan future practice sessions alongside the existing active/closed lifecycle.
+
+### Capabilities
+
+- **Unified date picker**: The "Start Session" flow includes a date picker defaulting to today; selecting today starts an active session immediately (existing behavior preserved); selecting a future date creates a scheduled session
+- **Scheduled status**: New `scheduled` state for sessions — visually distinct with a blue badge and left border accent; sorted by target date (nearest first) between active and closed sessions
+- **Activation**: A dedicated "Activate" button transitions a scheduled session to active; disabled with tooltip when another session is already active; at most one active session at any time
+- **Closed session finality**: Closed sessions cannot be reactivated — the activate button is only rendered for scheduled sessions
+- **Task pre-planning**: Scheduled sessions support task definitions at creation time via TaskBuilder, enabling users to plan what to practice and when
+- **Backward compatibility**: Existing sessions without a target date continue to work without migration; `targetDate` is an optional field (`undefined` for legacy sessions)
+- **Eviction safety**: The MAX_SESSIONS cap evicts only the oldest closed sessions; scheduled sessions are preserved during eviction
+
+**Spec**: `specs/066-session-scheduling/`  
+**Updated**: March 2026
