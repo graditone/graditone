@@ -144,6 +144,10 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - IndexedDB (`sessions` store) for full Session objects; localStorage (`graditone-sessions-index`) for SessionIndexEntry[] fast index (066-session-scheduling)
 - TypeScript (React 18+), Rust (stable) for backend WASM + React, existing SessionsPlugin, PluginContext API (v8), wasm-bindgen for phrase detection (067-practice-goals-tab)
 - IndexedDB (`graditone-db`, currently version 3 → version 4 for `goals` store) + localStorage index (067-practice-goals-tab)
+- TypeScript 5.x / React 18 + React (hooks, state), Vitest (test runner), existing sessions-plugin CSS framework (068-goal-creation-form)
+- IndexedDB via existing `goalStorage.ts` and `sessionStorage.ts` — unchanged (068-goal-creation-form)
+- TypeScript 5.5, React 19 + Vitest 2, `@testing-library/react` 16, Vite 6 (build), `idb` (IndexedDB via goalStorage.ts) (068-goal-creation-form)
+- IndexedDB (`graditone-goals-index`, `goals` store via goalStorage.ts); localStorage index in GoalsView (068-goal-creation-form)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -164,9 +168,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 068-goal-creation-form: Added TypeScript 5.5, React 19 + Vitest 2, `@testing-library/react` 16, Vite 6 (build), `idb` (IndexedDB via goalStorage.ts)
+- 068-goal-creation-form: Added TypeScript 5.x / React 18 + React (hooks, state), Vitest (test runner), existing sessions-plugin CSS framework
 - 067-practice-goals-tab: Added TypeScript (React 18+), Rust (stable) for backend WASM + React, existing SessionsPlugin, PluginContext API (v8), wasm-bindgen for phrase detection
-- 066-session-scheduling: Added TypeScript (frontend), React 18+ components + React, IndexedDB (via sessionStorage.ts), localStorage
-- 065-sessions-calendar-view: Added TypeScript ~5.9.3, React 19.2.0 + React 19, Vite 7.2.4, existing sessions plugin (`plugins-external/sessions-plugin/`)
 
 
 <!-- MANUAL ADDITIONS START -->
