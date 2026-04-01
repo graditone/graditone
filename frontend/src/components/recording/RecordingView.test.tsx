@@ -60,6 +60,36 @@ vi.mock('../../services/import/MusicXMLImportService', () => ({
   MusicXMLImportService: vi.fn(),
 }));
 
+vi.mock('../../services/playback/ToneAdapter', () => {
+  const mockInstance = {
+    init: vi.fn().mockResolvedValue(undefined),
+    attackNote: vi.fn(),
+    releaseNote: vi.fn(),
+    stopAll: vi.fn(),
+    playNote: vi.fn(),
+    getCurrentTime: vi.fn(() => 0),
+    startTransport: vi.fn(),
+    stopTransport: vi.fn(),
+    clearSchedule: vi.fn(),
+    isInitialized: vi.fn(() => false),
+    setMuted: vi.fn(),
+    updateTempo: vi.fn(),
+    handleCC: vi.fn(),
+    setMasterVolume: vi.fn(),
+    getMasterVolume: vi.fn(() => 80),
+    loadPersistedVolume: vi.fn(),
+    onTransportRestart: vi.fn(() => () => {}),
+    getTransportSeconds: vi.fn(() => 0),
+    scheduleRepeat: vi.fn(() => 0),
+    clearTransportEvent: vi.fn(),
+  };
+  return {
+    ToneAdapter: {
+      getInstance: vi.fn(() => mockInstance),
+    },
+  };
+});
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 interface RenderScoreViewerOptions {
