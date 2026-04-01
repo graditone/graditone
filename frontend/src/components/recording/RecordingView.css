@@ -1,15 +1,26 @@
 /*
  * RecordingView layout styles
- * Debug-mode-only component — simple readable layout for developer use
+ * Debug-mode-only component — themed via Graditone CSS custom properties.
+ *
+ * Color tokens (defined per body[data-landing-theme] via App.css bridge):
+ *   --color-surface        page / card background
+ *   --color-surface-alt    header / slightly darker surface
+ *   --color-border         divider / outline color
+ *   --color-text           primary text
+ *   --color-text-secondary secondary / label text
+ *   --color-text-muted     hint / timestamp text
+ *   --color-accent         CTA / play-notes button
+ *   --color-danger         Stop / disconnect / recording dot
+ *   --color-success        Start / velocity bar fill
  */
 
 .recording-view {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  background: #1a1a1a;
-  color: #f0f0f0;
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: var(--color-surface, #1a1a1a);
+  color: var(--color-text, #f0f0f0);
+  font-family: var(--ls-font-body, 'Segoe UI', system-ui, sans-serif);
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
@@ -19,15 +30,15 @@
   align-items: center;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  background: #111;
-  border-bottom: 1px solid #333;
+  background: var(--color-surface-alt, #111);
+  border-bottom: 1px solid var(--color-border, #333);
   flex-shrink: 0;
 }
 
 .recording-view__back-btn {
   background: transparent;
-  border: 1px solid #555;
-  color: #ccc;
+  border: 1px solid var(--color-border, #555);
+  color: var(--color-text-secondary, #ccc);
   padding: 0.4rem 0.9rem;
   border-radius: 6px;
   cursor: pointer;
@@ -37,8 +48,8 @@
 }
 
 .recording-view__back-btn:hover {
-  border-color: #aaa;
-  color: #fff;
+  border-color: var(--color-text-secondary, #aaa);
+  color: var(--color-text, #fff);
 }
 
 .recording-view__title {
@@ -46,6 +57,8 @@
   font-weight: 600;
   margin: 0;
   flex: 1;
+  color: var(--color-text, #f0f0f0);
+  font-family: var(--ls-font-heading, system-ui, sans-serif);
 }
 
 .recording-view__debug-badge {
@@ -82,8 +95,8 @@
   flex: 1;
   width: 100%;
   border-radius: 6px;
-  border: 1px solid #333;
-  background: #0d0d0d;
+  border: 1px solid var(--color-border, #333);
+  background: color-mix(in srgb, var(--color-surface, #111) 85%, #000);
   display: block;
 }
 
@@ -103,21 +116,21 @@
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.15s;
-  background: #2e7d32;
+  background: var(--color-success, #2e7d32);
   color: #fff;
 }
 
 .recording-view__toggle-btn:hover {
-  background: #388e3c;
+  background: color-mix(in srgb, var(--color-success, #2e7d32) 80%, #fff);
 }
 
 .recording-view__toggle-btn--stop {
-  background: #b71c1c;
+  background: var(--color-danger, #b71c1c);
   color: #fff;
 }
 
 .recording-view__toggle-btn--stop:hover {
-  background: #c62828;
+  background: color-mix(in srgb, var(--color-danger, #b71c1c) 80%, #fff);
 }
 
 /* ── Recording active indicator ──────────────────────────────────────────── */
@@ -127,18 +140,18 @@
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
-  color: #aaa;
+  color: var(--color-text-muted, #aaa);
 }
 
 .recording-view__status--active {
-  color: #ef5350;
+  color: var(--color-danger, #ef5350);
 }
 
 .recording-view__status-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #ef5350;
+  background: var(--color-danger, #ef5350);
   animation: recording-pulse 1.2s ease-in-out infinite;
   flex-shrink: 0;
 }
@@ -152,10 +165,10 @@
 
 .recording-view__error {
   padding: 0.75rem 1rem;
-  background: rgba(183, 28, 28, 0.2);
-  border: 1px solid #b71c1c;
+  background: var(--color-danger-bg, rgba(183, 28, 28, 0.2));
+  border: 1px solid var(--color-danger, #b71c1c);
   border-radius: 6px;
-  color: #ef9a9a;
+  color: color-mix(in srgb, var(--color-danger, #ef5350) 75%, #fff);
   font-size: 0.875rem;
 }
 
@@ -169,9 +182,10 @@
   font-size: 2rem;
   font-weight: 700;
   line-height: 1;
-  color: #f0f0f0;
+  color: var(--color-text, #f0f0f0);
   min-width: 3.5rem;
   letter-spacing: 0.02em;
+  font-family: var(--ls-font-heading, system-ui, sans-serif);
 }
 
 /* ── Note history list ─────────────────────────────────────────────────────── */
@@ -194,10 +208,64 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #777;
+  color: var(--color-text-muted, #777);
 }
 
 /* NoteHistoryList internal header */
+/* Multi-column: fills top→bottom within each column, then moves right.
+   Needs a fixed height so the browser knows when to start a new column. */
+.note-history-list__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  height: 240px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  columns: 120px;
+  column-gap: 0;
+  column-fill: auto;
+  border: 1px solid var(--color-border, #2a2a2a);
+  border-radius: 4px;
+}
+
+.note-history-list__entry {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.08rem 0.25rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  border-bottom: 1px solid var(--color-border, #1c1c1c);
+  border-right: 1px solid var(--color-border, #1c1c1c);
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+  background: var(--color-surface, #1a1a1a);
+  break-inside: avoid;
+}
+
+.note-history-list__entry-label {
+  font-weight: 600;
+  color: var(--color-text, #e0e0e0);
+  min-width: 2.5ch;
+}
+
+.note-history-list__entry-time {
+  color: var(--color-text-muted, #555);
+  font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+}
+
+.note-history-list__expand-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted, #555);
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
 .note-history-list__header {
   display: flex;
   align-items: center;
@@ -209,13 +277,13 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #777;
+  color: var(--color-text-muted, #777);
 }
 
 .note-history-list__clear-btn {
   background: transparent;
-  border: 1px solid #444;
-  color: #888;
+  border: 1px solid var(--color-border, #444);
+  color: var(--color-text-muted, #888);
   padding: 0.15rem 0.45rem;
   border-radius: 4px;
   cursor: pointer;
@@ -225,14 +293,14 @@
 }
 
 .note-history-list__clear-btn:hover {
-  border-color: #888;
-  color: #ddd;
+  border-color: var(--color-text-secondary, #888);
+  color: var(--color-text, #ddd);
 }
 
 .recording-view__clear-btn {
   background: transparent;
-  border: 1px solid #444;
-  color: #aaa;
+  border: 1px solid var(--color-border, #444);
+  color: var(--color-text-secondary, #aaa);
   padding: 0.25rem 0.6rem;
   border-radius: 4px;
   cursor: pointer;
@@ -241,8 +309,8 @@
 }
 
 .recording-view__clear-btn:hover {
-  border-color: #888;
-  color: #ddd;
+  border-color: var(--color-text-secondary, #888);
+  color: var(--color-text, #ddd);
 }
 
 /* ── RecordingStaff ──────────────────────────────────────────────────────── */
@@ -252,8 +320,8 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.75rem 0;
-  border-top: 1px solid #2a2a2a;
-  border-bottom: 1px solid #2a2a2a;
+  border-top: 1px solid var(--color-border, #2a2a2a);
+  border-bottom: 1px solid var(--color-border, #2a2a2a);
 }
 
 .recording-staff__header {
@@ -273,13 +341,13 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #777;
+  color: var(--color-text-muted, #777);
 }
 
 .recording-staff__clear-btn {
   background: transparent;
-  border: 1px solid #444;
-  color: #aaa;
+  border: 1px solid var(--color-border, #444);
+  color: var(--color-text-secondary, #aaa);
   padding: 0.25rem 0.6rem;
   border-radius: 4px;
   cursor: pointer;
@@ -288,8 +356,8 @@
 }
 
 .recording-staff__clear-btn:hover {
-  border-color: #888;
-  color: #ddd;
+  border-color: var(--color-text-secondary, #888);
+  color: var(--color-text, #ddd);
 }
 
 .recording-staff__play-btn {
@@ -307,8 +375,8 @@
 }
 
 .recording-staff__play-btn--notes {
-  background: #1565c0;
-  color: #fff;
+  background: var(--color-accent, #1565c0);
+  color: var(--ls-cta-text, #fff);
 }
 
 .recording-staff__play-btn--notes:hover {
@@ -316,7 +384,7 @@
 }
 
 .recording-staff__play-btn--audio {
-  background: #2e7d32;
+  background: var(--color-success, #2e7d32);
   color: #fff;
 }
 
@@ -325,7 +393,7 @@
 }
 
 .recording-staff__play-btn--stop {
-  background: #b71c1c;
+  background: var(--color-danger, #b71c1c);
   color: #fff;
 }
 
@@ -336,7 +404,7 @@
 .recording-staff__renderer {
   width: 100%;
   overflow-x: auto;
-  background: #fff;
+  /* Background set via inline style from RecordingStaff using the active RenderConfig */
   border-radius: 6px;
   /* Give the SVG staff room — viewportHeight is 200px in DEFAULT_STAFF_CONFIG */
   min-height: 80px;
@@ -348,17 +416,71 @@
 
 .recording-staff__status {
   font-size: 0.8rem;
-  color: #aaa;
+  color: var(--color-text-muted, #aaa);
   padding: 0 0.25rem;
   min-height: 1.2em;
 }
 
 .recording-staff__status strong {
-  color: #d4a0ff;
+  color: var(--color-accent, #d4a0ff);
   font-weight: 600;
 }
 
 .recording-staff__status--muted {
-  color: #555;
+  color: var(--color-text-muted, #555);
   font-style: italic;
+}
+
+/* ─── 069-midi-velocity: velocity bar + channel display ─────────────────────── */
+
+.note-history-list__entry-velocity {
+  font-variant-numeric: tabular-nums;
+  min-width: 2.5ch;
+  text-align: right;
+  font-size: 0.7rem;
+  color: var(--color-text-secondary, #aaa);
+}
+
+.note-history-list__velocity-bar-wrap {
+  width: 40px;
+  height: 4px;
+  background: color-mix(in srgb, var(--color-border, #2a2a2a) 80%, #000);
+  border-radius: 2px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.note-history-list__velocity-bar {
+  height: 100%;
+  background-color: var(--color-success, #4caf50);
+  border-radius: 2px;
+}
+
+.note-history-list__entry-channel {
+  font-family: monospace;
+  font-size: 0.65rem;
+  color: var(--color-text-muted, #666);
+}
+
+.note-history-list__raw-bytes {
+  font-family: monospace;
+  font-size: 0.7rem;
+  color: var(--color-text-muted, #aaa);
+  display: block;
+  overflow-wrap: break-word;
+}
+
+.note-history-list__cc-log {
+  max-height: 150px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.note-history-list__cc-entry {
+  font-family: monospace;
+  font-size: 0.7rem;
+  color: var(--color-text-muted, #888);
+  padding: 2px 0;
 }

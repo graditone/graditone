@@ -551,7 +551,9 @@ function App() {
   // Feature 001-recording-view: Show RecordingView when navigated to from ScoreViewer
   if (showRecording) {
     return (
-      <RecordingView onBack={() => { setShowRecording(false); }} />
+      <RenderConfigContext.Provider value={scoreRenderConfig}>
+        <RecordingView onBack={() => { setShowRecording(false); }} />
+      </RenderConfigContext.Provider>
     )
   }
 

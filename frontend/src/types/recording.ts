@@ -62,6 +62,12 @@ export interface NoteOnset {
   confidence: number;
   /** Elapsed ms since session startTimestamp */
   elapsedMs: number;
+  /** MIDI key velocity 1–127. undefined when input source is microphone. FR-001/FR-006. */
+  velocity?: number;
+  /** MIDI channel 1–16. undefined when input source is microphone. FR-003/FR-006. */
+  channel?: number;
+  /** Raw MIDI message bytes, e.g. [0x90, 60, 100]. undefined for mic input. FR-004. */
+  rawBytes?: readonly number[];
 }
 
 /** Current waveform buffer used to render the oscilloscope */
@@ -101,6 +107,8 @@ export interface MidiNoteEvent {
   timestampMs: number;
   /** Derived scientific pitch name, e.g. "A4", "C#5" */
   label: string;
+  /** Raw MIDI message bytes, e.g. [0x90, 60, 100]. Set in useMidiInput from ev.data. FR-004. */
+  rawBytes?: readonly number[];
 }
 
 /** A device-level connection lifecycle event */

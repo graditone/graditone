@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ScoreViewer } from '../../components/ScoreViewer';
 import { RecordingView } from '../../components/recording/RecordingView';
@@ -59,6 +59,36 @@ vi.mock('../../services/score-api', () => ({
 vi.mock('../../services/import/MusicXMLImportService', () => ({
   MusicXMLImportService: vi.fn(),
 }));
+
+vi.mock('../../services/playback/ToneAdapter', () => {
+  const mockInstance = {
+    init: vi.fn().mockResolvedValue(undefined),
+    attackNote: vi.fn(),
+    releaseNote: vi.fn(),
+    stopAll: vi.fn(),
+    playNote: vi.fn(),
+    getCurrentTime: vi.fn(() => 0),
+    startTransport: vi.fn(),
+    stopTransport: vi.fn(),
+    clearSchedule: vi.fn(),
+    isInitialized: vi.fn(() => false),
+    setMuted: vi.fn(),
+    updateTempo: vi.fn(),
+    handleCC: vi.fn(),
+    setMasterVolume: vi.fn(),
+    getMasterVolume: vi.fn(() => 80),
+    loadPersistedVolume: vi.fn(),
+    onTransportRestart: vi.fn(() => () => {}),
+    getTransportSeconds: vi.fn(() => 0),
+    scheduleRepeat: vi.fn(() => 0),
+    clearTransportEvent: vi.fn(),
+  };
+  return {
+    ToneAdapter: {
+      getInstance: vi.fn(() => mockInstance),
+    },
+  };
+});
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -586,5 +616,131 @@ describe('RecordingView — 029-MIDI US5: disconnect handling', () => {
     });
 
     expect(screen.queryByText(/MIDI device disconnected/i)).not.toBeInTheDocument();
+  });
+});
+
+// ─── T005: 069-midi-velocity — velocity forwarding in handleMidiNoteOn (US1) ──
+
+describe('T005: RecordingView velocity forwarding (US1)', () => {
+  it('T005a — velocity is stored in note history entry', async () => {
+    const input = createMockMidiInput('Piano', 'dev-v1');
+    const access = createMockMidiAccess([input]);
+    mockMidiSupported(access);
+
+    render(<RecordingView onBack={vi.fn()} />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireMidiNoteOn(input, 69, 80); // A4, velocity 80
+      await Promise.resolve();
+    });
+
+    // The velocity value should be displayed in the note history list
+    const list = screen.getByRole('list', { name: /note history/i });
+    expect(list).toBeInTheDocument();
+    expect(within(list).getByText('80')).toBeInTheDocument();
+  });
+
+  it('T005b — different velocity values are rendered per note', async () => {
+    const input = createMockMidiInput('Piano', 'dev-v2');
+    const access = createMockMidiAccess([input]);
+    mockMidiSupported(access);
+
+    render(<RecordingView onBack={vi.fn()} />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireMidiNoteOn(input, 60, 30); // C4, velocity 30
+      fireMidiNoteOn(input, 72, 110); // C5, velocity 110
+      await Promise.resolve();
+    });
+
+    const list = screen.getByRole('list', { name: /note history/i });
+    expect(within(list).getByText('30')).toBeInTheDocument();
+    expect(within(list).getByText('110')).toBeInTheDocument();
+  });
+});
+
+// ─── T012: 069-midi-velocity — channel forwarding in handleMidiNoteOn (US3) ──
+
+describe('T012: RecordingView channel forwarding (US3)', () => {
+  it('T012a — channel is rendered in note history entry', async () => {
+    const input = createMockMidiInput('Piano', 'dev-ch1');
+    const access = createMockMidiAccess([input]);
+    mockMidiSupported(access);
+
+    render(<RecordingView onBack={vi.fn()} />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireMidiNoteOn(input, 69, 80); // channel comes from mock event
+      await Promise.resolve();
+    });
+
+    const list = screen.getByRole('list', { name: /note history/i });
+    // Channel text should be rendered as "chN"
+    expect(within(list).getByText(/^ch\d+$/)).toBeInTheDocument();
+  });
+});
+
+// ─── T018: 069-midi-velocity — CC log + rawBytes forwarding (US4) ────────
+
+describe('T018: RecordingView CC log and rawBytes (US4)', () => {
+  it('T018a — rawBytes is populated on note history entry', async () => {
+    const input = createMockMidiInput('Piano', 'dev-rb1');
+    const access = createMockMidiAccess([input]);
+    mockMidiSupported(access);
+
+    render(<RecordingView onBack={vi.fn()} />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireMidiNoteOn(input, 69, 80); // A4 vel 80 ch1 → [0x90, 69, 80]
+      await Promise.resolve();
+    });
+
+    // expand button should be present (rawBytes is set)
+    const list = screen.getByRole('list', { name: /note history/i });
+    expect(within(list).getByRole('button', { name: /expand|show bytes|detail/i })).toBeInTheDocument();
+  });
+
+  it('T018b — CC messages appear in CC log section', async () => {
+    const input = createMockMidiInput('Piano', 'dev-cc1');
+    const access = createMockMidiAccess([input]);
+    mockMidiSupported(access);
+
+    render(<RecordingView onBack={vi.fn()} />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Fire a CC64 (sustain pedal) event
+    await act(async () => {
+      if (!input.onmidimessage) return;
+      const data = new Uint8Array([0xb0, 64, 127]); // CC64 ch1 val 127
+      input.onmidimessage({ data, timeStamp: 0 } as unknown as MIDIMessageEvent);
+      await Promise.resolve();
+    });
+
+    // CC log section should be visible with controller/value/channel info
+    expect(screen.getByText(/CC.?64|controller.*64/i)).toBeInTheDocument();
   });
 });

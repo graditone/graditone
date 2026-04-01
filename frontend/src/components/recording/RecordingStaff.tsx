@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import type { Note } from '../../types/score';
 import type { PitchSample } from '../../types/recording';
+import { useRenderConfig } from '../../contexts/RenderConfigContext';
 import { NotationLayoutEngine } from '../../services/notation/NotationLayoutEngine';
 import { NotationRenderer } from '../notation/NotationRenderer';
 import { DEFAULT_STAFF_CONFIG } from '../../types/notation/config';
@@ -89,15 +90,20 @@ export interface RecordingStaffProps {
   audioChunksRef: MutableRefObject<Float32Array[]>;
   /** Discard all accumulated PCM chunks to free memory. */
   clearAudioChunks: () => void;
+  /** Increment this value to clear all staff notes from the parent. */
+  clearTrigger?: number;
 }
 
 /**
  * RecordingStaff — Shows detected notes on a treble-clef staff with
  * quantized rhythmic durations in a ring-buffer that wraps every 4 measures.
  */
-export function RecordingStaff({ currentPitch, bpm = 120, audioChunksRef, clearAudioChunks }: RecordingStaffProps) {
+export function RecordingStaff({ currentPitch, bpm = 120, audioChunksRef, clearAudioChunks, clearTrigger }: RecordingStaffProps) {
   // ── Committed notes (finalised) ───────────────────────────────────
   const [notes, setNotes] = useState<Note[]>([]);
+
+  // ── Theme ─────────────────────────────────────────────────────────────
+  const renderConfig = useRenderConfig();
 
   // ── Playback state ───────────────────────────────────────────────
   const [isPlayingNotes, setIsPlayingNotes] = useState(false);
@@ -126,6 +132,18 @@ export function RecordingStaff({ currentPitch, bpm = 120, audioChunksRef, clearA
     setIsPlayingNotes(false);
     setIsPlayingAudio(false);
   }, []);
+
+  // ── External clear trigger ───────────────────────────────────────────────
+  // When clearTrigger increments (from parent's handleClearAll), reset staff.
+  useEffect(() => {
+    if (clearTrigger === undefined || clearTrigger === 0) return;
+    stopPlayback();
+    setNotes([]);
+    nextTickRef.current = 0;
+    currentLabelRef.current = null;
+    clearAudioChunks();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearTrigger]);
 
   /** Play detected notes using piano samples via ToneAdapter. */
   const handlePlayNotes = useCallback(() => {
@@ -350,11 +368,13 @@ export function RecordingStaff({ currentPitch, bpm = 120, audioChunksRef, clearA
         className="recording-staff__renderer"
         aria-label={statusLabel}
         role="img"
+        style={{ background: renderConfig?.backgroundColor ?? '#fff' }}
       >
         <NotationRenderer
           layout={layout}
           highlightedNoteIds={ghostNote ? [GHOST_NOTE_ID] : []}
           showClef
+          inkColor={renderConfig?.glyphColor ?? 'black'}
         />
       </div>
 

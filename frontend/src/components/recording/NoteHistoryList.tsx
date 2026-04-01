@@ -8,7 +8,7 @@
  * T028: Core component
  * T029: Wired into RecordingView
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { NoteOnset } from '../../types/recording';
 
 interface NoteHistoryListProps {
@@ -25,6 +25,19 @@ function formatElapsed(ms: number): string {
 
 export function NoteHistoryList({ entries, onClear }: NoteHistoryListProps) {
   const listRef = useRef<HTMLUListElement>(null);
+  const [expandedIndices, setExpandedIndices] = useState<Set<number>>(new Set());
+
+  function toggleExpand(idx: number) {
+    setExpandedIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) {
+        next.delete(idx);
+      } else {
+        next.add(idx);
+      }
+      return next;
+    });
+  }
 
   // Auto-scroll to newest entry
   useEffect(() => {
@@ -59,7 +72,37 @@ export function NoteHistoryList({ entries, onClear }: NoteHistoryListProps) {
           {entries.map((entry, idx) => (
             <li key={idx} className="note-history-list__entry">
               <span className="note-history-list__entry-label">{entry.label}</span>
+              {entry.channel !== undefined && (
+                <span className="note-history-list__entry-channel">ch{entry.channel}</span>
+              )}
               <span className="note-history-list__entry-time">{formatElapsed(entry.elapsedMs)}</span>
+              {entry.velocity !== undefined && (
+                <>
+                  <span className="note-history-list__entry-velocity">{entry.velocity}</span>
+                  <div className="note-history-list__velocity-bar-wrap">
+                    <div
+                      className="note-history-list__velocity-bar"
+                      style={{ width: `${Math.round((entry.velocity / 127) * 100)}%` }}
+                    />
+                  </div>
+                </>
+              )}
+              {entry.rawBytes !== undefined && (
+                <>
+                  <button
+                    className="note-history-list__expand-btn"
+                    onClick={() => toggleExpand(idx)}
+                    aria-label="Show bytes"
+                  >
+                    {expandedIndices.has(idx) ? '▲' : '▼'}
+                  </button>
+                  {expandedIndices.has(idx) && (
+                    <span className="note-history-list__raw-bytes">
+                      {entry.rawBytes.map((b) => `0x${b.toString(16).toUpperCase().padStart(2, '0')}`).join(' ')}
+                    </span>
+                  )}
+                </>
+              )}
             </li>
           ))}
         </ul>
