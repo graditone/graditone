@@ -48,6 +48,9 @@ export interface NotationRendererProps {
 
   /** Step-mode: fill colour for each note label (default #1976d2), keyed by note id */
   noteLabelColors?: Record<string, string>;
+
+  /** Ink colour for staff lines, barlines, clef and note heads (default "black") */
+  inkColor?: string;
 }
 
 /**
@@ -64,6 +67,7 @@ const NotationRendererComponent: React.FC<NotationRendererProps> = ({
   highlightedNoteIds = [],
   noteLabels = {},
   noteLabelColors = {},
+  inkColor = 'black',
 }) => {
   const handleNoteClick = (noteId: string, e: React.MouseEvent) => {
     // Stop propagation to prevent triggering container's playback toggle
@@ -94,7 +98,7 @@ const NotationRendererComponent: React.FC<NotationRendererProps> = ({
           x2={line.x2}
           y1={line.y}
           y2={line.y}
-          stroke="black"
+          stroke={inkColor}
           strokeWidth={line.strokeWidth}
           opacity={0.50}
         />
@@ -109,7 +113,7 @@ const NotationRendererComponent: React.FC<NotationRendererProps> = ({
           x2={ledger.x2}
           y1={ledger.y}
           y2={ledger.y}
-          stroke="black"
+          stroke={inkColor}
           strokeWidth={ledger.strokeWidth}
         />
       ))}
@@ -122,7 +126,7 @@ const NotationRendererComponent: React.FC<NotationRendererProps> = ({
           y={layout.clef.y}
           fontSize={layout.clef.fontSize}
           fontFamily="Bravura"
-          fill="black"
+          fill={inkColor}
           textAnchor="middle"
           dominantBaseline="central"
           opacity={0.60}
@@ -144,7 +148,7 @@ const NotationRendererComponent: React.FC<NotationRendererProps> = ({
               y={note.y}
               fontSize={note.fontSize * 0.65} // Smaller to fit between barline and note
               fontFamily="Bravura"
-              fill={selectedNoteId === note.id ? 'blue' : 'black'}
+              fill={selectedNoteId === note.id ? 'blue' : inkColor}
               textAnchor="middle"
               dominantBaseline="central"
             >
@@ -160,7 +164,7 @@ const NotationRendererComponent: React.FC<NotationRendererProps> = ({
             y={note.y}
             fontSize={note.fontSize}
             fontFamily="Bravura"
-            fill={selectedNoteId === note.id ? 'blue' : 'black'}
+            fill={selectedNoteId === note.id ? 'blue' : inkColor}
             textAnchor="middle"
             dominantBaseline="central"
             onClick={(e) => handleNoteClick(note.id, e)}
@@ -196,7 +200,7 @@ const NotationRendererComponent: React.FC<NotationRendererProps> = ({
           x2={barline.x}
           y1={barline.y1}
           y2={barline.y2}
-          stroke="black"
+          stroke={inkColor}
           strokeWidth={barline.strokeWidth}
           opacity={0.60}
         />
@@ -211,7 +215,7 @@ const NotationRendererComponent: React.FC<NotationRendererProps> = ({
           y={accidental.y}
           fontSize={accidental.fontSize}
           fontFamily="Bravura"
-          fill="black"
+          fill={inkColor}
           textAnchor="middle"
           dominantBaseline="central"
         >

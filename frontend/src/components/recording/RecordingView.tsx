@@ -14,7 +14,7 @@
  *   - Auto-switches to MIDI on hot-connect with an info banner
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../services/recording/useAudioRecorder';
 import { useMidiInput } from '../../services/recording/useMidiInput';
 import { OscilloscopeCanvas } from './OscilloscopeCanvas';
@@ -23,6 +23,8 @@ import { RecordingStaff } from './RecordingStaff';
 import { InputSourceBadge } from './InputSourceBadge';
 import { MidiVisualizationPlaceholder } from './MidiVisualizationPlaceholder';
 import type { InputSource, MidiNoteEvent, MidiConnectionEvent, NoteOnset } from '../../types/recording';
+import type { MidiCCEvent } from '../../services/recording/midiUtils';
+import { ToneAdapter } from '../../services/playback/ToneAdapter';
 import './RecordingView.css';
 
 interface RecordingViewProps {
@@ -57,6 +59,10 @@ export function RecordingView({ onBack }: RecordingViewProps) {
   const [midiConnectInfo, setMidiConnectInfo] = useState<string | null>(null);
   // Error message shown when MIDI device disconnects unexpectedly
   const [midiDisconnectError, setMidiDisconnectError] = useState<string | null>(null);
+  // CC message history (Feature 069 US4)
+  const [midiCCHistory, setMidiCCHistory] = useState<MidiCCEvent[]>([]);
+  // Currently held MIDI note number (for staff display). null = no note held.
+  const [midiHeldNoteNumber, setMidiHeldNoteNumber] = useState<number | null>(null);
 
   const handleMidiNoteOn = useCallback((event: MidiNoteEvent) => {
     const noteMatch = /^([A-G]#?)(-?\d+)$/.exec(event.label);
@@ -66,12 +72,32 @@ export function RecordingView({ onBack }: RecordingViewProps) {
       octave: noteMatch ? parseInt(noteMatch[2], 10) : 4,
       confidence: 1.0,
       elapsedMs: event.timestampMs,
+      velocity: event.velocity,
+      channel: event.channel,
+      rawBytes: event.rawBytes,
     };
     setMidiNoteHistory((prev) => {
       const next = [...prev, onset];
       return next.length > 200 ? next.slice(next.length - 200) : next;
     });
     setMidiCurrentLabel(event.label);
+    setMidiHeldNoteNumber(event.noteNumber);
+    // Play back the note so velocity impact can be heard
+    ToneAdapter.getInstance().init().then(() => {
+      ToneAdapter.getInstance().attackNote(event.noteNumber, event.velocity);
+    });
+  }, []);
+
+  const handleMidiNoteOff = useCallback((noteNumber: number) => {
+    ToneAdapter.getInstance().releaseNote(noteNumber);
+    setMidiHeldNoteNumber((prev) => (prev === noteNumber ? null : prev));
+  }, []);
+
+  const handleMidiCC = useCallback((event: MidiCCEvent) => {
+    setMidiCCHistory((prev) => {
+      const next = [...prev, event];
+      return next.length > 200 ? next.slice(next.length - 200) : next;
+    });
   }, []);
 
   const handleMidiConnectionChange = useCallback((event: MidiConnectionEvent) => {
@@ -102,7 +128,9 @@ export function RecordingView({ onBack }: RecordingViewProps) {
 
   const { devices: midiDevices, isSupported: midiSupported } = useMidiInput({
     onNoteOn: handleMidiNoteOn,
+    onNoteOff: handleMidiNoteOff,
     onConnectionChange: handleMidiConnectionChange,
+    onCC: handleMidiCC,
     sessionStartMs: session.startTimestamp ?? 0,
   });
 
@@ -126,6 +154,30 @@ export function RecordingView({ onBack }: RecordingViewProps) {
       setMidiNotSupported(true);
     }
   }, [midiSupported]);
+
+  // Synthetic PitchSample derived from the held MIDI note (drives RecordingStaff while MIDI active)
+  const midiCurrentPitch = useMemo(() => {
+    if (midiHeldNoteNumber === null) return null;
+    const PITCH_CLASSES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'] as const;
+    const note = PITCH_CLASSES[midiHeldNoteNumber % 12];
+    const octave = Math.floor(midiHeldNoteNumber / 12) - 1;
+    return {
+      hz: 440 * Math.pow(2, (midiHeldNoteNumber - 69) / 12),
+      confidence: 1.0,
+      note,
+      octave,
+      label: `${note}${octave}`,
+    };
+  }, [midiHeldNoteNumber]);
+
+  // Combined clear: wipes both mic and MIDI histories + staff notation
+  const [staffClearTrigger, setStaffClearTrigger] = useState(0);
+  const handleClearAll = useCallback(() => {
+    clearHistory();
+    setMidiNoteHistory([]);
+    setMidiCCHistory([]);
+    setStaffClearTrigger(n => n + 1);
+  }, [clearHistory]);
 
   // ─── Derived display values ──────────────────────────────────────────────────
 
@@ -232,7 +284,12 @@ export function RecordingView({ onBack }: RecordingViewProps) {
         </div>
 
         {/* Live staff — detected notes with quantized durations */}
-        <RecordingStaff currentPitch={currentPitch} audioChunksRef={audioChunksRef} clearAudioChunks={clearAudioChunks} />
+        <RecordingStaff
+          currentPitch={activeSource.kind === 'midi' ? midiCurrentPitch : currentPitch}
+          audioChunksRef={audioChunksRef}
+          clearAudioChunks={clearAudioChunks}
+          clearTrigger={staffClearTrigger}
+        />
 
         {/* US2: Start/Stop toggle — placed below the staff */}
         <div className="recording-view__controls">
@@ -253,7 +310,20 @@ export function RecordingView({ onBack }: RecordingViewProps) {
         </div>
 
         {/* US5: Note history list */}
-        <NoteHistoryList entries={displayNoteHistory} onClear={clearHistory} />
+        <NoteHistoryList entries={displayNoteHistory} onClear={handleClearAll} />
+
+        {/* US4 (Feature 069): CC message log */}
+        {midiCCHistory.length > 0 && (
+          <section aria-label="CC log">
+            <ul className="note-history-list__cc-log">
+              {midiCCHistory.map((cc, idx) => (
+                <li key={idx} className="note-history-list__cc-entry">
+                  CC{cc.controller} val={cc.value} Ch {cc.channel}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
     </div>
   );

@@ -107,7 +107,8 @@ export function useMidiInput(callbacks: UseMidiInputCallbacks): UseMidiInputResu
         const { sessionStartMs = 0 } = callbacksRef.current;
         const note = parseMidiNoteOn(ev.data as Uint8Array, sessionStartMs, ev.timeStamp);
         if (note) {
-          callbacksRef.current.onNoteOn(note);
+          const noteWithRawBytes = { ...note, rawBytes: Array.from(ev.data as Uint8Array) };
+          callbacksRef.current.onNoteOn(noteWithRawBytes);
           return;
         }
         const offNote = parseMidiNoteOff(ev.data as Uint8Array);
@@ -115,9 +116,9 @@ export function useMidiInput(callbacks: UseMidiInputCallbacks): UseMidiInputResu
           callbacksRef.current.onNoteOff(offNote);
           return;
         }
-        // Feature 063: Route CC7/CC11 to onCC callback
+        // Feature 063 + 069: Route ALL CC messages to onCC callback
         const cc = parseMidiCC(ev.data as Uint8Array);
-        if (cc && (cc.controller === 7 || cc.controller === 11) && callbacksRef.current.onCC) {
+        if (cc && callbacksRef.current.onCC) {
           callbacksRef.current.onCC(cc);
         }
       };

@@ -365,3 +365,58 @@ describe('T028 — useMidiInput: disconnect fires onConnectionChange immediately
     expect(onConnectionChange.mock.calls[0][0].kind).toBe('connected');
   });
 });
+
+// ─── T016: 069-midi-velocity — rawBytes forwarding + all-CC routing (US4) ────
+
+describe('T016: useMidiInput rawBytes and all-CC (US4)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it('T016a — note-on event has rawBytes set from ev.data', async () => {
+    const input = createMockMidiInput('Keys', 'dev-r1');
+    const access = createMockMidiAccess([input]);
+    mockMidiSupported(access);
+
+    const onNoteOn = vi.fn<[MidiNoteEvent], void>();
+    renderHook(() => useMidiInput({ onNoteOn }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    act(() => {
+      fireMidiNoteOn(input, 60, 100); // C4, vel 100, ch 1 → [0x90, 60, 100]
+    });
+
+    expect(onNoteOn).toHaveBeenCalledOnce();
+    const event = onNoteOn.mock.calls[0][0];
+    expect(event.rawBytes).toEqual([0x90, 60, 100]);
+  });
+
+  it('T016b — ALL CC messages are routed to onCC (not just CC7/CC11)', async () => {
+    const input = createMockMidiInput('Keys', 'dev-r2');
+    const access = createMockMidiAccess([input]);
+    mockMidiSupported(access);
+
+    const onNoteOn = vi.fn<[MidiNoteEvent], void>();
+    const onCC = vi.fn();
+    renderHook(() => useMidiInput({ onNoteOn, onCC }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Fire CC64 (sustain pedal) — previously filtered out
+    act(() => {
+      if (!input.onmidimessage) return;
+      const data = new Uint8Array([0xb0, 64, 127]); // CC64 ch1
+      input.onmidimessage({ data, timeStamp: 0 } as unknown as MIDIMessageEvent);
+    });
+
+    expect(onCC).toHaveBeenCalledOnce();
+    expect(onCC.mock.calls[0][0].controller).toBe(64);
+  });
+});
