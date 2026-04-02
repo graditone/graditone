@@ -572,6 +572,32 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     [score],
   );
 
+  /** Load a catalogue score ad-hoc (no React state change) and compute difficulty. */
+  const getRegionDifficultyForScore = useCallback(
+    async (catalogueId: string, startMeasure: number | null, endMeasure: number | null, staffIndex: number): Promise<import('../types/score').DifficultyRating | null> => {
+      const preloaded = ALL_PRELOADED_SCORES.find(s => s.id === catalogueId);
+      if (!preloaded) return null;
+      try {
+        const response = await fetch(preloaded.path);
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        const fileName = preloaded.path.split('/').pop() ?? 'score.mxl';
+        const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+        const service = new MusicXMLImportService();
+        const result = await service.importFile(file);
+        const measureCount = result.score.measure_end_ticks?.length ?? 0;
+        if (measureCount === 0) return null;
+        const start = startMeasure ?? 0;
+        const end = endMeasure ?? (measureCount - 1);
+        return computeRegionDifficulty(result.score, start, end, staffIndex) ?? null;
+      } catch (error) {
+        console.error('[scorePlayer] getRegionDifficultyForScore FAILED:', error);
+        return null;
+      }
+    },
+    [],
+  );
+
   // ─── Return the bridge object ─────────────────────────────────────────────
 
   const api = useMemo((): PluginScorePlayerContext => ({
@@ -591,6 +617,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     getMeasureEndTicks,
     getPhrases,
     getRegionDifficulty,
+    getRegionDifficultyForScore,
   }), [
     getCatalogue,
     loadScore,
@@ -608,6 +635,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     getMeasureEndTicks,
     getPhrases,
     getRegionDifficulty,
+    getRegionDifficultyForScore,
   ]);
 
   const internal = useMemo((): ScorePlayerInternal => ({
@@ -681,6 +709,7 @@ export function createNoOpScorePlayer(): PluginScorePlayerContext {
     getMeasureEndTicks: () => null,
     getPhrases: () => null,
     getRegionDifficulty: () => null,
+    getRegionDifficultyForScore: async () => null,
   };
 }
 
@@ -718,5 +747,6 @@ export function createScorePlayerProxy(
     getMeasureEndTicks: () => proxyRef.current.getMeasureEndTicks(),
     getPhrases: () => proxyRef.current.getPhrases(),
     getRegionDifficulty: (...args) => proxyRef.current.getRegionDifficulty(...args),
+    getRegionDifficultyForScore: (...args) => proxyRef.current.getRegionDifficultyForScore(...args),
   };
 }

@@ -192,6 +192,29 @@
 
 ---
 
+## Phase 10: Session UX — Duration, Editing, Reopen & Difficulty
+
+**Purpose**: Session creation UX (duration sliders, budget bar, validation), session editing (add/remove tasks), reopen closed sessions, and manual task difficulty computation
+
+- [X] T069 Add duration sliders (session default 60 min, task default 5 min) with snap-to-10 on mouseup/touchend and max 120 min to TaskBuilder in plugins-external/sessions-plugin/TaskBuilder.tsx and SessionsPlugin.css
+- [X] T070 Add time budget bar showing busy/free time in TaskBuilder; block task add if insufficient free time; disable Create button when over budget in plugins-external/sessions-plugin/TaskBuilder.tsx and SessionsPlugin.css
+- [X] T071 Fix blue focus/hover ring on all buttons and tab bar in plugins-external/sessions-plugin/SessionsPlugin.css (global `button:focus { outline: none }` + `button:focus-visible` rule)
+- [X] T072 Add per-field error highlighting with `ERROR_FIELD_MAP` and inline error messages under specific fields in plugins-external/sessions-plugin/TaskBuilder.tsx and SessionsPlugin.css
+- [X] T073 Remove total session time display (⏱ 60 min) from sessions toolbar in plugins-external/sessions-plugin/SessionsPlugin.tsx and SessionsPlugin.css
+- [X] T074 Change help button icon from `?` to `📖` and push to right side of toolbar with `margin-left: auto` in plugins-external/sessions-plugin/SessionsPlugin.tsx and SessionsPlugin.css
+- [X] T075 Add `addTaskToSession` and `removeTaskFromSession` to `useSessionManager` hook with guards (no remove for goal-linked or tasks with linkedPractices) in plugins-external/sessions-plugin/useSessionManager.ts
+- [X] T076 Build session edit mode UI: toggle button, per-task remove buttons, "+ Add Task" flow with `availableTimeSecs` and `existingBusySecs` props on TaskBuilder in plugins-external/sessions-plugin/SessionsPlugin.tsx and SessionsPlugin.css
+- [X] T077 Move Edit button from progress bar row into session header row before delete button in plugins-external/sessions-plugin/SessionsPlugin.tsx
+- [X] T078 Limit goal available time to 50% of total session time (1800s); store `availableTime: totalSessionTime` (3600s full budget) for manual tasks in plugins-external/sessions-plugin/GoalsView.tsx
+- [X] T079 Add `reopenSession(id)` to `useSessionManager` hook: set closed session back to active if no other session is active in plugins-external/sessions-plugin/useSessionManager.ts
+- [X] T080 Add "▶ Reopen" button on closed sessions when no active session exists in plugins-external/sessions-plugin/SessionsPlugin.tsx and SessionsPlugin.css
+- [X] T081 Add `getRegionDifficultyForScore(catalogueId, startMeasure, endMeasure, staffIndex)` async method to plugin API that loads a catalogue score ad-hoc (no React state change) and computes difficulty in frontend/src/plugin-api/types.ts and frontend/src/plugin-api/scorePlayerContext.ts
+- [X] T082 Compute difficulty for manually-created tasks in `handleCreate` (async) using `getRegionDifficultyForScore` for both `measures` and `all` region types in plugins-external/sessions-plugin/TaskBuilder.tsx
+
+**Checkpoint**: Session creation fully polished with duration controls, budget management, editing, reopen, and automatic difficulty for manual tasks.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
