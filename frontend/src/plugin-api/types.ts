@@ -626,6 +626,19 @@ export interface PluginScorePlayerContext {
     endMeasure: number,
     staffIndex: number,
   ): DifficultyRating | null;
+
+  /**
+   * Feature 070: Loads a catalogue score ad-hoc and computes difficulty for a
+   * specific measure range and staff. Does NOT change the currently loaded score.
+   * Pass null for startMeasure/endMeasure to use the full score range.
+   * Returns null if the catalogue ID is unknown, the region is empty, or WASM rejects the input.
+   */
+  getRegionDifficultyForScore(
+    catalogueId: string,
+    startMeasure: number | null,
+    endMeasure: number | null,
+    staffIndex: number,
+  ): Promise<DifficultyRating | null>;
 }
 
 /**
