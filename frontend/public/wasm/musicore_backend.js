@@ -412,6 +412,29 @@ export function compute_layout_wasm(score_json, config_json) {
 }
 
 /**
+ * @param {any} score_js
+ * @param {number} start_measure
+ * @param {number} end_measure
+ * @param {number} staff_index
+ * @returns {any}
+ */
+export function compute_region_difficulty(score_js, start_measure, end_measure, staff_index) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.compute_region_difficulty(retptr, addHeapObject(score_js), start_measure, end_measure, staff_index);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        if (r2) {
+            throw takeObject(r1);
+        }
+        return takeObject(r0);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
  * Create a new empty score with default structural events
  *
  * # Arguments
@@ -607,6 +630,16 @@ function __wbg_get_imports() {
             let result;
             try {
                 result = getObject(arg0) instanceof ArrayBuffer;
+            } catch (_) {
+                result = false;
+            }
+            const ret = result;
+            return ret;
+        },
+        __wbg_instanceof_Map_53af74335dec57f4: function(arg0) {
+            let result;
+            try {
+                result = getObject(arg0) instanceof Map;
             } catch (_) {
                 result = false;
             }

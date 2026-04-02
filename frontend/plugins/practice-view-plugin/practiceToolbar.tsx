@@ -79,7 +79,7 @@ export interface PracticeToolbarProps {
   /** When true, a replay is running — practice toggle should be disabled. */
   isReplaying?: boolean;
   /** Feature 061: Session task tag — when set, config is locked and tag is shown. */
-  taskTag?: { taskNumber: number; sessionName: string } | null;
+  taskTag?: { taskNumber: number; sessionName: string; difficulty?: 1 | 2 | 3 } | null;
   /** Feature 061: Called when the task tag badge is clicked. */
   onTaskTagClick?: () => void;
 }
@@ -220,6 +220,15 @@ export function PracticeToolbar({
         >
           Session Task {taskTag.taskNumber}
         </button>
+      )}
+
+      {/* Feature 070: Difficulty tag next to task tag in practice view */}
+      {taskTag?.difficulty && (
+        <span
+          className={`difficulty-tag difficulty-tag--${taskTag.difficulty === 1 ? 'easy' : taskTag.difficulty === 2 ? 'medium' : 'hard'}`}
+        >
+          {taskTag.difficulty === 1 ? 'Easy' : taskTag.difficulty === 2 ? 'Medium' : 'Hard'}
+        </span>
       )}
 
       {/* Play / Pause toggle */}

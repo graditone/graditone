@@ -376,21 +376,21 @@ pub fn detect_phrases(score: &Score) -> Vec<PhraseRegion> {
         );
 
         // Step 2: Detect rest-based boundaries (secondary signal)
-        let rest_boundaries = detect_rest_boundaries(instrument, &score.measure_end_ticks);
-
-        // Step 3: Merge hard_boundaries + rest_boundaries for gap detection
-        let mut all_boundaries = hard_boundaries.clone();
-        all_boundaries.extend(&rest_boundaries);
+        // Note: rest_boundaries are only used for splitting slur-based phrases, not for
+        // fragmenting fallback gaps. Using rest boundaries on fallback gaps causes whole-rest
+        // intro measures (e.g. Arabesque m.1-2) to produce 1-measure "phrases".
+        let _rest_boundaries = detect_rest_boundaries(instrument, &score.measure_end_ticks);
 
         // Step 4: Find gaps not covered by slur phrases → apply fallback grouping
+        // Use only hard_boundaries to split gaps (structural boundaries only).
         let covered = measure_coverage(&slur_phrases, num_measures);
         let gaps = find_gaps(&covered, num_measures);
 
         let mut instrument_phrases = slur_phrases;
 
         for (gap_start, gap_end) in gaps {
-            // Split gap at hard+rest boundaries, then apply fallback grouping to each sub-gap
-            let sub_gaps = split_range_at_boundaries(gap_start, gap_end, &all_boundaries);
+            // Split gap at hard boundaries only, then apply fallback grouping to each sub-gap
+            let sub_gaps = split_range_at_boundaries(gap_start, gap_end, &hard_boundaries);
             for (sub_start, sub_end) in sub_gaps {
                 let groups = apply_fallback_grouping(sub_start, sub_end, ts_num, ts_den);
                 for (gs, ge) in groups {

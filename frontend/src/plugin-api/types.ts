@@ -1,5 +1,5 @@
 /**
- * Graditone Plugin API — Types (v9)
+ * Graditone Plugin API — Types (v10)
  * Feature 030: Plugin Architecture (v1 baseline)
  * Feature 031: Practice View Plugin — adds recording namespace and offsetMs (v2)
  * Feature 033: Play Score Plugin — adds scorePlayer namespace, ScoreRenderer component (v3)
@@ -11,6 +11,7 @@
  * Feature 060: Sessions Plugin — adds PracticeSavedEvent, onPracticeSaved,
  *              protectedPracticeIds on ScoreSelector (v8)
  * Feature 067: Practice Goals — adds getPhrases() to PluginScorePlayerContext (v9)
+ * Feature 070: Session task distribution — adds getRegionDifficulty() (v10)
  *
  * Defines all public types for the Graditone Plugin API.
  * See specs/030-plugin-architecture/contracts/plugin-api.ts for the v1 canonical contract.
@@ -26,7 +27,7 @@
  */
 
 import type { ComponentType } from 'react';
-import type { PhraseRegion } from '../types/score';
+import type { DifficultyRating, PhraseRegion } from '../types/score';
 
 // ---------------------------------------------------------------------------
 // Staff viewer component props (injected via PluginContext.components)
@@ -615,6 +616,16 @@ export interface PluginScorePlayerContext {
    * Returns an empty array if the score has no detected phrases.
    */
   getPhrases(): ReadonlyArray<PhraseRegion> | null;
+
+  /**
+   * Feature 070: Returns difficulty rating for a specific measure range and staff.
+   * Returns null if no score is loaded, the region is empty, or WASM rejects the input.
+   */
+  getRegionDifficulty(
+    startMeasure: number,
+    endMeasure: number,
+    staffIndex: number,
+  ): DifficultyRating | null;
 }
 
 /**

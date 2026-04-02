@@ -18,22 +18,63 @@ pub fn compute_difficulty(score: &Score) -> Option<DifficultyRating> {
         return None;
     }
 
+    compute_region_difficulty(score, 0, measure_count - 1, None)
+}
+
+/// Compute a difficulty rating for a specific measure range and optional staff.
+///
+/// - `start_measure` and `end_measure` are 0-based and inclusive.
+/// - `staff_index = None` computes both hands (hardest staff per instrument).
+/// - `staff_index = Some(i)` computes difficulty for a single staff index.
+pub fn compute_region_difficulty(
+    score: &Score,
+    start_measure: usize,
+    end_measure: usize,
+    staff_index: Option<usize>,
+) -> Option<DifficultyRating> {
+    if score.instruments.is_empty() {
+        return None;
+    }
+
+    let measure_count = score.measure_end_ticks.len();
+    if measure_count == 0 || start_measure > end_measure || end_measure >= measure_count {
+        return None;
+    }
+
     score
         .instruments
         .iter()
-        .filter_map(|instrument| compute_instrument_difficulty(score, instrument, measure_count))
+        .filter_map(|instrument| {
+            compute_instrument_difficulty(
+                score,
+                instrument,
+                start_measure,
+                end_measure,
+                staff_index,
+            )
+        })
         .max_by(|a, b| a.density_rate.partial_cmp(&b.density_rate).unwrap())
 }
 
 fn compute_instrument_difficulty(
     score: &Score,
     instrument: &Instrument,
-    measure_count: usize,
+    start_measure: usize,
+    end_measure: usize,
+    staff_index: Option<usize>,
 ) -> Option<DifficultyRating> {
+    if let Some(idx) = staff_index {
+        if idx >= instrument.staves.len() {
+            return None;
+        }
+    }
+
+    let measure_count = end_measure.saturating_sub(start_measure) + 1;
     let mut bar_densities: Vec<f64> = Vec::with_capacity(measure_count);
     let mut bar_polyphonies: Vec<(f64, f64)> = Vec::with_capacity(measure_count); // (avg, max) per bar
+    let mut has_any_note = false;
 
-    for measure_index in 0..measure_count {
+    for measure_index in start_measure..=end_measure {
         let tpm = ticks_per_measure_at(score, measure_index);
         if tpm == 0 {
             continue;
@@ -62,15 +103,19 @@ fn compute_instrument_difficulty(
             continue;
         }
 
-        let pitch_count = count_pitches_in_bar(instrument, bar_start, bar_end);
+        let pitch_count = count_pitches_in_bar(instrument, bar_start, bar_end, staff_index);
+        if pitch_count > 0 {
+            has_any_note = true;
+        }
         bar_densities.push(pitch_count as f64 / bar_duration_beats);
 
         // Polyphony: sample at each note onset in the bar
-        let (avg_poly, max_poly) = compute_bar_polyphony(instrument, bar_start, bar_end);
+        let (avg_poly, max_poly) =
+            compute_bar_polyphony(instrument, bar_start, bar_end, staff_index);
         bar_polyphonies.push((avg_poly, max_poly));
     }
 
-    if bar_densities.is_empty() {
+    if bar_densities.is_empty() || !has_any_note {
         return None;
     }
 
@@ -104,40 +149,66 @@ fn compute_instrument_difficulty(
 /// Compute the average and maximum polyphony for a bar.
 /// polyphony(t) = number of notes sounding at time t.
 /// Samples at each note onset tick within the bar.
-fn compute_bar_polyphony(instrument: &Instrument, bar_start: u32, bar_end: u32) -> (f64, f64) {
-    // Collect all sounding intervals (start, end) across all staves/voices, max per staff
-    // Use per-staff max to match the density counting approach (hardest single hand)
-    let best_staff = instrument
-        .staves
-        .iter()
-        .map(|staff| {
-            let intervals: Vec<(u32, u32)> = staff
-                .voices
-                .iter()
-                .flat_map(|voice| voice.interval_events.iter())
-                .filter(|note| {
-                    !note.is_tie_continuation
-                        && !note.is_grace
-                        && note.start_tick.value() >= bar_start
-                        && note.start_tick.value() < bar_end
-                })
-                .map(|note| {
-                    let start = note.start_tick.value();
-                    let end = start + note.duration_ticks;
-                    (start, end)
-                })
-                .collect();
-            intervals
-        })
-        .max_by_key(|intervals| intervals.len())
-        .unwrap_or_default();
+fn compute_bar_polyphony(
+    instrument: &Instrument,
+    bar_start: u32,
+    bar_end: u32,
+    staff_index: Option<usize>,
+) -> (f64, f64) {
+    // Collect sounding intervals (start, end).
+    // - Single staff: intervals from that staff only.
+    // - Both hands (None): combine intervals from ALL staves so that
+    //   polyphony reflects simultaneous notes across both hands.
+    let combined_intervals: Vec<(u32, u32)> = if let Some(idx) = staff_index {
+        let Some(staff) = instrument.staves.get(idx) else {
+            return (0.0, 0.0);
+        };
+        staff
+            .voices
+            .iter()
+            .flat_map(|voice| voice.interval_events.iter())
+            .filter(|note| {
+                !note.is_tie_continuation
+                    && !note.is_grace
+                    && note.start_tick.value() >= bar_start
+                    && note.start_tick.value() < bar_end
+            })
+            .map(|note| {
+                let start = note.start_tick.value();
+                let end = start + note.duration_ticks;
+                (start, end)
+            })
+            .collect()
+    } else {
+        instrument
+            .staves
+            .iter()
+            .flat_map(|staff| {
+                staff
+                    .voices
+                    .iter()
+                    .flat_map(|voice| voice.interval_events.iter())
+                    .filter(|note| {
+                        !note.is_tie_continuation
+                            && !note.is_grace
+                            && note.start_tick.value() >= bar_start
+                            && note.start_tick.value() < bar_end
+                    })
+                    .map(|note| {
+                        let start = note.start_tick.value();
+                        let end = start + note.duration_ticks;
+                        (start, end)
+                    })
+            })
+            .collect()
+    };
 
-    if best_staff.is_empty() {
+    if combined_intervals.is_empty() {
         return (0.0, 0.0);
     }
 
     // Collect unique onset ticks as sample points
-    let mut onset_ticks: Vec<u32> = best_staff.iter().map(|&(s, _)| s).collect();
+    let mut onset_ticks: Vec<u32> = combined_intervals.iter().map(|&(s, _)| s).collect();
     onset_ticks.sort_unstable();
     onset_ticks.dedup();
 
@@ -149,7 +220,10 @@ fn compute_bar_polyphony(instrument: &Instrument, bar_start: u32, bar_end: u32) 
     let mut max_poly = 0u32;
 
     for &t in &onset_ticks {
-        let poly = best_staff.iter().filter(|&&(s, e)| s <= t && t < e).count() as u32;
+        let poly = combined_intervals
+            .iter()
+            .filter(|&&(s, e)| s <= t && t < e)
+            .count() as u32;
         total_poly += poly;
         if poly > max_poly {
             max_poly = poly;
@@ -160,10 +234,36 @@ fn compute_bar_polyphony(instrument: &Instrument, bar_start: u32, bar_end: u32) 
     (avg_poly, max_poly as f64)
 }
 
-/// Count individual sounding pitches in a bar range per staff, returning the
-/// maximum across staves (i.e. the hardest single hand). Excludes tied
-/// continuations and grace notes.
-fn count_pitches_in_bar(instrument: &Instrument, bar_start: u32, bar_end: u32) -> u32 {
+/// Count individual sounding pitches in a bar range.
+///
+/// - `staff_index = Some(i)`: count for that single staff.
+/// - `staff_index = None` (both hands): **sum** across all staves so that
+///   playing both hands produces a higher density than either hand alone.
+///
+/// Excludes tied continuations and grace notes.
+fn count_pitches_in_bar(
+    instrument: &Instrument,
+    bar_start: u32,
+    bar_end: u32,
+    staff_index: Option<usize>,
+) -> u32 {
+    if let Some(idx) = staff_index {
+        let Some(staff) = instrument.staves.get(idx) else {
+            return 0;
+        };
+        return staff
+            .voices
+            .iter()
+            .flat_map(|voice| voice.interval_events.iter())
+            .filter(|note| {
+                !note.is_tie_continuation
+                    && !note.is_grace
+                    && note.start_tick.value() >= bar_start
+                    && note.start_tick.value() < bar_end
+            })
+            .count() as u32;
+    }
+
     instrument
         .staves
         .iter()
@@ -180,8 +280,7 @@ fn count_pitches_in_bar(instrument: &Instrument, bar_start: u32, bar_end: u32) -
                 })
                 .count() as u32
         })
-        .max()
-        .unwrap_or(0)
+        .sum()
 }
 
 /// Derive ticks-per-measure from the time signature active at the start of the given measure.
