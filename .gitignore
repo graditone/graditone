@@ -16,6 +16,12 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
 # Node.js/TypeScript (frontend)
 node_modules/
 dist/

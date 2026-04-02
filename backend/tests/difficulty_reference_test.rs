@@ -3,7 +3,8 @@
 //!
 //! Combined formula: 0.6 * note_density + 0.4 * polyphony
 //! Thresholds: < 2.5 Easy, 2.5–3.5 Medium, > 3.5 Hard
-//! Note density uses notes-per-beat (tempo-independent), per-staff max.
+//! Note density uses notes-per-beat (tempo-independent).
+//! BH (staff_index=None) sums pitches across staves; single staff uses that staff only.
 //! See research.md "Reference Score Calibration" section for details.
 
 use musicore_backend::domain::difficulty::DifficultyLevel;
@@ -27,7 +28,7 @@ fn reference_bach_invention_no1() {
     let (rate, level) = compute_for_score("../scores/Bach_InventionNo1.mxl");
     assert_eq!(
         level,
-        DifficultyLevel::Medium,
+        DifficultyLevel::Hard,
         "Bach Invention density_rate={:.4}",
         rate
     );
@@ -49,7 +50,7 @@ fn reference_burgmuller_arabesque() {
     let (rate, level) = compute_for_score("../scores/Burgmuller_Arabesque.mxl");
     assert_eq!(
         level,
-        DifficultyLevel::Medium,
+        DifficultyLevel::Hard,
         "Arabesque density_rate={:.4}",
         rate
     );
@@ -60,7 +61,7 @@ fn reference_burgmuller_la_candeur() {
     let (rate, level) = compute_for_score("../scores/Burgmuller_LaCandeur.mxl");
     assert_eq!(
         level,
-        DifficultyLevel::Easy,
+        DifficultyLevel::Medium,
         "La Candeur density_rate={:.4}",
         rate
     );
@@ -82,7 +83,7 @@ fn reference_pachelbel_canon_d() {
     let (rate, level) = compute_for_score("../scores/Pachelbel_CanonD.mxl");
     assert_eq!(
         level,
-        DifficultyLevel::Easy,
+        DifficultyLevel::Hard,
         "Canon D density_rate={:.4}",
         rate
     );

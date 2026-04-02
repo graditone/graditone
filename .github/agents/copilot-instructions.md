@@ -148,6 +148,10 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - IndexedDB via existing `goalStorage.ts` and `sessionStorage.ts` — unchanged (068-goal-creation-form)
 - TypeScript 5.5, React 19 + Vitest 2, `@testing-library/react` 16, Vite 6 (build), `idb` (IndexedDB via goalStorage.ts) (068-goal-creation-form)
 - IndexedDB (`graditone-goals-index`, `goals` store via goalStorage.ts); localStorage index in GoalsView (068-goal-creation-form)
+- TypeScript 5.x, React 19 + React 19, Vite 5, Vitest 2, @testing-library/react 16, @testing-library/jest-dom (069-midi-velocity-review)
+- N/A — in-memory React state only; no IndexedDB or localStorage changes (069-midi-velocity-review)
+- Rust (latest stable) + TypeScript (strict mode), React 18+ + wasm-pack, wasm-bindgen, Vite, Vitest, @testing-library/reac (070-session-task-distribution)
+- IndexedDB (sessions + goals stores) with localStorage index layer (070-session-task-distribution)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -168,9 +172,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 070-session-task-distribution: Added Rust (latest stable) + TypeScript (strict mode), React 18+ + wasm-pack, wasm-bindgen, Vite, Vitest, @testing-library/reac
+- 069-midi-velocity-review: Added TypeScript 5.x, React 19 + React 19, Vite 5, Vitest 2, @testing-library/react 16, @testing-library/jest-dom
 - 068-goal-creation-form: Added TypeScript 5.5, React 19 + Vitest 2, `@testing-library/react` 16, Vite 6 (build), `idb` (IndexedDB via goalStorage.ts)
-- 068-goal-creation-form: Added TypeScript 5.x / React 18 + React (hooks, state), Vitest (test runner), existing sessions-plugin CSS framework
-- 067-practice-goals-tab: Added TypeScript (React 18+), Rust (stable) for backend WASM + React, existing SessionsPlugin, PluginContext API (v8), wasm-bindgen for phrase detection
 
 
 <!-- MANUAL ADDITIONS START -->

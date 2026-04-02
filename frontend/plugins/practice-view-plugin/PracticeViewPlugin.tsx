@@ -226,7 +226,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const taskIdRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   // Feature 061: Task tag info for toolbar display
-  const [taskTag, setTaskTag] = useState<{ taskNumber: number; sessionName: string } | null>(null);
+  const [taskTag, setTaskTag] = useState<{ taskNumber: number; sessionName: string; difficulty?: 1 | 2 | 3 } | null>(null);
   // Feature 061: Pending task config to apply once score is loaded
   const pendingTaskConfigRef = useRef<{
     staffIndex: number;
@@ -894,7 +894,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         taskIdRef.current = (tc.taskId as string) ?? null;
         sessionIdRef.current = (tc.sessionId as string) ?? null;
         if (typeof tc.taskNumber === 'number' && typeof tc.sessionName === 'string') {
-          setTaskTag({ taskNumber: tc.taskNumber as number, sessionName: tc.sessionName as string });
+          setTaskTag({ taskNumber: tc.taskNumber as number, sessionName: tc.sessionName as string, difficulty: tc.difficulty as (1 | 2 | 3 | undefined) });
         }
         loadedScoreRefRef.current = scoreRef as ScoreRef;
         pendingTaskConfigRef.current = {

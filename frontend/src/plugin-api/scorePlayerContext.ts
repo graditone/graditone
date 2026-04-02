@@ -35,6 +35,7 @@ import { loadScoreFromIndexedDB, deleteScoreFromIndexedDB } from '../services/st
 import { ScoreCache } from '../services/score-cache';
 import { addUserScore, getUserScore } from '../services/userScoreIndex';
 import { getSchemaVersion } from '../services/wasm/music-engine';
+import { computeRegionDifficulty } from '../services/wasm/music-engine';
 import type { Note, Score } from '../types/score';
 import { expandNotesWithRepeats } from '../services/playback/RepeatNoteExpander';
 
@@ -557,6 +558,20 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     [score],
   );
 
+  const getRegionDifficulty = useCallback(
+    (startMeasure: number, endMeasure: number, staffIndex: number): import('../types/score').DifficultyRating | null => {
+      if (!score) { console.warn('[scorePlayer] getRegionDifficulty: no score loaded'); return null; }
+      try {
+        const result = computeRegionDifficulty(score, startMeasure, endMeasure, staffIndex);
+        return result;
+      } catch (error) {
+        console.error('[scorePlayer] getRegionDifficulty FAILED:', error);
+        return null;
+      }
+    },
+    [score],
+  );
+
   // ─── Return the bridge object ─────────────────────────────────────────────
 
   const api = useMemo((): PluginScorePlayerContext => ({
@@ -575,6 +590,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     extractPracticeNotes,
     getMeasureEndTicks,
     getPhrases,
+    getRegionDifficulty,
   }), [
     getCatalogue,
     loadScore,
@@ -591,6 +607,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     extractPracticeNotes,
     getMeasureEndTicks,
     getPhrases,
+    getRegionDifficulty,
   ]);
 
   const internal = useMemo((): ScorePlayerInternal => ({
@@ -663,6 +680,7 @@ export function createNoOpScorePlayer(): PluginScorePlayerContext {
     extractPracticeNotes: (_staffIndex: number, _maxCount?: number) => null,
     getMeasureEndTicks: () => null,
     getPhrases: () => null,
+    getRegionDifficulty: () => null,
   };
 }
 
@@ -699,5 +717,6 @@ export function createScorePlayerProxy(
     extractPracticeNotes: (...args) => proxyRef.current.extractPracticeNotes(...args),
     getMeasureEndTicks: () => proxyRef.current.getMeasureEndTicks(),
     getPhrases: () => proxyRef.current.getPhrases(),
+    getRegionDifficulty: (...args) => proxyRef.current.getRegionDifficulty(...args),
   };
 }

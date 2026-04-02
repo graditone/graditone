@@ -2,6 +2,8 @@
 .git/
 .gitignore
 .github/
+Dockerfile*
+.dockerignore
 
 # Rust build artifacts
 target/

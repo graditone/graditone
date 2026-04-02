@@ -5,6 +5,7 @@ import { getWasmModule, initWasm } from './loader';
 import type { WasmError } from '../../types/wasm-error';
 import { isWasmError, WasmEngineError } from '../../types/wasm-error';
 import type { Score } from '../../types/score';
+import type { DifficultyRating } from '../../types/score';
 import type { ImportWarning } from '../../types/import-warning';
 
 /**
@@ -111,6 +112,32 @@ export async function parseMusicXML(xmlContent: string): Promise<WasmImportResul
     // The result is already a JavaScript object (deserialized by wasm-bindgen)
     return result as WasmImportResult;
   } catch (error) {
+    handleWasmError(error);
+  }
+}
+
+/**
+ * Compute difficulty for a score region and optional staff.
+ *
+ * staffIndex: -1 for both hands, 0+ for a specific staff.
+ * Returns null when the region has no notes.
+ */
+export function computeRegionDifficulty(
+  score: Score,
+  startMeasure: number,
+  endMeasure: number,
+  staffIndex: number,
+): DifficultyRating | null {
+  const wasmModule = getWasmModule();
+  if (!wasmModule) {
+    throw new WasmEngineError('WASM module not initialized');
+  }
+
+  try {
+    const result = wasmModule.compute_region_difficulty(score, startMeasure, endMeasure, staffIndex);
+    return (result as DifficultyRating | null) ?? null;
+  } catch (error) {
+    console.error('[WASM] compute_region_difficulty THREW:', error, { startMeasure, endMeasure, staffIndex });
     handleWasmError(error);
   }
 }

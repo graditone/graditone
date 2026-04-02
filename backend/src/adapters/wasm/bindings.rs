@@ -3,7 +3,9 @@
 
 use super::error_handling::import_error_to_js;
 use crate::adapters::dtos::{SCORE_SCHEMA_VERSION, ScoreDto};
-use crate::domain::difficulty::density::compute_difficulty;
+use crate::domain::difficulty::density::{
+    compute_difficulty, compute_region_difficulty as compute_region_difficulty_domain,
+};
 use crate::domain::importers::musicxml::{ImportContext, MusicXMLConverter, MusicXMLParser};
 use crate::domain::phrases::detect_phrases;
 use crate::ports::importers::{ImportMetadata, ImportStatistics};
@@ -141,6 +143,44 @@ pub fn parse_musicxml(xml_content: &str) -> Result<JsValue, JsValue> {
 
     // Serialize WasmImportResult to JsValue for JavaScript
     serde_wasm_bindgen::to_value(&result)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+#[wasm_bindgen]
+pub fn compute_region_difficulty(
+    score_js: JsValue,
+    start_measure: usize,
+    end_measure: usize,
+    staff_index: i32,
+) -> Result<JsValue, JsValue> {
+    let score_dto: ScoreDto = serde_wasm_bindgen::from_value(score_js)
+        .map_err(|e| JsValue::from_str(&format!("Deserialization error: {}", e)))?;
+    let score = score_dto.to_domain_score();
+
+    let measure_count = score.measure_end_ticks.len();
+    if start_measure > end_measure {
+        return Err(JsValue::from_str("Invalid measure range"));
+    }
+    if measure_count == 0 || end_measure >= measure_count {
+        return Err(JsValue::from_str("Measure index out of bounds"));
+    }
+    if staff_index < -1 {
+        return Err(JsValue::from_str("Invalid staff index"));
+    }
+
+    let staff_filter = if staff_index == -1 {
+        None
+    } else {
+        Some(staff_index as usize)
+    };
+
+    let difficulty =
+        compute_region_difficulty_domain(&score, start_measure, end_measure, staff_filter);
+
+    // Convert to DTO so `level` is serialized as integer (1/2/3) matching the TS DifficultyLevel type
+    let dto = difficulty.map(|r| crate::adapters::dtos::DifficultyRatingDto::from(&r));
+
+    serde_wasm_bindgen::to_value(&dto)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
 }
 

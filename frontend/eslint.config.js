@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'build', 'coverage', 'node_modules', '**/*.min.js']),
   // Feature 030: lint-test/ is an intentional ESLint boundary violation fixture.
   // Exclude it from the global lint run (verify it manually with:
   //   npx eslint plugins/lint-test/ — expected: 1 no-restricted-imports error).

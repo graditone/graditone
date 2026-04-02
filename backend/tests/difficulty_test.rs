@@ -261,8 +261,8 @@ fn test_no_measures_returns_none() {
 }
 
 #[test]
-fn test_all_rests_returns_easy() {
-    // A bar with no notes at all → density = 0 → Easy
+fn test_all_rests_returns_none() {
+    // A bar with no notes at all → no difficulty rating (None)
     let mut score = Score::new();
     score.global_structural_events.clear();
     score
@@ -274,9 +274,7 @@ fn test_all_rests_returns_easy() {
     score.measure_end_ticks = vec![3840];
     score.add_instrument(Instrument::new("Piano".to_string()));
 
-    let result = compute_difficulty(&score).unwrap();
-    assert!((result.density_rate - 0.0).abs() < 0.001);
-    assert_eq!(result.level, DifficultyLevel::Easy);
+    assert!(compute_difficulty(&score).is_none());
 }
 
 #[test]

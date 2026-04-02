@@ -6,6 +6,12 @@ interface WasmModule {
   default: () => Promise<void>;
   // Phase 3: MusicXML Parsing
   parse_musicxml: (xmlContent: string) => unknown;
+  compute_region_difficulty: (
+    score: unknown,
+    startMeasure: number,
+    endMeasure: number,
+    staffIndex: number,
+  ) => unknown;
   // Phase 4: Domain Operations
   create_score: (title?: string) => unknown;
   add_instrument: (score: unknown, name: string) => unknown;

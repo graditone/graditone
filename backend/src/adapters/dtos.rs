@@ -190,3 +190,77 @@ impl From<&Score> for ScoreDto {
         }
     }
 }
+
+impl ScoreDto {
+    /// Convert a ScoreDto back to a domain Score.
+    ///
+    /// Used by WASM bindings that receive a JS Score object (which is always
+    /// serialized in DTO shape) and need a domain Score for domain functions.
+    pub fn to_domain_score(&self) -> Score {
+        use crate::domain::ids::{InstrumentId, ScoreId, StaffId};
+
+        let score_id = ScoreId::parse(&self.id).unwrap_or_default();
+
+        let instruments = self
+            .instruments
+            .iter()
+            .map(|inst_dto| {
+                let inst_id = InstrumentId::parse(&inst_dto.id).unwrap_or_default();
+                let staves = inst_dto
+                    .staves
+                    .iter()
+                    .map(|staff_dto| {
+                        let staff_id = StaffId::parse(&staff_dto.id).unwrap_or_default();
+                        Staff {
+                            id: staff_id,
+                            staff_structural_events: staff_dto.staff_structural_events.clone(),
+                            voices: staff_dto.voices.clone(),
+                        }
+                    })
+                    .collect();
+
+                Instrument {
+                    id: inst_id,
+                    name: inst_dto.name.clone(),
+                    instrument_type: inst_dto.instrument_type.clone(),
+                    staves,
+                }
+            })
+            .collect();
+
+        let difficulty_rating = self.difficulty_rating.as_ref().map(|dto| {
+            use crate::domain::difficulty::DifficultyLevel;
+            DifficultyRating {
+                density_rate: dto.density_rate,
+                level: DifficultyLevel::from_density_rate(dto.density_rate),
+            }
+        });
+
+        let phrases = self
+            .phrases
+            .iter()
+            .map(|dto| PhraseRegion {
+                instrument_index: dto.instrument_index,
+                start_measure: dto.start_measure,
+                end_measure: dto.end_measure,
+                start_tick: dto.start_tick,
+                end_tick: dto.end_tick,
+            })
+            .collect();
+
+        Score {
+            id: score_id,
+            global_structural_events: self.global_structural_events.clone(),
+            instruments,
+            repeat_barlines: self.repeat_barlines.clone(),
+            volta_brackets: self.volta_brackets.clone(),
+            pickup_ticks: self.pickup_ticks,
+            measure_end_ticks: self.measure_end_ticks.clone(),
+            octave_shift_regions: self.octave_shift_regions.clone(),
+            difficulty_rating,
+            phrases,
+            dynamics: self.dynamics.clone(),
+            gradual_dynamics: self.gradual_dynamics.clone(),
+        }
+    }
+}
