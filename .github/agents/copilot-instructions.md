@@ -177,6 +177,7 @@ Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
 - 072-dynamics-score-display: Added Rust (stable), TypeScript (strict) + wasm-bindgen, serde_json (Rust); React 18, SVG DOM (TypeScript)
+- 072-tempo-impact-results: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 - 071-warmup-goal-tasks: Added TypeScript 5.x, React 18+ + sessions plugin (`plugins-external/sessions-plugin/`), Train view plugin (`frontend/plugins/train-view/`), Plugin API v8 (`frontend/src/plugin-api/`)
 - 070-session-task-distribution: Added Rust (latest stable) + TypeScript (strict mode), React 18+ + wasm-pack, wasm-bindgen, Vite, Vitest, @testing-library/reac
 

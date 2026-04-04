@@ -122,12 +122,14 @@ export interface ExerciseResult {
   comparisons: NoteComparison[];
   /** Unmatched response notes */
   extraneousNotes: ResponseNote[];
-  /** Final score 0–100 */
+  /** Final score 0–100, adjusted for BPM difficulty via log2 normalisation (feature 072). */
   score: number;
   /** Slots with correct pitch */
   correctPitchCount: number;
   /** Slots with correct timing */
   correctTimingCount: number;
+  /** BPM of the exercise — used for display in TrainResultsOverlay (feature 072). */
+  bpm: number;
 }
 
 // ─── Complexity Levels ────────────────────────────────────────────────────────
