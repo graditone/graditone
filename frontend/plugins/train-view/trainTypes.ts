@@ -16,7 +16,7 @@ export type TrainMode = 'flow' | 'step';
 /** Exercise configuration for generating a training set */
 export interface ExerciseConfig {
   /** Note pool selection */
-  preset: 'random' | 'scales' | 'score';
+  preset: 'scales' | 'score';
   /** Number of notes in the exercise (1–20) */
   noteCount: number;
   /** Clef determines the note pool range */
@@ -167,12 +167,12 @@ export const COMPLEXITY_PRESETS: ComplexityPresets = {
   },
   mid: {
     bpm: 80,
-    config: { preset: 'random', noteCount: 16, clef: 'Treble', octaveRange: 1, mode: 'step', scaleId: 'c-major' },
+    config: { preset: 'scales', noteCount: 16, clef: 'Treble', octaveRange: 1, mode: 'step', scaleId: 'c-major' },
     description: '16 notes · Treble · 80 BPM · Step',
   },
   high: {
     bpm: 100,
-    config: { preset: 'random', noteCount: 20, clef: 'Bass', octaveRange: 2, mode: 'flow', scaleId: 'c-major' },
+    config: { preset: 'scales', noteCount: 20, clef: 'Bass', octaveRange: 2, mode: 'flow', scaleId: 'c-major' },
     description: '20 notes · Bass · 100 BPM · Flow',
   },
 };
