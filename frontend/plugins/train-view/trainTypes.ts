@@ -176,3 +176,45 @@ export const COMPLEXITY_PRESETS: ComplexityPresets = {
     description: '20 notes · Bass · 100 BPM · Flow',
   },
 };
+
+// ─── Saved Train ──────────────────────────────────────────────────────────────
+
+/** A single response note record with pre-computed playback offset for replay. */
+export interface SavedTrainResponseNote {
+  midiNote: number;
+  /** Offset in ms from exercise start — used as offsetMs for context.playNote replay. */
+  offsetMs: number;
+  durationMs: number;
+}
+
+/** Complete persisted train record stored in IndexedDB. */
+export interface SavedTrain {
+  id: string;
+  name: string;
+  savedAt: string;
+  config: ExerciseConfig;
+  bpm: number;
+  result: ExerciseResult;
+  responseNotes: SavedTrainResponseNote[];
+}
+
+/** Lightweight index entry stored in localStorage for browsing without IndexedDB round-trips. */
+export interface SavedTrainIndexEntry {
+  id: string;
+  name: string;
+  savedAt: string;
+  score: number;
+  totalNotes: number;
+}
+
+// ─── MIDI label helper ────────────────────────────────────────────────────────
+
+const MIDI_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+/** Convert a MIDI note number to a friendly label (C4, D#5 …). */
+export function midiToLabel(midi: number): string {
+  const name = MIDI_NOTE_NAMES[((midi % 12) + 12) % 12];
+  const octave = Math.floor(midi / 12) - 1;
+  return `${name}${octave}`;
+}
+

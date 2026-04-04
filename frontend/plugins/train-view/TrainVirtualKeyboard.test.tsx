@@ -122,6 +122,8 @@ function makeMockContext(): PluginContext & {
       id: 'train-view', name: 'Practice', version: '1.0.0',
       pluginApiVersion: '4', entryPoint: 'index.tsx', origin: 'builtin',
     } as const,
+    openPlugin: vi.fn(),
+    getNavigationData: vi.fn(() => null),
     _pitchSubscribers: pitchSubscribers,
     _midiSubscribers: midiSubscribers,
   };

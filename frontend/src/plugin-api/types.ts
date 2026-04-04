@@ -1038,4 +1038,6 @@ export interface PracticeSavedEvent {
   readonly practiceTimeMs: number;
   /** Optional task ID when the practice was launched from a session task. */
   readonly taskId?: string;
+  /** Optional session ID when the practice was launched from a session task. */
+  readonly sessionId?: string;
 }
