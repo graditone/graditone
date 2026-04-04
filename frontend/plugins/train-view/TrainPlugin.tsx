@@ -608,6 +608,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           score: Math.max(0, Math.round(100 - penalized.size * (100 / ex.notes.length))),
           correctPitchCount: ex.notes.length - penalized.size,
           correctTimingCount: ex.notes.length,
+          bpm: 0,
         };
         practiceTimeMsRef.current = Date.now() - exerciseStartMsRef.current;
         setTrainCompletedNaturally(true);

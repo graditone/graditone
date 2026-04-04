@@ -303,6 +303,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         noteResults: saved.performanceData.noteResults,
         wrongNoteEvents: saved.performanceData.wrongNoteEvents,
         bpmAtCompletion: saved.performanceData.bpmAtCompletion,
+        tempoMultiplier: saved.tempoMultiplier ?? 1.0,
       });
       setPartialPerformanceRecord(null);
     } else {
@@ -311,6 +312,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         noteResults: saved.performanceData.noteResults,
         wrongNoteEvents: saved.performanceData.wrongNoteEvents,
         bpmAtCompletion: saved.performanceData.bpmAtCompletion,
+        tempoMultiplier: saved.tempoMultiplier ?? 1.0,
         stoppedAtIndex: saved.performanceData.stoppedAtIndex ?? 0,
         totalNoteCount: saved.performanceData.totalNoteCount ?? saved.performanceData.notes.length,
       });
@@ -378,6 +380,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     playerState,
     practiceStartTimeRef,
     context,
+    tempoMultiplierRef,
     initialStartTick: pendingTaskLoopRegion?.startTick ?? null,
     initialEndTick: pendingTaskLoopRegion?.endTick ?? null,
     taskLocked: !!taskIdRef.current,
@@ -543,6 +546,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         noteResults: [...ps.noteResults],
         wrongNoteEvents: [...ps.wrongNoteEvents],
         bpmAtCompletion: playerState.bpm,
+        tempoMultiplier: tempoMultiplierRef.current,
         stoppedAtIndex: ps.currentIndex,
         totalNoteCount: ps.notes.length,
       });
@@ -596,6 +600,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         noteResults: [...ps.noteResults],
         wrongNoteEvents: [...ps.wrongNoteEvents],
         bpmAtCompletion: playerState.bpm,
+        tempoMultiplier: tempoMultiplierRef.current,
         stoppedAtIndex: ps.currentIndex,
         totalNoteCount: ps.notes.length,
       });
@@ -830,7 +835,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       setSaveError(null);
       setSavedPractices(listSavedPractices());
       // Feature 060: Notify subscribers (e.g. sessions plugin) that a practice was saved
-      const breakdown = computePracticeScore(performanceData.noteResults);
+      const breakdown = computePracticeScore(performanceData.noteResults, tempoMultiplier);
       const lastNr = performanceData.noteResults[performanceData.noteResults.length - 1];
       broadcastPracticeSaved({
         savedPracticeId: id,

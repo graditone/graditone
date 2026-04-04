@@ -194,7 +194,7 @@ export function ResultsOverlay({
     const results = practiceState.noteResults.length > 0
       ? practiceState.noteResults
       : performanceRecord?.noteResults ?? [];
-    const breakdown = computePracticeScore(results);
+    const breakdown = computePracticeScore(results, performanceRecord?.tempoMultiplier ?? 1.0);
     if (!breakdown) return null;
 
     const lastResult = results[results.length - 1];
@@ -218,7 +218,7 @@ export function ResultsOverlay({
       return { zeroProgress: true as const, stoppedAtIndex, totalNoteCount };
     }
 
-    const breakdown = computePracticeScore(noteResults);
+    const breakdown = computePracticeScore(noteResults, partialPerformanceRecord?.tempoMultiplier ?? 1.0);
     if (!breakdown) {
       return { zeroProgress: true as const, stoppedAtIndex, totalNoteCount };
     }
@@ -275,6 +275,12 @@ export function ResultsOverlay({
               {practiceReport.score}
             </span>
             <span className="practice-results__score-label">/ 100</span>
+          </div>
+          {/* Feature 072: Tempo context subtitle */}
+          <div className="practice-results__tempo-subtitle">
+            {(performanceRecord?.bpmAtCompletion ?? 0) > 0
+              ? `${performanceRecord!.bpmAtCompletion} BPM · ${Math.round(practiceReport.tempoMultiplier * 100)}%`
+              : `${Math.round(practiceReport.tempoMultiplier * 100)}%`}
           </div>
           <div
             className="practice-results__score-grade"
@@ -619,6 +625,12 @@ export function ResultsOverlay({
                   {partialReport.score}
                 </span>
                 <span className="practice-results__score-label">/ 100</span>
+              </div>
+              {/* Feature 072: Tempo context subtitle */}
+              <div className="practice-results__tempo-subtitle">
+                {(partialPerformanceRecord?.bpmAtCompletion ?? 0) > 0
+                  ? `${partialPerformanceRecord!.bpmAtCompletion} BPM · ${Math.round(partialReport.tempoMultiplier * 100)}%`
+                  : `${Math.round(partialReport.tempoMultiplier * 100)}%`}
               </div>
             </div>
 
