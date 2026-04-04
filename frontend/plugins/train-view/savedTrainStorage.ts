@@ -111,9 +111,7 @@ export function generateTrainName(
   const presetLabel =
     config.preset === 'scales'
       ? `Scale-${config.scaleId ?? 'unknown'}`
-      : config.preset === 'score'
-        ? 'Score'
-        : 'Random';
+      : 'Score';
   const modeLabel = config.mode === 'step' ? 'Step' : 'Flow';
   const y = date.getFullYear();
   const mo = String(date.getMonth() + 1).padStart(2, '0');

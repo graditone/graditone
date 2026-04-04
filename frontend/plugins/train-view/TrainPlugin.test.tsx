@@ -449,12 +449,11 @@ describe('TrainPlugin', () => {
   // ── (l) Score preset — US1 ────────────────────────────────────────────────
 
   describe('Score preset (US1 — T007)', () => {
-    it('renders three preset options: Random, Scales, and Score', () => {
+    it('renders two preset options: Scales and Score', () => {
       const ctx = makeMockContext();
       render(<TrainPlugin context={ctx} />);
 
-      // All three radio options must be present in the preset selector
-      expect(screen.getByRole('radio', { name: /random/i })).toBeDefined();
+      // Both radio options must be present in the preset selector
       expect(screen.getByRole('radio', { name: /scales/i })).toBeDefined();
       expect(screen.getByRole('radio', { name: /score/i })).toBeDefined();
     });
@@ -692,7 +691,7 @@ describe('TrainPlugin', () => {
       expect(hasScoreMax).toBe(true);
     });
 
-    it('cancel with no score loaded reverts preset to random', async () => {
+    it('cancel with no score loaded reverts preset to scales', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
       render(<TrainPlugin context={ctx} />);
@@ -709,9 +708,9 @@ describe('TrainPlugin', () => {
       // Dialog should be gone
       expect(screen.queryByTestId('score-selector-dialog')).toBeNull();
 
-      // Preset should have reverted to random
-      const randomRadio = screen.getByRole('radio', { name: /random/i }) as HTMLInputElement;
-      expect(randomRadio.checked).toBe(true);
+      // Preset should have reverted to scales
+      const scalesRadio = screen.getByRole('radio', { name: /scales/i }) as HTMLInputElement;
+      expect(scalesRadio.checked).toBe(true);
     });
 
     it('cancel after score is loaded closes dialog without changing preset', async () => {
@@ -750,11 +749,11 @@ describe('TrainPlugin', () => {
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: /beethoven/i })); });
       await act(async () => { spPlayer._notify({ status: 'ready', currentTick: 0, totalDurationTicks: 1000, highlightedNoteIds: new Set<string>(), bpm: 120, title: null, error: null }); });
 
-      // Switch to Random preset
-      await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /random/i })); });
+      // Switch to Scales preset
+      await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /scales/i })); });
 
       // Notes slider max should NOT be the score's totalAvailable
-      // (it should revert to the default max=20 for random)
+      // (it should revert to the default max for scales)
       const sliders = document.querySelectorAll('input[type="range"]');
       const notesSlider = Array.from(sliders).find(s => {
         const max = Number((s as HTMLInputElement).max);
@@ -780,7 +779,7 @@ describe('TrainPlugin', () => {
       await act(async () => { spPlayer._notify({ status: 'ready', currentTick: 0, totalDurationTicks: 1000, highlightedNoteIds: new Set<string>(), bpm: 120, title: null, error: null }); });
 
       // Switch away and back
-      await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /random/i })); });
+      await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /scales/i })); });
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
 
       // No dialog — cached pitches are used immediately
@@ -1021,7 +1020,7 @@ describe('TrainPlugin — visual differentiation and badge-clear (US3)', () => {
     expect(sel.value).toBe('custom');
   });
 
-  it('after selecting Mid then changing Clef, select shows "custom"', async () => {
+  it('after selecting Mid then changing Scale, select shows "custom"', async () => {
     const ctx = makeMockContext();
     render(<TrainPlugin context={ctx} />);
 
@@ -1029,9 +1028,9 @@ describe('TrainPlugin — visual differentiation and badge-clear (US3)', () => {
     await act(async () => { fireEvent.change(sel, { target: { value: 'mid' } }); });
     expect(sel.value).toBe('mid');
 
-    // Change Clef - should switch to custom
-    const bassRadio = screen.getByRole('radio', { name: /bass/i });
-    await act(async () => { fireEvent.click(bassRadio); });
+    // Change Scale - should switch to custom
+    const scaleSelect = screen.getByRole('combobox', { name: /scale/i }) as HTMLSelectElement;
+    await act(async () => { fireEvent.change(scaleSelect, { target: { value: 'g-major' } }); });
 
     expect(sel.value).toBe('custom');
   });

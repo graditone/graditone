@@ -994,9 +994,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     setExercise(
       configRef.current.preset === 'score' && scorePitchesRef.current
         ? generateScoreExercise(bpmRef.current, scorePitchesRef.current.notes, configRef.current.noteCount)
-        : configRef.current.preset !== 'score'
-          ? generateExercise(bpmRef.current, configRef.current)
-          : { notes: [], bpm: bpmRef.current },
+        : configRef.current.preset === 'score'
+          ? { notes: [], bpm: bpmRef.current }
+          : generateScaleExercise(bpmRef.current, configRef.current.scaleId, configRef.current.octaveRange),
     );
     setPhase('ready');
     phaseRef.current = 'ready';
@@ -1021,10 +1021,8 @@ export function TrainPlugin({ context }: TrainPluginProps) {
         } else {
           setExercise({ notes: [], bpm: bpmRef.current });
         }
-      } else if (next.preset === 'scales') {
-        setExercise(generateScaleExercise(bpmRef.current, next.scaleId, next.octaveRange));
       } else {
-        setExercise(generateExercise(bpmRef.current, next));
+        setExercise(generateScaleExercise(bpmRef.current, next.scaleId, next.octaveRange));
       }
     }
   }, []);
@@ -1035,10 +1033,8 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     if (phaseRef.current === 'ready') {
       if (configRef.current.preset === 'score' && scorePitchesRef.current) {
         setExercise(generateScoreExercise(v, scorePitchesRef.current.notes, configRef.current.noteCount));
-      } else if (configRef.current.preset === 'scales') {
+      } else {
         setExercise(generateScaleExercise(v, configRef.current.scaleId, configRef.current.octaveRange));
-      } else if (configRef.current.preset !== 'score') {
-        setExercise(generateExercise(v, configRef.current));
       }
     }
   }, []);
@@ -1080,9 +1076,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     setExercise(
       nextConfig.preset === 'score' && scorePitchesRef.current
         ? generateScoreExercise(nextBpm, scorePitchesRef.current.notes, nextConfig.noteCount)
-        : nextConfig.preset !== 'score'
-          ? generateExercise(nextBpm, nextConfig)
-          : { notes: [], bpm: nextBpm },
+        : nextConfig.preset === 'score'
+          ? { notes: [], bpm: nextBpm }
+          : generateScaleExercise(nextBpm, nextConfig.scaleId, nextConfig.octaveRange),
     );
 
     setPhase('ready');
@@ -1644,7 +1640,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
               {/* SCORE */}
               <div className="train-sidebar__section">
                 <p className="train-sidebar__section-title">Score</p>
-                {([['random', 'Random'], ['score', 'Score'], ['scales', 'Scales']] as [ExerciseConfig['preset'], string][]).map(([v, label]) => (
+                {([['score', 'Score'], ['scales', 'Scales']] as [ExerciseConfig['preset'], string][]).map(([v, label]) => (
                   <label
                     key={v}
                     className={`train-sidebar__radio-label${isDisabled ? ' train-sidebar__radio-label--disabled' : ''}`}
@@ -1922,8 +1918,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           onCancel={() => {
             setShowScoreSelector(false);
             if (!scorePitchesRef.current) {
-              // No score loaded yet — revert to random preset
-              updateConfig({ preset: 'random' });
+              updateConfig({ preset: 'scales' });
             }
           }}
           onSelectUserScore={(scoreId) => {

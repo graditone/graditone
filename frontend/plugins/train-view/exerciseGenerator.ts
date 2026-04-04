@@ -6,7 +6,7 @@
  * Imports ONLY from ./trainTypes — no src/ imports permitted (ESLint boundary).
  *
  * Exports:
- * - generateExercise(bpm?, config?, seed?) → TrainExercise
+ * - generateExercise(bpm?, config?) → TrainExercise
  * - generateScaleExercise(bpm, scaleId, octaveRange) → TrainExercise
  * - SCALE_OPTIONS — ordered list for the scale dropdown
  * - DEFAULT_EXERCISE_CONFIG
@@ -66,22 +66,10 @@ export const SCALE_OPTIONS: readonly ScaleOption[] = [
 
 export const DEFAULT_BPM = 80;
 
-/**
- * Diatonic note pools keyed by "Clef-OctaveRange".
- * Treble-1: C4–C5 (60–72) · Treble-2: C3–C5 (48–72)
- * Bass-1: C3–C4 (48–60) · Bass-2: C2–C4 (36–60)
- */
-const NOTE_POOLS: Record<string, readonly number[]> = {
-  'Treble-1': [60, 62, 64, 65, 67, 69, 71, 72],
-  'Treble-2': [48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72],
-  'Bass-1':   [48, 50, 52, 53, 55, 57, 59, 60],
-  'Bass-2':   [36, 38, 40, 41, 43, 45, 47, 48, 50, 52, 53, 55, 57, 59, 60],
-};
-
 // ─── Default config ───────────────────────────────────────────────────────────
 
 export const DEFAULT_EXERCISE_CONFIG: ExerciseConfig = {
-  preset: 'random',
+  preset: 'scales',
   noteCount: 8,
   clef: 'Treble',
   octaveRange: 1,
@@ -90,65 +78,25 @@ export const DEFAULT_EXERCISE_CONFIG: ExerciseConfig = {
   stepTimeoutMultiplier: 4,
 };
 
-// ─── PRNG ─────────────────────────────────────────────────────────────────────
-
-/**
- * A simple, fast 32-bit seeded PRNG (mulberry32).
- * Returns a function that produces values in [0, 1).
- */
-function mulberry32(seed: number): () => number {
-  let s = seed >>> 0;
-  return function () {
-    s |= 0;
-    s = (s + 0x6d2b79f5) | 0;
-    let z = Math.imul(s ^ (s >>> 15), 1 | s);
-    z = (z + Math.imul(z ^ (z >>> 7), 61 | z)) ^ z;
-    return ((z ^ (z >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Generate a practice exercise from the given config.
- * When config.preset === 'scales', delegates to generateScaleExercise.
- * When config.preset === 'score', delegates to generateScoreExercise using
- * the supplied scorePitches (returns an empty exercise when pitches are absent).
+ * Delegates to generateScaleExercise for 'scales' preset and
+ * generateScoreExercise for 'score' preset.
  *
  * @param bpm          Tempo in beats per minute (default 80)
- * @param config       Exercise configuration (default: 8 random Treble-1 notes)
- * @param seed         Optional seed for deterministic output (useful in tests)
- * @param scorePitches Pitches extracted from the loaded score (required for 'score' preset)
+ * @param config       Exercise configuration
  */
 export function generateExercise(
   bpm: number = DEFAULT_BPM,
   config: ExerciseConfig = DEFAULT_EXERCISE_CONFIG,
-  seed?: number,
-  scorePitches?: ReadonlyArray<{ midiPitches: ReadonlyArray<number> }>,
 ): TrainExercise {
   if (config.preset === 'scales') {
     return generateScaleExercise(bpm, config.scaleId, config.octaveRange);
   }
-  if (config.preset === 'score') {
-    if (!scorePitches || scorePitches.length === 0) {
-      return { notes: [], bpm };
-    }
-    return generateScoreExercise(bpm, scorePitches, config.noteCount);
-  }
-
-  const poolKey = `${config.clef}-${config.octaveRange}`;
-  const pool = NOTE_POOLS[poolKey] ?? NOTE_POOLS['Treble-1'];
-  const rand = seed !== undefined ? mulberry32(seed) : Math.random;
-  const msPerBeat = 60_000 / bpm;
-
-  const notes: ExerciseNote[] = Array.from({ length: config.noteCount }, (_, i) => ({
-    id: `ex-${i}`,
-    slotIndex: i,
-    midiPitch: pool[Math.floor(rand() * pool.length)],
-    expectedOnsetMs: i * msPerBeat,
-  }));
-
-  return { notes, bpm };
+  // preset === 'score' — scorePitches handled directly by callers
+  return { notes: [], bpm };
 }
 
 /**

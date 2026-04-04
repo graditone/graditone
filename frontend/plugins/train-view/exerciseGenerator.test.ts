@@ -99,20 +99,20 @@ describe('COMPLEXITY_PRESETS', () => {
     expect(config.mode).toBe('step');
   });
 
-  it('mid preset: preset=random, noteCount=16, clef=Treble, octaveRange=1, bpm=80, mode=step', () => {
+  it('mid preset: preset=scales, noteCount=16, clef=Treble, octaveRange=1, bpm=80, mode=step', () => {
     const { bpm, config } = COMPLEXITY_PRESETS['mid'];
     expect(bpm).toBe(80);
-    expect(config.preset).toBe('random');
+    expect(config.preset).toBe('scales');
     expect(config.noteCount).toBe(16);
     expect(config.clef).toBe('Treble');
     expect(config.octaveRange).toBe(1);
     expect(config.mode).toBe('step');
   });
 
-  it('high preset: preset=random, noteCount=20, clef=Bass, octaveRange=2, bpm=100, mode=flow', () => {
+  it('high preset: preset=scales, noteCount=20, clef=Bass, octaveRange=2, bpm=100, mode=flow', () => {
     const { bpm, config } = COMPLEXITY_PRESETS['high'];
     expect(bpm).toBe(100);
-    expect(config.preset).toBe('random');
+    expect(config.preset).toBe('scales');
     expect(config.noteCount).toBe(20);
     expect(config.clef).toBe('Bass');
     expect(config.octaveRange).toBe(2);
