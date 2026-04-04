@@ -1,9 +1,11 @@
 <!--
-SYNC IMPACT REPORT - Constitution v2.5.0
-Generated: 2026-02-24
+SYNC IMPACT REPORT - Constitution v2.7.0
+Generated: 2026-04-04
 
-VERSION CHANGE: 2.4.0 → 2.5.0
-BUMP RATIONALE: MINOR - Strengthened Principle VI to explicitly prohibit TypeScript layout engine implementations and enforce exclusive use of the Rust/WASM pipeline
+VERSION CHANGE: 2.6.0 → 2.7.0
+BUMP RATIONALE: MINOR - Added mandatory Git Worktree Workflow section to Development Workflow;
+  all spec development MUST occur inside a dedicated git worktree located at
+  ../worktrees/<branch-name> relative to the repository root.
 
 PRINCIPLES STATUS:
   ✓ I. Domain-Driven Design (UNCHANGED)
@@ -11,57 +13,37 @@ PRINCIPLES STATUS:
   ✓ III. Progressive Web Application Architecture (UNCHANGED)
   ✓ IV. Precision & Fidelity (UNCHANGED)
   ✓ V. Test-First Development (UNCHANGED)
-  ✓ VI. Layout Engine Authority (UPDATED - explicit prohibition of TypeScript layout engines)
-  ✓ VII. Regression Prevention (UNCHANGED) - Every detected error must result in a new test
+  ✓ VI. Layout Engine Authority (UNCHANGED)
+  ✓ VII. Regression Prevention (UNCHANGED)
 
-PRINCIPLE UPDATES:
-  ~ VI. Layout Engine Authority - Added explicit single-implementation constraint: the Rust/WASM engine is the ONLY permitted layout implementation; TypeScript-side layout engines (coordinate calculations in frontend code) are explicitly prohibited
-      - Closes the loophole where a TypeScript layout engine (NotationLayoutEngine) could technically satisfy "renderer prohibition" while still violating the spirit of layout engine authority
-      - Direct consequence of 001-practice-rust-layout migration discovery
-
-NEW PRINCIPLE ADDITIONS (v2.4.0):
-  + VII. Regression Prevention - All bugs, errors, or incorrect behavior discovered (in production, deployment, manual testing, or code review) MUST result in creation of a failing test that reproduces the issue before fixing
-      - Test created first, demonstrates the error
-      - Fix implemented, test passes
-      - Test remains permanently to prevent regression
-      - Rationale: Builds comprehensive test suite from real-world issues, prevents bugs from recurring, turns every error into documentation
-
-ARCHITECTURAL IMPACT:
-  + Strengthens Test-First Development (Principle V) by extending it to cover reactive testing (errors found after implementation)
-  + Creates feedback loop: production errors → tests → prevention
-  + Ensures test suite grows to cover actual failure modes, not just anticipated ones
+NEW SECTIONS ADDED:
+  + Development Workflow › Git Worktree Workflow
+      - Every feature branch MUST be developed inside a dedicated git worktree
+      - Worktrees MUST be created at <repo-parent>/worktrees/<branch-name>
+      - Creation command: git worktree add ../worktrees/<branch-name> <branch-name>
+      - Cleanup command: git worktree remove ../worktrees/<branch-name> (after merge)
 
 TEMPLATE CONSISTENCY STATUS:
-  ⚠️ tasks-template.md - REQUIRES UPDATE
-      - Add task template for "Create regression test for bug #X"
-      - Include test creation as first step in bug fix workflows
-  
-  ⚠️ spec-template.md - MINOR UPDATE NEEDED
-      - Add guidance on documenting known issues and required regression tests
-  
-  ✅ plan-template.md - Works with existing Constitution Check section
+  ✅ spec-template.md   - UPDATED: Added **Worktree** path line to front-matter header
+  ✅ plan-template.md   - UPDATED: Added **Worktree** path line to front-matter header
+  ✅ tasks-template.md  - No changes needed (path conventions unaffected)
   ✅ checklist-template.md - No changes needed (principle-agnostic)
   ✅ agent-file-template.md - No changes needed (principle-agnostic)
-
-EXISTING FEATURES IMPACT:
-  ✅ Recent Experience (2026-02-15) - Feature 018 deployment revealed missing TypeScript files (.gitignore issue)
-      - Error found: GitHub Actions build failure due to ignored WASM wrapper files
-      - Proper response: Would have created integration/build test checking for required files before fixing .gitignore
-      - Second error found: Test failures due to field name inconsistencies (BoundingBox x/y vs x_position/y_position)
-      - Proper response: Fixed tests to match actual interface contracts
-      - Demonstrates value: These errors now have test coverage preventing recurrence
-
-COMPLIANCE PATTERNS:
-  ✅ CORRECT: Bug found → Create failing test → Fix bug → Test passes → Commit both
-  ❌ VIOLATION: Bug found → Fix immediately → Deploy without test → Same bug recurs later
-  ✅ CORRECT: Production error → Write integration test reproducing issue → Fix → Deploy with test
-  ✅ CORRECT: Code review finds edge case → Add test for edge case → Update implementation
+  ⚠️ .github/agents/speckit.specify.agent.md - REQUIRES UPDATE
+      - Step 2 currently only creates the branch via create-new-feature.sh
+      - Must add: after branch creation, run
+          git worktree add ../worktrees/<branch-name> <branch-name>
+        from the repository root so the worktree exists before any spec work begins
+  ⚠️ .specify/scripts/bash/create-new-feature.sh - CONSIDER UPDATE
+      - The script could be extended to create the worktree automatically
+        (git worktree add ../worktrees/<branch-name> <branch-name>)
+        after the branch is created, keeping the step atomic.
 
 FOLLOW-UP TODOS:
-  1. Update bug fix workflow documentation to mandate test-first approach
-  2. Add "regression test" label/tag to bug tracking
-  3. Update PR template to prompt for regression tests when fixing bugs
-  4. Audit recent bug fixes (last 3 months) to ensure regression tests exist
+  1. Update speckit.specify.agent.md to create the worktree as part of step 2
+  2. Optionally extend create-new-feature.sh to create the worktree automatically
+  3. Update speckit.implement.agent.md to verify the correct worktree is active
+     before beginning implementation tasks
 
 -->
 
@@ -215,6 +197,39 @@ Every error, bug, or incorrect behavior MUST result in a test before being fixed
 - **Feature Branches**: All work happens in `feature/###-short-description` branches
 - **PR Requirements**: Pull requests MUST include tests, pass CI, and update relevant specs
 
+### Git Worktree Workflow
+
+All spec development MUST be performed inside a dedicated git worktree. Work on a feature
+branch directly from the primary working tree is prohibited.
+
+- **Worktree Location**: Worktrees MUST be created as siblings of the repository root, inside
+  a `worktrees/` directory in the parent folder:
+  ```
+  <repo-root-parent>/
+  ├── graditone/           # repository root (primary working tree)
+  └── worktrees/
+      └── <branch-name>/   # dedicated worktree for this feature
+  ```
+- **Creation**: Run the following command from the repository root before beginning any spec work:
+  ```
+  git worktree add ../worktrees/<branch-name> <branch-name>
+  ```
+- **One Worktree Per Branch**: Each active feature branch MUST have exactly one worktree. Do not
+  reuse a worktree directory for a different branch.
+- **IDE / Editor Context**: Open the worktree directory (`../worktrees/<branch-name>`) as the
+  workspace root when working on a feature, to keep IDE state (open files, terminals, extensions)
+  isolated from other concurrent features.
+- **Cleanup**: After the feature branch is merged, remove the worktree:
+  ```
+  git worktree remove ../worktrees/<branch-name>
+  ```
+
+**Rationale**: Git worktrees allow multiple feature branches to be active simultaneously without
+stashing or switching branches in the primary working tree. Each spec's code, tests, and
+generated artifacts remain fully isolated, preventing accidental cross-contamination between
+features. IDE contexts stay stable per feature, and CI-related file generation cannot bleed
+across branches.
+
 ### Documentation Currency
 
 Once all tasks in a spec are implemented, project documentation MUST be updated to reflect any changes introduced:
@@ -258,4 +273,4 @@ This constitution supersedes all other development practices. Amendments require
 
 ---
 
-**Version**: 2.6.0 | **Ratified**: 2026-02-06 | **Last Amended**: 2026-02-26
+**Version**: 2.7.0 | **Ratified**: 2026-02-06 | **Last Amended**: 2026-04-04
