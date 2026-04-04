@@ -171,12 +171,20 @@ function makeMockContext(overrides?: { scorePlayer?: PluginScorePlayerContext & 
       entryPoint: 'index.tsx',
       origin: 'builtin',
     } as const,
+    openPlugin: vi.fn(),
+    getNavigationData: vi.fn(() => null),
     _pitchSubscribers: pitchSubscribers,
     _midiSubscribers: midiSubscribers,
   };
 }
 
-/** Fire a MIDI attack on ctx to auto-start the exercise (replaces the removed Play button). */
+/** Click the ▶ Train button to start the exercise. */
+function clickTrainStart() {
+  const btn = screen.getByTestId('train-play-btn');
+  fireEvent.click(btn);
+}
+
+/** Fire a MIDI attack on ctx (used after exercise has started, for note input). */
 function fireMidiAttack(ctx: ReturnType<typeof makeMockContext>, midiNote = 60) {
   ctx._midiSubscribers.forEach(h => h({ type: 'attack' as const, midiNote, timestamp: Date.now(), durationMs: 500 }));
 }
@@ -212,11 +220,11 @@ describe('TrainPlugin', () => {
       expect(screen.getByLabelText(/mode/i)).toBeDefined();
     });
 
-    it('shows "Press any note to start" prompt in the ready state', () => {
+    it('shows "▶ Train" start button in the ready state', () => {
       const ctx = makeMockContext();
       render(<TrainPlugin context={ctx} />);
 
-      expect(screen.getByText(/press any note to start/i)).toBeDefined();
+      expect(screen.getByTestId('train-play-btn')).toBeDefined();
     });
 
     it('does NOT show results panel on mount', () => {
@@ -238,8 +246,8 @@ describe('TrainPlugin', () => {
       // Switch to flow mode (default level is low → step; flow needed for countdown)
       await act(async () => { fireEvent.change(screen.getByLabelText(/mode/i), { target: { value: 'flow' } }); });
 
-      // Fire MIDI attack to start exercise (auto-start replaces Play button)
-      await act(async () => { fireMidiAttack(ctx); });
+      // Click ▶ Train to start the exercise
+      await act(async () => { clickTrainStart(); });
 
       // Should show countdown "3" immediately
       expect(screen.queryByText('3')).not.toBeNull();
@@ -314,7 +322,7 @@ describe('TrainPlugin', () => {
       // Switch to flow mode so notes are scheduled via playNote
       await act(async () => { fireEvent.change(screen.getByLabelText(/mode/i), { target: { value: 'flow' } }); });
 
-      await act(async () => { fireMidiAttack(ctx); });
+      await act(async () => { clickTrainStart(); });
 
       // Advance through countdown (3s) + a bit
       await act(async () => { vi.advanceTimersByTime(4000); });
@@ -339,7 +347,7 @@ describe('TrainPlugin', () => {
       const ctx = makeMockContext();
       render(<TrainPlugin context={ctx} />);
 
-      await act(async () => { fireMidiAttack(ctx); });
+      await act(async () => { clickTrainStart(); });
 
       // Get through countdown
       await act(async () => { vi.advanceTimersByTime(4000); });
@@ -362,7 +370,7 @@ describe('TrainPlugin', () => {
       // Switch to flow mode so the exercise drives itself to completion
       await act(async () => { fireEvent.change(screen.getByLabelText(/mode/i), { target: { value: 'flow' } }); });
 
-      await act(async () => { fireMidiAttack(ctx); });
+      await act(async () => { clickTrainStart(); });
 
       // Advance well past the exercise duration (countdown 3s + exercise up to ~10s + buffer)
       await act(async () => { vi.advanceTimersByTime(20_000); });
@@ -383,15 +391,16 @@ describe('TrainPlugin', () => {
       render(<TrainPlugin context={ctx} />);
 
       // Complete an exercise to reach results
-      await act(async () => { fireMidiAttack(ctx); });
+      await act(async () => { clickTrainStart(); });
       await act(async () => { vi.advanceTimersByTime(20_000); });
 
-      // Find and click Try Again
-      const tryAgainBtn = screen.queryByRole('button', { name: /try again/i });
-      if (tryAgainBtn) {
-        await act(async () => { fireEvent.click(tryAgainBtn); });
-        // After Try Again, start prompt should be visible (back in ready)
-        expect(screen.getByText(/press any note to start/i)).toBeDefined();
+      // Find and click Retry in the results overlay
+      const retryBtn = screen.queryByTestId('train-retry-btn')
+        ?? screen.queryByRole('button', { name: /retry/i });
+      if (retryBtn) {
+        await act(async () => { fireEvent.click(retryBtn); });
+        // After Retry, Train start button should be visible (back in ready)
+        expect(screen.getByTestId('train-play-btn')).toBeDefined();
       }
     });
   });
@@ -404,15 +413,15 @@ describe('TrainPlugin', () => {
       render(<TrainPlugin context={ctx} />);
 
       // Complete an exercise to reach results
-      await act(async () => { fireMidiAttack(ctx); });
+      await act(async () => { clickTrainStart(); });
       await act(async () => { vi.advanceTimersByTime(20_000); });
 
-      // Find and click New Exercise
-      const newExBtn = screen.queryByRole('button', { name: /new exercise/i });
+      // Find and click New in the results overlay
+      const newExBtn = screen.queryByRole('button', { name: /new exercise|new/i });
       if (newExBtn) {
         await act(async () => { fireEvent.click(newExBtn); });
-        // After New Exercise, start prompt should be visible (back in ready)
-        expect(screen.getByText(/press any note to start/i)).toBeDefined();
+        // After New, Train start button should be visible (back in ready)
+        expect(screen.getByTestId('train-play-btn')).toBeDefined();
       }
     });
   });
@@ -425,7 +434,7 @@ describe('TrainPlugin', () => {
       const { unmount } = render(<TrainPlugin context={ctx} />);
 
       // Start exercise
-      await act(async () => { fireMidiAttack(ctx); });
+      await act(async () => { clickTrainStart(); });
       // Get through countdown to playing phase
       await act(async () => { vi.advanceTimersByTime(4000); });
 
@@ -578,8 +587,8 @@ describe('TrainPlugin', () => {
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: /beethoven/i })); });
       await act(async () => { spPlayer._notify({ status: 'ready', currentTick: 0, totalDurationTicks: 1000, highlightedNoteIds: new Set<string>(), bpm: 120, title: null, error: null }); });
 
-      // Start exercise — auto-start via MIDI attack
-      await act(async () => { fireMidiAttack(ctx); });
+      // Start exercise via Train button
+      await act(async () => { clickTrainStart(); });
 
       const changeScoreBtn = screen.getByRole('button', { name: /change score/i }) as HTMLButtonElement;
       expect(changeScoreBtn.disabled).toBe(true);
@@ -884,8 +893,8 @@ describe('TrainPlugin — complexity level selector (US1)', () => {
     const ctx = makeMockContext();
     render(<TrainPlugin context={ctx} />);
 
-    // Trigger playing phase via MIDI auto-start
-    await act(async () => { fireMidiAttack(ctx); });
+    // Trigger playing phase via Train button
+    await act(async () => { clickTrainStart(); });
     await act(async () => { vi.advanceTimersByTime(5000); });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;

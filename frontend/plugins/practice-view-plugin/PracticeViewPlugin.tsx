@@ -843,6 +843,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         totalNotes: breakdown?.totalNotes ?? 0,
         practiceTimeMs: lastNr?.responseTimeMs ?? 0,
         ...(taskIdRef.current ? { taskId: taskIdRef.current } : {}),
+        ...(sessionIdRef.current ? { sessionId: sessionIdRef.current } : {}),
       });
     } catch (e) {
       console.error('[PracticeViewPlugin] Failed to save practice:', e);

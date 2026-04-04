@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PluginContext, PluginPitchEvent, PluginNoteEvent, PluginScorePitches, ScorePlayerState, MetronomeState, MetronomeSubdivision } from '../../src/plugin-api/index';
+import { broadcastPracticeSaved } from '../../src/plugin-api/index';
 import type {
   TrainPhase,
   TrainExercise,
@@ -22,12 +23,16 @@ import type {
   NoteComparisonStatus,
   ActiveComplexityLevel,
   ComplexityLevel,
+  SavedTrain,
 } from './trainTypes';
-import { COMPLEXITY_PRESETS, COMPLEXITY_LEVEL_STORAGE_KEY } from './trainTypes';
+import { COMPLEXITY_PRESETS, COMPLEXITY_LEVEL_STORAGE_KEY, midiToLabel } from './trainTypes';
+import { TrainResultsOverlay } from './TrainResultsOverlay';
 import { generateExercise, generateScoreExercise, generateScaleExercise, DEFAULT_EXERCISE_CONFIG, SCALE_OPTIONS } from './exerciseGenerator';
 import { scoreCapture } from './exerciseScorer';
 import './TrainPlugin.css';
 import { TrainVirtualKeyboard } from './TrainVirtualKeyboard';
+import { saveTrainToIndexedDB, loadTrainFromIndexedDB, deleteTrainFromIndexedDB, generateTrainName } from './savedTrainStorage';
+import { addSavedTrainIndex } from './savedTrainIndex';
 
 // ─── Hz/MIDI helpers ──────────────────────────────────────────────────────────
 
@@ -39,14 +44,6 @@ function hzToMidi(hz: number): number {
 /** Convert hz to fractional MIDI cents for scoring. */
 function hzToMidiCents(hz: number): number {
   return 12 * Math.log2(hz / 440) * 100 + 6900;
-}
-
-/** MIDI note number to friendly label (C4, D#5 …) */
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-function midiToLabel(midi: number): string {
-  const name = NOTE_NAMES[((midi % 12) + 12) % 12];
-  const octave = Math.floor(midi / 12) - 1;
-  return `${name}${octave}`;
 }
 
 // ─── Pitch onset detection constants (mirrors usePracticeRecorder) ────────────
@@ -77,6 +74,8 @@ export interface TrainPluginProps {
 export function TrainPlugin({ context }: TrainPluginProps) {
   // ── Complexity level state ──────────────────────────────────────────────────
   const [complexityLevel, setComplexityLevel] = useState<ActiveComplexityLevel>('low');
+  /** True when opened from a warm-up task — shows Train button instead of auto-start */
+  const [isWarmUpMode, setIsWarmUpMode] = useState(false);
 
   // ── Config & BPM state ─────────────────────────────────────────────────────
   const [config, setConfig] = useState<ExerciseConfig>({ ...DEFAULT_EXERCISE_CONFIG });
@@ -140,6 +139,19 @@ export function TrainPlugin({ context }: TrainPluginProps) {
   // tapping the backdrop so the user can see the staff underneath.
   const [resultsOverlayVisible, setResultsOverlayVisible] = useState(true);
 
+  // ── Save state ────────────────────────────────────────────────────────────────
+  const [isSaved, setIsSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  /** True only when the exercise finished naturally (all notes played). False if stopped early. */
+  const [trainCompletedNaturally, setTrainCompletedNaturally] = useState(false);
+
+  // ── Replay state ──────────────────────────────────────────────────────────────
+  const [isReplaying, setIsReplaying] = useState(false);
+  /** MIDI note currently highlighted on the response staff during replay (null = none). */
+  const [replayHighlightedMidi, setReplayHighlightedMidi] = useState<number | null>(null);
+  /** setTimeout IDs for the active replay. Cancelled on stop or unmount. */
+  const replayTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
   // Sound toggle — muting silences guide notes without affecting user MIDI feedback
   const [soundEnabled, setSoundEnabled] = useState(true);
   const soundEnabledRef = useRef(true);
@@ -165,6 +177,10 @@ export function TrainPlugin({ context }: TrainPluginProps) {
   const exerciseStaffRef = useRef<HTMLDivElement>(null);
   const captureRef = useRef<ResponseNote[]>([]);
   const playStartMsRef = useRef<number>(0);
+  /** Wall-clock ms when the current exercise began (after countdown). Set in both flow and step modes. */
+  const exerciseStartMsRef = useRef<number>(0);
+  /** Computed exercise duration in ms, set when result is produced. Used for session activity tracking. */
+  const practiceTimeMsRef = useRef<number>(0);
   const phaseRef = useRef<TrainPhase>('ready');
   const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exerciseRef = useRef<TrainExercise>(exercise);
@@ -197,6 +213,10 @@ export function TrainPlugin({ context }: TrainPluginProps) {
   const highlightTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   /** Prevents auto-start from firing more than once per ready phase */
   const autoStartedRef = useRef(false);
+  /** True when opened from a warm-up task — suppresses mic/MIDI auto-start */
+  const isWarmUpModeRef = useRef(false);
+  /** Tracks the latest result for the Back button handler (avoids stale closure) */
+  const resultRef = useRef<import('./trainTypes').ExerciseResult | null>(null);
   /** Stable ref to the current handleStepInput function */
   const handleStepInputRef = useRef<(midi: number) => void>(() => {});
   /** Stable ref to the current handleStartStep function */
@@ -227,15 +247,8 @@ export function TrainPlugin({ context }: TrainPluginProps) {
   const handleMidiAttackRef = useRef<(midiNote: number, timestamp: number) => void>(() => {});
   useEffect(() => {
     handleMidiAttackRef.current = (midiNote: number, timestamp: number) => {
-      // Auto-start: first note in ready phase triggers exercise start
+      // Notes in ready phase are ignored — user must press ▶ Train to start
       if (phaseRef.current === 'ready') {
-        if (!autoStartedRef.current) {
-          if (configRef.current.mode === 'step') {
-            handleStartStepRef.current();
-          } else {
-            handlePlayRef.current();
-          }
-        }
         return;
       }
       if (phaseRef.current !== 'playing') return;
@@ -393,15 +406,8 @@ export function TrainPlugin({ context }: TrainPluginProps) {
 
         silenceStableCountRef.current = 0; // reset silence run
 
-        // AUTO-START: first valid mic pitch while in ready phase
-        if (phaseRef.current === 'ready' && !autoStartedRef.current) {
-          if (configRef.current.mode === 'step') {
-            handleStartStepRef.current();
-          } else {
-            handlePlayRef.current();
-          }
-          return;
-        }
+        // Notes in ready phase are ignored — user must press ▶ Train to start
+        if (phaseRef.current === 'ready') return;
 
         // STEP MODE: dispatch every distinct valid pitch directly (bypass flow debounce)
         if (configRef.current.mode === 'step' && phaseRef.current === 'playing') {
@@ -495,16 +501,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
       }
       // Shared scoring + auto-start handler (also used by virtual keyboard — T002)
       handleMidiAttackRef.current(event.midiNote, event.timestamp);
-      // Audio: MIDI keyboards produce no acoustic sound, so relay through the host.
-      // (Virtual keyboard handles its own audio unconditionally in the component.)
-      if (phaseRef.current === 'playing') {
-        context.playNote({
-          midiNote: event.midiNote,
-          timestamp: event.timestamp,
-          type: 'attack',
-          durationMs: event.durationMs ?? 500,
-        });
-      }
+      // Audio is provided by pre-scheduled guide notes (flow mode) or the
+      // next-note preview (step mode). Relaying the user's note here doubles it.
+      // Virtual keyboard handles its own audio unconditionally per FR-006.
     });
     return unsub;
   }, [context]);
@@ -515,6 +514,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
       if (finishTimerRef.current !== null) {
         clearTimeout(finishTimerRef.current);
       }
+      // Cancel any in-progress replay
+      replayTimersRef.current.forEach(clearTimeout);
+      replayTimersRef.current = [];
       context.stopPlayback();
       // Force-close the microphone stream so the browser releases the device
       // indicator immediately when leaving the Train view.
@@ -607,6 +609,8 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           correctPitchCount: ex.notes.length - penalized.size,
           correctTimingCount: ex.notes.length,
         };
+        practiceTimeMsRef.current = Date.now() - exerciseStartMsRef.current;
+        setTrainCompletedNaturally(true);
         setResult(exerciseResult);
         setHighlightedSlotIndex(null);
         setResultsOverlayVisible(true);
@@ -623,14 +627,6 @@ export function TrainPlugin({ context }: TrainPluginProps) {
         }, STEP_INPUT_DELAY_MS);
         setHighlightedSlotIndex(nextIdx);
         stepLastPlayTimeRef.current = Date.now();
-        if (soundEnabledRef.current || inputSourceRef.current === 'midi') {
-          context.playNote({
-            midiNote: ex.notes[nextIdx].midiPitch,
-            timestamp: Date.now(),
-            type: 'attack',
-            durationMs: 600,
-          });
-        }
         scheduleStepSlotTimeout(nextIdx);
       }
     } else {
@@ -661,6 +657,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     if (phaseRef.current !== 'ready') return;
     if (autoStartedRef.current) return;
     autoStartedRef.current = true;
+    setTrainCompletedNaturally(false);
     setPhase('playing');
     phaseRef.current = 'playing';
     captureRef.current = [];
@@ -673,12 +670,10 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     stepPenalizedSlotsRef.current = new Set();
     stepWrongMidiMapRef.current = new Map();
     stepLastPlayTimeRef.current = Date.now();
+    exerciseStartMsRef.current = Date.now();
     setHighlightedSlotIndex(0);
     const firstNote = exerciseRef.current.notes[0];
     if (firstNote) {
-      if (soundEnabledRef.current || inputSourceRef.current === 'midi') {
-        context.playNote({ midiNote: firstNote.midiPitch, timestamp: Date.now(), type: 'attack', durationMs: 600 });
-      }
       scheduleStepSlotTimeout(0);
     }
   }, [context, resetOnsetDetection, scheduleStepSlotTimeout]);
@@ -689,6 +684,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
   const handlePlay = useCallback(() => {
     if (phaseRef.current !== 'ready') return;
     autoStartedRef.current = true;
+    setTrainCompletedNaturally(false);
 
     const currentExercise = exerciseRef.current;
     const msPerBeat = 60_000 / currentExercise.bpm;
@@ -709,6 +705,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
       phaseRef.current = 'playing';
       const now = Date.now();
       playStartMsRef.current = now;
+      exerciseStartMsRef.current = now;
       setPlayStartMs(now);
 
       // Schedule per-slot highlight timers
@@ -754,6 +751,8 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           captureRef.current,
           { includeTimingScore: inputSourceRef.current === 'midi' },
         );
+        practiceTimeMsRef.current = Date.now() - exerciseStartMsRef.current;
+        setTrainCompletedNaturally(true);
         setResult(exerciseResult);
         setResultsOverlayVisible(true);
         setPhase('results');
@@ -807,11 +806,136 @@ export function TrainPlugin({ context }: TrainPluginProps) {
       captureRef.current,
       { includeTimingScore: inputSourceRef.current === 'midi' },
     );
+    practiceTimeMsRef.current = Date.now() - exerciseStartMsRef.current;
+    setTrainCompletedNaturally(false);
     setResult(exerciseResult);
     setResultsOverlayVisible(true);
     setPhase('results');
     phaseRef.current = 'results';
   }, [context, resetOnsetDetection, clearStepTimeout]);
+
+  // ── Save ───────────────────────────────────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    if (!result) return;
+    const now = new Date();
+    const id = crypto.randomUUID();
+    const name = generateTrainName(configRef.current, now);
+    const savedAt = now.toISOString();
+    // Build response notes with ms offsets from exercise start
+    const responseNotes = responseNoteEvents
+      .filter((e) => e.type === 'attack')
+      .map((e) => ({
+        midiNote: e.midiNote,
+        // Flow mode: real timestamp − play start; Step mode: already a slot offset
+        offsetMs: configRef.current.mode === 'flow'
+          ? Math.max(0, e.timestamp - playStartMsRef.current)
+          : e.timestamp,
+        durationMs: (60_000 / bpmRef.current) * 0.85,
+      }));
+    const savedTrain: SavedTrain = {
+      id,
+      name,
+      savedAt,
+      config: configRef.current,
+      bpm: bpmRef.current,
+      result,
+      responseNotes,
+    };
+    try {
+      await saveTrainToIndexedDB(savedTrain);
+      const { evictedIds } = addSavedTrainIndex({
+        id,
+        name,
+        savedAt,
+        score: result.score,
+        totalNotes: result.comparisons.length,
+      });
+      // Clean up evicted records from IndexedDB
+      for (const evictedId of evictedIds) {
+        deleteTrainFromIndexedDB(evictedId).catch((e) =>
+          console.warn('[TrainPlugin] Failed to delete evicted train:', e),
+        );
+      }
+      setIsSaved(true);
+      setSaveError(null);
+      // Notify sessions plugin so the activity appears in the active session
+      broadcastPracticeSaved({
+        savedPracticeId: id,
+        practiceName: name,
+        scoreTitle: name,
+        completionStatus: 'complete',
+        savedAt,
+        practiceScore: result.score,
+        correctCount: result.correctPitchCount,
+        totalNotes: result.comparisons.length,
+        practiceTimeMs: practiceTimeMsRef.current,
+        ...(warmUpTaskConfigRef.current ? { taskId: warmUpTaskConfigRef.current.taskId, sessionId: warmUpTaskConfigRef.current.sessionId } : {}),
+      });
+    } catch (err) {
+      console.error('[TrainPlugin] Failed to save train:', err);
+      setSaveError('Save failed — please try again.');
+    }
+  }, [result, responseNoteEvents]);
+
+  // ── Replay ─────────────────────────────────────────────────────────────────
+  const handleReplayStop = useCallback(() => {
+    replayTimersRef.current.forEach(clearTimeout);
+    replayTimersRef.current = [];
+    context.stopPlayback();
+    setIsReplaying(false);
+    setHighlightedSlotIndex(null);
+    setReplayHighlightedMidi(null);
+  }, [context]);
+
+  const handleReplayStart = useCallback(() => {
+    if (isReplaying) return;
+    const notesToReplay = responseNoteEvents.filter((e) => e.type === 'attack');
+    if (notesToReplay.length === 0) return;
+    setIsReplaying(true);
+    setHighlightedSlotIndex(null);
+    setReplayHighlightedMidi(null);
+    // Play all notes via offsetMs so they fire relative to now
+    context.stopPlayback();
+    notesToReplay.forEach((e) => {
+      const offsetMs = configRef.current.mode === 'flow'
+        ? Math.max(0, e.timestamp - playStartMsRef.current)
+        : e.timestamp;
+      context.playNote({
+        midiNote: e.midiNote,
+        timestamp: Date.now(),
+        type: 'attack',
+        offsetMs,
+        durationMs: e.durationMs ?? (60_000 / bpmRef.current) * 0.85,
+      });
+      // Schedule response staff highlight at the same offset
+      const highlightTimer = setTimeout(
+        () => setReplayHighlightedMidi(e.midiNote),
+        offsetMs,
+      );
+      replayTimersRef.current.push(highlightTimer);
+    });
+    // Schedule exercise staff highlights at expected onset times
+    exerciseRef.current.notes.forEach((note, i) => {
+      const t = setTimeout(() => setHighlightedSlotIndex(i), note.expectedOnsetMs);
+      replayTimersRef.current.push(t);
+    });
+    // Auto-stop after last note + buffer
+    const lastOffset = Math.max(
+      ...notesToReplay.map((e) =>
+        configRef.current.mode === 'flow'
+          ? Math.max(0, e.timestamp - playStartMsRef.current)
+          : e.timestamp,
+      ),
+    );
+    const stopTimer = setTimeout(() => {
+      context.stopPlayback();
+      setIsReplaying(false);
+      setHighlightedSlotIndex(null);
+      setReplayHighlightedMidi(null);
+      replayTimersRef.current = replayTimersRef.current.filter((t) => t !== stopTimer);
+    }, lastOffset + 1500);
+    replayTimersRef.current.push(stopTimer);
+  }, [context, isReplaying, responseNoteEvents]);
 
   // ── Try Again ──────────────────────────────────────────────────────────────────
   const handleTryAgain = useCallback(() => {
@@ -819,6 +943,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     resetOnsetDetection();
     setResponseNoteEvents([]);
     setResult(null);
+    setIsSaved(false);
+    setSaveError(null);
+    handleReplayStop();
     // Reset highlight / step state
     highlightTimersRef.current.forEach(clearTimeout);
     highlightTimersRef.current = [];
@@ -831,9 +958,16 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     autoStartedRef.current = false;
     if (stepSlotTimeoutRef.current !== null) { clearTimeout(stepSlotTimeoutRef.current); stepSlotTimeoutRef.current = null; }
     if (stepDebounceTimeoutRef.current !== null) { clearTimeout(stepDebounceTimeoutRef.current); stepDebounceTimeoutRef.current = null; }
+    setTrainCompletedNaturally(false);
     setPhase('ready');
     phaseRef.current = 'ready';
-  }, [resetOnsetDetection]);
+    // Auto-start immediately — same effect as pressing ▶ Train again
+    if (configRef.current.mode === 'step') {
+      handleStartStepRef.current();
+    } else {
+      handlePlayRef.current();
+    }
+  }, [resetOnsetDetection, handleReplayStop]);
 
   // ── New Exercise ───────────────────────────────────────────────────────────────
   const handleNewExercise = useCallback(() => {
@@ -841,6 +975,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     resetOnsetDetection();
     setResponseNoteEvents([]);
     setResult(null);
+    setIsSaved(false);
+    setSaveError(null);
+    handleReplayStop();
     // Reset highlight / step state
     highlightTimersRef.current.forEach(clearTimeout);
     highlightTimersRef.current = [];
@@ -853,6 +990,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     autoStartedRef.current = false;
     if (stepSlotTimeoutRef.current !== null) { clearTimeout(stepSlotTimeoutRef.current); stepSlotTimeoutRef.current = null; }
     if (stepDebounceTimeoutRef.current !== null) { clearTimeout(stepDebounceTimeoutRef.current); stepDebounceTimeoutRef.current = null; }
+    setTrainCompletedNaturally(false);
     setExercise(
       configRef.current.preset === 'score' && scorePitchesRef.current
         ? generateScoreExercise(bpmRef.current, scorePitchesRef.current.notes, configRef.current.noteCount)
@@ -862,7 +1000,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     );
     setPhase('ready');
     phaseRef.current = 'ready';
-  }, [resetOnsetDetection]);
+  }, [resetOnsetDetection, handleReplayStop]);
 
   // ── Config helpers — use refs to avoid stale closures ──────────────────────
   const updateConfig = useCallback((patch: Partial<ExerciseConfig>) => {
@@ -962,6 +1100,116 @@ export function TrainPlugin({ context }: TrainPluginProps) {
       : 'low';
     applyComplexityLevel(level);
   }, [applyComplexityLevel]);
+
+  // ── Feature 071: Warm-up task config ref (set on mount, used on completion) ──
+  const warmUpTaskConfigRef = useRef<{ taskId: string; sessionId: string; loopCount: number; minResult: number } | null>(null);
+  const [taskTag, setTaskTag] = useState<{ taskNumber: number; sessionName: string; difficulty?: 1 | 2 | 3 } | null>(null);
+
+  // Read warm-up nav data once during render — stored in a ref so it survives
+  // React StrictMode's double-invocation of effects (where getNavigationData()
+  // would return null on the second run, losing the scale/tempo config).
+  // Read navigation data once during render — stored in refs so they survive
+  // React StrictMode's double-invocation of effects (where getNavigationData()
+  // would return null on the second run, losing the config).
+  // IMPORTANT: getNavigationData() is one-shot (clears after read), so we read
+  // it once and extract both warmUpTaskConfig and savedTrainId from the same call.
+  const warmUpNavDataRef = useRef<{ taskId: string; taskNumber?: number; sessionId: string; sessionName?: string; scaleId: string; tempoMultiplier: number; loopCount: number; minResult: number; difficulty?: 1 | 2 | 3 } | null | '__unread__'>('__unread__');
+  const savedTrainNavRef = useRef<{ savedTrainId: string; returnToSession?: { sessionId: string; taskId: string; taskNumber?: number; sessionName?: string; difficulty?: 1 | 2 | 3 } } | null | '__unread__'>('__unread__');
+  if (warmUpNavDataRef.current === '__unread__') {
+    const navData = context.getNavigationData() as {
+      warmUpTaskConfig?: { taskId: string; taskNumber?: number; sessionId: string; sessionName?: string; scaleId: string; tempoMultiplier: number; loopCount: number; minResult: number; difficulty?: 1 | 2 | 3 };
+      savedTrainId?: string;
+      returnToSession?: { sessionId: string; taskId: string; taskNumber?: number; sessionName?: string; difficulty?: 1 | 2 | 3 };
+    } | null;
+    warmUpNavDataRef.current = navData?.warmUpTaskConfig ?? null;
+    savedTrainNavRef.current = navData?.savedTrainId
+      ? { savedTrainId: navData.savedTrainId, returnToSession: navData.returnToSession }
+      : null;
+  }
+
+  // ── Feature 071: Apply warm-up task config from navigation data on mount ──
+  useEffect(() => {
+    const warmUpConfig = warmUpNavDataRef.current;
+    if (warmUpConfig === '__unread__' || !warmUpConfig) return;
+    const { taskId, sessionId, scaleId, tempoMultiplier, loopCount, minResult } = warmUpConfig;
+    warmUpTaskConfigRef.current = { taskId, sessionId, loopCount, minResult };
+    if (warmUpConfig.taskNumber) {
+      setTaskTag({ taskNumber: warmUpConfig.taskNumber, sessionName: warmUpConfig.sessionName ?? '', difficulty: warmUpConfig.difficulty });
+    }
+    const targetBpm = Math.round(tempoMultiplier * 80);
+    updateConfig({ preset: 'scales', scaleId });
+    handleBpmChange(targetBpm);
+    setComplexityLevel(null);      // show "Custom" in the level selector
+    isWarmUpModeRef.current = true;
+    setIsWarmUpMode(true);         // show explicit Train button, suppress auto-start
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);  // Run once on mount only
+
+  // ── Feature 071: Keep resultRef in sync for Back button handler ─────────
+  useEffect(() => { resultRef.current = result; }, [result]);
+
+  // ── Feature 071: Load a saved train from navigation data on mount ─────────
+  // When the user opens a previously saved train, getNavigationData() returns
+  // { savedTrainId }. We restore all state from the saved record and jump
+  // directly to the results overlay (showing the persisted score + replay).
+  useEffect(() => {
+    const navData = savedTrainNavRef.current;
+    if (navData === '__unread__' || !navData) return;
+    const { savedTrainId, returnToSession } = navData;
+    // Populate warmUpTaskConfigRef so the "Return to Sessions" button appears
+    if (returnToSession) {
+      warmUpTaskConfigRef.current = {
+        taskId: returnToSession.taskId,
+        sessionId: returnToSession.sessionId,
+        loopCount: 0,
+        minResult: 0,
+      };
+      if (returnToSession.taskNumber) {
+        setTaskTag({ taskNumber: returnToSession.taskNumber, sessionName: returnToSession.sessionName ?? '', difficulty: returnToSession.difficulty });
+      }
+    }
+    loadTrainFromIndexedDB(savedTrainId)
+      .then((saved) => {
+        if (!saved) return;
+        // Restore config + BPM
+        configRef.current = saved.config;
+        setConfig(saved.config);
+        bpmRef.current = saved.bpm;
+        setBpmValue(saved.bpm);
+        // Reconstruct exercise from result comparisons (target notes are stored there)
+        const reconstructed: TrainExercise = {
+          notes: saved.result.comparisons.map((c) => c.target),
+          bpm: saved.bpm,
+        };
+        setExercise(reconstructed);
+        exerciseRef.current = reconstructed;
+        // Restore response events (use saved offsets as timestamps for display)
+        setResponseNoteEvents(
+          saved.responseNotes.map((n) => ({
+            midiNote: n.midiNote,
+            timestamp: n.offsetMs,
+            type: 'attack' as const,
+            durationMs: n.durationMs,
+          })),
+        );
+        setPlayStartMs(0);
+        playStartMsRef.current = 0;
+        setResult(saved.result);
+        resultRef.current = saved.result;
+        setResultsOverlayVisible(true);
+        setIsSaved(true);
+        setComplexityLevel(null);
+        setPhase('results');
+        phaseRef.current = 'results';
+      })
+      .catch((err) => {
+        console.error('[TrainPlugin] Failed to load saved train:', err);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount only
+
+  // ── Feature 071: warm-up completion — navigation deferred to Back button ──
+  // (no auto-navigate so the user can review results before returning)
 
   // ── Sidebar: only visible in Custom mode, hidden during exercise ──────────
   useEffect(() => {
@@ -1100,11 +1348,12 @@ export function TrainPlugin({ context }: TrainPluginProps) {
 
   // ── Highlighted notes ─────────────────────────────────────────────────────────
 
-  // Response staff: most-recently played note
+  // Response staff: most-recently played note (during exercise) or current replay note
   const responseHighlightedNotes = useMemo(() => {
+    if (isReplaying && replayHighlightedMidi !== null) return [replayHighlightedMidi];
     if (phase !== 'playing' || responseNoteEvents.length === 0) return [];
     return [responseNoteEvents[responseNoteEvents.length - 1].midiNote];
-  }, [phase, responseNoteEvents]);
+  }, [phase, responseNoteEvents, isReplaying, replayHighlightedMidi]);
 
   const isDisabled = phase === 'playing' || phase === 'countdown';
   const { StaffViewer, ScoreSelector } = context.components;
@@ -1140,11 +1389,59 @@ export function TrainPlugin({ context }: TrainPluginProps) {
       <header className="train-plugin__header">
         <button
           className="train-plugin__header-btn train-plugin__back-btn"
-          onClick={() => context.close()}
+          onClick={() => {
+          const cfg = warmUpTaskConfigRef.current;
+          const res = resultRef.current;
+          if (cfg && phase === 'results' && res) {
+            context.openPlugin('sessions-plugin', {
+              completedWarmUpTask: {
+                taskId: cfg.taskId,
+                sessionId: cfg.sessionId,
+                result: res.score,
+                completedAt: Date.now(),
+              },
+              expandSessionId: cfg.sessionId,
+              expandTaskId: cfg.taskId,
+            });
+          } else {
+            context.close();
+          }
+        }}
         >
           ← Back
         </button>
-        <h1 className="train-plugin__title">Train</h1>
+
+        {/* Show title when not in a session task */}
+        {!taskTag && <h1 className="train-plugin__title">Train</h1>}
+
+        {/* Feature 071: Session task tag — shown when launched from a session task */}
+        {taskTag && (
+          <button
+            className="train-plugin__task-tag"
+            title={`Session Task ${taskTag.taskNumber}`}
+            type="button"
+            onClick={() => {
+              const cfg = warmUpTaskConfigRef.current;
+              if (cfg) {
+                context.openPlugin('sessions-plugin', {
+                  expandSessionId: cfg.sessionId,
+                  expandTaskId: cfg.taskId,
+                });
+              }
+            }}
+          >
+            Session Task {taskTag.taskNumber}
+          </button>
+        )}
+
+        {/* Feature 070: Difficulty tag next to task tag */}
+        {taskTag?.difficulty && (
+          <span
+            className={`difficulty-tag difficulty-tag--${taskTag.difficulty === 1 ? 'easy' : taskTag.difficulty === 2 ? 'medium' : 'hard'}`}
+          >
+            {taskTag.difficulty === 1 ? 'Easy' : taskTag.difficulty === 2 ? 'Medium' : 'Hard'}
+          </span>
+        )}
 
         {/* COMPLEXITY LEVEL — next to title */}
         <label className="train-plugin__level-label" htmlFor="train-level-select">Level</label>
@@ -1195,6 +1492,23 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           <option value="custom">Custom</option>
         </select>
 
+        {(phase === 'ready' || phase === 'results') && (
+          <button
+            className="train-plugin__header-btn train-plugin__header-btn--start"
+            onClick={() => {
+              if (configRef.current.mode === 'step') {
+                handleStartStepRef.current();
+              } else {
+                handlePlayRef.current();
+              }
+            }}
+            aria-label="Start train exercise"
+            data-testid="train-play-btn"
+          >
+            ▶ Train
+          </button>
+        )}
+
         {phase === 'playing' && (
           <button
             className="train-plugin__header-btn train-plugin__header-btn--stop"
@@ -1204,26 +1518,6 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           >
             ■ Stop
           </button>
-        )}
-
-        {phase === 'results' && (
-          <>
-            <button
-              className="train-plugin__header-btn train-plugin__header-btn--retry"
-              onClick={handleTryAgain}
-              aria-label="Retry exercise"
-              data-testid="train-retry-btn"
-            >
-              🔁 Retry
-            </button>
-            <button
-              className="train-plugin__header-btn train-plugin__header-btn--new"
-              onClick={handleNewExercise}
-              aria-label="New exercise"
-            >
-              🎲 New
-            </button>
-          </>
         )}
 
         {/* Spacer pushes badge to the right */}
@@ -1550,19 +1844,6 @@ export function TrainPlugin({ context }: TrainPluginProps) {
             </div>
           )}
 
-          {/* Controls: ready phase */}
-          {phase === 'ready' && (
-            <div className="train-controls">
-              <button
-                className="train-start-prompt"
-                data-testid="train-play-btn"
-                aria-label="Start exercise"
-                onClick={() => config.mode === 'step' ? handleStartStep() : handlePlay()}
-              >
-                🎹 Press any note to start
-              </button>
-            </div>
-          )}
 
           {/* Response staff — flow mode playing/results; step mode playing only */}
           {(phase === 'playing' || (phase === 'results' && config.mode !== 'step')) && (
@@ -1580,140 +1861,38 @@ export function TrainPlugin({ context }: TrainPluginProps) {
             </div>
           )}
 
-          {/* Results panel */}
-          {phase === 'results' && result && (
-            <>
-              {/* Backdrop — only visible in mobile landscape overlay mode.
-                  Tap it to dismiss the overlay (returns to staff view). */}
-              <div
-                className="train-results__backdrop"
-                role="button"
-                aria-label="Close results"
-                onClick={() => setResultsOverlayVisible(false)}
-                onTouchEnd={(e) => { e.preventDefault(); setResultsOverlayVisible(false); }}
-              />
-              <div
-                className="train-results"
-                role="region"
-                aria-label="Exercise results"
-                onClick={(e) => e.stopPropagation()}
-              >
-              {/* Close button — only shown in mobile landscape overlay */}
-              <button
-                className="train-results__close"
-                aria-label="Close results"
-                onClick={() => setResultsOverlayVisible(false)}
-              >
-                ×
-              </button>
-              {/* Score headline */}
-              <div className="train-results__score-block">
-                <div className="train-results__score-ring">
-                  <span
-                    className="train-results__score-number"
-                    style={{
-                      color:
-                        result.score >= 90 ? '#2e7d32'
-                        : result.score >= 60 ? '#f57f17'
-                        : '#c62828',
-                    }}
-                  >
-                    {result.score}
-                  </span>
-                  <span className="train-results__score-label">/ 100</span>
-                </div>
-                <div
-                  className="train-results__score-grade"
-                  style={{
-                    color:
-                      result.score >= 90 ? '#2e7d32'
-                      : result.score >= 60 ? '#f57f17'
-                      : '#c62828',
-                  }}
-                >
-                  {result.score === 100 ? '🏆 Perfect!'
-                    : result.score >= 90 ? '🌟 Excellent!'
-                    : result.score >= 70 ? '👍 Good job!'
-                    : result.score >= 50 ? '💪 Keep going!'
-                    : '🎯 Keep practicing!'}
-                </div>
-              </div>
-
-              {/* Collapsible note-by-note table */}
-              <details className="train-results__details">
-                <summary className="train-results__details-summary">
-                  Note-by-note details
-                </summary>
-                <div className="train-results__table-wrapper">
-                  <table
-                    className="train-results__table"
-                    aria-label="Per-note comparison"
-                  >
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Target</th>
-                        <th>Detected</th>
-                        <th>Status</th>
-                        <th>Pitch Δ (¢)</th>
-                        <th>Timing Δ (ms)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.comparisons.map((c, i) => (
-                        <tr
-                          key={i}
-                          className={`train-results__row train-results__row--${c.status}`}
-                        >
-                          <td>{i + 1}</td>
-                          <td>{midiToLabel(c.target.midiPitch)}</td>
-                          <td>
-                            {c.response
-                              ? `${midiToLabel(Math.round(c.response.midiCents / 100))} (${c.response.hz.toFixed(1)} Hz)`
-                              : '—'}
-                          </td>
-                          <td aria-label={c.status}>
-                            <span className="train-results__status-icon">
-                              {c.status === 'correct' ? '✅'
-                                : c.status === 'wrong-pitch' ? '⚠️'
-                                : c.status === 'wrong-timing' ? '⏱️'
-                                : c.status === 'missed' ? '❌'
-                                : '➕'}
-                            </span>{' '}
-                            {c.status === 'correct' ? 'Correct'
-                              : c.status === 'wrong-pitch' ? 'Wrong pitch'
-                              : c.status === 'wrong-timing' ? 'Wrong timing'
-                              : c.status === 'missed' ? 'Missed'
-                              : 'Extraneous'}
-                          </td>
-                          <td>
-                            {c.pitchDeviationCents !== null
-                              ? Math.round(c.pitchDeviationCents)
-                              : '—'}
-                          </td>
-                          <td>
-                            {c.timingDeviationMs !== null
-                              ? Math.round(c.timingDeviationMs)
-                              : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {result.extraneousNotes.length > 0 && (
-                  <div className="train-results__extraneous">
-                    <strong>Extraneous notes:</strong>{' '}
-                    {result.extraneousNotes.length} extra note
-                    {result.extraneousNotes.length !== 1 ? 's' : ''} played outside the beat windows.
-                  </div>
-                )}
-              </details>
-
-              {/* Retry / New actions are in the toolbar — no redundant buttons here */}
-            </div>
-          </>
-          )}
+          {/* Results overlay — Practice-aligned modal (Feature 071) */}
+          <TrainResultsOverlay
+            result={result}
+            visible={phase === 'results' && resultsOverlayVisible}
+            onDismiss={() => setResultsOverlayVisible(false)}
+            onRetry={handleTryAgain}
+            onNew={isWarmUpMode ? undefined : handleNewExercise}
+            onSave={trainCompletedNaturally && result ? handleSave : undefined}
+            isSaved={isSaved}
+            saveError={saveError}
+            isReplaying={isReplaying}
+            onReplay={responseNoteEvents.length > 0 ? handleReplayStart : undefined}
+            onReplayStop={handleReplayStop}
+            onReturnToSession={warmUpTaskConfigRef.current ? () => {
+              const cfg = warmUpTaskConfigRef.current!;
+              const res = resultRef.current;
+              if (res) {
+                context.openPlugin('sessions-plugin', {
+                  completedWarmUpTask: {
+                    taskId: cfg.taskId,
+                    sessionId: cfg.sessionId,
+                    result: res.score,
+                    completedAt: Date.now(),
+                  },
+                  expandSessionId: cfg.sessionId,
+                  expandTaskId: cfg.taskId,
+                });
+              } else {
+                context.openPlugin('sessions-plugin', {});
+              }
+            } : undefined}
+          />
         </main>
       </div>
 

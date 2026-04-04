@@ -35,6 +35,60 @@
   color: var(--color-text, #222);
 }
 
+/* Feature 071: Session task tag — matches practice-view styling */
+.train-plugin__task-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--ls-cta-bg, #1a4a9a);
+  color: var(--ls-cta-text, #fff);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+  flex-shrink: 0;
+  letter-spacing: 0.01em;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+
+.train-plugin__task-tag:hover {
+  opacity: 0.85;
+}
+
+/* ── Difficulty tag (inline copy from DifficultyTag.css) ──────────────────── */
+
+.difficulty-tag {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+.difficulty-tag--easy {
+  background: rgba(76, 175, 80, 0.15);
+  color: #2e7d32;
+}
+
+.difficulty-tag--medium {
+  background: rgba(255, 152, 0, 0.15);
+  color: #e65100;
+}
+
+.difficulty-tag--hard {
+  background: rgba(244, 67, 54, 0.15);
+  color: #c62828;
+}
+
 /* Spacer that pushes the badge to the right end of the header */
 .train-plugin__header-spacer {
   flex: 1;
@@ -82,6 +136,16 @@
 
 .train-plugin__header-btn--stop:hover {
   background: var(--color-danger-dark, #b71c1c);
+}
+
+.train-plugin__header-btn--start {
+  background: var(--color-success, #43a047);
+  color: #fff;
+  border-color: transparent;
+}
+
+.train-plugin__header-btn--start:hover {
+  background: var(--color-success-dark, #2e7d32);
 }
 
 
@@ -982,6 +1046,40 @@
     cursor: pointer;
     z-index: 1;
   }
+}
+
+/* ── practice-results__* activation rules for Train view ────────────────────
+ * The practice-results__backdrop and practice-results__close are hidden by
+ * default (defined in PracticeViewPlugin.css) and activated here by the
+ * train-plugin--results parent class.
+ */
+.train-plugin--results .practice-results__backdrop {
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 200;
+  pointer-events: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.train-plugin--results .practice-results__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.12);
+  color: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 1;
 }
 
 /* ── Feature 039: Metronome group — matches Play / Practice style ────────── */
