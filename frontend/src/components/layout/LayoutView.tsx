@@ -260,6 +260,9 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
     ...(score.measure_end_ticks && score.measure_end_ticks.length > 0
       ? { measure_end_ticks: score.measure_end_ticks }
       : {}),
+    // Forward dynamic markings and hairpins to layout engine (Feature 072)
+    ...(score.dynamics && score.dynamics.length > 0 ? { dynamics: score.dynamics } : {}),
+    ...(score.gradual_dynamics && score.gradual_dynamics.length > 0 ? { gradual_dynamics: score.gradual_dynamics } : {}),
   };
 }
 

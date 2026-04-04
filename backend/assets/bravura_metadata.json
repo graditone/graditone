@@ -99,6 +99,38 @@
     "flag32ndDown": {
       "bBoxNE": [1.08, 4.55],
       "bBoxSW": [0.0, -0.13]
+    },
+    "dynamicPPP": {
+      "bBoxNE": [2.244, 0.216],
+      "bBoxSW": [-0.036, -0.576]
+    },
+    "dynamicPP": {
+      "bBoxNE": [1.512, 0.216],
+      "bBoxSW": [-0.036, -0.576]
+    },
+    "dynamicPiano": {
+      "bBoxNE": [0.78, 0.216],
+      "bBoxSW": [-0.036, -0.576]
+    },
+    "dynamicMP": {
+      "bBoxNE": [1.476, 0.216],
+      "bBoxSW": [-0.036, -0.576]
+    },
+    "dynamicMF": {
+      "bBoxNE": [1.332, 0.216],
+      "bBoxSW": [-0.036, -0.576]
+    },
+    "dynamicForte": {
+      "bBoxNE": [0.636, 0.216],
+      "bBoxSW": [-0.036, -0.576]
+    },
+    "dynamicFF": {
+      "bBoxNE": [1.248, 0.216],
+      "bBoxSW": [-0.036, -0.576]
+    },
+    "dynamicFFF": {
+      "bBoxNE": [1.98, 0.216],
+      "bBoxSW": [-0.036, -0.576]
     }
   },
   "engravingDefaults": {

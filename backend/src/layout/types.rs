@@ -185,6 +185,12 @@ pub struct Staff {
     /// Fingering glyphs: positioned numerals (1–5) above or below noteheads
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fingering_glyphs: Vec<FingeringGlyph>,
+    /// Positioned dynamic level symbols below the staff (ppp through fff, fallback "dyn")
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dynamic_glyphs: Vec<DynamicGlyph>,
+    /// Positioned hairpin crescendo/diminuendo segments below the staff
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hairpin_layouts: Vec<HairpinLayout>,
 }
 
 /// Short horizontal line for notes outside the 5-line staff range
@@ -229,6 +235,58 @@ pub struct FingeringGlyph {
     pub digit: u8,
     /// true = numeral above notehead, false = numeral below notehead
     pub above: bool,
+}
+
+/// A positioned dynamic level symbol ready for rendering.
+/// Emitted by the layout engine; consumed by the SVG renderer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DynamicGlyph {
+    /// SMuFL Unicode codepoint string (e.g. "\u{E520}" for p). Empty = fallback text mode.
+    pub codepoint: String,
+    /// Fallback text label (used only when codepoint is empty, e.g. "dyn").
+    pub label: String,
+    /// Absolute x coordinate in logical units (left edge of glyph)
+    #[serde(serialize_with = "round_f32")]
+    pub x: f32,
+    /// Absolute y coordinate in logical units (glyph baseline)
+    #[serde(serialize_with = "round_f32")]
+    pub y: f32,
+    /// Font size (always 80.0 — SMuFL standard, 4 staff spaces = 1em)
+    #[serde(serialize_with = "round_f32")]
+    pub font_size: f32,
+    /// Pre-computed glyph bounding box in logical units (from Bravura metrics)
+    pub bounding_box: BoundingBox,
+}
+
+/// Direction of a hairpin dynamic change (visual).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HairpinDirection {
+    Crescendo,
+    Diminuendo,
+}
+
+/// A pre-computed hairpin wedge segment. The layout engine always emits
+/// per-system segments; a hairpin spanning a line break produces two entries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HairpinLayout {
+    /// Crescendo (open rightward) or Diminuendo (open leftward)
+    pub direction: HairpinDirection,
+    /// Left endpoint x coordinate (logical units)
+    #[serde(serialize_with = "round_f32")]
+    pub x_start: f32,
+    /// Right endpoint x coordinate (logical units)
+    #[serde(serialize_with = "round_f32")]
+    pub x_end: f32,
+    /// Vertical center of the hairpin (same baseline as dynamic glyphs)
+    #[serde(serialize_with = "round_f32")]
+    pub y_center: f32,
+    /// Half the maximum opening width in logical units (default: 1 * units_per_space)
+    #[serde(serialize_with = "round_f32")]
+    pub opening: f32,
+    /// True = this segment is a system-continuation (left end stays open)
+    pub continues_left: bool,
+    /// True = hairpin continues onto next system (right end stays open)
+    pub continues_right: bool,
 }
 
 /// A cubic Bézier curve connecting two tied notes.

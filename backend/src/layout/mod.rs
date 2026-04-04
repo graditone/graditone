@@ -19,6 +19,7 @@ pub mod types;
 pub(crate) mod annotations;
 pub(crate) mod assembly;
 pub(crate) mod barlines;
+pub(crate) mod dynamics;
 pub(crate) mod extraction;
 pub(crate) mod note_layout;
 pub(crate) mod staff_groups;
@@ -31,9 +32,9 @@ pub use breaker::MeasureInfo;
 pub use extraction::NoteData;
 pub use types::{
     BarLine, BarLineSegment, BarLineType, BoundingBox, BracketGlyph, BracketType, Color,
-    GlobalLayout, Glyph, GlyphRun, LayoutConfig, LedgerLine, MeasureNumber, NameLabel,
-    OttavaBracketLayout, Point, RepeatDotPosition, SourceReference, Staff, StaffGroup, StaffLine,
-    System, TickRange, VoltaBracketLayout,
+    DynamicGlyph, GlobalLayout, Glyph, GlyphRun, HairpinDirection, HairpinLayout, LayoutConfig,
+    LedgerLine, MeasureNumber, NameLabel, OttavaBracketLayout, Point, RepeatDotPosition,
+    SourceReference, Staff, StaffGroup, StaffLine, System, TickRange, VoltaBracketLayout,
 };
 
 use extraction::{
@@ -173,17 +174,33 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
 
     // Compute measure widths using spacer
     let spacing_config = spacer::SpacingConfig::default();
+
+    // Compute per-measure dynamics extra width (glyphs wider than noteheads)
+    let measure_tick_ranges: Vec<(u32, u32)> = measures
+        .iter()
+        .enumerate()
+        .map(|(i, _)| {
+            let start = actual_start(i, &measure_end_ticks_vec, pickup_ticks, ticks_per_measure);
+            let end = actual_end(i, &measure_end_ticks_vec, pickup_ticks, ticks_per_measure);
+            (start, end)
+        })
+        .collect();
+    let dynamics_extra_widths =
+        dynamics::compute_dynamics_extra_widths(score, &measure_tick_ranges);
+
     let measure_infos: Vec<breaker::MeasureInfo> = measures
         .iter()
         .enumerate()
         .map(
             |(i, (note_durations, rest_durations, chord_second_count))| {
-                let width = spacer::compute_measure_width(
+                let base_width = spacer::compute_measure_width(
                     note_durations,
                     rest_durations,
                     &spacing_config,
                     *chord_second_count,
                 );
+                let dynamics_extra = dynamics_extra_widths.get(i).copied().unwrap_or(0.0);
+                let width = base_width + dynamics_extra;
                 let start =
                     actual_start(i, &measure_end_ticks_vec, pickup_ticks, ticks_per_measure);
                 let end = actual_end(i, &measure_end_ticks_vec, pickup_ticks, ticks_per_measure);
@@ -595,6 +612,19 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     &measure_starts,
                 );
 
+                // Render dynamics (static markings + hairpins) below the staff
+                let dyn_result = dynamics::render_dynamics(
+                    score,
+                    (staff_index as u8) + 1, // 1-based staff number
+                    system.tick_range.start_tick,
+                    system.tick_range.end_tick,
+                    staff_vertical_offset,
+                    config.units_per_space,
+                    &note_positions,
+                    system.bounding_box.width,
+                    unified_left_margin,
+                );
+
                 // Create staff with batched glyphs and structural glyphs
                 let staff = Staff {
                     staff_lines,
@@ -606,6 +636,8 @@ pub fn compute_layout(score: &serde_json::Value, config: &LayoutConfig) -> Globa
                     tie_arcs: ann.tie_arcs,
                     slur_arcs: ann.slur_arcs,
                     fingering_glyphs: ann.fingering_glyphs,
+                    dynamic_glyphs: dyn_result.dynamic_glyphs,
+                    hairpin_layouts: dyn_result.hairpin_layouts,
                 };
 
                 staves.push(staff);
