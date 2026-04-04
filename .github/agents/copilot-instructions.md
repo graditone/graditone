@@ -176,6 +176,7 @@ Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
 - 073-sessions-tabs-order: Added TypeScript 5.x + React 19.2.0, Vitest, @testing-library/reac
+- 072-tempo-impact-results: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 - 071-warmup-goal-tasks: Added TypeScript 5.x, React 18+ + sessions plugin (`plugins-external/sessions-plugin/`), Train view plugin (`frontend/plugins/train-view/`), Plugin API v8 (`frontend/src/plugin-api/`)
 - 070-session-task-distribution: Added Rust (latest stable) + TypeScript (strict mode), React 18+ + wasm-pack, wasm-bindgen, Vite, Vitest, @testing-library/reac
 
