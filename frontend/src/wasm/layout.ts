@@ -169,6 +169,10 @@ export interface Staff {
   slur_arcs?: TieArc[];
   /** Fingering annotations positioned near noteheads */
   fingering_glyphs?: FingeringGlyph[];
+  /** Positioned dynamic level symbols (ppp through fff, or fallback "dyn") */
+  dynamic_glyphs?: DynamicGlyph[];
+  /** Positioned hairpin crescendo/diminuendo segments */
+  hairpin_layouts?: HairpinLayout[];
 }
 
 /**
@@ -209,6 +213,46 @@ export interface FingeringGlyph {
   y: number;
   digit: number;
   above: boolean;
+}
+
+/**
+ * A positioned dynamic level symbol ready for rendering.
+ * Emitted by the Rust layout engine — the frontend MUST NOT modify coordinates.
+ */
+export interface DynamicGlyph {
+  /** SMuFL Unicode codepoint string (e.g. "\uE520" for p). Empty = fallback text. */
+  codepoint: string;
+  /** Fallback text label when codepoint is empty (e.g. "dyn"). */
+  label: string;
+  /** Absolute x coordinate in logical units (left edge of glyph) */
+  x: number;
+  /** Absolute y coordinate in logical units (glyph baseline) */
+  y: number;
+  /** Always 80.0 (SMuFL standard, 4 staff spaces) */
+  font_size: number;
+  /** Pre-computed glyph bounding box in logical units */
+  bounding_box: BoundingBox;
+}
+
+/**
+ * A pre-computed hairpin wedge segment.
+ * Per-system: a hairpin spanning a line break produces two HairpinLayout entries.
+ */
+export interface HairpinLayout {
+  /** Crescendo = opens rightward; Diminuendo = closes rightward */
+  direction: 'Crescendo' | 'Diminuendo';
+  /** Left endpoint x coordinate (logical units) */
+  x_start: number;
+  /** Right endpoint x coordinate (logical units) */
+  x_end: number;
+  /** Vertical center y coordinate (logical units, same baseline as dynamic glyphs) */
+  y_center: number;
+  /** Half the opening width (logical units, default 20 = 1 staff space) */
+  opening: number;
+  /** True = this segment is a right-side continuation from a previous system */
+  continues_left: boolean;
+  /** True = this hairpin continues onto the next system; right end is open */
+  continues_right: boolean;
 }
 
 /**
