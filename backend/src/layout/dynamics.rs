@@ -42,6 +42,7 @@ fn dynamic_level_codepoint(level: &str) -> Option<(&'static str, &'static str)> 
 /// * `note_positions` - Tick-to-x mapping from the note positioning pass
 /// * `system_end_x` - Right edge x coordinate of the system
 /// * `left_margin` - Left margin x coordinate
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_dynamics(
     score: &serde_json::Value,
     staff_number: u8,
@@ -226,6 +227,7 @@ fn render_static_dynamics(
 }
 
 /// Render hairpin crescendo/diminuendo wedge segments.
+#[allow(clippy::too_many_arguments)]
 fn render_hairpins(
     score: &serde_json::Value,
     staff_number: u8,
