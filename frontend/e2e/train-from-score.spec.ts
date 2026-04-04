@@ -3,8 +3,8 @@
  *
  * SC-001: Open Train plugin -> select Score preset -> selector opens -> choose
  *         Beethoven Fur Elise -> exercise staff has notes -> start exercise
- * SC-002: Switch to Random and back to Score -- no dialog opens (cache preserved)
- * SC-003: All existing Random and C4 Scale exercise flows still work (regression)
+ * SC-002: Switch to Scales and back to Score -- no dialog opens (cache preserved)
+ * SC-003: All existing Scales exercise flows still work (regression)
  * SC-004: Notes slider max matches totalAvailable from loaded score
  * SC-005: Score selector contains a file-upload control
  *
@@ -24,7 +24,6 @@ import { test, expect, type Page } from '@playwright/test';
 
 const TRAIN_BTN   = /train/i;
 const SCORE_RADIO = /score/i;
-const RANDOM_RADIO  = /random/i;
 const SCALES_RADIO  = /scales/i;
 // Exact displayName from preloadedScores.ts (\u2014 is em-dash, \u00fc is u-umlaut)
 const BEETHOVEN_TXT = 'Beethoven \u2014 F\u00fcr Elise';
@@ -81,12 +80,12 @@ test.describe('SC-001: Score preset basic flow', () => {
 // \u2500 SC-002 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 test.describe('SC-002: Cache preserved on preset switch', () => {
-  test('switch to Random and back -- no dialog opens', async ({ page }) => {
+  test('switch to Scales and back -- no dialog opens', async ({ page }) => {
     await openTrain(page);
     await loadBeethovenScore(page);
 
     // Switch away and back
-    await page.getByRole('radio', { name: RANDOM_RADIO }).click();
+    await page.getByRole('radio', { name: SCALES_RADIO }).click();
     await page.getByRole('radio', { name: SCORE_RADIO }).click();
 
     // Dialog must NOT reopen (cached pitches still present)
@@ -98,12 +97,12 @@ test.describe('SC-002: Cache preserved on preset switch', () => {
 // \u2500 SC-003 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 test.describe('SC-003: Existing preset regressions', () => {
-  test('Random preset exercise starts normally', async ({ page }) => {
+  test('Scales preset exercise starts normally (High complexity)', async ({ page }) => {
     await openTrain(page);
-    // Select High complexity level -- uses random preset + flow mode (with countdown)
+    // Select High complexity level -- uses scales preset + flow mode (with countdown)
     const levelSel = page.getByLabel(/complexity level/i);
     await levelSel.selectOption('high');
-    await expect(page.getByRole('radio', { name: RANDOM_RADIO })).toBeChecked({ timeout: 5_000 });
+    await expect(page.getByRole('radio', { name: SCALES_RADIO })).toBeChecked({ timeout: 5_000 });
 
     await page.locator(PLAY_BTN).click();
     // Play button disappears as soon as countdown starts
@@ -159,7 +158,7 @@ test.describe('SC-005: Score selector file-upload UI', () => {
     const fileInput = page.locator(`${SCORE_DIALOG} input[type="file"]`);
     await expect(fileInput).toBeAttached();
 
-    // Cancel closes the dialog and reverts to random preset
+    // Cancel closes the dialog and reverts to scales preset
     await page.getByRole('button', { name: /cancel score selection/i }).click();
     await expect(page.locator(SCORE_DIALOG)).not.toBeVisible();
     await expect(page.locator(TRAIN_VIEW)).toBeVisible();
