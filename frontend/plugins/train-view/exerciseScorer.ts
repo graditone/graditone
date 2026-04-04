@@ -119,9 +119,19 @@ export function scoreExercise(
   });
 
   const n = exercise.notes.length;
-  const score = n === 0 ? 0 : options.includeTimingScore
+  const rawScore = n === 0 ? 0 : options.includeTimingScore
     ? Math.round(50 * correctPitchCount / n + 50 * correctTimingCount / n)
     : Math.round(100 * correctPitchCount / n);
+
+  // Feature 072: Apply log2 BPM difficulty factor.
+  // bpmFactor reduces the error penalty for higher BPM (harder) and amplifies
+  // it for lower BPM (easier). Clamped to [0.5, 2.0] to ensure score stays in [0, 100].
+  // Guard: treat bpm <= 0 as reference BPM (80) so the factor is neutral.
+  const referenceBpm = 80;
+  const effectiveBpm = exercise.bpm > 0 ? exercise.bpm : referenceBpm;
+  const bpmFactor = Math.max(0.5, Math.min(2.0, 1 - Math.log2(effectiveBpm / referenceBpm)));
+  const penalty = 100 - rawScore;
+  const score = Math.max(0, Math.min(100, Math.round(100 - penalty * bpmFactor)));
 
   return {
     comparisons,
@@ -129,5 +139,6 @@ export function scoreExercise(
     score,
     correctPitchCount,
     correctTimingCount,
+    bpm: exercise.bpm,
   };
 }
