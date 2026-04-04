@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LandingScreen } from '../../components/LandingScreen';
+import { LocaleProvider } from '../../i18n/index';
+import esCatalog from '../../i18n/locales/es.json';
 
 /**
  * Feature 001-landing-redesign: LandingScreen component tests
@@ -73,6 +75,18 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
+// Custom render helper — wraps with LocaleProvider (required by LandingScreen)
+// ---------------------------------------------------------------------------
+
+import React from 'react';
+import { LocaleProvider } from '../../i18n/index';
+import esCatalog from '../../i18n/locales/es.json';
+
+function renderWithLocale(ui: React.ReactElement, locale?: 'en' | 'es') {
+  return render(<LocaleProvider locale={locale}>{ui}</LocaleProvider>);
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -82,7 +96,7 @@ afterEach(() => {
  */
 describe('LandingScreen', () => {
   it('T001: renders without crashing', () => {
-    expect(() => render(<LandingScreen />)).not.toThrow();
+    expect(() => renderWithLocale(<LandingScreen />)).not.toThrow();
   });
 
   /**
@@ -90,7 +104,7 @@ describe('LandingScreen', () => {
    * FR-001: 100vw × 100vh, position: fixed
    */
   it('T002: container has landing-screen class covering full viewport', () => {
-    render(<LandingScreen />);
+    renderWithLocale(<LandingScreen />);
     const container = screen.getByTestId('landing-screen');
     expect(container).toBeInTheDocument();
     expect(container).toHaveAttribute('role', 'region');
@@ -101,7 +115,7 @@ describe('LandingScreen', () => {
    * FR-002: one animated note symbol displayed
    */
   it('T003: a note glyph element is rendered on mount', () => {
-    render(<LandingScreen />);
+    renderWithLocale(<LandingScreen />);
     const note = screen.getByTestId('landing-note');
     expect(note).toBeInTheDocument();
     // Should contain a non-empty text node (Bravura Unicode)
@@ -114,7 +128,7 @@ describe('LandingScreen', () => {
    * FR-004: note changes symbol every second
    */
   it('T004: glyph character changes after 1 second', () => {
-    render(<LandingScreen />);
+    renderWithLocale(<LandingScreen />);
     const note = screen.getByTestId('landing-note');
     const initialGlyph = note.textContent;
 
@@ -134,7 +148,7 @@ describe('LandingScreen', () => {
    * FR-006: color and glyph change on the same 1-second tick
    */
   it('T005: note color changes simultaneously with glyph at 1-second tick', () => {
-    render(<LandingScreen />);
+    renderWithLocale(<LandingScreen />);
     const note = screen.getByTestId('landing-note');
     const initialColor = (note as HTMLElement).style.color;
 
@@ -155,7 +169,7 @@ describe('LandingScreen', () => {
    * FR-005: symbol after each change differs from preceding one
    */
   it('T006: no two consecutive seconds show the same glyph', () => {
-    render(<LandingScreen />);
+    renderWithLocale(<LandingScreen />);
     const note = screen.getByTestId('landing-note');
     const glyphs: string[] = [note.textContent ?? ''];
 
@@ -179,7 +193,7 @@ describe('LandingScreen', () => {
    */
   it('T007: clicking the screen pauses the animation; clicking again resumes it', async () => {
     const user = userEvent.setup({ advanceTimers: (ms) => advanceTime(ms) });
-    render(<LandingScreen />);
+    renderWithLocale(<LandingScreen />);
     const screen_ = screen.getByTestId('landing-screen');
     const note = screen.getByTestId('landing-note');
 
@@ -210,7 +224,7 @@ describe('LandingScreen', () => {
    */
   it('T008: with prefers-reduced-motion, note position does not change', () => {
     mockMatchMedia(true); // Enable reduced-motion BEFORE render
-    render(<LandingScreen />);
+    renderWithLocale(<LandingScreen />);
     const note = screen.getByTestId('landing-note');
 
     const initialLeft = (note as HTMLElement).style.left;
@@ -230,7 +244,7 @@ describe('LandingScreen', () => {
    */
   it('T009: with prefers-reduced-motion, glyph still changes every second', () => {
     mockMatchMedia(true);
-    render(<LandingScreen />);
+    renderWithLocale(<LandingScreen />);
     const note = screen.getByTestId('landing-note');
     const initial = note.textContent;
 
@@ -246,7 +260,7 @@ describe('LandingScreen', () => {
    * FR-008: rAF loop pauses on hidden tab, elapsed does not advance
    */
   it('T010: elapsed time does not advance when document is hidden', () => {
-    render(<LandingScreen />);
+    renderWithLocale(<LandingScreen />);
     const note = screen.getByTestId('landing-note');
 
     // Let 0.5s pass with tab visible (no glyph change yet)
@@ -279,13 +293,13 @@ describe('LandingScreen', () => {
 
 describe('LandingScreen — Feature 039 theme props', () => {
   it('applies theme-<id> class to root div when activeThemeId is provided', () => {
-    render(<LandingScreen activeThemeId="ember" />);
+    renderWithLocale(<LandingScreen activeThemeId="ember" />);
     const container = screen.getByTestId('landing-screen');
     expect(container.classList.contains('theme-ember')).toBe(true);
   });
 
   it('does not add any theme class when activeThemeId is absent', () => {
-    render(<LandingScreen />);
+    renderWithLocale(<LandingScreen />);
     const container = screen.getByTestId('landing-screen');
     // No .theme-* class should be present
     const themeClasses = Array.from(container.classList).filter(c => c.startsWith('theme-'));
@@ -293,22 +307,53 @@ describe('LandingScreen — Feature 039 theme props', () => {
   });
 
   it('switches theme class when activeThemeId changes', () => {
-    const { rerender } = render(<LandingScreen activeThemeId="ember" />);
+    const { rerender } = renderWithLocale(<LandingScreen activeThemeId="ember" />);
     const container = screen.getByTestId('landing-screen');
     expect(container.classList.contains('theme-ember')).toBe(true);
 
-    rerender(<LandingScreen activeThemeId="saffron" />);
+    rerender(<LocaleProvider><LandingScreen activeThemeId="saffron" /></LocaleProvider>);
     expect(container.classList.contains('theme-ember')).toBe(false);
     expect(container.classList.contains('theme-saffron')).toBe(true);
   });
 
   it('uses noteColors prop for the animated note color rendering', () => {
     const customColors = ['#FF0000', '#00FF00', '#0000FF'] as const;
-    render(<LandingScreen noteColors={customColors} />);
+    renderWithLocale(<LandingScreen noteColors={customColors} />);
     const note = screen.getByTestId('landing-note');
     // The color style is set inline — one of the custom colors must be used
     const colorStyle = note.style.color;
     expect(customColors.some(c => c.toLowerCase() === colorStyle.toLowerCase() || colorStyle !== '')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// i18n — Spanish locale (T020, Feature 073)
+// Written BEFORE migration of LandingScreen.tsx (T024).
+// Tests FAIL until useTranslation() replaces hardcoded aria-labels.
+// ---------------------------------------------------------------------------
+
+describe('LandingScreen i18n — Spanish locale (US3)', () => {
+  it('shows Spanish aria-label (playing state) when locale is "es"', () => {
+    render(
+      <LocaleProvider locale="es">
+        <LandingScreen />
+      </LocaleProvider>,
+    );
+    const region = screen.getByRole('region');
+    expect(region).toHaveAttribute('aria-label', esCatalog['landing.aria_playing']);
+  });
+
+  it('shows Spanish aria-label (paused state) when locale is "es"', async () => {
+    const user = userEvent.setup();
+    render(
+      <LocaleProvider locale="es">
+        <LandingScreen />
+      </LocaleProvider>,
+    );
+    // Click to pause
+    const region = screen.getByRole('region');
+    await user.click(region);
+    expect(region).toHaveAttribute('aria-label', esCatalog['landing.aria_paused']);
   });
 });
 

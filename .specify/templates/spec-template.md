@@ -1,6 +1,7 @@
 # Feature Specification: [FEATURE NAME]
 
 **Feature Branch**: `[###-feature-name]`  
+**Worktree**: `../worktrees/[###-feature-name]`  
 **Created**: [DATE]  
 **Status**: Draft  
 **Input**: User description: "$ARGUMENTS"

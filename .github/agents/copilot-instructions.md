@@ -152,6 +152,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - N/A — in-memory React state only; no IndexedDB or localStorage changes (069-midi-velocity-review)
 - Rust (latest stable) + TypeScript (strict mode), React 18+ + wasm-pack, wasm-bindgen, Vite, Vitest, @testing-library/reac (070-session-task-distribution)
 - IndexedDB (sessions + goals stores) with localStorage index layer (070-session-task-distribution)
+- TypeScript 5.x, React 18+ + sessions plugin (`plugins-external/sessions-plugin/`), Train view plugin (`frontend/plugins/train-view/`), Plugin API v8 (`frontend/src/plugin-api/`) (071-warmup-goal-tasks)
+- IndexedDB (`sessions` + `goals` stores via `openDB`) for full objects; localStorage (`graditone-sessions-index`, `graditone-goals-index`) for fast-list indexes (071-warmup-goal-tasks)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -172,9 +174,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 071-warmup-goal-tasks: Added TypeScript 5.x, React 18+ + sessions plugin (`plugins-external/sessions-plugin/`), Train view plugin (`frontend/plugins/train-view/`), Plugin API v8 (`frontend/src/plugin-api/`)
 - 070-session-task-distribution: Added Rust (latest stable) + TypeScript (strict mode), React 18+ + wasm-pack, wasm-bindgen, Vite, Vitest, @testing-library/reac
 - 069-midi-velocity-review: Added TypeScript 5.x, React 19 + React 19, Vite 5, Vitest 2, @testing-library/react 16, @testing-library/jest-dom
-- 068-goal-creation-form: Added TypeScript 5.5, React 19 + Vitest 2, `@testing-library/react` 16, Vite 6 (build), `idb` (IndexedDB via goalStorage.ts)
 
 
 <!-- MANUAL ADDITIONS START -->

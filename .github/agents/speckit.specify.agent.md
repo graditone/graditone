@@ -70,7 +70,7 @@ Given that feature description, do this:
      - "Create a dashboard for analytics" → "analytics-dashboard"
      - "Fix payment processing timeout bug" → "fix-payment-timeout"
 
-2. **Create the feature branch** by running the script with `--short-name` (and `--json`). In sequential mode, do NOT pass `--number` — the script auto-detects the next available number. In timestamp mode, the script generates a `YYYYMMDD-HHMMSS` prefix automatically:
+2. **Create the feature branch and worktree** by running the script with `--short-name` (and `--json`). In sequential mode, do NOT pass `--number` — the script auto-detects the next available number. In timestamp mode, the script generates a `YYYYMMDD-HHMMSS` prefix automatically:
 
    **Branch numbering mode**: Before running the script, check if `.specify/init-options.json` exists and read the `branch_numbering` value.
    - If `"timestamp"`, add `--timestamp` (Bash) or `-Timestamp` (PowerShell) to the script invocation
@@ -86,8 +86,14 @@ Given that feature description, do this:
    - Always include the JSON flag (`--json` for Bash, `-Json` for PowerShell) so the output can be parsed reliably
    - You must only ever run this script once per feature
    - The JSON is provided in the terminal as output - always refer to it to get the actual content you're looking for
-   - The JSON output will contain BRANCH_NAME and SPEC_FILE paths
+   - The JSON output will contain BRANCH_NAME, SPEC_FILE, FEATURE_NUM, and WORKTREE_DIR
    - For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot")
+
+   **After the script succeeds**: The feature branch has been created and a dedicated git worktree
+   has been placed at WORKTREE_DIR (`../worktrees/<branch-name>` relative to the repository root).
+   All spec work — writing spec.md, plan.md, tasks.md, and any generated artefacts — happens
+   inside that worktree directory. Inform the user to open WORKTREE_DIR as their workspace root
+   before proceeding.
 
 3. Load `.specify/templates/spec-template.md` to understand required sections.
 
@@ -242,7 +248,9 @@ Given that feature description, do this:
        ```
    - If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
 
-**NOTE:** The script creates and checks out the new branch and initializes the spec file before writing.
+**NOTE:** The script creates the feature branch, initialises a dedicated git worktree at
+`../worktrees/<branch-name>` (relative to the repository root), and writes the spec template
+into the worktree's `specs/` directory before the agent begins writing content.
 
 ## Quick Guidelines
 
