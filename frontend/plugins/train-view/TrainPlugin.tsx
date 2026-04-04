@@ -1411,6 +1411,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           ← Back
         </button>
 
+        {/* Show title when not in a session task */}
+        {!taskTag && <h1 className="train-plugin__title">Train</h1>}
+
         {/* Feature 071: Session task tag — shown when launched from a session task */}
         {taskTag && (
           <button
@@ -1500,7 +1503,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
               }
             }}
             aria-label="Start train exercise"
-            data-testid="train-start-btn"
+            data-testid="train-play-btn"
           >
             ▶ Train
           </button>

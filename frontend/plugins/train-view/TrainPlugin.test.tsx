@@ -180,7 +180,7 @@ function makeMockContext(overrides?: { scorePlayer?: PluginScorePlayerContext & 
 
 /** Click the ▶ Train button to start the exercise. */
 function clickTrainStart() {
-  const btn = screen.getByTestId('train-start-btn');
+  const btn = screen.getByTestId('train-play-btn');
   fireEvent.click(btn);
 }
 
@@ -224,7 +224,7 @@ describe('TrainPlugin', () => {
       const ctx = makeMockContext();
       render(<TrainPlugin context={ctx} />);
 
-      expect(screen.getByTestId('train-start-btn')).toBeDefined();
+      expect(screen.getByTestId('train-play-btn')).toBeDefined();
     });
 
     it('does NOT show results panel on mount', () => {
@@ -400,7 +400,7 @@ describe('TrainPlugin', () => {
       if (retryBtn) {
         await act(async () => { fireEvent.click(retryBtn); });
         // After Retry, Train start button should be visible (back in ready)
-        expect(screen.getByTestId('train-start-btn')).toBeDefined();
+        expect(screen.getByTestId('train-play-btn')).toBeDefined();
       }
     });
   });
@@ -421,7 +421,7 @@ describe('TrainPlugin', () => {
       if (newExBtn) {
         await act(async () => { fireEvent.click(newExBtn); });
         // After New, Train start button should be visible (back in ready)
-        expect(screen.getByTestId('train-start-btn')).toBeDefined();
+        expect(screen.getByTestId('train-play-btn')).toBeDefined();
       }
     });
   });
