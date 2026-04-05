@@ -5,7 +5,7 @@
  *
  * Invariants:
  * - Every key present in en.json must exist in es.json with a non-empty value
- * - Both catalogs must have exactly 30 keys
+ * - Both catalogs must have exactly 74 keys
  * - No extra keys in es.json that are absent from en.json
  */
 
@@ -17,12 +17,12 @@ describe('Translation catalog completeness', () => {
   const enKeys = Object.keys(enCatalog) as Array<keyof typeof enCatalog>;
   const esKeys = Object.keys(esCatalog) as Array<keyof typeof esCatalog>;
 
-  it('English catalog has exactly 30 keys', () => {
-    expect(enKeys).toHaveLength(30);
+  it('English catalog has exactly 74 keys', () => {
+    expect(enKeys).toHaveLength(74);
   });
 
-  it('Spanish catalog has exactly 30 keys', () => {
-    expect(esKeys).toHaveLength(30);
+  it('Spanish catalog has exactly 74 keys', () => {
+    expect(esKeys).toHaveLength(74);
   });
 
   it('every key in en.json exists in es.json', () => {

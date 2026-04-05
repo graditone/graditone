@@ -7,6 +7,7 @@
  * Returns null when the practices list is empty.
  */
 import type { SavedPracticeIndexEntry } from '../../services/savedPractice.types';
+import { useTranslation } from '../../i18n/index';
 import './SavedPracticeList.css';
 
 export interface SavedPracticeListProps {
@@ -31,12 +32,13 @@ export function SavedPracticeList({
   protectedPracticeMap,
   onViewSessions,
 }: SavedPracticeListProps) {
+  const { t } = useTranslation();
   if (practices.length === 0) return null;
 
   return (
     <details className="saved-practice-list" open>
       <summary className="saved-practice-list__summary">
-        Saved Practices ({practices.length})
+        {t('saved_practices.summary', { count: practices.length })}
       </summary>
       <ul className="saved-practice-list__items" role="list">
         {practices.map((practice) => {
@@ -62,7 +64,7 @@ export function SavedPracticeList({
                   <span className="saved-practice-item__date">{savedDate} {savedTime}</span>
                   {practice.completionStatus === 'partial' && (
                     <span className="saved-practice-item__badge saved-practice-item__badge--partial">
-                      Partial
+                      {t('saved_practices.partial')}
                     </span>
                   )}
                 </span>
@@ -70,7 +72,7 @@ export function SavedPracticeList({
               {protectedPracticeIds?.has(practice.id) ? (
                 <button
                   className="saved-practice-item__session-link"
-                  aria-label={`Linked to session: ${protectedPracticeMap?.get(practice.id)?.sessionName ?? 'session'}`}
+                  aria-label={t('saved_practices.linked_session_aria', { name: protectedPracticeMap?.get(practice.id)?.sessionName ?? 'session' })}
                   disabled={disabled}
                   onClick={() => {
                     const info = protectedPracticeMap?.get(practice.id);
@@ -84,7 +86,7 @@ export function SavedPracticeList({
               ) : (
                 <button
                   className="saved-practice-item__delete-btn"
-                  aria-label={`Delete ${practice.name}`}
+                  aria-label={t('saved_practices.delete_aria', { name: practice.name })}
                   disabled={disabled}
                   onClick={() => onDelete(practice.id)}
                   type="button"

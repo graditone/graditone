@@ -1,12 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { LoadScoreDialog } from './LoadScoreDialog';
+import { LocaleProvider } from '../../i18n/index';
 import type { ImportResult } from '../../services/import/MusicXMLImportService';
 
 // --- helpers -----------------------------------------------------------------
 
+const W = ({ children }: { children: React.ReactNode }) => <LocaleProvider locale="en">{children}</LocaleProvider>;
+
 function makeOnImportComplete() {
   return vi.fn<[ImportResult], void>();
+}
+
+function renderWithLocale(ui: React.ReactElement) {
+  return render(ui, { wrapper: W });
 }
 
 // <dialog> showModal / close are not implemented in jsdom
@@ -23,7 +30,7 @@ afterEach(() => {
 
 describe('LoadScoreDialog — open/close/dismiss', () => {
   it('calls showModal when open=true', () => {
-    render(
+    renderWithLocale(
       <LoadScoreDialog
         open={true}
         onClose={vi.fn()}
@@ -34,7 +41,7 @@ describe('LoadScoreDialog — open/close/dismiss', () => {
   });
 
   it('calls dialog.close() when open changes false→true→false', () => {
-    const { rerender } = render(
+    const { rerender } = renderWithLocale(
       <LoadScoreDialog
         open={true}
         onClose={vi.fn()}
@@ -52,7 +59,7 @@ describe('LoadScoreDialog — open/close/dismiss', () => {
   });
 
   it('renders preloaded score list heading', () => {
-    render(
+    renderWithLocale(
       <LoadScoreDialog
         open={true}
         onClose={vi.fn()}
@@ -64,7 +71,7 @@ describe('LoadScoreDialog — open/close/dismiss', () => {
 
   it('calls onClose when Close / Cancel button is clicked', () => {
     const onClose = vi.fn();
-    render(
+    renderWithLocale(
       <LoadScoreDialog
         open={true}
         onClose={onClose}
@@ -81,7 +88,7 @@ describe('LoadScoreDialog — open/close/dismiss', () => {
 
 describe('LoadScoreDialog — preloaded score selection', () => {
   it('shows a list of preloaded scores equal to PRELOADED_SCORES length', () => {
-    render(
+    renderWithLocale(
       <LoadScoreDialog
         open={true}
         onClose={vi.fn()}
@@ -99,7 +106,7 @@ describe('LoadScoreDialog — preloaded score selection', () => {
       () => new Promise(() => {}), // never resolves
     );
 
-    render(
+    renderWithLocale(
       <LoadScoreDialog
         open={true}
         onClose={vi.fn()}
@@ -124,7 +131,7 @@ describe('LoadScoreDialog — preloaded score selection', () => {
 describe('LoadScoreDialog — regression guards', () => {
   it('renders without error when userScores is an empty array', () => {
     expect(() =>
-      render(
+      renderWithLocale(
         <LoadScoreDialog
           open={true}
           onClose={vi.fn()}
@@ -141,7 +148,7 @@ describe('LoadScoreDialog — regression guards', () => {
   });
 
   it('still renders ≥6 preloaded scores when userScores is provided', () => {
-    render(
+    renderWithLocale(
       <LoadScoreDialog
         open={true}
         onClose={vi.fn()}
@@ -165,7 +172,7 @@ describe('LoadScoreDialog — fetch error handling', () => {
   it('shows named error message when fetch rejects', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network failure'));
 
-    render(
+    renderWithLocale(
       <LoadScoreDialog
         open={true}
         onClose={vi.fn()}
@@ -189,7 +196,7 @@ describe('LoadScoreDialog — fetch error handling', () => {
   it('shows Retry button after error', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network failure'));
 
-    render(
+    renderWithLocale(
       <LoadScoreDialog
         open={true}
         onClose={vi.fn()}
@@ -211,7 +218,7 @@ describe('LoadScoreDialog — fetch error handling', () => {
       .mockRejectedValueOnce(new Error('network failure'))
       .mockImplementation(() => new Promise(() => {})); // second call never resolves
 
-    render(
+    renderWithLocale(
       <LoadScoreDialog
         open={true}
         onClose={vi.fn()}
