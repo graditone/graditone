@@ -21,6 +21,7 @@ import { subscribePracticeSaved } from './plugin-api/practiceSavedBus'
 import { PluginStaffViewer } from './plugin-api/PluginStaffViewer'
 import { createNoOpScorePlayer, createScorePlayerProxy } from './plugin-api/scorePlayerContext'
 import { createNoOpMetronome, createMetronomeProxy } from './plugin-api/metronomeContext'
+import { useTranslation } from './i18n/index'
 // US3 (T027): type-only import — no runtime dependency on the Tone.js bundle.
 // The actual module is loaded lazily via loadToneAdapter() on first user interaction.
 import type { ToneAdapter as ToneAdapterType } from './services/playback/ToneAdapter'
@@ -60,6 +61,7 @@ import './App.css'
  * Feature 013: Added onboarding with demo music on first run
  */
 function App() {
+  const { t } = useTranslation()
   const [wasmLoading, setWasmLoading] = useState(true)
   const [wasmError, setWasmError] = useState<string | null>(null)
   
@@ -466,7 +468,7 @@ function App() {
           gap: '1rem'
         }}>
           <div style={{ fontSize: '2rem' }}>🎼</div>
-          <p>Loading music engine...</p>
+          <p>{t('loading.engine')}</p>
         </main>
       </div>
     )
@@ -504,24 +506,24 @@ function App() {
           padding: '2rem'
         }}>
           <div style={{ fontSize: '2rem', color: '#f44336' }}>⚠️</div>
-          <h2 style={{ color: '#333' }}>Failed to Initialize Music Engine</h2>
+          <h2 style={{ color: '#333' }}>{t('errors.wasm.title')}</h2>
           <p style={{ maxWidth: '600px', textAlign: 'center', color: '#333' }}>
             {wasmError?.includes('fetch') ? (
               <>
-                <strong>Offline First Launch Detected</strong>
+                <strong>{t('errors.wasm.offline_title')}</strong>
                 <br /><br />
-                This app requires <strong>one online visit</strong> to download the music engine before offline mode works.
+                {t('errors.wasm.offline_body')}
                 <br /><br />
-                Please connect to the internet and reload the page.
+                {t('errors.wasm.offline_reload')}
               </>
             ) : (
               <>
-                Your browser may not support WebAssembly, or there was an error loading the music engine.
+                {t('errors.wasm.generic_body')}
               </>
             )}
           </p>
           <details style={{ maxWidth: '600px', marginTop: '1rem' }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#333' }}>Error Details</summary>
+            <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#333' }}>{t('errors.wasm.details_toggle')}</summary>
             <pre style={{ 
               marginTop: '1rem', 
               padding: '1rem', 
@@ -537,8 +539,8 @@ function App() {
           </details>
           <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#666' }}>
             {wasmError?.includes('fetch') 
-              ? 'After one online visit, all features work offline.' 
-              : 'Try using a modern browser like Chrome, Firefox, Safari, or Edge.'
+              ? t('errors.wasm.offline_note')
+              : t('errors.wasm.browser_hint')
             }
           </p>
         </main>
@@ -627,11 +629,11 @@ function App() {
                   </a>
                 </h1>
               </div>
-              <p className="app-slogan">The open platform for musical practice</p>
+              <p className="app-slogan">{t('header.slogan')}</p>
             </div>
             {/* Feature 030: Plugin navigation entries */}
             <nav
-              aria-label="Installed plugins"
+              aria-label={t('header.installed_plugins_nav')}
               className="plugin-nav"
             >
               {allPlugins.filter(p => p.manifest.type !== 'core' && !p.manifest.hidden).map(({ manifest }) => (
@@ -646,12 +648,12 @@ function App() {
             {/* Feature 048: Single Plugins button — always visible (entry point for first plugin) */}
             <button
               type="button"
-              aria-label="Manage Plugins"
-              title="Manage Plugins"
+              aria-label={t('header.plugins_button_label')}
+              title={t('header.plugins_button_label')}
               onClick={() => setShowPluginManager(true)}
               className="plugin-manage-btn"
             >
-              Plugins
+              {t('header.plugins_button')}
             </button>
           </header>
           {/* Feature 048: Unified plugin manager dialog */}

@@ -22,6 +22,7 @@ import { ScoreViewer } from '../../components/ScoreViewer';
 import { RecordingView } from '../../components/recording/RecordingView';
 import { FileStateProvider } from '../../services/state/FileStateContext';
 import { TempoStateProvider } from '../../services/state/TempoStateContext';
+import { LocaleProvider } from '../../i18n/index';
 import {
   mockMidiSupported,
   mockMidiUnsupported,
@@ -99,14 +100,16 @@ interface RenderScoreViewerOptions {
 
 function renderScoreViewer(opts: RenderScoreViewerOptions = {}) {
   return render(
-    <TempoStateProvider>
-      <FileStateProvider>
-        <ScoreViewer
-          debugMode={opts.debugMode ?? false}
-          onShowRecording={opts.onShowRecording ?? vi.fn()}
-        />
-      </FileStateProvider>
-    </TempoStateProvider>
+    <LocaleProvider>
+      <TempoStateProvider>
+        <FileStateProvider>
+          <ScoreViewer
+            debugMode={opts.debugMode ?? false}
+            onShowRecording={opts.onShowRecording ?? vi.fn()}
+          />
+        </FileStateProvider>
+      </TempoStateProvider>
+    </LocaleProvider>
   );
 }
 

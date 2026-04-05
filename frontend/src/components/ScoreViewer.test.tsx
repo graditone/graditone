@@ -17,6 +17,7 @@ import userEvent from '@testing-library/user-event';
 import { ScoreViewer } from './ScoreViewer';
 import { FileStateProvider } from '../services/state/FileStateContext';
 import { TempoStateProvider } from '../services/state/TempoStateContext';
+import { LocaleProvider } from '../i18n/index';
 import type { Score } from '../types/score';
 
 // ─── Module mocks ──────────────────────────────────────────────────────────
@@ -75,9 +76,11 @@ const makeScore = (overrides: Partial<Score> = {}): Score => ({
 
 function TestWrapper({ children }: { children: React.ReactNode }) {
   return (
-    <TempoStateProvider>
-      <FileStateProvider>{children}</FileStateProvider>
-    </TempoStateProvider>
+    <LocaleProvider>
+      <TempoStateProvider>
+        <FileStateProvider>{children}</FileStateProvider>
+      </TempoStateProvider>
+    </LocaleProvider>
   );
 }
 

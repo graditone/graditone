@@ -2,6 +2,7 @@
 // Shows a banner at the top of the page when browser is offline
 
 import { useOfflineDetection } from '../hooks/useOfflineDetection';
+import { useTranslation } from '../i18n/index';
 import './OfflineBanner.css';
 
 /**
@@ -25,6 +26,7 @@ import './OfflineBanner.css';
  * ```
  */
 export function OfflineBanner() {
+  const { t } = useTranslation()
   const isOnline = useOfflineDetection();
 
   // Don't render banner when online
@@ -53,7 +55,7 @@ export function OfflineBanner() {
           <line x1="12" y1="20" x2="12.01" y2="20" />
         </svg>
         <span className="offline-message">
-          You're offline — all features work normally
+          {t('offline.banner')}
         </span>
       </div>
     </div>

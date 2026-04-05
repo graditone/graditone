@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from '../i18n/index';
 import './IOSInstallModal.css';
 
 // Extend Navigator interface for iOS-specific standalone property
@@ -24,6 +25,7 @@ interface IOSNavigator extends Navigator {
  * <IOSInstallModal />
  */
 export const IOSInstallModal: React.FC = () => {
+  const { t } = useTranslation()
   // Compute initial state to avoid setState in effect
   const [showModal, setShowModal] = useState(() => {
     // Detect iOS (iPad, iPhone, iPod) or iPad Pro with touchscreen
@@ -56,21 +58,21 @@ export const IOSInstallModal: React.FC = () => {
     <div className="ios-install-modal">
       <div className="ios-install-modal__backdrop" onClick={handleDismiss} />
       <div className="ios-install-modal__content">
-        <h2 className="ios-install-modal__title">Install Graditone</h2>
+        <h2 className="ios-install-modal__title">{t('ios_install.title')}</h2>
         <p className="ios-install-modal__description">
-          Install this app on your iPad for the best experience:
+          {t('ios_install.step_intro')}
         </p>
         <ol className="ios-install-modal__steps">
-          <li>Tap the Share button <span className="ios-install-modal__icon" role="img" aria-label="Share icon">⎋</span> at the top</li>
-          <li>Scroll down and tap "Add to Home Screen"</li>
-          <li>Tap "Add" to confirm</li>
+          <li>{t('ios_install.step_share')} <span className="ios-install-modal__icon" role="img" aria-label={t('ios_install.step_share_aria')}>⎋</span> at the top</li>
+          <li>{t('ios_install.step_add')}</li>
+          <li>{t('ios_install.step_confirm')}</li>
         </ol>
         <button 
           className="ios-install-modal__button" 
           onClick={handleDismiss}
-          aria-label="Dismiss install instructions"
+          aria-label={t('ios_install.dismiss_button_aria')}
         >
-          Got it
+          {t('ios_install.dismiss_button')}
         </button>
       </div>
     </div>

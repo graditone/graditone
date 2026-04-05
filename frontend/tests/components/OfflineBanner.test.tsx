@@ -8,10 +8,15 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
 import { useOfflineDetection } from '../../src/hooks/useOfflineDetection';
+import { LocaleProvider } from '../../src/i18n/index';
 
+function renderWithLocale(ui: React.ReactElement) {
+  return render(<LocaleProvider>{ui}</LocaleProvider>);
+}
 // Mock useOfflineDetection hook
 vi.mock('../../src/hooks/useOfflineDetection');
 
@@ -32,7 +37,7 @@ describe('OfflineBanner - Feature 025 (User Story 4)', () => {
       vi.mocked(useOfflineDetection).mockReturnValue(false); // false = offline
 
       // Act: Render banner
-      render(<OfflineBanner />);
+      renderWithLocale(<OfflineBanner />);
 
       // Assert: Banner visible
       const banner = screen.getByRole('alert');
@@ -50,7 +55,7 @@ describe('OfflineBanner - Feature 025 (User Story 4)', () => {
       vi.mocked(useOfflineDetection).mockReturnValue(false);
 
       // Act: Render banner
-      render(<OfflineBanner />);
+      renderWithLocale(<OfflineBanner />);
 
       // Assert: Old message should NOT appear
       // (Feature 025 removes implication that some features don't work)
@@ -62,7 +67,7 @@ describe('OfflineBanner - Feature 025 (User Story 4)', () => {
       vi.mocked(useOfflineDetection).mockReturnValue(false);
 
       // Act: Render banner
-      render(<OfflineBanner />);
+      renderWithLocale(<OfflineBanner />);
 
       // Assert: Message should be reassuring, not limiting
       // EXPECTED TO FAIL - current message implies limitations
@@ -82,7 +87,7 @@ describe('OfflineBanner - Feature 025 (User Story 4)', () => {
       vi.mocked(useOfflineDetection).mockReturnValue(true); // true = online
 
       // Act: Render banner
-      const { container } = render(<OfflineBanner />);
+      const { container } = renderWithLocale(<OfflineBanner />);
 
       // Assert: Banner not rendered
       expect(container.firstChild).toBeNull();
@@ -94,7 +99,7 @@ describe('OfflineBanner - Feature 025 (User Story 4)', () => {
       vi.mocked(useOfflineDetection).mockReturnValue(false); // false = offline
 
       // Act: Render banner
-      render(<OfflineBanner />);
+      renderWithLocale(<OfflineBanner />);
 
       // Assert: Banner visible with alert role
       const banner = screen.getByRole('alert');
@@ -114,7 +119,7 @@ describe('OfflineBanner - Feature 025 (User Story 4)', () => {
       vi.mocked(useOfflineDetection).mockReturnValue(false);
 
       // Act: Render banner
-      render(<OfflineBanner />);
+      renderWithLocale(<OfflineBanner />);
 
       // Assert: Exact phrase present
       // EXPECTED TO FAIL initially
@@ -126,7 +131,7 @@ describe('OfflineBanner - Feature 025 (User Story 4)', () => {
       vi.mocked(useOfflineDetection).mockReturnValue(false);
 
       // Act: Render banner
-      render(<OfflineBanner />);
+      renderWithLocale(<OfflineBanner />);
 
       // Assert: Icon still present
       const icon = screen.getByRole('alert').querySelector('svg');
@@ -144,7 +149,7 @@ describe('OfflineBanner - Feature 025 (User Story 4)', () => {
       vi.mocked(useOfflineDetection).mockReturnValue(false);
 
       // Act: Render banner
-      render(<OfflineBanner />);
+      renderWithLocale(<OfflineBanner />);
 
       // Assert: Proper ARIA attributes
       const banner = screen.getByRole('alert');
@@ -156,7 +161,7 @@ describe('OfflineBanner - Feature 025 (User Story 4)', () => {
       vi.mocked(useOfflineDetection).mockReturnValue(false);
 
       // Act: Render banner
-      render(<OfflineBanner />);
+      renderWithLocale(<OfflineBanner />);
 
       // Assert: Classes present
       const banner = screen.getByRole('alert');

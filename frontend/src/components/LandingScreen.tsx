@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { SMUFL_CODEPOINTS } from '../types/notation/config';
+import { useTranslation } from '../i18n/index';
 import './LandingScreen.css';
 
 // ---------------------------------------------------------------------------
@@ -100,6 +101,7 @@ export interface LandingScreenProps {
  * - Respects prefers-reduced-motion: position frozen, glyph/color still cycle
  */
 export function LandingScreen({ onShowInstruments, corePlugins, onLaunchPlugin, activeThemeId, noteColors }: LandingScreenProps) {
+  const { t } = useTranslation()
   // Read reduced-motion preference once at mount
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -282,7 +284,7 @@ export function LandingScreen({ onShowInstruments, corePlugins, onLaunchPlugin, 
       className={`landing-screen${paused ? ' landing-screen--paused' : ''}${activeThemeId ? ` theme-${activeThemeId}` : ''}`}
       data-testid="landing-screen"
       role="region"
-      aria-label={paused ? 'Landing screen (paused — click to resume)' : 'Landing screen (click to pause)'}
+      aria-label={paused ? t('landing.aria_paused') : t('landing.aria_playing')}
       tabIndex={-1}
       onClick={handleNoteClick}
     >
