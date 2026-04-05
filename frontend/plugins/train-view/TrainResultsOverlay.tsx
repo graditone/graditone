@@ -211,6 +211,12 @@ export function TrainResultsOverlay({
           <div className="practice-results__score-grade" style={{ color: scoreColor(result.score) }}>
             {scoreGrade(result.score)}
           </div>
+          {/* Feature 072: BPM context subtitle */}
+          {result.bpm > 0 && (
+            <div className="practice-results__tempo-subtitle">
+              {result.bpm} BPM
+            </div>
+          )}
         </div>
 
         {/* Stats row */}

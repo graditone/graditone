@@ -170,6 +170,8 @@ mod tests {
             tie_arcs: vec![],
             slur_arcs: vec![],
             fingering_glyphs: vec![],
+            dynamic_glyphs: vec![],
+            hairpin_layouts: vec![],
         };
 
         let staff_1 = Staff {
@@ -182,6 +184,8 @@ mod tests {
             tie_arcs: vec![],
             slur_arcs: vec![],
             fingering_glyphs: vec![],
+            dynamic_glyphs: vec![],
+            hairpin_layouts: vec![],
         };
 
         let staves = vec![staff_0, staff_1];
@@ -239,6 +243,8 @@ mod tests {
             tie_arcs: vec![],
             slur_arcs: vec![],
             fingering_glyphs: vec![],
+            dynamic_glyphs: vec![],
+            hairpin_layouts: vec![],
         };
 
         let staff_1 = Staff {
@@ -251,6 +257,8 @@ mod tests {
             tie_arcs: vec![],
             slur_arcs: vec![],
             fingering_glyphs: vec![],
+            dynamic_glyphs: vec![],
+            hairpin_layouts: vec![],
         };
 
         let staves = vec![staff_0, staff_1];

@@ -506,7 +506,83 @@ export class RenderingPipeline {
       staffElement.appendChild(text);
     }
 
+    // Dynamic markings and hairpins
+    this.renderDynamics(staff, staffElement, config);
+
     return staffElement;
+  }
+
+  private renderDynamics(staff: Staff, staffElement: SVGGElement, config: RenderConfig): void {
+    // Static dynamic glyphs (ppp through fff, or fallback text)
+    for (const glyph of staff.dynamic_glyphs ?? []) {
+      const text = createSVGElement('text');
+      text.setAttribute('x', glyph.x.toString());
+      text.setAttribute('y', glyph.y.toString());
+
+      if (glyph.codepoint !== '') {
+        // SMuFL glyph via Bravura font
+        text.setAttribute('font-family', 'Bravura');
+        text.setAttribute('font-size', glyph.font_size.toString());
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dominant-baseline', 'middle');
+        text.setAttribute('fill', config.glyphColor);
+        text.textContent = glyph.codepoint;
+      } else {
+        // Fallback italic text (e.g. "dyn" for unrecognised dynamics)
+        text.setAttribute('font-style', 'italic');
+        text.setAttribute('font-family', 'serif');
+        text.setAttribute('font-size', (glyph.font_size * 0.5).toString());
+        text.setAttribute('fill', config.glyphColor);
+        text.textContent = glyph.label;
+      }
+
+      text.classList.add('dynamic-glyph');
+      staffElement.appendChild(text);
+    }
+
+    // Hairpin crescendo/diminuendo wedge lines
+    for (const hp of staff.hairpin_layouts ?? []) {
+      const halfOpening = hp.opening / 2;
+
+      let x1Top: number, y1Top: number, x2Top: number, y2Top: number;
+      let x1Bot: number, y1Bot: number, x2Bot: number, y2Bot: number;
+
+      if (hp.direction === 'Crescendo') {
+        // Point at start, open at end
+        x1Top = hp.x_start; y1Top = hp.y_center;
+        x2Top = hp.x_end;   y2Top = hp.y_center - halfOpening;
+        x1Bot = hp.x_start; y1Bot = hp.y_center;
+        x2Bot = hp.x_end;   y2Bot = hp.y_center + halfOpening;
+      } else {
+        // Open at start, point at end
+        x1Top = hp.x_start; y1Top = hp.y_center - halfOpening;
+        x2Top = hp.x_end;   y2Top = hp.y_center;
+        x1Bot = hp.x_start; y1Bot = hp.y_center + halfOpening;
+        x2Bot = hp.x_end;   y2Bot = hp.y_center;
+      }
+
+      const topArm = createSVGElement('line');
+      topArm.setAttribute('x1', x1Top.toString());
+      topArm.setAttribute('y1', y1Top.toString());
+      topArm.setAttribute('x2', x2Top.toString());
+      topArm.setAttribute('y2', y2Top.toString());
+      topArm.setAttribute('stroke', config.staffLineColor);
+      topArm.setAttribute('stroke-width', '1.5');
+      topArm.setAttribute('fill', 'none');
+      topArm.classList.add('hairpin');
+      staffElement.appendChild(topArm);
+
+      const bottomArm = createSVGElement('line');
+      bottomArm.setAttribute('x1', x1Bot.toString());
+      bottomArm.setAttribute('y1', y1Bot.toString());
+      bottomArm.setAttribute('x2', x2Bot.toString());
+      bottomArm.setAttribute('y2', y2Bot.toString());
+      bottomArm.setAttribute('stroke', config.staffLineColor);
+      bottomArm.setAttribute('stroke-width', '1.5');
+      bottomArm.setAttribute('fill', 'none');
+      bottomArm.classList.add('hairpin');
+      staffElement.appendChild(bottomArm);
+    }
   }
 
   private renderBarLine(barLine: BarLine, config: RenderConfig): SVGGElement {
