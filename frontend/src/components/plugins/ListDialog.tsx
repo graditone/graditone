@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect } from 'react';
 import type { ListDialogItem } from '../../plugin-api/index';
+import { useTranslation } from '../../i18n/index';
 import './ListDialog.css';
 
 // ---------------------------------------------------------------------------
@@ -39,8 +40,10 @@ export function ListDialog({
   onAction,
   onClose,
   footer,
-  emptyMessage = 'No items.',
+  emptyMessage,
 }: ListDialogProps) {
+  const { t } = useTranslation();
+  const resolvedEmptyMessage = emptyMessage ?? t('list_dialog.empty_default');
   // ── Escape key ───────────────────────────────────────────────────────
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -69,7 +72,7 @@ export function ListDialog({
           <h2 className="list-dialog__title">{title}</h2>
           <button
             type="button"
-            aria-label="Close"
+            aria-label={t('list_dialog.close_aria')}
             onClick={onClose}
             className="list-dialog__close"
           >
@@ -79,7 +82,7 @@ export function ListDialog({
 
         {/* Body — scrollable list */}
         {items.length === 0 ? (
-          <p className="list-dialog__empty">{emptyMessage}</p>
+          <p className="list-dialog__empty">{resolvedEmptyMessage}</p>
         ) : (
           <ul className="list-dialog__body">
             {items.map((item) => (

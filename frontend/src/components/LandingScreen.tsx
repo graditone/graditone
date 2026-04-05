@@ -101,7 +101,7 @@ export interface LandingScreenProps {
  * - Respects prefers-reduced-motion: position frozen, glyph/color still cycle
  */
 export function LandingScreen({ onShowInstruments, corePlugins, onLaunchPlugin, activeThemeId, noteColors }: LandingScreenProps) {
-  const { t } = useTranslation()
+  const { t, tDynamic } = useTranslation()
   // Read reduced-motion preference once at mount
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -311,12 +311,12 @@ export function LandingScreen({ onShowInstruments, corePlugins, onLaunchPlugin, 
             className="landing-plugin-btn"
             onClick={() => onLaunchPlugin(p.id)}
           >
-            {p.icon ? `${p.icon} ` : ''}{p.name}
+            {p.icon ? `${p.icon} ` : ''}{tDynamic(`plugin.name.${p.id}`, p.name)}
           </button>
         ))}
         {onShowInstruments && (
           <button className="landing-instruments-btn" onClick={onShowInstruments}>
-            🎸 Instruments
+            {t('landing.instruments_button')}
           </button>
         )}
       </div>

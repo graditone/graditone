@@ -17,6 +17,7 @@
  */
 import { useRef, useMemo } from 'react';
 import type { PluginScoreSelectorProps } from '../../plugin-api/types';
+import { useTranslation } from '../../i18n/index';
 import { UserScoreList } from '../load-score/UserScoreList';
 import { SavedPracticeList } from '../load-score/SavedPracticeList';
 import { ScoreGroupList } from '../load-score/ScoreGroupList';
@@ -42,6 +43,7 @@ export function ScoreSelectorPlugin({
   onViewSessions,
 }: PluginScoreSelectorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { t } = useTranslation();
   const { userScores, removeUserScore } = useUserScores();
 
   // Exclude from the flat list any scores already rendered in a collapsible group
@@ -74,17 +76,17 @@ export function ScoreSelectorPlugin({
       className="score-selector-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label="Select a Score"
+      aria-label={t('score_selector.title')}
       data-testid="score-selector-dialog"
     >
       <div className="score-selector-panel">
         {/* Header */}
         <div className="score-selector-header">
-          <h2 className="score-selector-title">Select a Score</h2>
+          <h2 className="score-selector-title">{t('score_selector.title')}</h2>
           <button
             className="score-selector-cancel"
             onClick={onCancel}
-            aria-label="Cancel score selection"
+            aria-label={t('score_selector.cancel_aria')}
             type="button"
           >
             ✕
@@ -102,12 +104,12 @@ export function ScoreSelectorPlugin({
         {isLoading ? (
           <div className="score-selector-loading" aria-live="polite" aria-busy="true">
             <span className="score-selector-spinner" aria-hidden="true" />
-            Loading…
+            {t('score_selector.loading')}
           </div>
         ) : (
           <>
             <div className="score-selector-scroll">
-              <ul className="score-selector-list" role="listbox" aria-label="Preloaded scores">
+              <ul className="score-selector-list" role="listbox" aria-label={t('score_selector.preloaded_aria')}>
                 {sortedCatalogue.map((entry) => (
                   <li key={entry.id} role="none" className="score-selector-item">
                     <button
@@ -168,7 +170,7 @@ export function ScoreSelectorPlugin({
               type="button"
               onClick={() => fileInputRef.current?.click()}
             >
-              📂 Load from file…
+              {t('score_selector.load_from_file')}
             </button>
             <input
               ref={fileInputRef}

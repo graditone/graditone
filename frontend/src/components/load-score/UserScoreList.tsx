@@ -6,6 +6,7 @@
  * Returns null when the scores list is empty.
  */
 import type { UserScore } from '../../services/userScoreIndex';
+import { useTranslation } from '../../i18n/index';
 import { DifficultyTag } from './DifficultyTag';
 import './UserScoreList.css';
 
@@ -28,11 +29,12 @@ export function UserScoreList({
   onSelect,
   onDelete,
 }: UserScoreListProps) {
+  const { t } = useTranslation();
   if (scores.length === 0) return null;
 
   return (
     <section className="user-score-list">
-      <h3 className="user-score-list__heading">My Scores</h3>
+      <h3 className="user-score-list__heading">{t('user_scores.heading')}</h3>
       <ul className="user-score-list__items" role="list">
         {scores.map((score) => {
           const isSelected = score.id === selectedId;
@@ -55,7 +57,7 @@ export function UserScoreList({
               </button>
               <button
                 className="user-score-item__delete-btn"
-                aria-label={`Remove ${score.displayName}`}
+                aria-label={t('user_scores.remove_aria', { name: score.displayName })}
                 disabled={disabled}
                 onClick={() => onDelete(score.id)}
                 type="button"

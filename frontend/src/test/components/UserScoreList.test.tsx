@@ -6,7 +6,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { UserScoreList } from '../../components/load-score/UserScoreList';
+import { LocaleProvider } from '../../i18n/index';
 import type { UserScore } from '../../services/userScoreIndex';
+
+const W = ({ children }: { children: React.ReactNode }) => <LocaleProvider locale="en">{children}</LocaleProvider>;
 
 function makeScore(overrides: Partial<UserScore> = {}): UserScore {
   return {
@@ -17,9 +20,13 @@ function makeScore(overrides: Partial<UserScore> = {}): UserScore {
   };
 }
 
+function r(ui: React.ReactElement) {
+  return render(ui, { wrapper: W });
+}
+
 describe('UserScoreList', () => {
   it('renders "My Scores" heading when scores.length > 0', () => {
-    render(
+    r(
       <UserScoreList
         scores={[makeScore()]}
         onSelect={vi.fn()}
@@ -34,7 +41,7 @@ describe('UserScoreList', () => {
       makeScore({ id: 'a', displayName: 'Waltz' }),
       makeScore({ id: 'b', displayName: 'Mazurka' }),
     ];
-    render(
+    r(
       <UserScoreList scores={scores} onSelect={vi.fn()} onDelete={vi.fn()} />
     );
     expect(screen.getByText('Waltz')).toBeInTheDocument();
@@ -42,7 +49,7 @@ describe('UserScoreList', () => {
   });
 
   it('renders nothing when scores is empty', () => {
-    const { container } = render(
+    const { container } = r(
       <UserScoreList scores={[]} onSelect={vi.fn()} onDelete={vi.fn()} />
     );
     expect(container.firstChild).toBeNull();
@@ -51,7 +58,7 @@ describe('UserScoreList', () => {
   it('calls onSelect with correct score object on row click', async () => {
     const onSelect = vi.fn();
     const score = makeScore({ id: 'sel-1', displayName: 'Prelude' });
-    render(
+    r(
       <UserScoreList scores={[score]} onSelect={onSelect} onDelete={vi.fn()} />
     );
 
@@ -64,7 +71,7 @@ describe('UserScoreList', () => {
   it('calls onDelete with correct id on × button click', async () => {
     const onDelete = vi.fn();
     const score = makeScore({ id: 'del-1', displayName: 'Etude' });
-    render(
+    r(
       <UserScoreList scores={[score]} onSelect={vi.fn()} onDelete={onDelete} />
     );
 
@@ -75,7 +82,7 @@ describe('UserScoreList', () => {
 
   it('applies user-score-item--selected class when selectedId matches', () => {
     const score = makeScore({ id: 'active-1', displayName: 'Sonata' });
-    render(
+    r(
       <UserScoreList
         scores={[score]}
         selectedId="active-1"
@@ -90,7 +97,7 @@ describe('UserScoreList', () => {
 
   it('does NOT apply selected class when selectedId does not match', () => {
     const score = makeScore({ id: 'other-1', displayName: 'Sonata' });
-    render(
+    r(
       <UserScoreList
         scores={[score]}
         selectedId="different-id"
@@ -104,7 +111,7 @@ describe('UserScoreList', () => {
 
   it('disables all buttons when disabled prop is true', () => {
     const score = makeScore({ id: 's1', displayName: 'Barcarolle' });
-    render(
+    r(
       <UserScoreList
         scores={[score]}
         disabled={true}
@@ -120,7 +127,7 @@ describe('UserScoreList', () => {
 
   it('does not disable buttons when disabled is false (default)', () => {
     const score = makeScore({ id: 's2', displayName: 'Gigue' });
-    render(
+    r(
       <UserScoreList scores={[score]} onSelect={vi.fn()} onDelete={vi.fn()} />
     );
     const buttons = screen.getAllByRole('button');

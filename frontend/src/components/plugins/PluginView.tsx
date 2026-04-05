@@ -19,6 +19,7 @@
 import { Component, useRef, type ReactNode, type ReactElement } from 'react';
 import type { PluginManifest, PluginScoreRendererProps } from '../../plugin-api/index';
 import type { PluginScorePlayerContext, PluginMetronomeContext } from '../../plugin-api/types';
+import { useTranslation } from '../../i18n/index';
 import { useScorePlayerBridge, type ScorePlayerInternal } from '../../plugin-api/scorePlayerContext';
 import { useMetronomeBridge } from '../../plugin-api/metronomeContext';
 import { ScoreRendererPlugin } from './ScoreRendererPlugin';
@@ -58,22 +59,43 @@ export class PluginView extends Component<PluginViewProps, PluginViewState> {
 
     if (hasError) {
       return (
-        <div className="plugin-error" style={styles.container}>
-          <div style={styles.card}>
-            <p style={styles.message}>
-              Plugin &ldquo;{plugin.name}&rdquo; encountered an error:{' '}
-              {error?.message ?? 'Unknown error'}
-            </p>
-            <button onClick={this.handleReset} style={styles.button}>
-              Reload plugin
-            </button>
-          </div>
-        </div>
+        <PluginErrorFallback
+          plugin={plugin}
+          error={error}
+          onReset={this.handleReset}
+        />
       );
     }
 
     return children;
   }
+}
+
+function PluginErrorFallback({
+  plugin,
+  error,
+  onReset,
+}: {
+  plugin: PluginManifest;
+  error: Error | null;
+  onReset: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="plugin-error" style={styles.container}>
+      <div style={styles.card}>
+        <p style={styles.message}>
+          {t('plugin_error.message', {
+            name: plugin.name,
+            error: error?.message ?? t('plugin_error.unknown'),
+          })}
+        </p>
+        <button onClick={onReset} style={styles.button}>
+          {t('plugin_error.reload')}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 const styles = {

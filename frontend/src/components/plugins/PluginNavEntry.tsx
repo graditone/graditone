@@ -7,6 +7,7 @@
  */
 
 import type { PluginManifest } from '../../plugin-api/index';
+import { useTranslation } from '../../i18n/index';
 
 export interface PluginNavEntryProps {
   plugin: PluginManifest;
@@ -15,16 +16,18 @@ export interface PluginNavEntryProps {
 }
 
 export function PluginNavEntry({ plugin, isActive, onSelect }: PluginNavEntryProps) {
+  const { t, tDynamic } = useTranslation();
+  const translatedName = tDynamic(`plugin.name.${plugin.id}`, plugin.name);
   return (
     <button
       className={`plugin-nav-entry${isActive ? ' plugin-nav-entry--active' : ''}`}
       onClick={onSelect}
       aria-pressed={isActive}
-      aria-label={`Open ${plugin.name} plugin`}
+      aria-label={t('nav.open_plugin_aria', { name: translatedName })}
     >
-      {plugin.name}
+      {translatedName}
       {plugin.origin === 'imported' && (
-        <span className="plugin-nav-entry__badge" aria-label="user-installed">↑</span>
+        <span className="plugin-nav-entry__badge" aria-label={t('nav.user_installed_aria')}>↑</span>
       )}
     </button>
   );
