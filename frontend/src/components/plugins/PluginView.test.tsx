@@ -13,6 +13,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PluginView } from './PluginView';
+import { LocaleProvider } from '../../i18n/index';
 import type { PluginManifest } from '../plugin-api/index';
 
 const makeManifest = (overrides: Partial<PluginManifest> = {}): PluginManifest => ({
@@ -34,6 +35,8 @@ const CrashingChild = ({ shouldCrash }: { shouldCrash: boolean }) => {
   return <div>Recovered content</div>;
 };
 
+const W = ({ children }: { children: React.ReactNode }) => <LocaleProvider locale="en">{children}</LocaleProvider>;
+
 describe('PluginView', () => {
   // Suppress React's console.error output for expected error boundary tests
   const originalConsoleError = console.error;
@@ -47,18 +50,18 @@ describe('PluginView', () => {
   describe('normal rendering', () => {
     it('renders children when no error occurs', () => {
       render(
-        <PluginView plugin={makeManifest()}>
+        <W><PluginView plugin={makeManifest()}>
           <SafeChild />
-        </PluginView>
+        </PluginView></W>
       );
       expect(screen.getByText('Safe content')).toBeInTheDocument();
     });
 
     it('does not show the error UI when no error occurs', () => {
       render(
-        <PluginView plugin={makeManifest()}>
+        <W><PluginView plugin={makeManifest()}>
           <SafeChild />
-        </PluginView>
+        </PluginView></W>
       );
       expect(screen.queryByText(/encountered an error/i)).not.toBeInTheDocument();
     });
@@ -67,9 +70,9 @@ describe('PluginView', () => {
   describe('error boundary', () => {
     it('catches a render error and shows the plugin name in the error message', () => {
       render(
-        <PluginView plugin={makeManifest({ name: 'Test Plugin' })}>
+        <W><PluginView plugin={makeManifest({ name: 'Test Plugin' })}>
           <CrashingChild shouldCrash={true} />
-        </PluginView>
+        </PluginView></W>
       );
       expect(screen.getByText(/Test Plugin/)).toBeInTheDocument();
       expect(screen.getByText(/encountered an error/i)).toBeInTheDocument();
@@ -77,18 +80,18 @@ describe('PluginView', () => {
 
     it('shows the error message from the thrown error', () => {
       render(
-        <PluginView plugin={makeManifest()}>
+        <W><PluginView plugin={makeManifest()}>
           <CrashingChild shouldCrash={true} />
-        </PluginView>
+        </PluginView></W>
       );
       expect(screen.getByText(/Test error from plugin/)).toBeInTheDocument();
     });
 
     it('shows a "Reload plugin" button when in error state', () => {
       render(
-        <PluginView plugin={makeManifest()}>
+        <W><PluginView plugin={makeManifest()}>
           <CrashingChild shouldCrash={true} />
-        </PluginView>
+        </PluginView></W>
       );
       expect(screen.getByRole('button', { name: /reload plugin/i })).toBeInTheDocument();
     });
@@ -105,9 +108,9 @@ describe('PluginView', () => {
       };
 
       render(
-        <PluginView plugin={makeManifest()}>
+        <W><PluginView plugin={makeManifest()}>
           <ControlledCrash />
-        </PluginView>
+        </PluginView></W>
       );
 
       // Verify error state is active

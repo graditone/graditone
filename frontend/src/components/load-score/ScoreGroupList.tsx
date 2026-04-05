@@ -1,5 +1,6 @@
 import type { ScoreGroup, PreloadedScore } from '../../data/preloadedScores';
 import type { DifficultyLevel } from '../../types/score';
+import { useTranslation } from '../../i18n/index';
 import { DifficultyTag } from './DifficultyTag';
 import './ScoreGroupList.css';
 
@@ -25,11 +26,12 @@ export function ScoreGroupList({
   onSelect,
   difficultyLevels = {},
 }: ScoreGroupListProps) {
+  const { tDynamic } = useTranslation();
   if (group.scores.length === 0) return null;
 
   return (
     <details className="score-group">
-      <summary className="score-group__summary">{group.displayName}</summary>
+      <summary className="score-group__summary">{tDynamic(`score_group.${group.id}`, group.displayName)}</summary>
       <ul className="score-group__list" role="list">
         {group.scores.map((score) => {
           const isSelected = score.id === selectedId;

@@ -83,7 +83,10 @@ export function LocaleProvider({
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useTranslation(): { t: (key: TranslationKey) => string } {
+export function useTranslation(): {
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  tDynamic: (key: string, fallback: string) => string;
+} {
   const ctx = useContext(LocaleContext);
 
   if (!ctx) {
@@ -95,10 +98,24 @@ export function useTranslation(): { t: (key: TranslationKey) => string } {
 
   const t = useMemo(
     () =>
-      (key: TranslationKey): string =>
-        ctx.catalog[key] ?? enCatalog[key],
+      (key: TranslationKey, params?: Record<string, string | number>): string => {
+        let value: string = ctx.catalog[key] ?? enCatalog[key];
+        if (params) {
+          for (const [k, v] of Object.entries(params)) {
+            value = value.replace(`{${k}}`, String(v));
+          }
+        }
+        return value;
+      },
     [ctx.catalog],
   );
 
-  return { t };
+  const tDynamic = useMemo(
+    () =>
+      (key: string, fallback: string): string =>
+        ctx.catalog[key] ?? (enCatalog as Record<string, string>)[key] ?? fallback,
+    [ctx.catalog],
+  );
+
+  return { t, tDynamic };
 }
