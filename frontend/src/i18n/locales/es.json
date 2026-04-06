@@ -19,6 +19,7 @@
   "plugin.name.train-view": "Entrenar",
   "plugin.name.practice-view-plugin": "Practicar",
   "plugin.name.guide": "Gu\u00eda",
+  "plugin.name.sessions-plugin": "Sesiones",
   "nav.open_plugin_aria": "Abrir plugin {name}",
   "nav.user_installed_aria": "instalado por usuario",
   "score_selector.title": "Seleccionar una partitura",
