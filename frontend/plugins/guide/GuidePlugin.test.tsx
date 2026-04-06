@@ -10,18 +10,24 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { GuidePlugin } from './GuidePlugin';
+import { LocaleProvider } from '../../src/i18n/index';
 import guidePlugin from './index';
 import manifest from './plugin.json';
+
+/** Wrapper that provides LocaleProvider for tests */
+function W({ children }: { children: React.ReactNode }) {
+  return <LocaleProvider locale="en">{children}</LocaleProvider>;
+}
 
 // ─── US1: First-Time User Orientation ───────────────────────────────────────
 
 describe('GuidePlugin — component (US1)', () => {
   it('renders without crashing', () => {
-    render(<GuidePlugin />);
+    render(<GuidePlugin />, { wrapper: W });
   });
 
   it('displays the "What is Graditone?" heading (FR-005)', () => {
-    render(<GuidePlugin />);
+    render(<GuidePlugin />, { wrapper: W });
     expect(screen.getByRole('heading', { name: /what is graditone\?/i })).toBeInTheDocument();
   });
 
@@ -68,27 +74,27 @@ describe('GuidePlugin — manifest', () => {
 
 describe('GuidePlugin — sections (US2)', () => {
   it('renders exactly five <section> elements (FR-004)', () => {
-    const { container } = render(<GuidePlugin />);
+    const { container } = render(<GuidePlugin />, { wrapper: W });
     expect(container.querySelectorAll('section')).toHaveLength(5);
   });
 
   it('displays heading "Playing a Score" (FR-006)', () => {
-    render(<GuidePlugin />);
+    render(<GuidePlugin />, { wrapper: W });
     expect(screen.getByRole('heading', { name: /playing a score/i })).toBeInTheDocument();
   });
 
   it('displays heading "Practice Mode" (FR-007)', () => {
-    render(<GuidePlugin />);
+    render(<GuidePlugin />, { wrapper: W });
     expect(screen.getByRole('heading', { name: /practice mode/i })).toBeInTheDocument();
   });
 
   it('displays heading "Train" (FR-008)', () => {
-    render(<GuidePlugin />);
+    render(<GuidePlugin />, { wrapper: W });
     expect(screen.getByRole('heading', { name: /^train$/i })).toBeInTheDocument();
   });
 
   it('displays heading "Loading a Score" (FR-009)', () => {
-    render(<GuidePlugin />);
+    render(<GuidePlugin />, { wrapper: W });
     expect(screen.getByRole('heading', { name: /loading a score/i })).toBeInTheDocument();
   });
 });

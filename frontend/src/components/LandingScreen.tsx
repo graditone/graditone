@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { SMUFL_CODEPOINTS } from '../types/notation/config';
+import { useTranslation } from '../i18n/index';
 import './LandingScreen.css';
 
 // ---------------------------------------------------------------------------
@@ -100,6 +101,7 @@ export interface LandingScreenProps {
  * - Respects prefers-reduced-motion: position frozen, glyph/color still cycle
  */
 export function LandingScreen({ onShowInstruments, corePlugins, onLaunchPlugin, activeThemeId, noteColors }: LandingScreenProps) {
+  const { t, tDynamic } = useTranslation()
   // Read reduced-motion preference once at mount
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -282,7 +284,7 @@ export function LandingScreen({ onShowInstruments, corePlugins, onLaunchPlugin, 
       className={`landing-screen${paused ? ' landing-screen--paused' : ''}${activeThemeId ? ` theme-${activeThemeId}` : ''}`}
       data-testid="landing-screen"
       role="region"
-      aria-label={paused ? 'Landing screen (paused — click to resume)' : 'Landing screen (click to pause)'}
+      aria-label={paused ? t('landing.aria_paused') : t('landing.aria_playing')}
       tabIndex={-1}
       onClick={handleNoteClick}
     >
@@ -309,12 +311,12 @@ export function LandingScreen({ onShowInstruments, corePlugins, onLaunchPlugin, 
             className="landing-plugin-btn"
             onClick={() => onLaunchPlugin(p.id)}
           >
-            {p.icon ? `${p.icon} ` : ''}{p.name}
+            {p.icon ? `${p.icon} ` : ''}{tDynamic(`plugin.name.${p.id}`, p.name)}
           </button>
         ))}
         {onShowInstruments && (
           <button className="landing-instruments-btn" onClick={onShowInstruments}>
-            🎸 Instruments
+            {t('landing.instruments_button')}
           </button>
         )}
       </div>

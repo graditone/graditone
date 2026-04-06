@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from '../i18n/index';
 import './AndroidInstallBanner.css';
 
 /**
@@ -17,6 +18,7 @@ const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.gradit
 const DISMISS_KEY = 'android-install-banner-dismissed';
 
 export const AndroidInstallBanner: React.FC = () => {
+  const { t } = useTranslation()
   const [visible] = useState(() => {
     // Must be Android
     const isAndroid = /android/i.test(navigator.userAgent);
@@ -42,26 +44,26 @@ export const AndroidInstallBanner: React.FC = () => {
   };
 
   return (
-    <div className="android-install-banner" role="banner" aria-label="Install Graditone from Google Play">
+    <div className="android-install-banner" role="banner" aria-label={t('android_install.banner_aria')}>
       <div className="android-install-banner__icon" aria-hidden="true">🎵</div>
       <div className="android-install-banner__text">
-        <span className="android-install-banner__title">Graditone is on Google Play</span>
-        <span className="android-install-banner__subtitle">Install the app for the best experience</span>
+        <span className="android-install-banner__title">{t('android_install.title')}</span>
+        <span className="android-install-banner__subtitle">{t('android_install.subtitle')}</span>
       </div>
       <a
         href={PLAY_STORE_URL}
         target="_blank"
         rel="noopener noreferrer"
         className="android-install-banner__cta"
-        aria-label="Get Graditone on Google Play"
+        aria-label={t('android_install.cta_aria')}
       >
-        Get the app
+        {t('android_install.cta')}
       </a>
       <button
         type="button"
         className="android-install-banner__dismiss"
         onClick={handleDismiss}
-        aria-label="Dismiss Play Store banner"
+        aria-label={t('android_install.dismiss_aria')}
       >
         ✕
       </button>

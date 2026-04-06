@@ -9,8 +9,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { ScoreViewer } from '../../src/components/ScoreViewer';
+import { LocaleProvider } from '../../src/i18n/index';
 import * as localStorage from '../../src/services/storage/local-storage';
 import * as scoreApi from '../../src/services/score-api';
 import * as wasmEngine from '../../src/services/wasm/music-engine';
@@ -177,7 +179,7 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
       mockLoadScoreFromIndexedDB.mockResolvedValue({ kind: 'loaded', score: mockScore });
 
       // Act: Render ScoreViewer with a score ID
-      render(<ScoreViewer scoreId="test-score-123" />);
+      render(<LocaleProvider><ScoreViewer scoreId="test-score-123" /></LocaleProvider>);
 
       // Assert: Wait for score to load
       await waitFor(() => {
@@ -199,7 +201,7 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
       mockApiClientGetScore.mockResolvedValue(mockScore);
 
       // Act: Render ScoreViewer with a score ID
-      render(<ScoreViewer scoreId="test-score-456" />);
+      render(<LocaleProvider><ScoreViewer scoreId="test-score-456" /></LocaleProvider>);
 
       // Assert: IndexedDB should be checked
       await waitFor(() => {
@@ -223,7 +225,7 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
       mockLoadScoreFromIndexedDB.mockResolvedValue({ kind: 'not-found' });
 
       // Act: Render ScoreViewer
-      render(<ScoreViewer scoreId="missing-score" />);
+      render(<LocaleProvider><ScoreViewer scoreId="missing-score" /></LocaleProvider>);
 
       // Assert: Wait for error message
       await waitFor(() => {
@@ -259,7 +261,7 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
       mockApiClientCreateScore.mockResolvedValue({ id: 'backend-id', instruments: [] });
 
       // Act: Simulate import result (would come from MusicXMLImporter component)
-      const { rerender } = render(<ScoreViewer />);
+      const { rerender } = render(<LocaleProvider><ScoreViewer /></LocaleProvider>);
 
       // Simulate handleMusicXMLImport being called with WASM parse result
       // (In real usage, this comes from MusicXMLImporter's onImportComplete prop)
@@ -271,7 +273,7 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
       // NOTE: This test may need refinement based on actual component structure
       // The key assertion is: no REST API calls during import
       
-      rerender(<ScoreViewer />);
+      rerender(<LocaleProvider><ScoreViewer /></LocaleProvider>);
 
       // Assert: REST API should NOT be called during import
       expect(mockApiClientCreateScore).not.toHaveBeenCalled();
@@ -305,7 +307,7 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
       // NOTE: createNewScore() is marked as deprecated but still defined
       // The actual method call would need to be triggered via UI or ref
       
-      render(<ScoreViewer />);
+      render(<LocaleProvider><ScoreViewer /></LocaleProvider>);
 
       // Since createNewScore() is deprecated and not exposed via UI,
       // we can't easily trigger it in this test
@@ -337,14 +339,14 @@ describe('ScoreViewer - Offline Mode (Feature 025, US2)', () => {
         .mockResolvedValueOnce({ kind: 'loaded', score: score2 });
 
       // Act: Load first score
-      const { rerender } = render(<ScoreViewer scoreId="score-1" />);
+      const { rerender } = render(<LocaleProvider><ScoreViewer scoreId="score-1" /></LocaleProvider>);
 
       await waitFor(() => {
         expect(mockLoadScoreFromIndexedDB).toHaveBeenCalledWith('score-1', 9);
       });
 
       // Act: Switch to second score
-      rerender(<ScoreViewer scoreId="score-2" />);
+      rerender(<LocaleProvider><ScoreViewer scoreId="score-2" /></LocaleProvider>);
 
       await waitFor(() => {
         expect(mockLoadScoreFromIndexedDB).toHaveBeenCalledWith('score-2', 9);

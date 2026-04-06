@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import type { ChangeEvent } from 'react';
 import { useImportMusicXML } from '../../hooks/useImportMusicXML';
+import { useTranslation } from '../../i18n/index';
 import type { ImportResult } from '../../services/import/MusicXMLImportService';
 
 interface LoadNewScoreButtonProps {
@@ -22,6 +23,7 @@ export function LoadNewScoreButton({
   onWillLoad,
 }: LoadNewScoreButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { t } = useTranslation();
 
   const { importFile, loading, error } = useImportMusicXML({
     onSuccess: (result) => {
@@ -58,16 +60,16 @@ export function LoadNewScoreButton({
         type="file"
         accept=".musicxml,.xml,.mxl"
         style={{ display: 'none' }}
-        aria-label="Upload MusicXML file"
+        aria-label={t('load_score.file_input_aria')}
         onChange={handleFileChange}
       />
       <button
         className="load-new-score-button"
         onClick={handleButtonClick}
         disabled={isBusy}
-        aria-label="Load from file"
+        aria-label={t('load_score.load_from_file_aria')}
       >
-        {loading ? '⏳ Importing…' : '📂 Load from File'}
+        {loading ? t('load_score.importing') : t('load_score.load_from_file')}
       </button>
       {error && (
         <p className="load-new-score-error" role="alert">

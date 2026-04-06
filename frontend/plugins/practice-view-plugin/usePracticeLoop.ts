@@ -23,6 +23,8 @@ export interface UsePracticeLoopParams {
   playerState: ScorePlayerState;
   practiceStartTimeRef: React.RefObject<number>;
   context: PluginContext;
+  /** Feature 072: Ref to current tempo multiplier for embedding in PerformanceRecord. */
+  tempoMultiplierRef: React.RefObject<number>;
   onComplete: (record: PerformanceRecord) => void;
   onResultsShow: () => void;
   /** Feature 061: Optional initial loop region start tick (from task config). */
@@ -60,6 +62,7 @@ export function usePracticeLoop({
   playerState,
   practiceStartTimeRef,
   context,
+  tempoMultiplierRef,
   onComplete,
   onResultsShow,
   initialStartTick,
@@ -150,6 +153,7 @@ export function usePracticeLoop({
         noteResults: [...practiceState.noteResults],
         wrongNoteEvents: [...practiceState.wrongNoteEvents],
         bpmAtCompletion: playerState.bpm,
+        tempoMultiplier: tempoMultiplierRef.current ?? 1.0,
       });
     }
   }, [practiceState.mode]); // eslint-disable-line react-hooks/exhaustive-deps

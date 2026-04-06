@@ -102,6 +102,8 @@ afterEach(() => {
 
 // Import App AFTER mocks are declared (vi.mock is hoisted by Vite)
 import App from './App';
+import { LocaleProvider } from './i18n/index';
+import esCatalog from './i18n/locales/es.json';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -111,7 +113,7 @@ describe('App plugin navigation (US3)', () => {
   // ── One nav entry per plugin ────────────────────────────────────────────
 
   it('renders exactly one nav entry for each installed plugin', async () => {
-    render(<App />);
+    render(<LocaleProvider><App /></LocaleProvider>);
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Open Alpha Plugin plugin/i })).toBeInTheDocument();
@@ -126,7 +128,7 @@ describe('App plugin navigation (US3)', () => {
   // ── Selecting a plugin activates it ────────────────────────────────────
 
   it('marks a plugin nav entry as active when clicked', async () => {
-    render(<App />);
+    render(<LocaleProvider><App /></LocaleProvider>);
 
     await waitFor(() => screen.getByRole('button', { name: /Open Alpha Plugin plugin/i }));
 
@@ -139,7 +141,7 @@ describe('App plugin navigation (US3)', () => {
   });
 
   it('renders the plugin view component when its nav entry is clicked', async () => {
-    render(<App />);
+    render(<LocaleProvider><App /></LocaleProvider>);
 
     await waitFor(() => screen.getByRole('button', { name: /Open Alpha Plugin plugin/i }));
 
@@ -151,7 +153,7 @@ describe('App plugin navigation (US3)', () => {
   // ── Switching between plugins ────────────────────────────────────────────
 
   it('deactivates the first plugin when user selects the second', async () => {
-    render(<App />);
+    render(<LocaleProvider><App /></LocaleProvider>);
 
     await waitFor(() => screen.getByRole('button', { name: /Open Alpha Plugin plugin/i }));
 
@@ -168,7 +170,7 @@ describe('App plugin navigation (US3)', () => {
   });
 
   it('shows the second plugin view when switching from first to second', async () => {
-    render(<App />);
+    render(<LocaleProvider><App /></LocaleProvider>);
 
     await waitFor(() => screen.getByRole('button', { name: /Open Alpha Plugin plugin/i }));
 
@@ -184,7 +186,7 @@ describe('App plugin navigation (US3)', () => {
   // ── Rapid switching ────────────────────────────────────────────────────
 
   it('handles rapid switching between plugins without throwing', async () => {
-    render(<App />);
+    render(<LocaleProvider><App /></LocaleProvider>);
 
     await waitFor(() => screen.getByRole('button', { name: /Open Alpha Plugin plugin/i }));
 
@@ -201,5 +203,62 @@ describe('App plugin navigation (US3)', () => {
     // Should end on alpha (10 clicks, 0-indexed: last click is at i=9 on betaBtn, but
     // i=9 is odd so betaBtn is clicked last)
     expect(betaBtn).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// i18n: US1 — Spanish browser sees Spanish text (T012)
+// Feature 073: Landing Page i18n
+//
+// Written BEFORE App.tsx migration (T014). Tests FAIL until t() calls replace
+// the hardcoded strings in App.tsx.
+// ---------------------------------------------------------------------------
+
+describe('App i18n — Spanish locale (US1)', () => {
+  it('shows the Spanish loading message while WASM initialises', () => {
+    render(
+      <LocaleProvider locale="es">
+        <App />
+      </LocaleProvider>,
+    );
+    // wasmLoading starts as true → loading UI is shown synchronously
+    expect(screen.getByText(esCatalog['loading.engine'])).toBeInTheDocument();
+  });
+
+  it('shows the Spanish slogan after WASM loads', async () => {
+    render(
+      <LocaleProvider locale="es">
+        <App />
+      </LocaleProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByText(esCatalog['header.slogan'])).toBeInTheDocument();
+    });
+  });
+});
+
+// i18n: US2 — unsupported browser locale falls back to English (T017)
+
+describe('App i18n — unsupported locale falls back to English (US2)', () => {
+  it('shows the English slogan when navigator.language is "fr" (unsupported)', async () => {
+    const originalLanguage = Object.getOwnPropertyDescriptor(navigator, 'language');
+    Object.defineProperty(navigator, 'language', { value: 'fr', configurable: true });
+
+    render(
+      // No locale prop → LocaleProvider reads navigator.language = 'fr'
+      // resolveLocale('fr') = 'en' → English catalog is used
+      <LocaleProvider>
+        <App />
+      </LocaleProvider>,
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByText('The open platform for musical practice'),
+      ).toBeInTheDocument();
+    });
+
+    if (originalLanguage) {
+      Object.defineProperty(navigator, 'language', originalLanguage);
+    }
   });
 });

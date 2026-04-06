@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { ScoreViewer } from "../../components/ScoreViewer";
 import { FileStateProvider } from "../../services/state/FileStateContext";
 import { TempoStateProvider } from "../../services/state/TempoStateContext";
+import { LocaleProvider } from "../../i18n/index";
 import { apiClient } from "../../services/score-api";
 import { loadScoreFromIndexedDB } from "../../services/storage/local-storage";
 import type { Score } from "../../types/score";
@@ -40,9 +41,11 @@ vi.mock("../../services/storage/local-storage", () => ({
 // Wrapper component for providers
 function TestWrapper({ children }: { children: React.ReactNode }) {
   return (
-    <TempoStateProvider>
-      <FileStateProvider>{children}</FileStateProvider>
-    </TempoStateProvider>
+    <LocaleProvider>
+      <TempoStateProvider>
+        <FileStateProvider>{children}</FileStateProvider>
+      </TempoStateProvider>
+    </LocaleProvider>
   );
 }
 

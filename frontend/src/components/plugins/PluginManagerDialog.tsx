@@ -10,6 +10,7 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { PluginManifest, ListDialogItem } from '../../plugin-api/index';
+import { useTranslation } from '../../i18n/index';
 import { importPlugin } from '../../services/plugins/PluginImporter';
 import { pluginRegistry } from '../../services/plugins/PluginRegistry';
 import { ListDialog } from './ListDialog';
@@ -50,15 +51,16 @@ export function PluginManagerDialog({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingManifest, setPendingManifest] = useState<PluginManifest | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { t } = useTranslation();
 
   // ── Map plugins → ListDialogItem[] ───────────────────────────────────
   const items: ListDialogItem[] = useMemo(
     () => importedPlugins.map((m) => ({
       id: m.id,
-      label: removing === m.id ? `${m.name} (removing…)` : m.name,
-      actionLabel: 'Remove',
+      label: removing === m.id ? `${m.name} ${t('plugin_manager.removing_suffix')}` : m.name,
+      actionLabel: t('plugin_manager.remove_action'),
     })),
-    [importedPlugins, removing],
+    [importedPlugins, removing, t],
   );
 
   // ── Remove handler (wired to ListDialog onAction) ────────────────────
@@ -145,7 +147,7 @@ export function PluginManagerDialog({
         accept=".zip"
         onChange={handleFileChange}
         className="plugin-manager-dialog__file-input--hidden"
-        aria-label="Select plugin ZIP file"
+        aria-label={t('plugin_manager.file_input_aria')}
         tabIndex={-1}
       />
 
@@ -154,14 +156,14 @@ export function PluginManagerDialog({
           type="button"
           className="plugin-manager-dialog__import-btn"
           onClick={() => inputRef.current?.click()}
-          aria-label="Import Plugin"
+          aria-label={t('plugin_manager.import_aria')}
         >
-          📂 Import Plugin…
+          {t('plugin_manager.import_btn')}
         </button>
       )}
 
       {importPhase === 'loading' && (
-        <p aria-live="polite" className="plugin-manager-dialog__status">Installing plugin…</p>
+        <p aria-live="polite" className="plugin-manager-dialog__status">{t('plugin_manager.installing')}</p>
       )}
 
       {importPhase === 'error' && (
@@ -171,9 +173,9 @@ export function PluginManagerDialog({
             type="button"
             className="plugin-manager-dialog__import-btn"
             onClick={() => { setImportPhase('idle'); setImportError(null); inputRef.current?.click(); }}
-            aria-label="Import Plugin"
+            aria-label={t('plugin_manager.import_aria')}
           >
-            📂 Try Again…
+            {t('plugin_manager.try_again')}
           </button>
         </>
       )}
@@ -181,14 +183,14 @@ export function PluginManagerDialog({
       {importPhase === 'duplicate' && pendingManifest && (
         <div role="alert">
           <p className="plugin-manager-dialog__confirm-text">
-            A plugin named <strong>&ldquo;{pendingManifest.name}&rdquo;</strong> is already installed. Replace it?
+            {t('plugin_manager.duplicate_text', { name: pendingManifest.name })}
           </p>
           <div className="plugin-manager-dialog__confirm-actions">
             <button type="button" onClick={handleCancelDuplicate} className="plugin-manager-dialog__btn">
-              Cancel
+              {t('plugin_manager.cancel')}
             </button>
             <button type="button" onClick={handleReplace} className="plugin-manager-dialog__btn plugin-manager-dialog__btn--danger">
-              Yes, Replace
+              {t('plugin_manager.replace')}
             </button>
           </div>
         </div>
@@ -198,11 +200,11 @@ export function PluginManagerDialog({
 
   return (
     <ListDialog
-      title="Manage Plugins"
+      title={t('plugin_manager.title')}
       items={items}
       onAction={handleAction}
       onClose={onClose}
-      emptyMessage="No plugins installed yet."
+      emptyMessage={t('plugin_manager.empty')}
       footer={footer}
     />
   );

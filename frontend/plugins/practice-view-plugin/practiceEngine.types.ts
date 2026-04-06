@@ -247,6 +247,8 @@ export interface PerformanceRecord {
   noteResults: PracticeNoteResult[];
   wrongNoteEvents: WrongNoteEvent[];
   bpmAtCompletion: number;
+  /** Tempo multiplier active at completion — input to computePracticeScore (feature 072). */
+  tempoMultiplier: number;
 }
 
 /** Snapshot captured when user stops practice mid-session (US7). */
@@ -255,6 +257,8 @@ export interface PartialPerformanceRecord {
   noteResults: ReadonlyArray<PracticeNoteResult>;
   wrongNoteEvents: ReadonlyArray<WrongNoteEvent>;
   bpmAtCompletion: number;
+  /** Tempo multiplier active at stop time — input to computePracticeScore (feature 072). */
+  tempoMultiplier: number;
   stoppedAtIndex: number;
   totalNoteCount: number;
 }
