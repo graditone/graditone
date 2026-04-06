@@ -34,6 +34,7 @@ import type {
   PluginScoreSelectorProps,
 } from '../../src/plugin-api/index';
 import { TrainPlugin } from './TrainPlugin';
+import { LocaleProvider } from '../../src/i18n/index';
 
 // ─── Mock ScorePlayer factory ──────────────────────────────────────────────
 
@@ -204,13 +205,18 @@ afterEach(() => {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
+/** Provide LocaleProvider for tests */
+function TestWrapper({ children }: { children: React.ReactNode }) {
+  return <LocaleProvider locale="en">{children}</LocaleProvider>;
+}
+
 describe('TrainPlugin', () => {
   // ── (a) Ready phase ────────────────────────────────────────────────────────
 
   describe('ready phase', () => {
     it('renders exercise staff and config UI on mount', () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Exercise staff is visible
       expect(screen.getAllByTestId('staff-viewer').length).toBeGreaterThanOrEqual(1);
@@ -222,14 +228,14 @@ describe('TrainPlugin', () => {
 
     it('shows "▶ Train" start button in the ready state', () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       expect(screen.getByTestId('train-play-btn')).toBeDefined();
     });
 
     it('does NOT show results panel on mount', () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       expect(screen.queryByText(/your score/i)).toBeNull();
       expect(screen.queryByText(/try again/i)).toBeNull();
@@ -241,7 +247,7 @@ describe('TrainPlugin', () => {
   describe('countdown phase', () => {
     it('shows countdown steps 3, 2, 1 and then transitions to playing', async () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Switch to flow mode (default level is low → step; flow needed for countdown)
       await act(async () => { fireEvent.change(screen.getByLabelText(/mode/i), { target: { value: 'flow' } }); });
@@ -273,7 +279,7 @@ describe('TrainPlugin', () => {
   describe('recording subscription', () => {
     it('calls context.recording.subscribe on mount', () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       expect(ctx.recording.subscribe).toHaveBeenCalledTimes(1);
     });
@@ -283,7 +289,7 @@ describe('TrainPlugin', () => {
       const unsubSpy = vi.fn();
       (ctx.recording.subscribe as ReturnType<typeof vi.fn>).mockReturnValue(unsubSpy);
 
-      const { unmount } = render(<TrainPlugin context={ctx} />);
+      const { unmount } = render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
       unmount();
 
       expect(unsubSpy).toHaveBeenCalledTimes(1);
@@ -295,7 +301,7 @@ describe('TrainPlugin', () => {
   describe('midi subscription', () => {
     it('registers a MIDI subscriber on mount', () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       expect(ctx.midi.subscribe).toHaveBeenCalledTimes(1);
     });
@@ -305,7 +311,7 @@ describe('TrainPlugin', () => {
       const unsubSpy = vi.fn();
       (ctx.midi.subscribe as ReturnType<typeof vi.fn>).mockReturnValue(unsubSpy);
 
-      const { unmount } = render(<TrainPlugin context={ctx} />);
+      const { unmount } = render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
       unmount();
 
       expect(unsubSpy).toHaveBeenCalledTimes(1);
@@ -317,7 +323,7 @@ describe('TrainPlugin', () => {
   describe('scheduled playback', () => {
     it('calls context.playNote for each exercise note when Play is pressed', async () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Switch to flow mode so notes are scheduled via playNote
       await act(async () => { fireEvent.change(screen.getByLabelText(/mode/i), { target: { value: 'flow' } }); });
@@ -345,7 +351,7 @@ describe('TrainPlugin', () => {
   describe('stop button', () => {
     it('calls context.stopPlayback when Stop is pressed during playing', async () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       await act(async () => { clickTrainStart(); });
 
@@ -365,7 +371,7 @@ describe('TrainPlugin', () => {
   describe('results phase', () => {
     it('shows a score and result panel after exercise completes', async () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Switch to flow mode so the exercise drives itself to completion
       await act(async () => { fireEvent.change(screen.getByLabelText(/mode/i), { target: { value: 'flow' } }); });
@@ -388,7 +394,7 @@ describe('TrainPlugin', () => {
   describe('"Try Again" action', () => {
     it('resets to ready phase with the same exercise', async () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Complete an exercise to reach results
       await act(async () => { clickTrainStart(); });
@@ -410,7 +416,7 @@ describe('TrainPlugin', () => {
   describe('"New Exercise" action', () => {
     it('resets to ready phase with new notes', async () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Complete an exercise to reach results
       await act(async () => { clickTrainStart(); });
@@ -431,7 +437,7 @@ describe('TrainPlugin', () => {
   describe('cleanup on unmount', () => {
     it('calls stopPlayback and unsubscribes when unmounted during playing', async () => {
       const ctx = makeMockContext();
-      const { unmount } = render(<TrainPlugin context={ctx} />);
+      const { unmount } = render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Start exercise
       await act(async () => { clickTrainStart(); });
@@ -451,7 +457,7 @@ describe('TrainPlugin', () => {
   describe('Score preset (US1 — T007)', () => {
     it('renders two preset options: Scales and Score', () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Both radio options must be present in the preset selector
       expect(screen.getByRole('radio', { name: /scales/i })).toBeDefined();
@@ -460,7 +466,7 @@ describe('TrainPlugin', () => {
 
     it('selecting Score with no scorePitches makes ScoreSelector visible', async () => {
       const ctx = makeMockContext();
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // ScoreSelector must NOT be open initially
       expect(screen.queryByTestId('score-selector-dialog')).toBeNull();
@@ -477,7 +483,7 @@ describe('TrainPlugin', () => {
     it('after loadScore resolves and extractPracticeNotes returns pitches the exercise populates', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Select Score preset → dialog opens
       await act(async () => {
@@ -504,7 +510,7 @@ describe('TrainPlugin', () => {
     it('Notes slider max equals scorePitches.totalAvailable when Score preset active', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Select Score → pick score → mark ready
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -530,7 +536,7 @@ describe('TrainPlugin', () => {
     it('clef and octave controls are disabled when Score preset is active', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: /beethoven/i })); });
@@ -555,7 +561,7 @@ describe('TrainPlugin', () => {
     it('"Set by score" disabled label is visible when Score preset is active', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: /beethoven/i })); });
@@ -567,7 +573,7 @@ describe('TrainPlugin', () => {
     it('"Change score" button is present when Score preset is active with a loaded score', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: /beethoven/i })); });
@@ -579,7 +585,7 @@ describe('TrainPlugin', () => {
     it('"Change score" button is disabled during countdown and playing phases', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Load score
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -602,7 +608,7 @@ describe('TrainPlugin', () => {
     it('"Change score" click reopens ScoreSelector overlay', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Load score and dismiss dialog
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -628,7 +634,7 @@ describe('TrainPlugin', () => {
     it('onLoadFile triggers loadScore with kind=file', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Open selector
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -648,7 +654,7 @@ describe('TrainPlugin', () => {
     it('scorePlayerState.error is passed to ScoreSelector as error prop', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Open the selector
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -665,7 +671,7 @@ describe('TrainPlugin', () => {
     it('error state does NOT clear previously cached scorePitches', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Load score successfully
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -694,7 +700,7 @@ describe('TrainPlugin', () => {
     it('cancel with no score loaded reverts preset to scales', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Select Score → dialog opens (no score loaded)
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -716,7 +722,7 @@ describe('TrainPlugin', () => {
     it('cancel after score is loaded closes dialog without changing preset', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Load score
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -742,7 +748,7 @@ describe('TrainPlugin', () => {
     it('scorePitches is preserved when switching away from Score preset', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Load a score
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -771,7 +777,7 @@ describe('TrainPlugin', () => {
     it('switching back to Score with cached pitches does NOT open ScoreSelector', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // Load a score
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -789,7 +795,7 @@ describe('TrainPlugin', () => {
     it('switching to Score with null cache opens ScoreSelector', async () => {
       const spPlayer = makeMockScorePlayer();
       const ctx = makeMockContext({ scorePlayer: spPlayer });
-      render(<TrainPlugin context={ctx} />);
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
       // No score loaded yet — selecting Score should open the dialog
       await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /score/i })); });
@@ -804,7 +810,7 @@ describe('TrainPlugin', () => {
 describe('TrainPlugin — complexity level selector (US1)', () => {
   it('renders a level select dropdown with Low, Mid, High options', () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     const values = Array.from(sel.options).map(o => o.value);
@@ -815,7 +821,7 @@ describe('TrainPlugin — complexity level selector (US1)', () => {
 
   it('select defaults to "low" (default level)', () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     expect(sel.value).toBe('low');
@@ -823,7 +829,7 @@ describe('TrainPlugin — complexity level selector (US1)', () => {
 
   it('selecting Low sets BPM slider to 40', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'mid' } }); });
@@ -835,7 +841,7 @@ describe('TrainPlugin — complexity level selector (US1)', () => {
 
   it('selecting Mid sets BPM slider to 80', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'mid' } }); });
@@ -846,7 +852,7 @@ describe('TrainPlugin — complexity level selector (US1)', () => {
 
   it('selecting High sets BPM slider to 100', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'high' } }); });
@@ -857,7 +863,7 @@ describe('TrainPlugin — complexity level selector (US1)', () => {
 
   it('selecting Low sets Clef to Treble', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'high' } }); });
@@ -869,7 +875,7 @@ describe('TrainPlugin — complexity level selector (US1)', () => {
 
   it('selecting High sets Clef to Bass', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'high' } }); });
@@ -880,7 +886,7 @@ describe('TrainPlugin — complexity level selector (US1)', () => {
 
   it('selecting High makes select value "high"', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'high' } }); });
@@ -890,7 +896,7 @@ describe('TrainPlugin — complexity level selector (US1)', () => {
 
   it('level selector is disabled while not in ready phase', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     // Trigger playing phase via Train button
     await act(async () => { clickTrainStart(); });
@@ -905,7 +911,7 @@ describe('TrainPlugin — complexity level selector (US1)', () => {
 describe('TrainPlugin — localStorage persistence (US2)', () => {
   it('selecting Mid writes \'mid\' to localStorage[train-complexity-level-v1]', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i);
     await act(async () => { fireEvent.change(sel, { target: { value: 'mid' } }); });
@@ -915,7 +921,7 @@ describe('TrainPlugin — localStorage persistence (US2)', () => {
 
   it('selecting High writes \'high\' to localStorage[train-complexity-level-v1]', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i);
     await act(async () => { fireEvent.change(sel, { target: { value: 'high' } }); });
@@ -926,7 +932,7 @@ describe('TrainPlugin — localStorage persistence (US2)', () => {
   it('when localStorage contains \'high\' on mount, select shows \'high\'', async () => {
     localStorage.setItem('train-complexity-level-v1', 'high');
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     await act(async () => { vi.runAllTimers(); });
 
@@ -937,7 +943,7 @@ describe('TrainPlugin — localStorage persistence (US2)', () => {
   it('when localStorage contains \'high\', BPM slider initialises to 100', async () => {
     localStorage.setItem('train-complexity-level-v1', 'high');
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     await act(async () => { vi.runAllTimers(); });
 
@@ -948,7 +954,7 @@ describe('TrainPlugin — localStorage persistence (US2)', () => {
   it('when localStorage contains invalid value, select defaults to \'low\'', async () => {
     localStorage.setItem('train-complexity-level-v1', 'extreme');
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     await act(async () => { vi.runAllTimers(); });
 
@@ -960,7 +966,7 @@ describe('TrainPlugin — localStorage persistence (US2)', () => {
 
   it('when localStorage is empty, select defaults to \'low\' with BPM=40', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     await act(async () => { vi.runAllTimers(); });
 
@@ -976,7 +982,7 @@ describe('TrainPlugin — localStorage persistence (US2)', () => {
 describe('TrainPlugin — visual differentiation and badge-clear (US3)', () => {
   it('Low option text is "Low"', () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     const lowOption = Array.from(sel.options).find(o => o.value === 'low');
@@ -986,7 +992,7 @@ describe('TrainPlugin — visual differentiation and badge-clear (US3)', () => {
 
   it('Mid option text is "Mid"', () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     const midOption = Array.from(sel.options).find(o => o.value === 'mid');
@@ -996,7 +1002,7 @@ describe('TrainPlugin — visual differentiation and badge-clear (US3)', () => {
 
   it('High option text is "High"', () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     const highOption = Array.from(sel.options).find(o => o.value === 'high');
@@ -1006,7 +1012,7 @@ describe('TrainPlugin — visual differentiation and badge-clear (US3)', () => {
 
   it('after selecting Low then changing Notes slider, select shows "custom"', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     await act(async () => { vi.runAllTimers(); });
 
@@ -1022,7 +1028,7 @@ describe('TrainPlugin — visual differentiation and badge-clear (US3)', () => {
 
   it('after selecting Mid then changing Scale, select shows "custom"', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'mid' } }); });
@@ -1037,7 +1043,7 @@ describe('TrainPlugin — visual differentiation and badge-clear (US3)', () => {
 
   it('after selecting High then changing BPM slider, select shows "custom"', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
 
     const sel = screen.getByLabelText(/complexity level/i) as HTMLSelectElement;
     await act(async () => { fireEvent.change(sel, { target: { value: 'high' } }); });
@@ -1058,20 +1064,20 @@ describe('TrainPlugin — visual differentiation and badge-clear (US3)', () => {
 describe('TrainPlugin — metronome button (Feature 035)', () => {
   it('renders a metronome toggle button with aria-label "Toggle metronome"', () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     expect(screen.getByRole('button', { name: /toggle metronome/i })).toBeTruthy();
   });
 
   it('has aria-pressed="false" on mount (metronome inactive)', () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     const btn = screen.getByRole('button', { name: /toggle metronome/i });
     expect(btn.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('calls context.metronome.toggle when the metronome button is clicked', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
     });
@@ -1080,7 +1086,7 @@ describe('TrainPlugin — metronome button (Feature 035)', () => {
 
   it('subscribes to context.metronome on mount', () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     expect(ctx.metronome.subscribe).toHaveBeenCalledTimes(1);
   });
 });

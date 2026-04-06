@@ -17,6 +17,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { PluginPlaybackStatus } from '../../src/plugin-api/index';
 import type { MetronomeSubdivision } from '../../src/plugin-api/index';
+import { useTranslation } from '../../src/i18n';
 
 // Mirror of PlaybackScheduler.PPQ — no host imports in plugin code
 const PPQ = 960;
@@ -83,6 +84,7 @@ export function PlaybackToolbar({
   metronomeSubdivision,
   onMetronomeSubdivisionChange,
 }: PlaybackToolbarProps) {
+  const { t } = useTranslation();
   const isPlaying = status === 'playing';
   const isActive = status === 'playing' || status === 'paused' || status === 'ready';
   const elapsedSeconds = ticksToElapsedSeconds(currentTick, bpm);
@@ -124,13 +126,13 @@ export function PlaybackToolbar({
   const SUBDIV_ICONS: Record<MetronomeSubdivision, string> = { 1: '♩', 2: '♪', 4: '♬' };
 
   return (
-    <div className="play-score__toolbar" role="toolbar" aria-label="Playback controls">
+    <div className="play-score__toolbar" role="toolbar" aria-label={t('play_score.toolbar.playback_controls_aria')}>
       {/* Back button — icon only, compact */}
       {showBack && (
         <button
           className="play-score__toolbar-btn play-score__toolbar-btn--back"
           onClick={onBack}
-          aria-label="Back"
+          aria-label={t('play_score.toolbar.back_aria')}
         >
           ←
         </button>
@@ -146,19 +148,19 @@ export function PlaybackToolbar({
         <button
           className="play-score__toolbar-btn play-score__toolbar-btn--pause"
           onClick={onPause}
-          aria-label="Pause"
+          aria-label={t('play_score.toolbar.pause_aria')}
           disabled={!isActive}
         >
-          ⏸ Pause
+          {t('play_score.toolbar.pause')}
         </button>
       ) : (
         <button
           className="play-score__toolbar-btn play-score__toolbar-btn--play"
           onClick={onPlay}
-          aria-label="Play"
+          aria-label={t('play_score.toolbar.play_aria')}
           disabled={status === 'idle' || status === 'loading' || status === 'error'}
         >
-          ▶ Play
+          {t('play_score.toolbar.play')}
         </button>
       )}
 
@@ -166,14 +168,14 @@ export function PlaybackToolbar({
       <button
         className="play-score__toolbar-btn play-score__toolbar-btn--stop"
         onClick={onStop}
-        aria-label="Stop"
+        aria-label={t('play_score.toolbar.stop_aria')}
         disabled={!isActive}
       >
-        ■ Stop
+        {t('play_score.toolbar.stop')}
       </button>
 
       {/* Elapsed / total timer */}
-      <span className="play-score__toolbar-timer" aria-label="Elapsed time">
+      <span className="play-score__toolbar-timer" aria-label={t('play_score.toolbar.elapsed_aria')}>
         <span className="play-score__toolbar-timer-elapsed">{elapsedFormatted}</span>
         {totalFormatted && (
           <span className="play-score__toolbar-timer-total"> / {totalFormatted}</span>
@@ -182,7 +184,7 @@ export function PlaybackToolbar({
 
       {/* Tempo control */}
       <div className="play-score__toolbar-tempo">
-        <span className="play-score__toolbar-tempo-label">TEMPO</span>
+        <span className="play-score__toolbar-tempo-label">{t('play_score.toolbar.tempo')}</span>
         <input
           id="play-score-tempo"
           type="range"
@@ -195,7 +197,7 @@ export function PlaybackToolbar({
             // Snap to 100% when within one step (±0.05) of 1.0
             onTempoChange(Math.abs(raw - 1.0) <= 0.05 ? 1.0 : raw);
           }}
-          aria-label="Tempo"
+          aria-label={t('play_score.toolbar.tempo_aria')}
           className="play-score__toolbar-tempo-slider"
           disabled={status === 'loading'}
         />
@@ -210,7 +212,7 @@ export function PlaybackToolbar({
           key={metronomeAnimKey}
           className={metronomeBtnClass}
           onClick={onMetronomeToggle}
-          aria-label="Toggle metronome"
+          aria-label={t('play_score.toolbar.metronome_toggle_aria')}
           aria-pressed={metronomeActive}
         >
           {SUBDIV_ICONS[metronomeSubdivision]}
@@ -218,7 +220,7 @@ export function PlaybackToolbar({
         <button
           className="play-score__metro-chevron"
           onClick={() => setMenuOpen(o => !o)}
-          aria-label="Metronome subdivision"
+          aria-label={t('play_score.toolbar.metronome_sub_aria')}
           aria-expanded={menuOpen}
           aria-haspopup="menu"
         >

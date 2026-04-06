@@ -14,6 +14,7 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PracticeViewPlugin } from './PracticeViewPlugin';
+import { LocaleProvider } from '../../src/i18n/index';
 import type {
   PluginContext,
   ScorePlayerState,
@@ -184,6 +185,11 @@ function createMockContext(
 // T028 — US1: Score selector and player rendering
 // ---------------------------------------------------------------------------
 
+/** Provide LocaleProvider for tests */
+function TestWrapper({ children }: { children: React.ReactNode }) {
+  return <LocaleProvider locale="en">{children}</LocaleProvider>;
+}
+
 describe('PracticeViewPlugin — US1: score selection screen', () => {
   let ctx: MockContext;
 
@@ -192,17 +198,17 @@ describe('PracticeViewPlugin — US1: score selection screen', () => {
   });
 
   it('renders ScoreSelector when status is idle', () => {
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     expect(screen.getByTestId('score-selector')).toBeTruthy();
   });
 
   it('does NOT render ScoreRenderer when status is idle', () => {
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     expect(screen.queryByTestId('score-renderer')).toBeNull();
   });
 
   it('renders ScoreRenderer when status is ready', () => {
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     act(() => {
       ctx.simulateStateChange({ status: 'ready', title: 'Test Score', staffCount: 1 });
     });
@@ -210,7 +216,7 @@ describe('PracticeViewPlugin — US1: score selection screen', () => {
   });
 
   it('does NOT render ScoreSelector when status is ready', () => {
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     act(() => {
       ctx.simulateStateChange({ status: 'ready', title: 'Test Score', staffCount: 1 });
     });
@@ -225,7 +231,7 @@ describe('PracticeViewPlugin — US1: score selection screen', () => {
 describe('PracticeViewPlugin — Back button', () => {
   it('calls context.close() when Back button is clicked from player view', () => {
     const ctx = createMockContext({ status: 'ready', title: 'Test', staffCount: 1 });
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(ctx.mockClose).toHaveBeenCalledTimes(1);
   });
@@ -238,21 +244,21 @@ describe('PracticeViewPlugin — Back button', () => {
 describe('PracticeViewPlugin — teardown (SC-006)', () => {
   it('calls context.stopPlayback() on unmount', () => {
     const ctx = createMockContext({ status: 'ready', staffCount: 1 });
-    const { unmount } = render(<PracticeViewPlugin context={ctx.context} />);
+    const { unmount } = render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     unmount();
     expect(ctx.mockStopPlayback).toHaveBeenCalled();
   });
 
   it('calls context.scorePlayer.stop() on unmount', () => {
     const ctx = createMockContext({ status: 'ready', staffCount: 1 });
-    const { unmount } = render(<PracticeViewPlugin context={ctx.context} />);
+    const { unmount } = render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     unmount();
     expect(ctx.mockStop).toHaveBeenCalled();
   });
 
   it('MIDI unsubscribe is called on unmount (T042)', () => {
     const ctx = createMockContext({ status: 'ready', staffCount: 1 });
-    const { unmount } = render(<PracticeViewPlugin context={ctx.context} />);
+    const { unmount } = render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     unmount();
     expect(ctx.midiUnsubscribe).toHaveBeenCalled();
   });
@@ -265,13 +271,13 @@ describe('PracticeViewPlugin — teardown (SC-006)', () => {
 describe('PracticeViewPlugin — staff selector visibility', () => {
   it('staff selector NOT shown when staffCount === 1', () => {
     const ctx = createMockContext({ status: 'ready', staffCount: 1 });
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     expect(screen.queryByRole('button', { name: /select hand/i })).toBeNull();
   });
 
   it('staff selector IS shown when staffCount === 2', () => {
     const ctx = createMockContext({ status: 'ready', staffCount: 2 });
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     expect(screen.getByRole('button', { name: /select hand/i })).toBeTruthy();
   });
 });
@@ -289,7 +295,7 @@ describe('PracticeViewPlugin — seek behaviour (T038)', () => {
       { status: 'ready', staffCount: 1, currentTick: 0 },
       MockRenderer,
     );
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     act(() => {
       capturedOnNoteShortTap?.(1920);
@@ -322,7 +328,7 @@ describe('PracticeViewPlugin — seek behaviour (T038)', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     // Start practice
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -345,7 +351,7 @@ describe('PracticeViewPlugin — Practice activation', () => {
     const ctx = createMockContext({ status: 'ready', staffCount: 1 });
     ctx.mockExtractPracticeNotes.mockReturnValue({ notes, totalAvailable: 1, clef: 'Treble' });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     expect(ctx.mockExtractPracticeNotes).toHaveBeenCalledWith(0);
@@ -353,7 +359,7 @@ describe('PracticeViewPlugin — Practice activation', () => {
 
   it('Practice button shows inactive when no score loaded', () => {
     const ctx = createMockContext({ status: 'ready', staffCount: 1 });
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     expect(screen.getByRole('button', { name: /start practice/i })).toBeTruthy();
   });
 });
@@ -370,7 +376,7 @@ describe('PracticeViewPlugin — Results overlay', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     // Start practice
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -397,7 +403,7 @@ describe('PracticeViewPlugin — Results overlay', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
     act(() => {
       ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 });
@@ -421,7 +427,7 @@ describe('PracticeViewPlugin — Results overlay', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
     act(() => {
       ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 });
@@ -457,7 +463,7 @@ function setupCompletedPractice(
     clef: 'Treble',
   });
 
-  const result = render(<PracticeViewPlugin context={ctx.context} />);
+  const result = render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
   // Start practice
   fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -543,7 +549,7 @@ describe('PracticeViewPlugin — Replay (038-practice-replay)', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     const baseTime = Date.now();
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -591,7 +597,7 @@ describe('PracticeViewPlugin — Replay (038-practice-replay)', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     const baseTime = Date.now();
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -634,7 +640,7 @@ describe('PracticeViewPlugin — Replay (038-practice-replay)', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     const baseTime = Date.now();
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -670,7 +676,7 @@ describe('PracticeViewPlugin — Replay (038-practice-replay)', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     const baseTime = Date.now();
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -767,7 +773,7 @@ describe('PracticeViewPlugin — Replay (038-practice-replay)', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     const baseTime = Date.now();
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -807,7 +813,7 @@ describe('PracticeViewPlugin — Replay (038-practice-replay)', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     const baseTime = Date.now();
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -908,7 +914,7 @@ describe('PracticeViewPlugin — Replay (038-practice-replay)', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     const baseTime = Date.now();
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -967,7 +973,7 @@ describe('Feature 042 — US4: chord hold — releasing one pitch while holding 
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     // Press both chord notes (triggers CORRECT_MIDI)
@@ -991,7 +997,7 @@ describe('Feature 042 — US4: chord hold — releasing one pitch while holding 
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     // Press correct note → enter holding
@@ -1039,7 +1045,7 @@ describe('Feature 042 — US2: hold indicator (T022-T024)', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     // Press correct note → entering holding mode; rAF loop starts
@@ -1072,7 +1078,7 @@ describe('Feature 042 — US2: hold indicator (T022-T024)', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
@@ -1110,7 +1116,7 @@ describe('Feature 042 — US2: hold indicator (T022-T024)', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
@@ -1164,7 +1170,7 @@ describe('Feature 042 — US3: early-release scoring (T028, T029, T030)', () => 
     const ctx = createMockContext({ status: 'ready', staffCount: 1, bpm: 120 });
     ctx.mockExtractPracticeNotes.mockReturnValue({ notes, totalAvailable: 1, clef: 'Treble' });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
@@ -1198,7 +1204,7 @@ describe('Feature 042 — US3: early-release scoring (T028, T029, T030)', () => 
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     const baseTime = Date.now();
@@ -1263,7 +1269,7 @@ describe('Feature 001 — T004: HL+HR chord pin retry after EARLY_RELEASE', () =
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     // Press both keys (LH=48, RH=60) → chord complete → enters 'holding' mode
@@ -1322,7 +1328,7 @@ describe('Feature 053 — M1 BH: hold capped to gap before next entry', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     // Press all 4 notes of the chord → should advance immediately (no long hold)
@@ -1362,7 +1368,7 @@ describe('Feature 053 — M1 BH: hold capped to gap before next entry', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     // Press all 4 chord notes → CORRECT_MIDI → advance to note 1
@@ -1398,7 +1404,7 @@ describe('Feature 053 — M1 BH: hold capped to gap before next entry', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     // Press all 4 chord notes → advance to note 1
@@ -1433,7 +1439,7 @@ describe('Feature 053 — M1 BH: hold capped to gap before next entry', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     // Play entry 0 correctly: chord + G5
@@ -1494,7 +1500,7 @@ describe('Feature 053 — M13: held onset pitch counts toward next chord', () =>
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     // Press G5 → completes note 0 → engine advances to note 1 (G5+D#5 chord)
@@ -1526,7 +1532,7 @@ describe('Feature 053 — M13: held onset pitch counts toward next chord', () =>
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
 
     // Press G5 → completes note 0. G5 held but note 1 is also [79] → must NOT auto-complete.
@@ -1569,7 +1575,7 @@ describe('[US6] Feature 053: position lock during active practice', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     // Start practice — engine now at waiting/active, currentIndex = 0
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -1625,7 +1631,7 @@ describe('[US6] Feature 053: position lock during active practice', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     // Start practice
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -1659,7 +1665,7 @@ describe('[US7] Feature 053: partial results on Stop', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     // Start practice
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
@@ -1693,7 +1699,7 @@ describe('[US7] Feature 053: partial results on Stop', () => {
       clef: 'Treble',
     });
 
-    render(<PracticeViewPlugin context={ctx.context} />);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     // Start practice
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));

@@ -29,6 +29,7 @@ import { COMPLEXITY_PRESETS, COMPLEXITY_LEVEL_STORAGE_KEY, midiToLabel } from '.
 import { TrainResultsOverlay } from './TrainResultsOverlay';
 import { generateExercise, generateScoreExercise, generateScaleExercise, DEFAULT_EXERCISE_CONFIG, SCALE_OPTIONS } from './exerciseGenerator';
 import { scoreCapture } from './exerciseScorer';
+import { useTranslation } from '../../src/i18n';
 import './TrainPlugin.css';
 import { TrainVirtualKeyboard } from './TrainVirtualKeyboard';
 import { saveTrainToIndexedDB, loadTrainFromIndexedDB, deleteTrainFromIndexedDB, generateTrainName } from './savedTrainStorage';
@@ -1354,6 +1355,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
 
   const isDisabled = phase === 'playing' || phase === 'countdown';
   const { StaffViewer, ScoreSelector } = context.components;
+  const { t } = useTranslation();
 
   // ── Input source badge ────────────────────────────────────────────────────────
   const isVirtualKeyboardActive = inputSource === 'virtual-keyboard';
@@ -1368,15 +1370,15 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           : micActive === true ? 'train-mic-badge--active' : '',
   ].filter(Boolean).join(' ');
   const inputBadgeLabel = isVirtualKeyboardActive
-    ? '🎹 Mic/MIDI suspended'
+    ? t('train.input.suspended')
     : inputSource === 'midi'
-      ? '🎹 MIDI Keyboard'
-      : micError ? `🎤 Mic (error)` : '🎤 Mic';
+      ? t('train.input.midi_keyboard')
+      : micError ? t('train.input.mic_error') : t('train.input.mic');
   const inputBadgeTip = isVirtualKeyboardActive
     ? 'Virtual keyboard active — mic and MIDI suspended'
     : inputSource === 'midi'
-      ? 'MIDI keyboard detected — using MIDI input'
-      : micError ?? 'Listening via microphone';
+      ? t('train.input.midi_detected_tip')
+      : micError ?? t('train.input.mic_listening_tip');
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -1405,17 +1407,17 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           }
         }}
         >
-          ← Back
+          {t('train.toolbar.back')}
         </button>
 
         {/* Show title when not in a session task */}
-        {!taskTag && <h1 className="train-plugin__title">Train</h1>}
+        {!taskTag && <h1 className="train-plugin__title">{t('train.toolbar.title')}</h1>}
 
         {/* Feature 071: Session task tag — shown when launched from a session task */}
         {taskTag && (
           <button
             className="train-plugin__task-tag"
-            title={`Session Task ${taskTag.taskNumber}`}
+            title={t('train.session_task', { n: taskTag.taskNumber })}
             type="button"
             onClick={() => {
               const cfg = warmUpTaskConfigRef.current;
@@ -1427,7 +1429,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
               }
             }}
           >
-            Session Task {taskTag.taskNumber}
+            {t('train.session_task', { n: taskTag.taskNumber })}
           </button>
         )}
 
@@ -1436,15 +1438,15 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           <span
             className={`difficulty-tag difficulty-tag--${taskTag.difficulty === 1 ? 'easy' : taskTag.difficulty === 2 ? 'medium' : 'hard'}`}
           >
-            {taskTag.difficulty === 1 ? 'Easy' : taskTag.difficulty === 2 ? 'Medium' : 'Hard'}
+            {taskTag.difficulty === 1 ? t('train.level.easy') : taskTag.difficulty === 2 ? t('train.level.medium') : t('train.level.hard')}
           </span>
         )}
 
         {/* COMPLEXITY LEVEL — next to title */}
-        <label className="train-plugin__level-label" htmlFor="train-level-select">Level</label>
+        <label className="train-plugin__level-label" htmlFor="train-level-select">{t('train.level.label')}</label>
         <select
           id="train-level-select"
-          aria-label="Complexity level"
+          aria-label={t('train.level.complexity_aria')}
           className="train-plugin__level-select"
           value={complexityLevel ?? 'custom'}
           disabled={isDisabled}
@@ -1483,10 +1485,10 @@ export function TrainPlugin({ context }: TrainPluginProps) {
             }
           }}
         >
-          <option value="low">Low</option>
-          <option value="mid">Mid</option>
-          <option value="high">High</option>
-          <option value="custom">Custom</option>
+          <option value="low">{t('train.level.low')}</option>
+          <option value="mid">{t('train.level.mid')}</option>
+          <option value="high">{t('train.level.high')}</option>
+          <option value="custom">{t('train.level.custom')}</option>
         </select>
 
         {(phase === 'ready' || phase === 'results') && (
@@ -1499,7 +1501,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
                 handlePlayRef.current();
               }
             }}
-            aria-label="Start train exercise"
+            aria-label={t('train.action.start_aria')}
             data-testid="train-play-btn"
           >
             ▶ Train
@@ -1510,7 +1512,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           <button
             className="train-plugin__header-btn train-plugin__header-btn--stop"
             onClick={handleStop}
-            aria-label="Stop exercise"
+            aria-label={t('train.action.stop_aria')}
             data-testid="train-stop-btn"
           >
             ■ Stop
@@ -1527,16 +1529,16 @@ export function TrainPlugin({ context }: TrainPluginProps) {
               key={metronomeAnimKey}
               className={metronomeBtnClass}
               onClick={handleMetronomeToggle}
-              aria-label="Toggle metronome"
+              aria-label={t('train.action.metronome_aria')}
               aria-pressed={metronomeState.active}
-              title={metronomeState.active ? 'Stop metronome' : 'Start metronome'}
+              title={metronomeState.active ? t('train.action.metronome_stop_title') : t('train.action.metronome_start_title')}
             >
               {SUBDIV_ICONS[metronomeState.subdivision as MetronomeSubdivision ?? 1]}
             </button>
             <button
               className="train-plugin__metro-chevron"
               onClick={() => setMetroMenuOpen((o) => !o)}
-              aria-label="Metronome subdivision"
+              aria-label={t('train.action.metronome_sub_aria')}
               aria-expanded={metroMenuOpen}
               aria-haspopup="menu"
             >
@@ -1570,9 +1572,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           <button
             className={`train-plugin__vkb-toggle${virtualKeyboardOpen ? ' train-plugin__vkb-toggle--active' : ''}`}
             onClick={handleVirtualKeyboardToggle}
-            aria-label={virtualKeyboardOpen ? 'Hide virtual keyboard' : 'Show virtual keyboard'}
+            aria-label={virtualKeyboardOpen ? t('train.action.vkeyboard_hide_aria') : t('train.action.vkeyboard_show_aria')}
             aria-pressed={virtualKeyboardOpen}
-            title={virtualKeyboardOpen ? 'Hide virtual keyboard' : 'Show virtual keyboard'}
+            title={virtualKeyboardOpen ? t('train.action.vkeyboard_hide_title') : t('train.action.vkeyboard_show_title')}
             data-testid="vkb-toggle-btn"
           >
             🎹
@@ -1591,15 +1593,15 @@ export function TrainPlugin({ context }: TrainPluginProps) {
       {showTips && (
         <div className="train-plugin__tips" role="note">
           <ul className="train-plugin__tips-list">
-            <li>🎹 Use a <strong>MIDI interface</strong> for accurate note detection.</li>
-            <li>🎤 Place the <strong>microphone as close as possible</strong> to the keyboard's speakers.</li>
-            <li>🤫 Practice in a <strong>quiet space</strong> — background noise reduces accuracy.</li>
-            <li>⭐ An <strong>external microphone</strong> significantly improves pitch detection.</li>
+            <li>{t('train.tip.use_midi')}</li>
+            <li>{t('train.tip.mic_placement')}</li>
+            <li>{t('train.tip.quiet_space')}</li>
+            <li>{t('train.tip.external_mic')}</li>
           </ul>
           <button
             className="train-plugin__tips-dismiss"
             onClick={handleDismissTips}
-            aria-label="Dismiss tips"
+            aria-label={t('train.tip.dismiss_aria')}
           >
             Got it!
           </button>
@@ -1615,9 +1617,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
             <button
               className="train-sidebar__toggle"
               onClick={() => setSidebarCollapsed(prev => !prev)}
-              aria-label={sidebarCollapsed ? 'Open config panel' : 'Collapse config panel'}
+              aria-label={sidebarCollapsed ? t('train.action.config_open_aria') : t('train.action.config_collapse_aria')}
               aria-expanded={!sidebarCollapsed}
-              title={sidebarCollapsed ? 'Open config' : 'Collapse config'}
+              title={sidebarCollapsed ? t('train.action.config_open_title') : t('train.action.config_collapse_title')}
             >
               {sidebarCollapsed ? '⚙' : '‹'}
             </button>
@@ -1625,22 +1627,22 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           <div className="train-sidebar__sections">
               {/* MODE */}
               <div className="train-sidebar__section">
-                <p className="train-sidebar__section-title">Mode</p>
+                <p className="train-sidebar__section-title">{t('train.mode.label')}</p>
                 <select
-                  aria-label="Mode"
+                  aria-label={t('train.mode.aria')}
                   className="train-sidebar__select"
                   value={config.mode}
                   disabled={isDisabled}
                   onChange={(e) => { setComplexityLevel(null); updateConfig({ mode: e.target.value as 'flow' | 'step' }); }}
                 >
-                  <option value="flow">Flow</option>
-                  <option value="step">Step</option>
+                  <option value="flow">{t('train.mode.flow')}</option>
+                  <option value="step">{t('train.mode.step')}</option>
                 </select>
               </div>
 
               {/* SCORE */}
               <div className="train-sidebar__section">
-                <p className="train-sidebar__section-title">Score</p>
+                <p className="train-sidebar__section-title">{t('train.score.label')}</p>
                 {([['score', 'Score'], ['scales', 'Scales']] as [ExerciseConfig['preset'], string][]).map(([v, label]) => (
                   <label
                     key={v}
@@ -1670,7 +1672,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
                     className="train-sidebar__select"
                     value={config.scaleId}
                     disabled={isDisabled}
-                    aria-label="Scale"
+                    aria-label={t('train.score.scale_aria')}
                     onChange={(e) => { setComplexityLevel(null); updateConfig({ scaleId: e.target.value }); }}
                   >
                     {SCALE_OPTIONS.map((s) => (
@@ -1682,17 +1684,17 @@ export function TrainPlugin({ context }: TrainPluginProps) {
                   <button
                     className="train-sidebar__change-score-btn"
                     disabled={isDisabled}
-                    aria-label="Change score"
+                    aria-label={t('train.score.change_aria')}
                     onClick={() => setShowScoreSelector(true)}
                   >
-                    Change score
+                    {t('train.score.change_aria')}
                   </button>
                 )}
               </div>
 
               {/* NOTES */}
               <div className="train-sidebar__section">
-                <p className="train-sidebar__section-title">Notes</p>
+                <p className="train-sidebar__section-title">{t('train.notes.label')}</p>
                 <div className="train-sidebar__slider-row">
                   <input
                     type="range"
@@ -1701,19 +1703,19 @@ export function TrainPlugin({ context }: TrainPluginProps) {
                     step={1}
                     value={config.noteCount}
                     disabled={isDisabled || config.preset === 'scales'}
-                    aria-label="Note count"
+                    aria-label={t('train.notes.count_aria')}
                     onChange={(e) => { setComplexityLevel(null); updateConfig({ noteCount: Number(e.target.value) }); }}
                   />
                   <span className="train-sidebar__slider-value">{config.noteCount}</span>
                 </div>
                 {config.preset === 'scales' && (
-                  <span className="train-score-disabled-label">Set by scale</span>
+                  <span className="train-score-disabled-label">{t('train.notes.set_by_scale')}</span>
                 )}
               </div>
 
               {/* CLEF */}
               <div className="train-sidebar__section">
-                <p className="train-sidebar__section-title">Clef</p>
+                <p className="train-sidebar__section-title">{t('train.clef.label')}</p>
                 {(['Treble', 'Bass'] as const).map((c) => (
                   <label
                     key={c}
@@ -1732,21 +1734,21 @@ export function TrainPlugin({ context }: TrainPluginProps) {
                   </label>
                 ))}
                 {config.preset === 'score' && (
-                  <span className="train-score-disabled-label">Set by score</span>
+                  <span className="train-score-disabled-label">{t('train.clef.set_by_score')}</span>
                 )}
                 {config.preset === 'scales' && (
-                  <span className="train-score-disabled-label">Set by scale</span>
+                  <span className="train-score-disabled-label">{t('train.clef.set_by_scale')}</span>
                 )}
               </div>
 
               {/* OCTAVES */}
               <div className="train-sidebar__section">
-                <p className="train-sidebar__section-title">Octaves</p>
+                <p className="train-sidebar__section-title">{t('train.octaves.label')}</p>
                 <select
                   className="train-sidebar__select"
                   value={config.octaveRange}
                   disabled={isDisabled || config.preset === 'score'}
-                  aria-label="Octave range"
+                  aria-label={t('train.octaves.range_aria')}
                   aria-disabled={config.preset === 'score'}
                   onChange={(e) => {
                     const o = Number(e.target.value) as 1 | 2 | 3 | 4;
@@ -1763,13 +1765,13 @@ export function TrainPlugin({ context }: TrainPluginProps) {
                   ))}
                 </select>
                 {config.preset === 'score' && (
-                  <span className="train-score-disabled-label">Set by score</span>
+                  <span className="train-score-disabled-label">{t('train.clef.set_by_score')}</span>
                 )}
               </div>
 
               {/* TEMPO */}
               <div className="train-sidebar__section">
-                <p className="train-sidebar__section-title">Tempo</p>
+                <p className="train-sidebar__section-title">{t('train.tempo.label')}</p>
                 <div className="train-sidebar__slider-row">
                   <input
                     type="range"
@@ -1778,12 +1780,12 @@ export function TrainPlugin({ context }: TrainPluginProps) {
                     step={5}
                     value={bpmValue}
                     disabled={isDisabled}
-                    aria-label="Tempo BPM"
+                    aria-label={t('train.tempo.bpm_aria')}
                     onChange={(e) => { setComplexityLevel(null); handleBpmChange(Number(e.target.value)); }}
                   />
                   <span className="train-sidebar__slider-value">{bpmValue}</span>
                 </div>
-                <p className="train-sidebar__slider-sublabel">BPM</p>
+                <p className="train-sidebar__slider-sublabel">{t('train.tempo.bpm')}</p>
               </div>
             </div>
         </aside>
@@ -1812,13 +1814,13 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           {/* Exercise staff */}
           <div className="train-staff-block">
             <div className="train-staff-label">
-              <span aria-hidden="true">Exercise</span>
+              <span aria-hidden="true">{t('train.exercise.label')}</span>
               <button
                 className={`train-staff-sound-btn${soundEnabled ? '' : ' train-staff-sound-btn--muted'}`}
                 onClick={toggleSound}
-                aria-label={soundEnabled ? 'Mute exercise notes' : 'Unmute exercise notes'}
+                aria-label={soundEnabled ? t('train.exercise.mute_aria') : t('train.exercise.unmute_aria')}
                 aria-pressed={!soundEnabled}
-                title={soundEnabled ? 'Exercise notes sound on — click to mute' : 'Exercise notes muted — click to unmute'}
+                title={soundEnabled ? t('train.exercise.mute_title') : t('train.exercise.unmute_title')}
               >
                 {soundEnabled ? '🔊' : '🔇'}
               </button>
@@ -1845,7 +1847,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           {/* Response staff — flow mode playing/results; step mode playing only */}
           {(phase === 'playing' || (phase === 'results' && config.mode !== 'step')) && (
             <div className="train-staff-block">
-              <div className="train-staff-label" aria-hidden="true">Your Response</div>
+              <div className="train-staff-label" aria-hidden="true">{t('train.exercise.your_response')}</div>
               <div className="train-staff-wrapper">
                 <StaffViewer
                   notes={responseNoteEvents}

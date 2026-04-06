@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { ResultsOverlay } from './ResultsOverlay';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
 import type { PluginContext, ScorePlayerState } from '../../src/plugin-api/index';
+import { LocaleProvider } from '../../src/i18n/index';
 
 function makeMockProps() {
   const playerState: ScorePlayerState = {
@@ -40,10 +41,15 @@ function makeMockProps() {
   };
 }
 
+/** Provide LocaleProvider for tests */
+function TestWrapper({ children }: { children: React.ReactNode }) {
+  return <LocaleProvider locale="en">{children}</LocaleProvider>;
+}
+
 describe('ResultsOverlay', () => {
   it('renders without crashing when overlay is hidden', () => {
     const props = makeMockProps();
-    const { container } = render(<ResultsOverlay {...props} />);
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
     // When not visible, should render nothing
     expect(container.querySelector('.practice-results')).toBeNull();
   });

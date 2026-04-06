@@ -10,6 +10,7 @@
 import '../practice-view-plugin/PracticeViewPlugin.css';
 import type { ExerciseResult, NoteComparison } from './trainTypes';
 import { midiToLabel } from './trainTypes';
+import { useTranslation } from '../../src/i18n';
 
 export interface TrainResultsOverlayProps {
   result: ExerciseResult | null;
@@ -40,14 +41,6 @@ function scoreColor(score: number): string {
   return score >= 90 ? '#2e7d32' : score >= 60 ? '#f57f17' : '#c62828';
 }
 
-function scoreGrade(score: number): string {
-  if (score === 100) return '🏆 Perfect!';
-  if (score >= 90) return '🌟 Excellent!';
-  if (score >= 70) return '👍 Good job!';
-  if (score >= 50) return '💪 Keep going!';
-  return '🎯 Keep practicing!';
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TrainResultsOverlay({
@@ -64,6 +57,16 @@ export function TrainResultsOverlay({
   onReplay,
   onReplayStop,
 }: TrainResultsOverlayProps) {
+  const { t } = useTranslation();
+
+  function scoreGrade(score: number): string {
+    if (score === 100) return t('train.results.grade_perfect');
+    if (score >= 90) return t('train.results.grade_excellent');
+    if (score >= 70) return t('train.results.grade_good');
+    if (score >= 50) return t('train.results.grade_keep_going');
+    return t('train.results.grade_keep_practicing');
+  }
+
   if (!result || !visible) return null;
 
   // ── Stats ──────────────────────────────────────────────────────────────────
@@ -110,9 +113,7 @@ export function TrainResultsOverlay({
 
     return (
       <details className="practice-results__details" style={{ marginTop: '8px' }}>
-        <summary className="practice-results__details-summary">
-          Timing deviation per note
-        </summary>
+          <summary className="practice-results__details-summary">{t('train.results.timing_chart')}</summary>
         <div className="practice-results__graph-wrapper">
           <svg
             viewBox={`0 0 ${W} ${H}`}
@@ -189,11 +190,11 @@ export function TrainResultsOverlay({
       <div
         className="practice-results"
         role="region"
-        aria-label="Exercise results"
+        aria-label={t('train.results.overlay_aria')}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
-        <button className="practice-results__close" aria-label="Close results" onClick={onDismiss}>
+        <button className="practice-results__close" aria-label={t('train.results.close_aria')} onClick={onDismiss}>
           ×
         </button>
 
@@ -223,39 +224,39 @@ export function TrainResultsOverlay({
         <div className="practice-results__stats">
           <div className="practice-results__stat">
             <span className="practice-results__stat-value">{totalNotes}</span>
-            <span className="practice-results__stat-label">Notes</span>
+            <span className="practice-results__stat-label">{t('train.results.notes')}</span>
           </div>
           <div className="practice-results__stat">
             <span className="practice-results__stat-value">{correctCount}</span>
-            <span className="practice-results__stat-label">Correct</span>
+            <span className="practice-results__stat-label">{t('train.results.correct')}</span>
           </div>
           <div className="practice-results__stat">
             <span className="practice-results__stat-value practice-results__stat-value--warn">
               {offBeatCount}
             </span>
-            <span className="practice-results__stat-label">Off-beat</span>
+            <span className="practice-results__stat-label">{t('train.results.off_beat')}</span>
           </div>
           <div className="practice-results__stat">
             <span className="practice-results__stat-value practice-results__stat-value--error">
               {wrongCount}
             </span>
-            <span className="practice-results__stat-label">Wrong</span>
+            <span className="practice-results__stat-label">{t('train.results.wrong')}</span>
           </div>
         </div>
 
         {/* Collapsible note-by-note table */}
         <details className="practice-results__details">
-          <summary className="practice-results__details-summary">Note-by-note details</summary>
+          <summary className="practice-results__details-summary">{t('train.results.details')}</summary>
           <div className="practice-results__table-wrapper">
             <table className="practice-results__table" aria-label="Per-note comparison">
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Target</th>
-                  <th>Detected</th>
-                  <th>Status</th>
-                  <th>Pitch Δ (¢)</th>
-                  <th>Timing Δ (ms)</th>
+                  <th>{t('train.results.target')}</th>
+                  <th>{t('train.results.detected')}</th>
+                  <th>{t('train.results.status')}</th>
+                  <th>{t('train.results.pitch_delta')}</th>
+                  <th>{t('train.results.timing_delta')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -285,10 +286,10 @@ export function TrainResultsOverlay({
                           : c.status === 'missed' ? '❌'
                           : '➕'}
                       </span>{' '}
-                      {c.status === 'correct' ? 'Correct'
-                        : c.status === 'wrong-pitch' ? 'Wrong pitch'
-                        : c.status === 'wrong-timing' ? 'Wrong timing'
-                        : c.status === 'missed' ? 'Missed'
+                      {c.status === 'correct' ? t('train.results.status_correct')
+                        : c.status === 'wrong-pitch' ? t('train.results.status_wrong_pitch')
+                        : c.status === 'wrong-timing' ? t('train.results.status_wrong_timing')
+                        : c.status === 'missed' ? t('train.results.status_missed')
                         : 'Extraneous'}
                     </td>
                     <td>
@@ -304,7 +305,7 @@ export function TrainResultsOverlay({
           </div>
           {result.extraneousNotes.length > 0 && (
             <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: '#555' }}>
-              <strong>Extraneous notes:</strong>{' '}
+            <strong>{t('train.results.extraneous')}</strong>{' '}
               {result.extraneousNotes.length} extra note
               {result.extraneousNotes.length !== 1 ? 's' : ''} played outside beat windows.
             </div>
@@ -319,30 +320,30 @@ export function TrainResultsOverlay({
           <button
             className="practice-results__repractice-btn"
             onClick={onRetry}
-            aria-label="Retry exercise"
+            aria-label={t('train.results.retry_aria')}
             data-testid="train-retry-btn"
             disabled={isReplaying}
           >
-            🔁 Retry
+            {t('train.results.retry')}
           </button>
           {onNew && (
             <button
               className="practice-results__replay-btn"
               onClick={onNew}
-              aria-label="New exercise"
+              aria-label={t('train.results.new_aria')}
               disabled={isReplaying}
             >
-              🎲 New
+              {t('train.results.new')}
             </button>
           )}
           {onReplay && (
             <button
               className="practice-results__replay-btn"
               onClick={isReplaying ? onReplayStop : onReplay}
-              aria-label={isReplaying ? 'Stop replay' : 'Replay notes'}
+              aria-label={isReplaying ? t('train.results.stop_replay_aria') : t('train.results.replay_aria')}
               data-testid="train-replay-btn"
             >
-              {isReplaying ? '⏹ Stop' : '▶ Replay'}
+              {isReplaying ? t('train.results.stop') : t('train.results.replay')}
             </button>
           )}
           {onSave && (
@@ -350,19 +351,19 @@ export function TrainResultsOverlay({
               className={`practice-results__save-btn${isSaved ? ' practice-results__save-btn--saved' : ''}`}
               onClick={isSaved ? undefined : onSave}
               disabled={isSaved || isReplaying}
-              aria-label={isSaved ? 'Train result saved' : 'Save train result'}
+              aria-label={isSaved ? t('train.results.saved_aria') : t('train.results.save_aria')}
               data-testid="train-save-btn"
             >
-              {isSaved ? '✓ Saved' : '💾 Save'}
+              {isSaved ? t('train.results.saved') : t('train.results.save')}
             </button>
           )}
           {onReturnToSession && (
             <button
               className="practice-results__session-btn"
               onClick={onReturnToSession}
-              aria-label="Return to session"
+              aria-label={t('train.results.session_aria')}
             >
-              ↩ Session
+              {t('train.results.session')}
             </button>
           )}
         </div>
@@ -375,7 +376,7 @@ export function TrainResultsOverlay({
         {/* Hint */}
         {!onReturnToSession && (
           <p className="practice-results__hint">
-            Press <strong>🔁 Retry</strong> to try again
+            {t('train.results.retry_hint')}
           </p>
         )}
       </div>

@@ -16,6 +16,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { PluginPlaybackStatus, MetronomeSubdivision } from '../../src/plugin-api/index';
 import type { PracticeMode } from './practiceEngine.types';
+import { useTranslation } from '../../src/i18n';
 
 // Mirror of PlaybackScheduler.PPQ — no host imports allowed
 const PPQ = 960;
@@ -119,6 +120,7 @@ export function PracticeToolbar({
   taskTag,
   onTaskTagClick,
 }: PracticeToolbarProps) {
+  const { t } = useTranslation();
   const isPlaying = status === 'playing';
   const isLoaded = status === 'ready' || status === 'playing' || status === 'paused';
 
@@ -192,13 +194,13 @@ export function PracticeToolbar({
     <div
       className="practice-plugin__toolbar"
       role="toolbar"
-      aria-label="Practice controls"
+      aria-label={t('practice.toolbar.controls_aria')}
     >
       {/* Back / Close button */}
       <button
         className="practice-plugin__toolbar-btn practice-plugin__toolbar-btn--back"
         onClick={onBack}
-        aria-label="Back"
+        aria-label={t('practice.toolbar.back_aria')}
       >
         ←
       </button>
@@ -214,11 +216,11 @@ export function PracticeToolbar({
       {taskTag && (
         <button
           className="practice-plugin__task-tag"
-          title={`Session Task ${taskTag.taskNumber}`}
+          title={t('practice.toolbar.session_task', { n: taskTag.taskNumber })}
           onClick={onTaskTagClick}
           type="button"
         >
-          Session Task {taskTag.taskNumber}
+          {t('practice.toolbar.session_task', { n: taskTag.taskNumber })}
         </button>
       )}
 
@@ -227,7 +229,7 @@ export function PracticeToolbar({
         <span
           className={`difficulty-tag difficulty-tag--${taskTag.difficulty === 1 ? 'easy' : taskTag.difficulty === 2 ? 'medium' : 'hard'}`}
         >
-          {taskTag.difficulty === 1 ? 'Easy' : taskTag.difficulty === 2 ? 'Medium' : 'Hard'}
+          {taskTag.difficulty === 1 ? t('train.level.easy') : taskTag.difficulty === 2 ? t('train.level.medium') : t('train.level.hard')}
         </span>
       )}
 
@@ -236,7 +238,7 @@ export function PracticeToolbar({
         <button
           className="practice-plugin__toolbar-btn practice-plugin__toolbar-btn--pause"
           onClick={onPause}
-          aria-label="Pause"
+          aria-label={t('practice.toolbar.pause_aria')}
         >
           ⏸
         </button>
@@ -244,7 +246,7 @@ export function PracticeToolbar({
         <button
           className="practice-plugin__toolbar-btn practice-plugin__toolbar-btn--play"
           onClick={onPlay}
-          aria-label="Play"
+          aria-label={t('practice.toolbar.play_aria')}
           disabled={!isLoaded}
         >
           ▶
@@ -255,7 +257,7 @@ export function PracticeToolbar({
       <button
         className="practice-plugin__toolbar-btn practice-plugin__toolbar-btn--stop"
         onClick={onStop}
-        aria-label="Stop"
+        aria-label={t('practice.toolbar.stop_aria')}
         disabled={!isLoaded}
       >
         ■
@@ -269,7 +271,7 @@ export function PracticeToolbar({
             onClick={() => setStaffMenuOpen((o) => !o)}
             aria-haspopup="listbox"
             aria-expanded={staffMenuOpen}
-            aria-label="Select hand"
+            aria-label={t('practice.toolbar.hand_aria')}
             disabled={!isLoaded || !!taskTag}
           >
             {staffIndexLabel(selectedStaffIndex)}
@@ -306,20 +308,20 @@ export function PracticeToolbar({
           but staff has not been confirmed yet (staffCount > 1) */}
       {showStaffPicker && (
         <span className="practice-plugin__staff-picker">
-          <span className="practice-plugin__staff-picker-label">Select staff above, then press Practice</span>
+          <span className="practice-plugin__staff-picker-label">{t('practice.toolbar.select_staff_prompt')}</span>
         </span>
       )}
 
       {/* Practice toggle button — disabled when no MIDI device connected */}
       <span
         className="practice-plugin__practice-btn-wrapper"
-        title={midiConnected === false ? 'A MIDI input device is required for practice mode' : undefined}
+        title={midiConnected === false ? t('practice.toolbar.no_midi_device') : undefined}
       >
         <button
           className={practiceBtnClass}
           onClick={onPracticeToggle}
           aria-label={
-            practiceRunning ? 'Stop practice mode' : 'Start practice mode'
+            practiceRunning ? t('practice.toolbar.practice_mode_stop_aria') : t('practice.toolbar.practice_mode_start_aria')
           }
           aria-pressed={practiceRunning}
           disabled={!isLoaded || midiConnected === false || !!isReplaying}
@@ -338,14 +340,14 @@ export function PracticeToolbar({
       {/* Replay mode label */}
       {isReplaying && (
         <span className="practice-plugin__replay-label" aria-live="polite">
-          ▶ Replaying…
+          {t('practice.toolbar.replaying')}
         </span>
       )}
 
       {/* No-MIDI notice — shown when practice is active but MIDI is disconnected */}
       {practiceRunning && midiConnected === false && (
         <span className="practice-plugin__no-midi-notice" role="alert">
-          Connect a MIDI device to practice
+          {t('practice.toolbar.connect_midi')}
         </span>
       )}
 
@@ -353,7 +355,7 @@ export function PracticeToolbar({
       <div className="practice-plugin__toolbar-spacer" />
 
       {/* Timer — right side, left of tempo */}
-      <span className="practice-plugin__toolbar-timer" aria-label="Elapsed time">
+      <span className="practice-plugin__toolbar-timer" aria-label={t('practice.toolbar.elapsed_aria')}>
         <span className="practice-plugin__toolbar-timer-elapsed">{elapsedFormatted}</span>
         {totalFormatted && (
           <span className="practice-plugin__toolbar-timer-total"> / {totalFormatted}</span>
@@ -362,7 +364,7 @@ export function PracticeToolbar({
 
       {/* Tempo */}
       <div className="practice-plugin__toolbar-tempo">
-        <span className="practice-plugin__toolbar-tempo-label">TEMPO</span>
+        <span className="practice-plugin__toolbar-tempo-label">{t('practice.toolbar.tempo')}</span>
         <input
           type="range"
           min={0.5}
@@ -373,7 +375,7 @@ export function PracticeToolbar({
             const raw = parseFloat(e.target.value);
             onTempoChange(Math.abs(raw - 1.0) <= 0.05 ? 1.0 : raw);
           }}
-          aria-label="Tempo multiplier"
+          aria-label={t('practice.toolbar.tempo_aria')}
           className="practice-plugin__toolbar-tempo-slider"
           disabled={status === 'loading' || !!taskTag}
         />
@@ -388,7 +390,7 @@ export function PracticeToolbar({
           key={metronomeAnimKey}
           className={metronomeBtnClass}
           onClick={onMetronomeToggle}
-          aria-label="Toggle metronome"
+          aria-label={t('practice.toolbar.metronome_aria')}
           aria-pressed={metronomeActive}
         >
           {SUBDIV_ICONS[metronomeSubdivision]}
@@ -396,7 +398,7 @@ export function PracticeToolbar({
         <button
           className="practice-plugin__metro-chevron"
           onClick={() => setMetroMenuOpen((o) => !o)}
-          aria-label="Metronome subdivision"
+          aria-label={t('practice.toolbar.metronome_sub_aria')}
           aria-expanded={metroMenuOpen}
           aria-haspopup="menu"
         >
@@ -431,8 +433,8 @@ export function PracticeToolbar({
       {midiConnected && (
         <span
           className="practice-plugin__midi-badge"
-          title="MIDI keyboard detected"
-          aria-label="MIDI keyboard connected"
+          title={t('practice.toolbar.midi_connected_title')}
+          aria-label={t('practice.toolbar.midi_connected_aria')}
         >
           🎹 MIDI
         </span>

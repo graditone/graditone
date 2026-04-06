@@ -35,6 +35,7 @@ import type {
 } from '../../src/plugin-api/index';
 import { TrainPlugin } from './TrainPlugin';
 import { TrainVirtualKeyboard } from './TrainVirtualKeyboard';
+import { LocaleProvider } from '../../src/i18n/index';
 
 // ---------------------------------------------------------------------------
 // Mock helpers (shared with TrainPlugin.test.tsx)
@@ -140,17 +141,22 @@ afterEach(() => { vi.runAllTimers(); vi.useRealTimers(); vi.clearAllMocks(); });
 // T003 — US1 Toggle Button (tests TrainPlugin integration)
 // ---------------------------------------------------------------------------
 
+/** Provide LocaleProvider for tests */
+function TestWrapper({ children }: { children: React.ReactNode }) {
+  return <LocaleProvider locale="en">{children}</LocaleProvider>;
+}
+
 describe('T003 — Virtual keyboard toggle button in TrainPlugin', () => {
   it('renders a keyboard toggle button in the header toolbar', () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     const toggleBtn = screen.getByTestId('vkb-toggle-btn');
     expect(toggleBtn).toBeDefined();
   });
 
   it('toggle button is rendered adjacent to the Mic/MIDI badge', () => {
     const ctx = makeMockContext();
-    const { container } = render(<TrainPlugin context={ctx} />);
+    const { container } = render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     // Both the toggle button and the badge should be inside the same header-actions container
     const actionsDiv = container.querySelector('.train-plugin__header-actions');
     expect(actionsDiv).not.toBeNull();
@@ -162,20 +168,20 @@ describe('T003 — Virtual keyboard toggle button in TrainPlugin', () => {
 
   it('toggle button has aria-pressed=false by default (keyboard hidden)', () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     const toggleBtn = screen.getByTestId('vkb-toggle-btn');
     expect(toggleBtn.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('virtual keyboard panel is NOT shown on initial render', () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     expect(screen.queryByTestId('vkb-panel')).toBeNull();
   });
 
   it('pressing the toggle button shows the virtual keyboard panel', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     const toggleBtn = screen.getByTestId('vkb-toggle-btn');
     await act(async () => { fireEvent.click(toggleBtn); });
     expect(screen.getByTestId('vkb-panel')).toBeDefined();
@@ -183,7 +189,7 @@ describe('T003 — Virtual keyboard toggle button in TrainPlugin', () => {
 
   it('toggle button has aria-pressed=true when panel is open', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     const toggleBtn = screen.getByTestId('vkb-toggle-btn');
     await act(async () => { fireEvent.click(toggleBtn); });
     expect(toggleBtn.getAttribute('aria-pressed')).toBe('true');
@@ -191,7 +197,7 @@ describe('T003 — Virtual keyboard toggle button in TrainPlugin', () => {
 
   it('toggle button has active CSS class when panel is open', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     const toggleBtn = screen.getByTestId('vkb-toggle-btn');
     await act(async () => { fireEvent.click(toggleBtn); });
     expect(toggleBtn.className).toContain('train-plugin__vkb-toggle--active');
@@ -199,7 +205,7 @@ describe('T003 — Virtual keyboard toggle button in TrainPlugin', () => {
 
   it('pressing the toggle button again hides the virtual keyboard panel', async () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     const toggleBtn = screen.getByTestId('vkb-toggle-btn');
     await act(async () => { fireEvent.click(toggleBtn); }); // open
     await act(async () => { fireEvent.click(toggleBtn); }); // close
@@ -208,7 +214,7 @@ describe('T003 — Virtual keyboard toggle button in TrainPlugin', () => {
 
   it('Mic/MIDI badge gains suspended class when virtual keyboard is active', async () => {
     const ctx = makeMockContext();
-    const { container } = render(<TrainPlugin context={ctx} />);
+    const { container } = render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     const toggleBtn = screen.getByTestId('vkb-toggle-btn');
     await act(async () => { fireEvent.click(toggleBtn); });
     const badge = container.querySelector('.train-mic-badge');
@@ -217,7 +223,7 @@ describe('T003 — Virtual keyboard toggle button in TrainPlugin', () => {
 
   it('virtual keyboard state resets to hidden on fresh mount (FR-009)', () => {
     const ctx = makeMockContext();
-    render(<TrainPlugin context={ctx} />);
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
     // On a fresh mount there should be no panel without any interaction
     expect(screen.queryByTestId('vkb-panel')).toBeNull();
   });
@@ -238,7 +244,7 @@ describe('T012 — TrainVirtualKeyboard component', () => {
     const ctx = makeVkbContext();
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
-    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
+    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />, { wrapper: TestWrapper });
     const keyboard = screen.getByTestId('train-vkb-keyboard');
     const whiteKeys = keyboard.querySelectorAll('.train-vkb__key--white');
     expect(whiteKeys.length).toBe(52); // standard 88-key piano
@@ -248,7 +254,7 @@ describe('T012 — TrainVirtualKeyboard component', () => {
     const ctx = makeVkbContext();
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
-    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
+    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />, { wrapper: TestWrapper });
     const keyboard = screen.getByTestId('train-vkb-keyboard');
     const blackKeys = keyboard.querySelectorAll('.train-vkb__key--black');
     expect(blackKeys.length).toBe(36); // standard 88-key piano
@@ -258,7 +264,7 @@ describe('T012 — TrainVirtualKeyboard component', () => {
 
   it('range label defaults to C3–C5 (centred on C4)', () => {
     const ctx = makeVkbContext();
-    render(<TrainVirtualKeyboard context={ctx} onKeyDown={vi.fn()} onKeyUp={vi.fn()} />);
+    render(<TrainVirtualKeyboard context={ctx} onKeyDown={vi.fn()} onKeyUp={vi.fn()} />, { wrapper: TestWrapper });
     const rangeLabel = screen.getByTestId('vkb-range-label');
     expect(rangeLabel.textContent).toContain('C3');
     expect(rangeLabel.textContent).toContain('C5');
@@ -266,7 +272,7 @@ describe('T012 — TrainVirtualKeyboard component', () => {
 
   it('scroll-right button increments the range label by one octave', async () => {
     const ctx = makeVkbContext();
-    render(<TrainVirtualKeyboard context={ctx} onKeyDown={vi.fn()} onKeyUp={vi.fn()} />);
+    render(<TrainVirtualKeyboard context={ctx} onKeyDown={vi.fn()} onKeyUp={vi.fn()} />, { wrapper: TestWrapper });
     const upBtn = screen.getByTestId('vkb-octave-up');
     await act(async () => { fireEvent.click(upBtn); });
     const rangeLabel = screen.getByTestId('vkb-range-label');
@@ -276,7 +282,7 @@ describe('T012 — TrainVirtualKeyboard component', () => {
 
   it('scroll-left button decrements the range label by one octave', async () => {
     const ctx = makeVkbContext();
-    render(<TrainVirtualKeyboard context={ctx} onKeyDown={vi.fn()} onKeyUp={vi.fn()} />);
+    render(<TrainVirtualKeyboard context={ctx} onKeyDown={vi.fn()} onKeyUp={vi.fn()} />, { wrapper: TestWrapper });
     const downBtn = screen.getByTestId('vkb-octave-down');
     await act(async () => { fireEvent.click(downBtn); });
     const rangeLabel = screen.getByTestId('vkb-range-label');
@@ -290,7 +296,7 @@ describe('T012 — TrainVirtualKeyboard component', () => {
     const ctx = makeVkbContext();
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
-    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
+    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />, { wrapper: TestWrapper });
     const c3Key = screen.getByTestId('vkb-key-48'); // C3 = MIDI 48
     await act(async () => { fireEvent.mouseDown(c3Key); });
     expect(onKeyDown).toHaveBeenCalledTimes(1);
@@ -303,7 +309,7 @@ describe('T012 — TrainVirtualKeyboard component', () => {
     const ctx = makeVkbContext();
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
-    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
+    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />, { wrapper: TestWrapper });
     const c3Key = screen.getByTestId('vkb-key-48');
     await act(async () => {
       fireEvent.mouseDown(c3Key);
@@ -319,7 +325,7 @@ describe('T012 — TrainVirtualKeyboard component', () => {
     const ctx = makeVkbContext();
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
-    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
+    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />, { wrapper: TestWrapper });
     const c3Key = screen.getByTestId('vkb-key-48');
     await act(async () => { fireEvent.mouseDown(c3Key); });
     expect(ctx.playNote).toHaveBeenCalledWith(
@@ -331,7 +337,7 @@ describe('T012 — TrainVirtualKeyboard component', () => {
     const ctx = makeVkbContext();
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
-    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
+    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />, { wrapper: TestWrapper });
     const c3Key = screen.getByTestId('vkb-key-48');
     await act(async () => {
       fireEvent.mouseDown(c3Key);
@@ -348,7 +354,7 @@ describe('T012 — TrainVirtualKeyboard component', () => {
     const ctx = makeVkbContext();
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
-    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
+    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />, { wrapper: TestWrapper });
     const c3Key = screen.getByTestId('vkb-key-48');
     await act(async () => { fireEvent.mouseDown(c3Key); });
     expect(c3Key.className).toContain('train-vkb__key--pressed');
@@ -358,7 +364,7 @@ describe('T012 — TrainVirtualKeyboard component', () => {
     const ctx = makeVkbContext();
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
-    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
+    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />, { wrapper: TestWrapper });
     const c3Key = screen.getByTestId('vkb-key-48');
     await act(async () => {
       fireEvent.mouseDown(c3Key);
@@ -373,7 +379,7 @@ describe('T012 — TrainVirtualKeyboard component', () => {
     const ctx = makeVkbContext();
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
-    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />);
+    render(<TrainVirtualKeyboard context={ctx} onKeyDown={onKeyDown} onKeyUp={onKeyUp} />, { wrapper: TestWrapper });
     const c3Key = screen.getByTestId('vkb-key-48');
     await act(async () => {
       // Simulate touch start (sets lastTouchTimeRef)

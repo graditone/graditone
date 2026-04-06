@@ -44,6 +44,7 @@ import { savePracticeToIndexedDB, generatePracticeName, loadPracticeFromIndexedD
 import { addSavedPracticeIndex, listSavedPractices, removeSavedPracticeIndex } from '../../src/plugin-api/index';
 import { broadcastPracticeSaved, computePracticeScore } from '../../src/plugin-api/index';
 import './PracticeViewPlugin.css';
+import { useTranslation } from '../../src/i18n';
 
 // Sessions plugin is optional — dynamically import so practice-view still
 // works when the sessions plugin is not installed.
@@ -123,6 +124,7 @@ export interface PracticeViewPluginProps {
 // ---------------------------------------------------------------------------
 
 export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
+  const { t } = useTranslation();
   // ─── scorePlayer state ─────────────────────────────────────────────────────
   const [playerState, setPlayerState] = useState<ScorePlayerState>(INITIAL_PLAYER_STATE);
 
@@ -781,7 +783,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
     const now = new Date();
     const id = crypto.randomUUID();
-    const scoreTitle = playerState.title ?? 'Untitled';
+    const scoreTitle = playerState.title ?? t('practice.plugin.untitled');
     const lr = loopRegion
       ? { startTick: loopRegion.startTick, endTick: loopRegion.endTick }
       : null;
@@ -853,7 +855,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     } catch (e) {
       console.error('[PracticeViewPlugin] Failed to save practice:', e);
       const isQuota = e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22);
-      setSaveError(isQuota ? 'Storage full — delete some saved practices and try again.' : 'Failed to save practice.');
+      setSaveError(isQuota ? t('practice.plugin.storage_full') : t('practice.plugin.save_failed'));
     }
   }, [
     practiceState.mode, performanceRecord, partialPerformanceRecord,
@@ -1072,12 +1074,12 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       {(practiceActive || practiceWaiting) &&
         practiceState.currentWrongAttempts > 0 && (
         <div className="practice-plugin__note-display" aria-live="polite">
-          <span className="practice-plugin__note-display-label">Expected:</span>
+          <span className="practice-plugin__note-display-label">{t('practice.plugin.expected')}</span>
           <span className="practice-plugin__note-display-notes practice-plugin__note-display-notes--expected">
             {expectedPitchLabels.join(', ')}
           </span>
           <span className="practice-plugin__note-display-sep">|</span>
-          <span className="practice-plugin__note-display-label">Playing:</span>
+          <span className="practice-plugin__note-display-label">{t('practice.plugin.playing')}</span>
           <span className="practice-plugin__note-display-notes practice-plugin__note-display-notes--wrong">
             {pressedPitchLabels.join(', ')}
           </span>
