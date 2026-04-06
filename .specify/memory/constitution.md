@@ -230,6 +230,45 @@ generated artifacts remain fully isolated, preventing accidental cross-contamina
 features. IDE contexts stay stable per feature, and CI-related file generation cannot bleed
 across branches.
 
+### External Plugin Repositories (`plugins-external/`)
+
+Some features require changes to plugins that live in a **separate private repository**
+(`graditone-pro-plugins`), cloned into `plugins-external/sessions-plugin/` inside the graditone
+root and gitignored there. Because git worktrees only cover the graditone repository, the plugin
+repo must be cloned separately inside each feature worktree that needs it.
+
+**Setup for a feature that touches `plugins-external/`**:
+
+1. After creating the graditone worktree, clone the plugin monorepo directly into `plugins-external/`:
+   ```
+   cd ../worktrees/<branch-name>
+   git clone git@github.com:aylabs/graditone-pro-plugins.git plugins-external
+   ```
+2. Create a matching feature branch inside the cloned repo:
+   ```
+   cd plugins-external
+   git checkout -b <branch-name>
+   ```
+3. Install dependencies for the specific plugin you need to edit:
+   ```
+   cd plugins-external/sessions-plugin && npm install
+   ```
+4. Make all plugin source changes inside the relevant subdirectory (e.g., `plugins-external/sessions-plugin/`).
+   File paths in spec documents (plan.md, tasks.md) are expressed relative to the plugin subdirectory,
+   not relative to the `graditone-pro-plugins` repo root.
+
+> ⚠️ **Critical**: Clone into `plugins-external/` directly (not `plugins-external/sessions-plugin/`).
+> The monorepo root maps exactly to `plugins-external/`, so that `../../frontend/` from any plugin
+> subdirectory correctly resolves to the graditone worktree's `frontend/` directory (required for tests).
+
+**Cleanup**: After the plugin PR is merged, the cloned directory can simply be deleted along
+with the graditone worktree — it is not tracked by either repository.
+
+**Rationale**: The plugin repo is gitignored in graditone, so it is not included in git
+worktrees. Cloning it inside the feature worktree keeps plugin changes isolated per feature,
+mirrors the primary working tree layout, and avoids accidentally mixing changes from different
+concurrent features in a single shared clone.
+
 ### Documentation Currency
 
 Once all tasks in a spec are implemented, project documentation MUST be updated to reflect any changes introduced:
