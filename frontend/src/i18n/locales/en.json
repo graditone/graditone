@@ -19,6 +19,7 @@
   "plugin.name.train-view": "Train",
   "plugin.name.practice-view-plugin": "Practice",
   "plugin.name.guide": "Guide",
+  "plugin.name.sessions-plugin": "Sessions",
   "nav.open_plugin_aria": "Open {name} plugin",
   "nav.user_installed_aria": "user-installed",
   "score_selector.title": "Select a Score",

@@ -13,9 +13,10 @@ Plugins extend Musicore with new UI views and interactive musical tools. They ru
 5. [API constraints and ESLint boundary](#api-constraints-and-eslint-boundary)
 6. [Theming your plugin](#theming-your-plugin)
 7. [Testing your plugin](#testing-your-plugin)
-8. [Reference: Virtual Keyboard plugin](#reference-virtual-keyboard-plugin)
-9. [Reference: Train plugin](#reference-train-plugin)
-10. [Reference: Virtual Keyboard Pro (importable plugin)](#reference-virtual-keyboard-pro-importable-plugin)
+8. [Internationalizing a Plugin (i18n)](#internationalizing-a-plugin-i18n)
+9. [Reference: Virtual Keyboard plugin](#reference-virtual-keyboard-plugin)
+10. [Reference: Train plugin](#reference-train-plugin)
+11. [Reference: Virtual Keyboard Pro (importable plugin)](#reference-virtual-keyboard-pro-importable-plugin)
 
 ---
 
@@ -497,6 +498,200 @@ Run the plugin tests:
 cd frontend
 npx vitest run plugins/my-plugin/
 ```
+
+---
+
+## Internationalizing a Plugin (i18n)
+
+Plugins can provide multi-language support using a self-contained i18n module.
+The plugin bundles its own locale infrastructure — **no imports from the host
+app's `frontend/src/i18n/` are permitted**, consistent with the Plugin API
+boundary rule.
+
+The canonical reference implementation is `plugins-external/sessions-plugin/`.
+
+### Architecture
+
+| File | Purpose |
+|------|---------|
+| `locales/en.json` | English translation catalog (source of truth for TypeScript types) |
+| `locales/es.json` | Spanish translation catalog |
+| `i18n.tsx` | Locale resolver, `LocaleProvider`, `useTranslation()` hook, `TranslationKey` type |
+| `i18n.test.ts` | Tests for locale resolver + catalog completeness |
+
+`TranslationKey = keyof typeof enCatalog` — any call to `t('unknown.key')` is
+a compile-time TypeScript error. Catalog completeness is enforced statically.
+
+### Step 1 — Create the i18n module
+
+Create `i18n.tsx` (`.tsx` because it contains JSX for the context provider):
+
+```typescript
+import React, { createContext, useContext, useMemo } from 'react';
+import enCatalog from './locales/en.json';
+import esCatalog from './locales/es.json';
+
+export const SUPPORTED_LOCALES = ['en', 'es'] as const;
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
+export const DEFAULT_LOCALE: SupportedLocale = 'en';
+
+export function resolveLocale(raw: string | undefined): SupportedLocale {
+  if (!raw) return DEFAULT_LOCALE;
+  const primary = raw.split('-')[0].toLowerCase();
+  return (SUPPORTED_LOCALES as readonly string[]).includes(primary)
+    ? (primary as SupportedLocale)
+    : DEFAULT_LOCALE;
+}
+
+export type TranslationKey = keyof typeof enCatalog;
+
+const catalogs: Record<SupportedLocale, Record<string, string>> = { en: enCatalog, es: esCatalog };
+
+const LocaleContext = createContext<{ locale: SupportedLocale; catalog: Record<string, string> } | null>(null);
+
+export function LocaleProvider({ locale: localeProp, children }: {
+  locale?: SupportedLocale;
+  children: React.ReactNode;
+}) {
+  const locale = useMemo<SupportedLocale>(
+    () => localeProp ?? resolveLocale(typeof navigator !== 'undefined' ? navigator.language : undefined),
+    [localeProp],
+  );
+  const catalog = useMemo(() => catalogs[locale], [locale]);
+  const value = useMemo(() => ({ locale, catalog }), [locale, catalog]);
+  return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
+}
+
+export function useTranslation() {
+  const ctx = useContext(LocaleContext);
+  if (!ctx) throw new Error('useTranslation() must be used inside <LocaleProvider>');
+  const t = useMemo(
+    () => (key: TranslationKey, params?: Record<string, string | number>): string => {
+      let value: string = ctx.catalog[key] ?? (enCatalog as Record<string, string>)[key] ?? key;
+      if (params) {
+        for (const [k, v] of Object.entries(params)) value = value.replace(`{${k}}`, String(v));
+      }
+      return value;
+    },
+    [ctx.catalog],
+  );
+  return { locale: ctx.locale, t };
+}
+```
+
+> **Requirement**: `"resolveJsonModule": true` must be set in your plugin's `tsconfig.json`.
+
+### Step 2 — Create catalogs
+
+Create `locales/en.json` (flat object, dot-namespaced keys):
+
+```json
+{
+  "common.cancel": "Cancel",
+  "common.task": "{count} task",
+  "common.tasks": "{count} tasks",
+  "my_plugin.title": "My Plugin",
+  "my_plugin.empty": "Nothing here yet."
+}
+```
+
+Copy to `locales/es.json` and translate values (keep keys identical).
+
+**Key conventions**: `namespace.descriptive_name`, `{param}` for interpolation,
+two keys for plurals (`common.task` / `common.tasks`), HTML allowed in values
+for guide/prose content.
+
+### Step 3 — Wrap the plugin root
+
+In your entry point (`index.tsx`):
+
+```typescript
+import { LocaleProvider } from './i18n';
+
+// Inside your Component wrapper:
+<LocaleProvider>
+  <MyPlugin context={context} />
+</LocaleProvider>
+```
+
+### Step 4 — Replace hardcoded strings
+
+```typescript
+import { useTranslation } from './i18n';
+import type { TranslationKey } from './i18n';
+
+export function MyComponent() {
+  const { t } = useTranslation();
+  return (
+    <div>
+      <h2>{t('my_plugin.title')}</h2>
+      <button aria-label={t('common.cancel')}>{t('common.cancel')}</button>
+      <span>{t(count === 1 ? 'common.task' : 'common.tasks', { count })}</span>
+      {/* HTML prose content */}
+      <li dangerouslySetInnerHTML={{ __html: t('guide.step1') }} />
+    </div>
+  );
+}
+```
+
+**Month/day arrays** — replace hardcoded arrays with catalog-driven lookups:
+
+```typescript
+const MONTH_NAMES = (
+  ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'] as const
+).map(m => t(`calendar.month_${m}` as TranslationKey));
+```
+
+### Step 5 — Translate the plugin button name
+
+Add the plugin name to the **host app** catalogs so the navigation button shows
+the translated name:
+
+```json
+// frontend/src/i18n/locales/en.json
+"plugin.name.my-plugin-id": "My Plugin"
+
+// frontend/src/i18n/locales/es.json
+"plugin.name.my-plugin-id": "Mi Plugin"
+```
+
+The host resolves this via `tDynamic('plugin.name.<id>', plugin.name)`.
+
+### Step 6 — Write tests
+
+Create `test-utils.tsx` for a shared render wrapper:
+
+```typescript
+import type { ReactElement } from 'react';
+import { render, type RenderOptions } from '@testing-library/react';
+import { LocaleProvider } from './i18n';
+
+function AllProviders({ children }: { children: React.ReactNode }) {
+  return <LocaleProvider locale="en">{children}</LocaleProvider>;
+}
+
+function customRender(ui: ReactElement, options?: Omit<RenderOptions, 'wrapper'>) {
+  return render(ui, { wrapper: AllProviders, ...options });
+}
+
+export * from '@testing-library/react';
+export { customRender as render };
+```
+
+Test coverage requirements:
+- **Locale resolver**: `resolveLocale('es') → 'es'`, `resolveLocale('fr') → 'en'`
+- **Catalog completeness**: Spanish has every key from English, no extras
+- **Fallback**: Missing key returns English value, unknown key returns key string
+- **Spanish rendering**: Wrap component in `<LocaleProvider locale="es">`, assert translated text
+
+### Step 7 — Add a third language
+
+Two changes, zero component modifications:
+
+1. Create `locales/fr.json` — copy `en.json`, translate all values
+2. In `i18n.tsx`: change `SUPPORTED_LOCALES` to `['en', 'es', 'fr'] as const` and add `import frCatalog from './locales/fr.json'` + register in `catalogs`
+
+All components automatically pick up the new locale via `navigator.language`.
 
 ---
 
