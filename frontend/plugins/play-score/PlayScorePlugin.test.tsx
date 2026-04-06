@@ -17,6 +17,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PlayScorePlugin } from './PlayScorePlugin';
 import type { PluginContext, ScorePlayerState, PluginPlaybackStatus, PluginScoreRendererProps, PluginScoreSelectorProps } from '../../src/plugin-api/index';
+import { LocaleProvider } from '../../src/i18n/index';
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -153,6 +154,11 @@ function createMockContext(stateOverride: Partial<ScorePlayerState> = {}, ScoreR
 // T007 — US1: Launch, selection screen, Back button behaviour
 // ---------------------------------------------------------------------------
 
+/** Provide LocaleProvider for tests */
+function TestWrapper({ children }: { children: React.ReactNode }) {
+  return <LocaleProvider locale="en">{children}</LocaleProvider>;
+}
+
 describe('PlayScorePlugin — US1: Selection screen and Back button', () => {
   let ctx: ReturnType<typeof createMockContext>;
 
@@ -161,7 +167,7 @@ describe('PlayScorePlugin — US1: Selection screen and Back button', () => {
   });
 
   it('renders all 6 catalogue entries by displayName on the selection screen', () => {
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     for (const entry of MOCK_CATALOGUE) {
       expect(screen.getByText(entry.displayName)).toBeInTheDocument();
@@ -169,7 +175,7 @@ describe('PlayScorePlugin — US1: Selection screen and Back button', () => {
   });
 
   it('Back button is absent when screen === "selection"', () => {
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     // No Back button visible on selection screen
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
@@ -177,7 +183,7 @@ describe('PlayScorePlugin — US1: Selection screen and Back button', () => {
 
   it('calls scorePlayer.loadScore with catalogueId when a score is selected', async () => {
     ctx.mockLoadScore.mockResolvedValueOnce(undefined);
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     const firstEntry = MOCK_CATALOGUE[0];
     fireEvent.click(screen.getByText(firstEntry.displayName));
@@ -190,7 +196,7 @@ describe('PlayScorePlugin — US1: Selection screen and Back button', () => {
 
   it('transitions to player view after selecting a score', async () => {
     ctx.mockLoadScore.mockResolvedValueOnce(undefined);
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     fireEvent.click(screen.getByText(MOCK_CATALOGUE[0].displayName));
 
@@ -207,7 +213,7 @@ describe('PlayScorePlugin — US1: Selection screen and Back button', () => {
 
   it('Back button is present when screen === "player"', async () => {
     ctx.mockLoadScore.mockResolvedValueOnce(undefined);
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     fireEvent.click(screen.getByText(MOCK_CATALOGUE[0].displayName));
     await act(async () => {
@@ -219,7 +225,7 @@ describe('PlayScorePlugin — US1: Selection screen and Back button', () => {
 
   it('Back button calls context.close()', async () => {
     ctx.mockLoadScore.mockResolvedValueOnce(undefined);
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     // Navigate to player view
     fireEvent.click(screen.getByText(MOCK_CATALOGUE[0].displayName));
@@ -234,7 +240,7 @@ describe('PlayScorePlugin — US1: Selection screen and Back button', () => {
   it('shows loading indicator when status === "loading"', async () => {
     // Start with loading state
     ctx = createMockContext({ status: 'loading' });
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     // Navigate to player view first
     fireEvent.click(screen.getByText(MOCK_CATALOGUE[0].displayName));
@@ -250,7 +256,7 @@ describe('PlayScorePlugin — US1: Selection screen and Back button', () => {
   });
 
   it('shows error message when status === "error"', async () => {
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     fireEvent.click(screen.getByText(MOCK_CATALOGUE[0].displayName));
 
@@ -272,7 +278,7 @@ describe('PlayScorePlugin — US1: Selection screen and Back button', () => {
  */
 async function navigateToPlayerView(ctx: ReturnType<typeof createMockContext>) {
   ctx.mockLoadScore.mockResolvedValueOnce(undefined);
-  render(<PlayScorePlugin context={ctx.context} />);
+  render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
   fireEvent.click(screen.getByText(MOCK_CATALOGUE[0].displayName));
   await act(async () => {
     ctx.simulateStateChange({ status: 'ready', title: MOCK_CATALOGUE[0].displayName });
@@ -423,7 +429,7 @@ async function setupPlayerWithCapturingRenderer(overrides: Partial<ScorePlayerSt
   const { Renderer, getLastProps } = createCapturingRenderer();
   const ctx = createMockContext(overrides, Renderer);
   ctx.mockLoadScore.mockResolvedValueOnce(undefined);
-  render(<PlayScorePlugin context={ctx.context} />);
+  render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
   // Navigate to player view
   fireEvent.click(screen.getByText(MOCK_CATALOGUE[0].displayName));
@@ -636,7 +642,7 @@ describe('PlayScorePlugin — US5: Return to start', () => {
 describe('PlayScorePlugin — US6: Load from file', () => {
   it('"Load from file…" button is present on selection screen', () => {
     const ctx = createMockContext();
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     expect(screen.getByText(/load from file/i)).toBeInTheDocument();
   });
@@ -644,7 +650,7 @@ describe('PlayScorePlugin — US6: Load from file', () => {
   it('selecting a valid file calls loadScore({kind:"file", file}) and transitions to player view', async () => {
     const ctx = createMockContext();
     ctx.mockLoadScore.mockResolvedValueOnce(undefined);
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     const fileInput = screen.getByTestId('mock-file-input');
     const mockFile = new File(['<score/>'], 'test.mxl', { type: 'application/octet-stream' });
@@ -667,7 +673,7 @@ describe('PlayScorePlugin — US6: Load from file', () => {
   it('error status after corrupt file shows error message', async () => {
     const ctx = createMockContext();
     ctx.mockLoadScore.mockResolvedValueOnce(undefined);
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     const fileInput = screen.getByTestId('mock-file-input');
     const badFile = new File(['not xml'], 'bad.mxl', { type: 'application/octet-stream' });
@@ -693,7 +699,7 @@ describe('PlayScorePlugin — US7: Tempo control', () => {
   it('adjusting tempo slider calls setTempoMultiplier(multiplier)', async () => {
     const ctx = createMockContext();
     ctx.mockLoadScore.mockResolvedValueOnce(undefined);
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     // Navigate to player view
     fireEvent.click(screen.getByText(MOCK_CATALOGUE[0].displayName));
@@ -712,7 +718,7 @@ describe('PlayScorePlugin — US7: Tempo control', () => {
   it('BPM display updates from ScorePlayerState.bpm', async () => {
     const ctx = createMockContext();
     ctx.mockLoadScore.mockResolvedValueOnce(undefined);
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     fireEvent.click(screen.getByText(MOCK_CATALOGUE[0].displayName));
     await act(async () => {
@@ -725,7 +731,7 @@ describe('PlayScorePlugin — US7: Tempo control', () => {
   it('tempo change during playback keeps status "playing"', async () => {
     const ctx = createMockContext();
     ctx.mockLoadScore.mockResolvedValueOnce(undefined);
-    render(<PlayScorePlugin context={ctx.context} />);
+    render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     fireEvent.click(screen.getByText(MOCK_CATALOGUE[0].displayName));
     await act(async () => {

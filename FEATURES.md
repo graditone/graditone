@@ -200,3 +200,22 @@ Extends the Sessions Plugin with a **scheduled** session state, allowing users t
 
 **Spec**: `specs/066-session-scheduling/`  
 **Updated**: March 2026
+
+---
+
+## Core Plugins i18n — Feature 075
+
+Completes internationalization (i18n) for all 5 internal builtin plugins: **Play Score**, **Train**, **Practice View**, **Virtual Keyboard**, and **Guide**.
+
+### Capabilities
+
+- **100% translated UI strings**: All user-visible text in builtin plugins has been migrated from hardcoded English to locale catalog keys — aria-labels, button labels, section headings, status messages, grade messages, and tooltips
+- **Locale catalog expanded**: `en.json` and `es.json` each extended from 117 to 314 keys — 197 new keys across namespaces `play_score.*`, `train.*`, `practice.*`, and `vkeyboard.*`
+- **Plugin nav names**: `plugin.name.sessions-plugin` and `plugin.name.virtual-keyboard` keys added so plugin navigation entries translate correctly alongside existing builtin names
+- **Locale parity enforced**: Existing parity regression test now validates 314 keys in perfect sync between EN and ES
+- **Scale names**: `train.scales.*` keys provide translated scale names (C Major → Do Mayor, etc.) for the train configuration sidebar
+- **Grade messages**: All five performance grade tiers (Perfect/Excellent/Good/Keep going/Keep practicing) fully translated in both train and practice result overlays
+- **Tests updated**: All plugin unit tests updated with `LocaleProvider` wrapper; catalog-completeness test updated to reflect new key count
+
+**Spec**: `specs/075-core-plugins-i18n/`  
+**Updated**: June 2025

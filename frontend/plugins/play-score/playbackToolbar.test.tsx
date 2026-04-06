@@ -10,6 +10,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PlaybackToolbar, type PlaybackToolbarProps } from './playbackToolbar';
+import { LocaleProvider } from '../../src/i18n/index';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,6 +47,11 @@ function makeDefaultProps(
 // T013 — Metronome button rendering
 // ---------------------------------------------------------------------------
 
+/** Provide LocaleProvider for tests */
+function TestWrapper({ children }: { children: React.ReactNode }) {
+  return <LocaleProvider locale="en">{children}</LocaleProvider>;
+}
+
 describe('PlaybackToolbar — metronome button (Feature 035)', () => {
   let onMetronomeToggle: ReturnType<typeof vi.fn>;
 
@@ -54,7 +60,7 @@ describe('PlaybackToolbar — metronome button (Feature 035)', () => {
   });
 
   it('renders a metronome button with aria-label "Toggle metronome"', () => {
-    render(<PlaybackToolbar {...makeDefaultProps({ onMetronomeToggle })} />);
+    render(<PlaybackToolbar {...makeDefaultProps({ onMetronomeToggle })} />, { wrapper: TestWrapper });
     expect(screen.getByRole('button', { name: /toggle metronome/i })).toBeTruthy();
   });
 
@@ -62,8 +68,7 @@ describe('PlaybackToolbar — metronome button (Feature 035)', () => {
     render(
       <PlaybackToolbar
         {...makeDefaultProps({ metronomeActive: false, onMetronomeToggle })}
-      />
-    );
+      />, { wrapper: TestWrapper });
     const btn = screen.getByRole('button', { name: /toggle metronome/i });
     expect(btn.getAttribute('aria-pressed')).toBe('false');
   });
@@ -72,14 +77,13 @@ describe('PlaybackToolbar — metronome button (Feature 035)', () => {
     render(
       <PlaybackToolbar
         {...makeDefaultProps({ metronomeActive: true, metronomeBeatIndex: 0, onMetronomeToggle })}
-      />
-    );
+      />, { wrapper: TestWrapper });
     const btn = screen.getByRole('button', { name: /toggle metronome/i });
     expect(btn.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('calls onMetronomeToggle when the button is clicked', () => {
-    render(<PlaybackToolbar {...makeDefaultProps({ onMetronomeToggle })} />);
+    render(<PlaybackToolbar {...makeDefaultProps({ onMetronomeToggle })} />, { wrapper: TestWrapper });
     fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
     expect(onMetronomeToggle).toHaveBeenCalledTimes(1);
   });
@@ -93,8 +97,7 @@ describe('PlaybackToolbar — metronome button (Feature 035)', () => {
           metronomeIsDownbeat: false,
           onMetronomeToggle,
         })}
-      />
-    );
+      />, { wrapper: TestWrapper });
     const btn = screen.getByRole('button', { name: /toggle metronome/i });
     expect(btn.className).toContain('metro-pulse');
   });
@@ -108,8 +111,7 @@ describe('PlaybackToolbar — metronome button (Feature 035)', () => {
           metronomeIsDownbeat: true,
           onMetronomeToggle,
         })}
-      />
-    );
+      />, { wrapper: TestWrapper });
     const btn = screen.getByRole('button', { name: /toggle metronome/i });
     expect(btn.className).toContain('metro-pulse');
     expect(btn.className).toContain('metro-downbeat');
@@ -123,8 +125,7 @@ describe('PlaybackToolbar — metronome button (Feature 035)', () => {
           metronomeBeatIndex: 2,
           onMetronomeToggle,
         })}
-      />
-    );
+      />, { wrapper: TestWrapper });
     const btn = screen.getByRole('button', { name: /toggle metronome/i });
     expect(btn.className).not.toContain('metro-pulse');
   });
@@ -133,16 +134,14 @@ describe('PlaybackToolbar — metronome button (Feature 035)', () => {
     const { rerender } = render(
       <PlaybackToolbar
         {...makeDefaultProps({ metronomeActive: false, onMetronomeToggle })}
-      />
-    );
+      />, { wrapper: TestWrapper });
     let btn = screen.getByRole('button', { name: /toggle metronome/i });
     expect(btn.getAttribute('aria-pressed')).toBe('false');
 
     rerender(
       <PlaybackToolbar
         {...makeDefaultProps({ metronomeActive: true, metronomeBeatIndex: 0, onMetronomeToggle })}
-      />
-    );
+      />, { wrapper: TestWrapper });
     btn = screen.getByRole('button', { name: /toggle metronome/i });
     expect(btn.getAttribute('aria-pressed')).toBe('true');
   });

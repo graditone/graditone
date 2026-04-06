@@ -20,6 +20,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { PluginContext, PluginNoteEvent } from '../../src/plugin-api/index';
 import './VirtualKeyboard.css';
+import { useTranslation } from '../../src/i18n';
 
 // ---------------------------------------------------------------------------
 // Note definitions
@@ -96,6 +97,7 @@ export interface VirtualKeyboardProps {
 }
 
 export function VirtualKeyboard({ context }: VirtualKeyboardProps) {
+  const { t } = useTranslation();
   const [pressedKeys, setPressedKeys] = useState<Set<number>>(new Set());
   // Played notes as PluginNoteEvents — fed to the staff viewer.
   // Notes are appended on key-release so durationMs is always known.
@@ -320,17 +322,17 @@ export function VirtualKeyboard({ context }: VirtualKeyboardProps) {
 
   return (
     <div className="virtual-keyboard">
-      <h2 className="virtual-keyboard__title">Virtual Keyboard</h2>
+      <h2 className="virtual-keyboard__title">{t('vkeyboard.title')}</h2>
 
       {/* Staff header: title + clear button */}
       <div className="virtual-keyboard__staff-header">
-        <span className="virtual-keyboard__staff-label">Staff</span>
+        <span className="virtual-keyboard__staff-label">{t('vkeyboard.staff')}</span>
         <button
           className="virtual-keyboard__clear-btn"
           onClick={() => setPlayedNotes([])}
-          aria-label="Clear staff"
+          aria-label={t('vkeyboard.clear_aria')}
         >
-          Clear
+          {t('vkeyboard.clear')}
         </button>
       </div>
 

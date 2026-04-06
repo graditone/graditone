@@ -11,6 +11,7 @@
 
 import { useRef } from 'react';
 import type { PluginPreloadedScore } from '../../src/plugin-api/index';
+import { useTranslation } from '../../src/i18n';
 
 export interface ScoreSelectionScreenProps {
   catalogue: readonly PluginPreloadedScore[];
@@ -24,6 +25,7 @@ export interface ScoreSelectionScreenProps {
 }
 
 export function ScoreSelectionScreen({ catalogue, userScores, onSelectScore, onSelectUserScore, onLoadFile }: ScoreSelectionScreenProps) {
+  const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,7 +39,7 @@ export function ScoreSelectionScreen({ catalogue, userScores, onSelectScore, onS
 
   return (
     <div className="play-score__selection-screen">
-      <p className="play-score__section-label">PRELOADED SCORES</p>
+      <p className="play-score__section-label">{t('play_score.selection.preloaded')}</p>
 
       <ul className="play-score__score-list" role="list">
         {catalogue.map(entry => (
@@ -58,7 +60,7 @@ export function ScoreSelectionScreen({ catalogue, userScores, onSelectScore, onS
             className="play-score__score-item play-score__score-item--file"
             onClick={() => fileInputRef.current?.click()}
           >
-            📁 Load from file…
+            {t('play_score.selection.load_file')}
           </button>
           <input
             ref={fileInputRef}
@@ -74,7 +76,7 @@ export function ScoreSelectionScreen({ catalogue, userScores, onSelectScore, onS
       {/* Feature 045: User-uploaded scores */}
       {userScores.length > 0 && (
         <>
-          <p className="play-score__section-label">MY SCORES</p>
+          <p className="play-score__section-label">{t('play_score.selection.my_scores')}</p>
           <ul className="play-score__score-list" role="list">
             {userScores.map(entry => (
               <li key={entry.id}>

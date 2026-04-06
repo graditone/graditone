@@ -9,6 +9,7 @@
 import { useCallback, useRef, useEffect, useMemo } from 'react';
 import type { PluginContext, ScorePlayerState } from '../../src/plugin-api/index';
 import { computePracticeScore } from '../../src/plugin-api/index';
+import { useTranslation } from '../../src/i18n';
 import type {
   PracticeState,
   PracticeNoteResult,
@@ -88,6 +89,7 @@ export function ResultsOverlay({
   saveError,
   onReturnToSession,
 }: ResultsOverlayProps) {
+  const { t } = useTranslation();
   // ─── Replay internals ────────────────────────────────────────────────────────
   const replayTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -250,11 +252,11 @@ export function ResultsOverlay({
       <div
         className="practice-results"
         role="region"
-        aria-label="Practice results"
+        aria-label={t('practice.results.overlay_aria')}
       >
         <button
           className="practice-results__close"
-          aria-label="Close results"
+          aria-label={t('practice.results.close_aria')}
           onClick={onDismiss}
         >
           ×
@@ -291,11 +293,11 @@ export function ResultsOverlay({
                 : '#c62828',
             }}
           >
-            {practiceReport.score === 100 ? '🏆 Perfect!'
-              : practiceReport.score >= 90 ? '🌟 Excellent!'
-              : practiceReport.score >= 70 ? '👍 Good job!'
-              : practiceReport.score >= 50 ? '💪 Keep going!'
-              : '🎯 Keep practicing!'}
+            {practiceReport.score === 100 ? t('practice.results.grade_perfect')
+              : practiceReport.score >= 90 ? t('practice.results.grade_excellent')
+              : practiceReport.score >= 70 ? t('practice.results.grade_good')
+              : practiceReport.score >= 50 ? t('practice.results.grade_keep_going')
+              : t('practice.results.grade_keep_practicing')}
           </div>
         </div>
 
@@ -303,48 +305,48 @@ export function ResultsOverlay({
         <div className="practice-results__stats">
           <div className="practice-results__stat">
             <span className="practice-results__stat-value">{practiceReport.totalNotes}</span>
-            <span className="practice-results__stat-label">Notes</span>
+            <span className="practice-results__stat-label">{t('practice.results.notes')}</span>
           </div>
           <div className="practice-results__stat">
             <span className="practice-results__stat-value">{practiceReport.correctCount}</span>
-            <span className="practice-results__stat-label">Correct</span>
+            <span className="practice-results__stat-label">{t('practice.results.correct')}</span>
           </div>
           <div className="practice-results__stat">
             <span className="practice-results__stat-value practice-results__stat-value--warn">
               {practiceReport.lateCount}
             </span>
-            <span className="practice-results__stat-label">Off-beat</span>
+            <span className="practice-results__stat-label">{t('practice.results.off_beat')}</span>
           </div>
           <div className="practice-results__stat">
             <span className="practice-results__stat-value practice-results__stat-value--error">
               {practiceReport.totalWrongAttempts}
             </span>
-            <span className="practice-results__stat-label">Wrong</span>
+            <span className="practice-results__stat-label">{t('practice.results.wrong')}</span>
           </div>
         </div>
 
         {/* Time comparison */}
         <div className="practice-results__time-comparison">
-          <span>Your time: <strong>{formatTimeMs(practiceReport.practiceTimeMs)}</strong></span>
+          <span>{t('practice.results.your_time')} <strong>{formatTimeMs(practiceReport.practiceTimeMs)}</strong></span>
           <span className="practice-results__time-separator">vs</span>
-          <span>Score time: <strong>{formatTimeMs(practiceReport.scoreTimeMs)}</strong></span>
+          <span>{t('practice.results.score_time')} <strong>{formatTimeMs(practiceReport.scoreTimeMs)}</strong></span>
         </div>
 
         {/* Collapsible per-note details */}
         <details className="practice-results__details">
           <summary className="practice-results__details-summary">
-            Note-by-note details
+            {t('train.results.details')}
           </summary>
           <div className="practice-results__table-wrapper">
             <table className="practice-results__table" aria-label="Per-note results">
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Expected</th>
-                  <th>Played</th>
-                  <th>Status</th>
-                  <th>Wrong tries</th>
-                  <th>Timing Δ</th>
+                  <th>{t('practice.results.expected')}</th>
+                  <th>{t('practice.results.played')}</th>
+                  <th>{t('practice.results.status')}</th>
+                  <th>{t('practice.results.wrong_tries')}</th>
+                  <th>{t('practice.results.timing_delta')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -367,10 +369,10 @@ export function ResultsOverlay({
                           : r.outcome === 'early-release' ? '⏱️'
                           : '❌'}
                       </span>{' '}
-                      {r.outcome === 'correct' ? 'Correct'
-                        : r.outcome === 'correct-late' ? 'Off-beat'
+                      {r.outcome === 'correct' ? t('practice.results.correct')
+                        : r.outcome === 'correct-late' ? t('practice.results.off_beat')
                         : r.outcome === 'early-release' ? 'Held too short'
-                        : 'Wrong'}
+                        : t('practice.results.wrong')}
                     </td>
                     <td>{r.wrongAttempts > 0 ? r.wrongAttempts : '—'}</td>
                     <td>
@@ -432,7 +434,7 @@ export function ResultsOverlay({
           return (
             <details className="practice-results__details" style={{ marginTop: '8px' }}>
               <summary className="practice-results__details-summary">
-                Timing deviation per note
+                {t('train.results.timing_chart')}
               </summary>
               <div className="practice-results__graph-wrapper">
                 <svg
@@ -510,7 +512,7 @@ export function ResultsOverlay({
             <button
               className="practice-results__repractice-btn"
               onClick={handleRepractice}
-              aria-label="Repractice"
+              aria-label={t('practice.results.repractice_aria')}
             >
               ↺ Repractice
             </button>
@@ -518,7 +520,7 @@ export function ResultsOverlay({
               <button
                 className="practice-results__replay-btn"
                 onClick={handleReplay}
-                aria-label="Replay your performance"
+                aria-label={t('practice.results.replay_aria')}
               >
                 ▶ Replay
               </button>
@@ -526,7 +528,7 @@ export function ResultsOverlay({
               <button
                 className="practice-results__replay-btn practice-results__replay-btn--stop"
                 onClick={handleReplayStop}
-                aria-label="Stop replay"
+                aria-label={t('practice.results.stop_replay_aria')}
               >
                 ■ Stop
               </button>
@@ -536,7 +538,7 @@ export function ResultsOverlay({
                 className={`practice-results__save-btn${isSaved ? ' practice-results__save-btn--saved' : ''}`}
                 onClick={onSave}
                 disabled={isSaved}
-                aria-label={isSaved ? 'Practice saved' : 'Save practice'}
+                aria-label={isSaved ? t('practice.results.saved_aria') : t('practice.results.save_aria')}
               >
                 {isSaved ? '✓ Saved' : '💾 Save'}
               </button>
@@ -548,7 +550,7 @@ export function ResultsOverlay({
               <button
                 className="practice-results__session-btn"
                 onClick={onReturnToSession}
-                aria-label="Return to session"
+                  aria-label={t('practice.results.session_aria')}
               >
                 ↩ Session
               </button>
@@ -558,7 +560,7 @@ export function ResultsOverlay({
 
         {/* Loop count slider */}
         {loopRegion && (
-          <div className="practice-results__loop-slider-row" aria-label="Loop count">
+          <div className="practice-results__loop-slider-row" aria-label={t('practice.results.loop_count_aria')}>
             <label className="practice-results__loop-label">
               Loops: <strong>{loopCount}</strong>
             </label>
@@ -570,13 +572,13 @@ export function ResultsOverlay({
               step={1}
               value={loopCount}
               onChange={(e) => setLoopCount(Number(e.target.value))}
-              aria-label="Number of loops to practice"
+              aria-label={t('practice.results.loops_aria')}
             />
           </div>
         )}
 
         <p className="practice-results__hint">
-          Press <strong>♩ Practice</strong> to try again
+          {t('practice.results.retry_hint')}
         </p>
       </div>
     </>
@@ -589,11 +591,11 @@ export function ResultsOverlay({
       <div
         className="practice-results"
         role="region"
-        aria-label="Practice results"
+        aria-label={t('practice.results.overlay_aria')}
       >
         <button
           className="practice-results__close"
-          aria-label="Close results"
+          aria-label={t('practice.results.close_aria')}
           onClick={onDismiss}
         >
           ×
@@ -601,13 +603,13 @@ export function ResultsOverlay({
 
         {partialReport.zeroProgress ? (
           <div className="practice-results__zero-progress">
-            <p>No notes played — session stopped before any input.</p>
+            <p>{t('practice.results.no_notes')}</p>
           </div>
         ) : (
           <>
             {/* Stopped-at badge */}
             <div className="practice-results__stopped-badge">
-              Stopped at note {partialReport.stoppedAtIndex} of {partialReport.totalNoteCount}
+              {t('practice.results.stopped_at', { x: String(partialReport.stoppedAtIndex), y: String(partialReport.totalNoteCount) })}
             </div>
 
             {/* Score headline */}
@@ -638,37 +640,37 @@ export function ResultsOverlay({
             <div className="practice-results__stats">
               <div className="practice-results__stat">
                 <span className="practice-results__stat-value">{partialReport.totalNotes}</span>
-                <span className="practice-results__stat-label">Notes</span>
+                <span className="practice-results__stat-label">{t('practice.results.notes')}</span>
               </div>
               <div className="practice-results__stat">
                 <span className="practice-results__stat-value">{partialReport.correctCount}</span>
-                <span className="practice-results__stat-label">Correct</span>
+                <span className="practice-results__stat-label">{t('practice.results.correct')}</span>
               </div>
               <div className="practice-results__stat">
                 <span className="practice-results__stat-value practice-results__stat-value--warn">
                   {partialReport.lateCount}
                 </span>
-                <span className="practice-results__stat-label">Off-beat</span>
+                <span className="practice-results__stat-label">{t('practice.results.off_beat')}</span>
               </div>
               <div className="practice-results__stat">
                 <span className="practice-results__stat-value practice-results__stat-value--error">
                   {partialReport.totalWrongAttempts}
                 </span>
-                <span className="practice-results__stat-label">Wrong</span>
+                <span className="practice-results__stat-label">{t('practice.results.wrong')}</span>
               </div>
             </div>
 
             {/* Time comparison */}
             <div className="practice-results__time-comparison">
-              <span>Your time: <strong>{formatTimeMs(partialReport.practiceTimeMs)}</strong></span>
+              <span>{t('practice.results.your_time')} <strong>{formatTimeMs(partialReport.practiceTimeMs)}</strong></span>
               <span className="practice-results__time-separator">vs</span>
-              <span>Score time: <strong>{formatTimeMs(partialReport.scoreTimeMs)}</strong></span>
+              <span>{t('practice.results.score_time')} <strong>{formatTimeMs(partialReport.scoreTimeMs)}</strong></span>
             </div>
           </>
         )}
 
         <p className="practice-results__hint">
-          Press <strong>♩ Practice</strong> to try again
+          {t('practice.results.retry_hint')}
         </p>
       </div>
     </>

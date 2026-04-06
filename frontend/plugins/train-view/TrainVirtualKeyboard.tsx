@@ -22,6 +22,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import './TrainVirtualKeyboard.css';
+import { useTranslation } from '../../src/i18n';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -132,6 +133,7 @@ export interface TrainVirtualKeyboardProps {
 // ---------------------------------------------------------------------------
 
 export function TrainVirtualKeyboard({ context, onKeyDown, onKeyUp }: TrainVirtualKeyboardProps) {
+  const { t } = useTranslation();
   // Fixed 88-key piano: A0–C8.
   const whiteNotes = PIANO_WHITE_NOTES;   // 52 white keys
   const blackNotes = PIANO_BLACK_NOTES;   // 36 black keys
@@ -324,7 +326,7 @@ export function TrainVirtualKeyboard({ context, onKeyDown, onKeyUp }: TrainVirtu
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="train-vkb" data-testid="train-vkb" role="group" aria-label="Virtual piano keyboard">
+    <div className="train-vkb" data-testid="train-vkb" role="group" aria-label={t('train.vkeyboard.aria')}>
       {/* Hidden label — consumed by screen readers and unit tests */}
       <span
         className="train-vkb__range-label--sr"
@@ -339,7 +341,7 @@ export function TrainVirtualKeyboard({ context, onKeyDown, onKeyUp }: TrainVirtu
         className="train-vkb__octave-btn"
         onClick={shiftDown}
         disabled={atLeftEdge}
-        aria-label="Scroll keyboard left one octave"
+        aria-label={t('train.vkeyboard.scroll_left_aria')}
         data-testid="vkb-octave-down"
       >
         ◀
@@ -403,7 +405,7 @@ export function TrainVirtualKeyboard({ context, onKeyDown, onKeyUp }: TrainVirtu
         className="train-vkb__octave-btn"
         onClick={shiftUp}
         disabled={atRightEdge}
-        aria-label="Scroll keyboard right one octave"
+        aria-label={t('train.vkeyboard.scroll_right_aria')}
         data-testid="vkb-octave-up"
       >
         ▶

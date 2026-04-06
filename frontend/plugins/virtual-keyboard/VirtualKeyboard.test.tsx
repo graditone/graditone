@@ -17,6 +17,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { VirtualKeyboard } from './VirtualKeyboard';
 import type { PluginContext, PluginManifest, PluginStaffViewerProps } from '../../src/plugin-api/index';
+import { LocaleProvider } from '../../src/i18n/index';
 
 const makeManifest = (): PluginManifest => ({
   id: 'virtual-keyboard',
@@ -46,6 +47,11 @@ function makeContext(emitNote = vi.fn(), playNote = vi.fn()): PluginContext {
   };
 }
 
+/** Provide LocaleProvider for tests */
+function TestWrapper({ children }: { children: React.ReactNode }) {
+  return <LocaleProvider locale="en">{children}</LocaleProvider>;
+}
+
 describe('VirtualKeyboard', () => {
   let emitNote: ReturnType<typeof vi.fn>;
   let playNote: ReturnType<typeof vi.fn>;
@@ -59,40 +65,40 @@ describe('VirtualKeyboard', () => {
 
   describe('keyboard layout', () => {
     it('renders at least 14 white keys', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const whiteKeys = document.querySelectorAll('.key--white');
       expect(whiteKeys.length).toBeGreaterThanOrEqual(14);
     });
 
     it('renders at least 10 black keys', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const blackKeys = document.querySelectorAll('.key--black');
       expect(blackKeys.length).toBeGreaterThanOrEqual(10);
     });
 
     it('renders the StaffViewer component via the plugin API', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       expect(screen.getByTestId('mock-staff-viewer')).toBeDefined();
     });
   });
 
   describe('key interactions', () => {
     it('calls context.emitNote when a white key is pressed', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const whiteKeys = document.querySelectorAll('.key--white');
       fireEvent.mouseDown(whiteKeys[0]);
       expect(emitNote).toHaveBeenCalledTimes(1);
     });
 
     it('calls context.emitNote when a black key is pressed', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const blackKeys = document.querySelectorAll('.key--black');
       fireEvent.mouseDown(blackKeys[0]);
       expect(emitNote).toHaveBeenCalledTimes(1);
     });
 
     it('calls context.playNote with type:attack on mousedown', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const c4 = document.querySelector('[data-midi="60"]');
       fireEvent.mouseDown(c4!);
       expect(playNote).toHaveBeenCalledWith(
@@ -101,7 +107,7 @@ describe('VirtualKeyboard', () => {
     });
 
     it('calls context.playNote with type:release on mouseup', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const c4 = document.querySelector('[data-midi="60"]');
       fireEvent.mouseDown(c4!);
       fireEvent.mouseUp(c4!);
@@ -111,7 +117,7 @@ describe('VirtualKeyboard', () => {
     });
 
     it('emits a PluginNoteEvent with midiNote and timestamp', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const before = Date.now();
       const whiteKeys = document.querySelectorAll('.key--white');
       fireEvent.mouseDown(whiteKeys[0]);
@@ -126,7 +132,7 @@ describe('VirtualKeyboard', () => {
 
   describe('MIDI note mapping', () => {
     it('middle C (C4) emits midiNote: 60', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       // C4 is middle C — find the key with data-midi="60"
       const c4 = document.querySelector('[data-midi="60"]');
       expect(c4).not.toBeNull();
@@ -137,7 +143,7 @@ describe('VirtualKeyboard', () => {
     });
 
     it('C#4 (black key) emits midiNote: 61', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const cSharp4 = document.querySelector('[data-midi="61"]');
       expect(cSharp4).not.toBeNull();
       fireEvent.mouseDown(cSharp4!);
@@ -149,7 +155,7 @@ describe('VirtualKeyboard', () => {
 
   describe('visual pressed state', () => {
     it('adds key--pressed class on mousedown', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const c4 = document.querySelector('[data-midi="60"]') as HTMLElement;
       expect(c4.classList.contains('key--pressed')).toBe(false);
       fireEvent.mouseDown(c4);
@@ -157,7 +163,7 @@ describe('VirtualKeyboard', () => {
     });
 
     it('removes key--pressed class on mouseup', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const c4 = document.querySelector('[data-midi="60"]') as HTMLElement;
       fireEvent.mouseDown(c4);
       fireEvent.mouseUp(c4);
@@ -165,7 +171,7 @@ describe('VirtualKeyboard', () => {
     });
 
     it('removes key--pressed class on mouseleave', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const c4 = document.querySelector('[data-midi="60"]') as HTMLElement;
       fireEvent.mouseDown(c4);
       fireEvent.mouseLeave(c4);
@@ -175,7 +181,7 @@ describe('VirtualKeyboard', () => {
 
   describe('note timing and duration', () => {
     it('does NOT add a note to StaffViewer on mousedown — only on mouseup', async () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const viewer = screen.getByTestId('mock-staff-viewer');
       const c4 = document.querySelector('[data-midi="60"]') as HTMLElement;
 
@@ -204,7 +210,7 @@ describe('VirtualKeyboard', () => {
         },
       };
 
-      render(<VirtualKeyboard context={capturingContext} />);
+      render(<VirtualKeyboard context={capturingContext} />, { wrapper: TestWrapper });
       const c4 = document.querySelector('[data-midi="60"]') as HTMLElement;
 
       const before = Date.now();
@@ -222,7 +228,7 @@ describe('VirtualKeyboard', () => {
 
   describe('touch / mouse dual-source guard', () => {
     it('does NOT fire a second attack when mousedown follows touchstart within 500 ms', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const c4 = document.querySelector('[data-midi="60"]') as HTMLElement;
 
       // Simulate a touch sequence followed immediately by the browser's
@@ -238,13 +244,13 @@ describe('VirtualKeyboard', () => {
 
   describe('clear button', () => {
     it('renders a "Clear" button', () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const btn = screen.getByRole('button', { name: /clear/i });
       expect(btn).toBeTruthy();
     });
 
     it('clicking Clear empties all notes from the StaffViewer', async () => {
-      render(<VirtualKeyboard context={context} />);
+      render(<VirtualKeyboard context={context} />, { wrapper: TestWrapper });
       const viewer = screen.getByTestId('mock-staff-viewer');
       const c4 = document.querySelector('[data-midi="60"]') as HTMLElement;
 

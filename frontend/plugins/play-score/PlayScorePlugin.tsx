@@ -22,6 +22,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { PluginContext, ScorePlayerState, PluginPlaybackStatus, MetronomeState, MetronomeSubdivision } from '../../src/plugin-api/index';
 
 import { PlaybackToolbar } from './playbackToolbar';
+import { useTranslation } from '../../src/i18n';
 import './PlayScorePlugin.css';
 
 export interface PlayScorePluginProps {
@@ -57,6 +58,7 @@ const INITIAL_METRONOME_STATE: MetronomeState = {
 // ---------------------------------------------------------------------------
 
 export function PlayScorePlugin({ context }: PlayScorePluginProps) {
+  const { t } = useTranslation();
   // ─── Screen state ─────────────────────────────────────────────────────────
   const [screen, setScreen] = useState<'selection' | 'player'>('selection');
 
@@ -305,9 +307,9 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
 
       {/* Loading indicator */}
       {status === 'loading' && (
-        <div className="play-score__loading" role="status" aria-label="Loading score">
+        <div className="play-score__loading" role="status" aria-label={t('play_score.loading_aria')}>
           <span className="play-score__loading-spinner">🎼</span>
-          <p>Loading…</p>
+          <p>{t('play_score.loading')}</p>
         </div>
       )}
 
