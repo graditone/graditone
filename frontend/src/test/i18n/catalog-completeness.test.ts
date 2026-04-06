@@ -5,7 +5,7 @@
  *
  * Invariants:
  * - Every key present in en.json must exist in es.json with a non-empty value
- * - Both catalogs must have exactly 117 keys
+ * - Both catalogs must have exactly 118 keys
  * - No extra keys in es.json that are absent from en.json
  */
 
