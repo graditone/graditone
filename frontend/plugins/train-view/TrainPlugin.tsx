@@ -1407,11 +1407,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           }
         }}
         >
-          {t('train.toolbar.back')}
+          ←
         </button>
 
-        {/* Show title when not in a session task */}
-        {!taskTag && <h1 className="train-plugin__title">{t('train.toolbar.title')}</h1>}
 
         {/* Feature 071: Session task tag — shown when launched from a session task */}
         {taskTag && (
@@ -1504,7 +1502,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
             aria-label={t('train.action.start_aria')}
             data-testid="train-play-btn"
           >
-            ▶ Train
+            {t('train.action.start')}
           </button>
         )}
 
@@ -1515,7 +1513,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
             aria-label={t('train.action.stop_aria')}
             data-testid="train-stop-btn"
           >
-            ■ Stop
+            {t('train.action.stop')}
           </button>
         )}
 
@@ -1603,7 +1601,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
             onClick={handleDismissTips}
             aria-label={t('train.tip.dismiss_aria')}
           >
-            Got it!
+            {t('train.tip.dismiss')}
           </button>
         </div>
       )}
@@ -1643,7 +1641,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
               {/* SCORE */}
               <div className="train-sidebar__section">
                 <p className="train-sidebar__section-title">{t('train.score.label')}</p>
-                {([['score', 'Score'], ['scales', 'Scales']] as [ExerciseConfig['preset'], string][]).map(([v, label]) => (
+                {([['score', t('train.preset.score')], ['scales', t('train.preset.scales')]] as [ExerciseConfig['preset'], string][]).map(([v, label]) => (
                   <label
                     key={v}
                     className={`train-sidebar__radio-label${isDisabled ? ' train-sidebar__radio-label--disabled' : ''}`}
@@ -1730,7 +1728,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
                       aria-disabled={config.preset === 'score' || config.preset === 'scales'}
                       onChange={() => { setComplexityLevel(null); updateConfig({ clef: c }); }}
                     />
-                    {c}
+                    {c === 'Treble' ? t('train.clef.treble') : t('train.clef.bass')}
                   </label>
                 ))}
                 {config.preset === 'score' && (

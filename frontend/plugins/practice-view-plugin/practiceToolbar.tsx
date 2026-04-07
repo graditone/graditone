@@ -165,9 +165,9 @@ export function PracticeToolbar({
   }, [staffMenuOpen]);
 
   function staffIndexLabel(index: number): string {
-    if (index === -1) return 'Both Hands';
-    if (index === 0) return 'Right Hand';
-    if (index === 1) return 'Left Hand';
+    if (index === -1) return t('practice.toolbar.both_hands');
+    if (index === 0) return t('practice.toolbar.right_hand');
+    if (index === 1) return t('practice.toolbar.left_hand');
     return `Staff ${index + 1}`;
   }
 
@@ -176,16 +176,16 @@ export function PracticeToolbar({
       value: i,
       label: staffIndexLabel(i),
     })),
-    { value: -1, label: 'Both Hands' },
+    { value: -1, label: t('practice.toolbar.both_hands') },
   ];
 
   // Practice button label and CSS class
   // 'holding' is a sub-state of active (note duration being measured) — show Stop button during both
   const practiceRunning = practiceMode === 'active' || practiceMode === 'holding' || practiceMode === 'waiting';
-  let practiceBtnLabel = '♩ Practice';
+  let practiceBtnLabel = t('practice.toolbar.practice_btn');
   let practiceBtnClass = 'practice-plugin__toolbar-btn practice-plugin__toolbar-btn--practice';
   if (practiceRunning) {
-    practiceBtnLabel = '■ Stop Practice';
+    practiceBtnLabel = t('practice.toolbar.stop_btn');
     practiceBtnClass =
       'practice-plugin__toolbar-btn practice-plugin__toolbar-btn--practice-active';
   }

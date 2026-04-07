@@ -17,6 +17,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { LayoutView } from '../layout/LayoutView';
 import type { PluginScoreRendererProps } from '../../plugin-api/types';
 import { usePhraseState } from '../../hooks/usePhraseState';
+import { useTranslation } from '../../i18n/index';
 import './ScoreRendererPlugin.css';
 import type { Note, Score } from '../../types/score';
 import type { PlaybackStatus, ITickSource } from '../../types/playback';
@@ -94,6 +95,7 @@ export function ScoreRendererPlugin({
   playbackStatus,
   onSetLoopRegion,
 }: ScoreRendererPluginProps) {
+  const { t } = useTranslation();
 
   // Build noteId → startTick lookup from the expanded notes array.
   // Expanded ticks are needed because playback engine (MusicTimeline) operates
@@ -261,29 +263,29 @@ export function ScoreRendererPlugin({
           className={`score-renderer-phrases-btn${phrasesVisible ? ' active' : ''}`}
           onClick={togglePhrases}
           disabled={!hasPhrases}
-          aria-label={phrasesVisible ? 'Hide phrases' : 'Show phrases'}
+          aria-label={phrasesVisible ? t('score.phrases.hide_aria') : t('score.phrases.show_aria')}
           aria-pressed={phrasesVisible}
-          title={hasPhrases ? (phrasesVisible ? 'Hide phrases' : 'Show phrases') : 'No phrases detected'}
+          title={hasPhrases ? (phrasesVisible ? t('score.phrases.hide_aria') : t('score.phrases.show_aria')) : t('score.phrases.none_title')}
         >
-          🎵 Phrases
+          {t('score.phrases.toggle')}
         </button>
         {phrasesVisible && (
           <>
             <button
               className="score-renderer-nav-btn"
               onClick={goToPreviousPhrase}
-              aria-label="Previous phrase"
-              title="Previous phrase"
+              aria-label={t('score.phrases.prev_aria')}
+              title={t('score.phrases.prev_aria')}
             >
-              ◀ Prev
+              {t('score.phrases.prev')}
             </button>
             <button
               className="score-renderer-nav-btn"
               onClick={goToNextPhrase}
-              aria-label="Next phrase"
-              title="Next phrase"
+              aria-label={t('score.phrases.next_aria')}
+              title={t('score.phrases.next_aria')}
             >
-              Next ▶
+              {t('score.phrases.next')}
             </button>
           </>
         )}
@@ -295,10 +297,10 @@ export function ScoreRendererPlugin({
               layoutWrapperRef.current.scrollTop = 0;
             }
           }}
-          aria-label="Return to start"
-          title="Return to start"
+          aria-label={t('score.return_to_start_aria')}
+          title={t('score.return_to_start_aria')}
         >
-          ⏮ Start
+          {t('score.return_to_start')}
         </button>
       </div>
     </div>

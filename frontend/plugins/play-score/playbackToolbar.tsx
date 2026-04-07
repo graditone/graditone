@@ -151,7 +151,7 @@ export function PlaybackToolbar({
           aria-label={t('play_score.toolbar.pause_aria')}
           disabled={!isActive}
         >
-          {t('play_score.toolbar.pause')}
+          ⏸
         </button>
       ) : (
         <button
@@ -160,7 +160,7 @@ export function PlaybackToolbar({
           aria-label={t('play_score.toolbar.play_aria')}
           disabled={status === 'idle' || status === 'loading' || status === 'error'}
         >
-          {t('play_score.toolbar.play')}
+          ▶
         </button>
       )}
 
@@ -171,7 +171,7 @@ export function PlaybackToolbar({
         aria-label={t('play_score.toolbar.stop_aria')}
         disabled={!isActive}
       >
-        {t('play_score.toolbar.stop')}
+        ■
       </button>
 
       {/* Elapsed / total timer */}
