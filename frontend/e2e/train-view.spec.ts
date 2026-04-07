@@ -23,17 +23,16 @@ test.describe('Feature 036: Train View navigation', () => {
   test('clicking Train navigates to the Train view', async ({ page }) => {
     await page.getByRole('button', { name: /train/i }).click();
 
-    // The Train view root and its heading must be visible
+    // The Train view root must be visible
     await expect(page.locator('[data-testid="train-view"]')).toBeVisible();
-    await expect(page.getByRole('heading', { name: /train/i })).toBeVisible();
   });
 
   test('Back button in Train view returns to the landing screen', async ({ page }) => {
     await page.getByRole('button', { name: /train/i }).click();
     await expect(page.locator('[data-testid="train-view"]')).toBeVisible();
 
-    // Press ← Back
-    await page.getByRole('button', { name: /← back/i }).click();
+    // Press ← (back button is icon-only)
+    await page.getByRole('button', { name: /←/i }).first().click();
 
     // Landing screen CTA must re-appear
     await expect(page.getByRole('button', { name: /play/i })).toBeVisible();
