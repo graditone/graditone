@@ -166,8 +166,8 @@ test.describe('Feature 035 / T023: Metronome audio teardown on plugin exit', () 
     await metronomeBtn.click();
     await expect(metronomeBtn).toHaveAttribute('aria-pressed', 'true');
 
-    // Exit via Back
-    await page.getByRole('button', { name: /← back/i }).click();
+    // Exit via Back (icon-only button, label is just "←")
+    await page.getByRole('button', { name: /←/ }).click();
 
     // Plugin should be gone
     await expect(page.getByTestId('train-view')).not.toBeVisible();

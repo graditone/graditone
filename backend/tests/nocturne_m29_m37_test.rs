@@ -376,3 +376,69 @@ fn test_nocturne_m32_m34_no_overlaps() {
         "Could not find systems with glyph data for overlap check"
     );
 }
+
+/// T008 — Replacement for `nocturne-m36-stem-verify.spec.ts`.
+///
+/// The original e2e test was screenshot-only with no assertions. This replaces it
+/// with a structural assertion: the cadenza passage near M36 (which has irregular
+/// "Senza tempo" durations) must preserve explicit `<stem>up</stem>` from the MusicXML.
+///
+/// Due to the cadenza measures having non-standard durations, the passage begins at
+/// the tick reported by `measure_end_ticks[35]` (end of the nominal M36). The importer
+/// must parse `<stem>up</stem>` as `stem_down: false` in the score DTO.
+#[test]
+fn test_nocturne_m36_rh_runs_have_stem_up() {
+    let importer = MusicXMLImporter::new();
+    let result = importer
+        .import_file(Path::new("../scores/Chopin_NocturneOp9No2.mxl"))
+        .expect("Failed to import Nocturne");
+    let dto: ScoreDto = (&result.score).into();
+    let score_json = serde_json::to_value(&dto).expect("DTO serialisation failed");
+
+    // Use measure_end_ticks to find the actual range dynamically.
+    // The cadenza passage after M36 (Senza tempo) starts at measure_end_ticks[35].
+    let measure_ends = score_json["measure_end_ticks"]
+        .as_array()
+        .expect("measure_end_ticks array");
+    assert!(
+        measure_ends.len() >= 38,
+        "Expected at least 38 measures, found {}",
+        measure_ends.len()
+    );
+    // cadenza_start = end of M36 (0-based index 35)
+    // cadenza_end   = end of M38 (0-based index 37)
+    let cadenza_start = measure_ends[35].as_u64().unwrap_or(192480); // ~192480
+    let cadenza_end = measure_ends[37].as_u64().unwrap_or(204000); // ~204000
+
+    // Both staves of the piano instrument.
+    let staves = score_json["instruments"][0]["staves"]
+        .as_array()
+        .expect("instruments[0].staves array");
+    assert!(!staves.is_empty(), "Expected at least one staff");
+
+    let mut stem_up_count: usize = 0;
+
+    let empty: Vec<serde_json::Value> = vec![];
+    for staff in staves {
+        for voice in staff["voices"].as_array().unwrap_or(&empty) {
+            for note in voice["interval_events"].as_array().unwrap_or(&empty) {
+                let tick = note["start_tick"].as_u64().unwrap_or(u64::MAX);
+                if tick >= cadenza_start && tick < cadenza_end {
+                    if let Some(false) = note["stem_down"].as_bool() {
+                        stem_up_count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // The cadenza passage (after the "Senza tempo" M36) contains explicit
+    // <stem>up</stem> notes in the MusicXML — importer must preserve them.
+    assert!(
+        stem_up_count >= 4,
+        "Expected ≥4 explicit stem-up notes in the cadenza passage (ticks {}..{}), found {}",
+        cadenza_start,
+        cadenza_end,
+        stem_up_count,
+    );
+}

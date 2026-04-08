@@ -971,7 +971,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   if (!isLoaded) {
     // Score selector screen
     return (
-      <div className="practice-plugin practice-plugin--selection">
+      <div className="practice-plugin practice-plugin--selection" data-testid="practice-plugin-root">
         <ScoreSelector
           catalogue={context.scorePlayer.getCatalogue()}
           isLoading={playerState.status === 'loading'}
@@ -998,7 +998,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   }
 
   return (
-    <div className={`practice-plugin${practiceActive ? ' practice-plugin--phantom' : ''}${((practiceState.mode === 'complete' || (practiceState.mode === 'inactive' && performanceRecord)) && resultsOverlayVisible) || (partialPerformanceRecord && resultsOverlayVisible) ? ' practice-plugin--results' : ''}`}>
+    <div className={`practice-plugin${practiceActive ? ' practice-plugin--phantom' : ''}${((practiceState.mode === 'complete' || (practiceState.mode === 'inactive' && performanceRecord)) && resultsOverlayVisible) || (partialPerformanceRecord && resultsOverlayVisible) ? ' practice-plugin--results' : ''}`} data-testid="practice-plugin-root">
       {/* Toolbar — top */}
       <PracticeToolbar
         scoreTitle={playerState.title}
