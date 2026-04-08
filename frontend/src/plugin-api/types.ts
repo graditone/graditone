@@ -628,6 +628,13 @@ export interface PluginScorePlayerContext {
   ): DifficultyRating | null;
 
   /**
+   * Feature 077: Convert a raw (layout) tick to expanded (playback) tick space.
+   * Scores with repeats have expanded ticks offset by the duration of repeated sections.
+   * Returns the input tick unchanged for scores without repeats.
+   */
+  rawTickToExpandedTick(rawTick: number): number;
+
+  /**
    * Feature 070: Loads a catalogue score ad-hoc and computes difficulty for a
    * specific measure range and staff. Does NOT change the currently loaded score.
    * Pass null for startMeasure/endMeasure to use the full score range.

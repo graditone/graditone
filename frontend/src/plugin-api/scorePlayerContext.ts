@@ -548,6 +548,46 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     [score],
   );
 
+  // ─── rawTickToExpandedTick (Feature 077) ──────────────────────────────────
+  // Build a sorted table of (rawTick, offset) entries from rawNotes→notes ID matching.
+  // Within each repeat section the offset is constant, so binary-searching the
+  // nearest preceding entry gives the correct offset for arbitrary raw ticks
+  // (including measure boundaries that don't coincide with note onsets).
+
+  const rawToExpandedOffsets = useMemo(() => {
+    if (!rawNotes.length || !notes.length) return null;
+    const expandedById = new Map<string, number>();
+    for (const n of notes) {
+      if (!expandedById.has(n.id)) expandedById.set(n.id, n.start_tick);
+    }
+    const entries: { raw: number; offset: number }[] = [];
+    const seen = new Set<number>();
+    for (const n of rawNotes) {
+      if (seen.has(n.start_tick)) continue;
+      seen.add(n.start_tick);
+      const exp = expandedById.get(n.id);
+      if (exp !== undefined) entries.push({ raw: n.start_tick, offset: exp - n.start_tick });
+    }
+    entries.sort((a, b) => a.raw - b.raw);
+    if (entries.every(e => e.offset === 0)) return null;
+    return entries;
+  }, [rawNotes, notes]);
+
+  const rawTickToExpandedTick = useCallback(
+    (rawTick: number): number => {
+      if (!rawToExpandedOffsets || rawToExpandedOffsets.length === 0) return rawTick;
+      let lo = 0, hi = rawToExpandedOffsets.length - 1, best = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (rawToExpandedOffsets[mid].raw <= rawTick) { best = mid; lo = mid + 1; }
+        else hi = mid - 1;
+      }
+      const offset = best >= 0 ? rawToExpandedOffsets[best].offset : rawToExpandedOffsets[0].offset;
+      return rawTick + offset;
+    },
+    [rawToExpandedOffsets],
+  );
+
   // ─── getPhrases (Feature 067) ─────────────────────────────────────────────
 
   const getPhrases = useCallback(
@@ -615,6 +655,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     getCurrentTickLive,
     extractPracticeNotes,
     getMeasureEndTicks,
+    rawTickToExpandedTick,
     getPhrases,
     getRegionDifficulty,
     getRegionDifficultyForScore,
@@ -633,6 +674,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     getCurrentTickLive,
     extractPracticeNotes,
     getMeasureEndTicks,
+    rawTickToExpandedTick,
     getPhrases,
     getRegionDifficulty,
     getRegionDifficultyForScore,
@@ -707,6 +749,7 @@ export function createNoOpScorePlayer(): PluginScorePlayerContext {
     getCurrentTickLive: () => 0,
     extractPracticeNotes: (_staffIndex: number, _maxCount?: number) => null,
     getMeasureEndTicks: () => null,
+    rawTickToExpandedTick: (rawTick: number) => rawTick,
     getPhrases: () => null,
     getRegionDifficulty: () => null,
     getRegionDifficultyForScore: async () => null,
@@ -745,6 +788,7 @@ export function createScorePlayerProxy(
     getCurrentTickLive: (...args) => proxyRef.current.getCurrentTickLive(...args),
     extractPracticeNotes: (...args) => proxyRef.current.extractPracticeNotes(...args),
     getMeasureEndTicks: () => proxyRef.current.getMeasureEndTicks(),
+    rawTickToExpandedTick: (...args) => proxyRef.current.rawTickToExpandedTick(...args),
     getPhrases: () => proxyRef.current.getPhrases(),
     getRegionDifficulty: (...args) => proxyRef.current.getRegionDifficulty(...args),
     getRegionDifficultyForScore: (...args) => proxyRef.current.getRegionDifficultyForScore(...args),

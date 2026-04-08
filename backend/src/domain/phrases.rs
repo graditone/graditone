@@ -314,20 +314,14 @@ pub fn detect_rest_boundaries(
 // T014: apply_fallback_grouping
 // ============================================================================
 
-/// Group ungrouped measure ranges into regular phrase groups.
-/// - 4/4 or 3/4 time → 4-measure phrases
-/// - 2/4 or 6/8 time → 8-measure phrases
-/// - Default → 4-measure phrases
+/// Group ungrouped measure ranges into regular 4-measure phrase groups.
 pub fn apply_fallback_grouping(
     start_measure: usize,
     end_measure: usize,
-    time_sig_numerator: u32,
-    time_sig_denominator: u32,
+    _time_sig_numerator: u32,
+    _time_sig_denominator: u32,
 ) -> Vec<(usize, usize)> {
-    let group_size = match (time_sig_numerator, time_sig_denominator) {
-        (2, 4) | (6, 8) => 8,
-        _ => 4,
-    };
+    let group_size = 4;
 
     let total = end_measure - start_measure + 1;
     let mut groups = Vec::new();
@@ -359,10 +353,7 @@ pub fn detect_phrases(score: &Score) -> Vec<PhraseRegion> {
 
     // Get the initial time signature for fallback grouping
     let (ts_num, ts_den) = get_initial_time_signature(score);
-    let group_size: usize = match (ts_num, ts_den) {
-        (2, 4) | (6, 8) => 8,
-        _ => 4,
-    };
+    let group_size: usize = 4;
 
     let mut all_phrases = Vec::new();
 
@@ -430,6 +421,14 @@ pub fn detect_phrases(score: &Score) -> Vec<PhraseRegion> {
             });
         }
 
+        // T027: Merge short boundary fragments into adjacent phrases.
+        // Phrases must be sorted before merging so predecessor/successor relationships are correct.
+        // End-repeat boundaries (measure_index + 1 for each End repeat barline) are passed so
+        // short phrases sitting right after a repeat end-bar merge forward, not backward.
+        let end_repeat_boundaries = collect_end_repeat_boundaries(score);
+        instrument_phrases.sort_by_key(|p| p.start_measure);
+        instrument_phrases = merge_short_phrases(instrument_phrases, &end_repeat_boundaries);
+
         // Sort by start_measure
         instrument_phrases.sort_by_key(|p| p.start_measure);
 
@@ -439,6 +438,87 @@ pub fn detect_phrases(score: &Score) -> Vec<PhraseRegion> {
     // Sort globally by (instrument_index, start_measure)
     all_phrases.sort_by_key(|p| (p.instrument_index, p.start_measure));
     all_phrases
+}
+
+// ============================================================================
+// T027: merge_short_phrases — eliminate boundary fragments
+// ============================================================================
+
+/// Minimum number of measures a phrase must span to be kept as-is.
+/// Phrases shorter than this are merged into their predecessor (or successor).
+pub const MIN_PHRASE_MEASURES: usize = 2;
+
+/// Collect the set of measure indices that immediately follow an End repeat barline
+/// (i.e. `measure_index + 1` for every `RepeatBarlineType::End` or `Both`).
+/// Short phrases starting at these positions should merge forward (into successor)
+/// rather than backward, so the repeat section boundary is preserved.
+pub fn collect_end_repeat_boundaries(score: &Score) -> BTreeSet<usize> {
+    use crate::domain::repeat::RepeatBarlineType;
+    let mut set = BTreeSet::new();
+    for rb in &score.repeat_barlines {
+        match rb.barline_type {
+            RepeatBarlineType::End | RepeatBarlineType::Both => {
+                let after = rb.measure_index as usize + 1;
+                if after < score.measure_end_ticks.len() {
+                    set.insert(after);
+                }
+            }
+            RepeatBarlineType::Start => {}
+        }
+    }
+    set
+}
+
+/// Merge phrases shorter than MIN_PHRASE_MEASURES into adjacent phrases.
+/// - If a short phrase's start_measure is in `end_repeat_boundaries`, it sits
+///   immediately after a repeat barline: merge it into its SUCCESSOR to preserve
+///   the repeat section boundary. Only fall back to predecessor if there is no successor.
+/// - Otherwise merge into predecessor (or successor if no predecessor).
+/// - Scores with a single phrase are never modified.
+/// - Iterates until no more merges are possible (stable).
+pub fn merge_short_phrases(
+    mut phrases: Vec<PhraseRegion>,
+    end_repeat_boundaries: &BTreeSet<usize>,
+) -> Vec<PhraseRegion> {
+    if phrases.len() <= 1 {
+        return phrases;
+    }
+    loop {
+        let pos = phrases
+            .iter()
+            .position(|p| p.end_measure - p.start_measure + 1 < MIN_PHRASE_MEASURES);
+        match pos {
+            None => break,
+            Some(i) => {
+                let merge_forward = end_repeat_boundaries.contains(&phrases[i].start_measure);
+                if merge_forward && i + 1 < phrases.len() {
+                    // Short phrase is right after an end-repeat: merge into successor
+                    // to preserve the repeat-section boundary.
+                    let short = phrases.remove(i);
+                    phrases[i].start_measure = short.start_measure;
+                    phrases[i].start_tick = short.start_tick;
+                } else if !merge_forward && i > 0 {
+                    // Normal case: merge into predecessor
+                    let short = phrases.remove(i);
+                    phrases[i - 1].end_measure = short.end_measure;
+                    phrases[i - 1].end_tick = short.end_tick;
+                } else if i + 1 < phrases.len() {
+                    // No predecessor available — merge into successor
+                    let short = phrases.remove(i);
+                    phrases[i].start_measure = short.start_measure;
+                    phrases[i].start_tick = short.start_tick;
+                } else if i > 0 {
+                    // No successor available — merge into predecessor as last resort
+                    let short = phrases.remove(i);
+                    phrases[i - 1].end_measure = short.end_measure;
+                    phrases[i - 1].end_tick = short.end_tick;
+                } else {
+                    break; // Single phrase, nothing to merge
+                }
+            }
+        }
+    }
+    phrases
 }
 
 /// Get the initial time signature from the score (default 4/4).
