@@ -339,11 +339,13 @@ fn test_fallback_grouping_4_4_time() {
 
 #[test]
 fn test_fallback_grouping_2_4_time() {
-    // 16 measures in 2/4 → two 8-measure phrases
+    // 16 measures in 2/4 → four 4-measure phrases
     let groups = musicore_backend::domain::phrases::apply_fallback_grouping(0, 15, 2, 4);
-    assert_eq!(groups.len(), 2);
-    assert_eq!(groups[0], (0, 7));
-    assert_eq!(groups[1], (8, 15));
+    assert_eq!(groups.len(), 4);
+    assert_eq!(groups[0], (0, 3));
+    assert_eq!(groups[1], (4, 7));
+    assert_eq!(groups[2], (8, 11));
+    assert_eq!(groups[3], (12, 15));
 }
 
 #[test]
@@ -546,6 +548,29 @@ fn test_parse_arabesque_produces_phrases() {
             window[1]
         );
     }
+
+    // T003: No phrase for instrument 0 should be shorter than 2 measures
+    for phrase in &inst0_phrases {
+        let length = phrase.end_measure - phrase.start_measure + 1;
+        assert!(
+            length >= 2,
+            "Instrument 0 phrase [{},{}] has length {} (< 2 measures): {:?}",
+            phrase.start_measure,
+            phrase.end_measure,
+            length,
+            phrase
+        );
+    }
+
+    // T003: Arabesque instrument 0 should produce exactly 8 phrases after merge
+    // (4-bar grouping: intro [0,1], then ~4-measure slur+boundary groups)
+    assert_eq!(
+        inst0_phrases.len(),
+        8,
+        "Expected 8 phrases for instrument 0, got {}: {:?}",
+        inst0_phrases.len(),
+        inst0_phrases
+    );
 }
 
 // ============================================================================
@@ -638,4 +663,95 @@ fn test_all_preloaded_scores_produce_phrases() {
             phrases.len()
         );
     }
+}
+
+// ============================================================================
+// T004: Unit test for merge_short_phrases — merge into predecessor
+// ============================================================================
+
+#[test]
+fn test_merge_short_phrases_merges_into_predecessor() {
+    use musicore_backend::domain::phrases::{PhraseRegion, merge_short_phrases};
+
+    // Input: [0,3],[4,4],[5,9] — the middle phrase has length 1, predecessor exists
+    let phrases = vec![
+        PhraseRegion {
+            instrument_index: 0,
+            start_measure: 0,
+            end_measure: 3,
+            start_tick: 0,
+            end_tick: 3840 * 4,
+        },
+        PhraseRegion {
+            instrument_index: 0,
+            start_measure: 4,
+            end_measure: 4,
+            start_tick: 3840 * 4,
+            end_tick: 3840 * 5,
+        },
+        PhraseRegion {
+            instrument_index: 0,
+            start_measure: 5,
+            end_measure: 9,
+            start_tick: 3840 * 5,
+            end_tick: 3840 * 10,
+        },
+    ];
+
+    let merged = merge_short_phrases(phrases, &std::collections::BTreeSet::new());
+    assert_eq!(
+        merged.len(),
+        2,
+        "Expected 2 phrases after merge, got {}: {:?}",
+        merged.len(),
+        merged
+    );
+    assert_eq!(merged[0].start_measure, 0);
+    assert_eq!(
+        merged[0].end_measure, 4,
+        "Predecessor should be extended to include short phrase"
+    );
+    assert_eq!(merged[1].start_measure, 5);
+    assert_eq!(merged[1].end_measure, 9);
+}
+
+// ============================================================================
+// T004b: Unit test for merge_short_phrases — merge into successor (no predecessor)
+// ============================================================================
+
+#[test]
+fn test_merge_short_phrases_merges_into_successor_when_no_predecessor() {
+    use musicore_backend::domain::phrases::{PhraseRegion, merge_short_phrases};
+
+    // Input: [0,0],[1,5] — first phrase has length 1, no predecessor → merge into successor
+    let phrases = vec![
+        PhraseRegion {
+            instrument_index: 0,
+            start_measure: 0,
+            end_measure: 0,
+            start_tick: 0,
+            end_tick: 3840,
+        },
+        PhraseRegion {
+            instrument_index: 0,
+            start_measure: 1,
+            end_measure: 5,
+            start_tick: 3840,
+            end_tick: 3840 * 6,
+        },
+    ];
+
+    let merged = merge_short_phrases(phrases, &std::collections::BTreeSet::new());
+    assert_eq!(
+        merged.len(),
+        1,
+        "Expected 1 phrase after merge, got {}: {:?}",
+        merged.len(),
+        merged
+    );
+    assert_eq!(
+        merged[0].start_measure, 0,
+        "Merged phrase should start at 0"
+    );
+    assert_eq!(merged[0].end_measure, 5, "Merged phrase should end at 5");
 }

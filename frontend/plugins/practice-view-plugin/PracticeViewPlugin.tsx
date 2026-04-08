@@ -238,6 +238,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     startMeasure: number | null;
     endMeasure: number | null;
   } | null>(null);
+  // Feature 061: Persists the task-driven staffIndex through subsequent loading
+  // cycles (e.g. setTempoMultiplier causing a reload) so the reset-to-0 effect
+  // cannot clobber it after it was applied.
+  const taskStaffIndexRef = useRef<number | null>(null);
   // Feature 061: Auto-start practice after task config + loop region are applied
   const autoStartPracticeRef = useRef(false);
   const [savedPractices, setSavedPractices] = useState<SavedPracticeIndexEntry[]>(() => listSavedPractices());
@@ -337,6 +341,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     if (!tc || playerState.status !== 'ready') return;
     pendingTaskConfigRef.current = null;
 
+    taskStaffIndexRef.current = tc.staffIndex;
     setSelectedStaffIndex(tc.staffIndex);
     setTempoMultiplier(tc.tempoMultiplier);
     context.scorePlayer.setTempoMultiplier(tc.tempoMultiplier);
@@ -356,7 +361,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       if (measureEndTicks && measureEndTicks.length > 0) {
         const result = measureRangeToTicks(startM, endM, measureEndTicks);
         if (result) {
-          setPendingTaskLoopRegion(result);
+          // measureRangeToTicks returns raw (layout) ticks, but the practice
+          // engine and playback engine operate in expanded (repeat-unrolled)
+          // tick space. Convert so loopPracticeRange, setPinnedStart, and
+          // setLoopEnd all receive the correct tick values.
+          setPendingTaskLoopRegion({
+            startTick: context.scorePlayer.rawTickToExpandedTick(result.startTick),
+            endTick: context.scorePlayer.rawTickToExpandedTick(result.endTick),
+          });
         }
       }
     }
@@ -431,8 +443,15 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // Reset to staff 0 when a new score is loaded.
   useEffect(() => {
-    if (!['ready', 'playing', 'paused'].includes(playerState.status)) {
-      setSelectedStaffIndex(0);
+    if (['ready', 'playing', 'paused'].includes(playerState.status)) {
+      // Re-apply the task's locked staff if one is pending (survives loading cycles)
+      if (taskStaffIndexRef.current !== null) {
+        setSelectedStaffIndex(taskStaffIndexRef.current);
+      }
+    } else {
+      if (taskStaffIndexRef.current === null) {
+        setSelectedStaffIndex(0);
+      }
     }
   }, [playerState.status]);
 
@@ -587,6 +606,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   const handleStaffChange = useCallback((index: number) => {
     setSelectedStaffIndex(index);
+    taskStaffIndexRef.current = null; // user made an explicit choice — release the lock
   }, []);
 
   // Practice toggle (T031, T033, T034)
@@ -905,14 +925,21 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           setTaskTag({ taskNumber: tc.taskNumber as number, sessionName: tc.sessionName as string, difficulty: tc.difficulty as (1 | 2 | 3 | undefined) });
         }
         loadedScoreRefRef.current = scoreRef as ScoreRef;
+        const staffIndex = (tc.staffIndex as number) ?? 0;
         pendingTaskConfigRef.current = {
-          staffIndex: (tc.staffIndex as number) ?? 0,
+          staffIndex,
           loopCount: (tc.loopCount as number) ?? 1,
           tempoMultiplier: (tc.tempoMultiplier as number) ?? 1.0,
           regionType: (tc.regionType as string) ?? 'all',
           startMeasure: (tc.startMeasure as number) ?? null,
           endMeasure: (tc.endMeasure as number) ?? null,
         };
+        // Apply staffIndex immediately: if the same score is already loaded,
+        // playerState.status stays 'ready' and the task-config effect never
+        // re-fires (its dependency doesn't change). Setting it here ensures
+        // the correct staff is selected even when no score reload happens.
+        taskStaffIndexRef.current = staffIndex;
+        setSelectedStaffIndex(staffIndex);
         if (scoreRef.type === 'preloaded') {
           context.scorePlayer.loadScore({ kind: 'catalogue', catalogueId: scoreRef.id });
         } else {

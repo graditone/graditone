@@ -167,6 +167,22 @@ export function ScoreRendererPlugin({
     return rawTick + offset;
   }, [rawToExpandedOffsets]);
 
+  /** Convert an expanded tick back to raw tick space.
+   *  Binary-searches the offset table by expanded value (raw + offset). */
+  const toRawTick = useCallback((expandedTick: number): number => {
+    if (!rawToExpandedOffsets || rawToExpandedOffsets.length === 0) return expandedTick;
+    // Each entry: expanded = raw + offset. Search for last entry where raw + offset <= expandedTick.
+    let lo = 0, hi = rawToExpandedOffsets.length - 1, best = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const exp = rawToExpandedOffsets[mid].raw + rawToExpandedOffsets[mid].offset;
+      if (exp <= expandedTick) { best = mid; lo = mid + 1; }
+      else hi = mid - 1;
+    }
+    const offset = best >= 0 ? rawToExpandedOffsets[best].offset : rawToExpandedOffsets[0].offset;
+    return expandedTick - offset;
+  }, [rawToExpandedOffsets]);
+
   // Feature 062: Phrase overlay state — wrap onSetLoopRegion to convert
   // raw phrase ticks to expanded ticks before reaching the playback engine.
   const phraseOptions = useMemo(() => ({
@@ -197,19 +213,28 @@ export function ScoreRendererPlugin({
   }, [selectedPhraseIndex, instrumentPhrases, toExpandedTick]);
 
   // Merge: phrase-derived loop takes precedence over parent's manual loop.
+  // Both phraseLoopRegion and loopRegion are in expanded tick space.
+  // Convert to raw tick space for the overlay renderer (barline positioning).
   const effectiveLoopRegion = phraseLoopRegion ?? loopRegion;
+  const overlayLoopRegion = useMemo(() => {
+    if (!effectiveLoopRegion) return null;
+    return {
+      startTick: toRawTick(effectiveLoopRegion.startTick),
+      endTick: toRawTick(effectiveLoopRegion.endTick),
+    };
+  }, [effectiveLoopRegion, toRawTick]);
 
   // Intercept long-press to clear phrase-selected loop when tapping inside it.
   // PlayScorePlugin's own handleNoteLongPress checks its own loopRegion state
   // (which is null for phrase-derived loops), so we handle clearing here.
   const handlePin = useCallback((tick: number | null, noteId: string | null) => {
-    if (tick != null && phraseLoopRegion && tick >= phraseLoopRegion.startTick && tick <= phraseLoopRegion.endTick) {
+    if (tick != null && phraseLoopRegion && overlayLoopRegion && tick >= overlayLoopRegion.startTick && tick <= overlayLoopRegion.endTick) {
       // Clear phrase selection → clears phraseLoopRegion
       selectPhrase(null);
       return;
     }
     onNoteLongPress(tick ?? 0, noteId);
-  }, [phraseLoopRegion, selectPhrase, onNoteLongPress]);
+  }, [phraseLoopRegion, overlayLoopRegion, selectPhrase, onNoteLongPress]);
 
   // ─── Loading placeholder ─────────────────────────────────────────────────
 
@@ -237,7 +262,7 @@ export function ScoreRendererPlugin({
           expectedNoteIds={expectedNoteIds ? (expectedNoteIds instanceof Set ? expectedNoteIds : new Set(expectedNoteIds)) : undefined}
           scrollTargetNoteIds={scrollTargetNoteIds ? (scrollTargetNoteIds instanceof Set ? scrollTargetNoteIds : new Set(scrollTargetNoteIds)) : undefined}
           pinnedNoteId={pinnedNoteId}
-          loopRegion={effectiveLoopRegion}
+          loopRegion={overlayLoopRegion}
           phrasesVisible={phrasesVisible}
           selectedPhraseIndex={selectedPhraseIndex}
           onPhraseClick={selectPhrase}

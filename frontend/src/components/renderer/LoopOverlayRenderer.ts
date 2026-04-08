@@ -3,14 +3,14 @@
  * Feature 058 - Extracted from LayoutRenderer.tsx
  *
  * Renders semi-transparent loop-region overlay rects on each visible system
- * to visualize the active practice loop region.
+ * to visualize the active practice loop region. Uses barline x-positions from
+ * the layout engine to place boundaries precisely at measure edges.
  */
 
 import type { GlobalLayout, System } from '../../wasm/layout';
 import type { Viewport } from '../../types/Viewport';
 import { createSVGElement } from '../../utils/svgHelpers';
 import { getVisibleSystems } from '../../utils/viewportUtils';
-import { createSourceKey } from '../../services/highlight/sourceMapping';
 
 export interface LoopOverlayOptions {
   loopRegion: { startTick: number; endTick: number };
@@ -45,61 +45,23 @@ export class LoopOverlayRenderer {
   /**
    * Renders a semi-transparent loop-region overlay rect for a single system.
    *
-   * Strategy:
-   * 1. Skip if the loop region doesn't overlap this system's tick_range.
-   * 2. Build a tick → x map by scanning glyphs via sourceToNoteIdMap + notes.
-   * 3. x_start = x of first note >= loopStartTick (or staff left edge).
-   * 4. x_end   = x of first note >= loopEndTick   (or staff right edge).
+   * Uses barline x-positions from the layout engine to place boundaries
+   * precisely at measure edges, matching PhraseOverlayRenderer's approach.
    */
   private renderOverlay(system: System, options: LoopOverlayOptions): SVGRectElement | null {
-    const { loopRegion, rawNotes, expandedNotes, sourceToNoteIdMap } = options;
+    const { loopRegion } = options;
 
-    // Convert expanded→raw ticks via the note arrays
-    let { startTick, endTick } = loopRegion;
-    if (rawNotes && expandedNotes && rawNotes !== expandedNotes) {
-      const rawById = new Map<string, number>();
-      for (const n of rawNotes) rawById.set(n.id, n.start_tick);
-      const exp2raw = new Map<number, number>();
-      for (const n of expandedNotes) {
-        const raw = rawById.get(n.id);
-        if (raw !== undefined) exp2raw.set(n.start_tick, raw);
-      }
-      startTick = exp2raw.get(startTick) ?? startTick;
-      endTick = exp2raw.get(endTick) ?? endTick;
-    }
+    // loopRegion ticks are in raw (layout) tick space — either from
+    // measureRangeToTicks (task-initiated) or from note pins (user-initiated,
+    // task-locked sessions prevent this). No tick-space conversion needed
+    // since barline positioning operates in the same raw tick space as systems.
+    const { startTick, endTick } = loopRegion;
 
     const sysStart = system.tick_range.start_tick;
     const sysEnd   = system.tick_range.end_tick;
 
     // No overlap between loop and this system
     if (endTick <= sysStart || startTick >= sysEnd) return null;
-
-    // Build tick → leftmost-x map from all glyphs in this system
-    const tickToX = new Map<number, number>();
-
-    if (sourceToNoteIdMap && rawNotes && rawNotes.length > 0) {
-      const noteIdToTick = new Map<string, number>();
-      for (const note of rawNotes) noteIdToTick.set(note.id, note.start_tick);
-
-      for (const staffGroup of system.staff_groups) {
-        for (const staff of staffGroup.staves) {
-          for (const run of staff.glyph_runs) {
-            for (const glyph of run.glyphs) {
-              if (!glyph.source_reference) continue;
-              const key = createSourceKey({ system_index: system.index, ...glyph.source_reference });
-              const noteId = sourceToNoteIdMap.get(key);
-              if (!noteId) continue;
-              const tick = noteIdToTick.get(noteId);
-              if (tick === undefined) continue;
-              const existing = tickToX.get(tick);
-              if (existing === undefined || glyph.position.x < existing) {
-                tickToX.set(tick, glyph.position.x);
-              }
-            }
-          }
-        }
-      }
-    }
 
     // Resolve coordinate edges from staff lines
     const firstStaff = system.staff_groups[0]?.staves[0];
@@ -111,23 +73,11 @@ export class LoopOverlayRenderer {
     const leftEdge  = firstStaff?.staff_lines[0]?.start_x    ?? system.bounding_box.x;
     const rightEdge = firstStaff?.staff_lines[0]?.end_x      ?? (system.bounding_box.x + system.bounding_box.width);
 
-    const sortedTicks = [...tickToX.keys()].sort((a, b) => a - b);
+    // Build barline x-positions for tick→x mapping
+    const barlineXs = this.collectBarlineXPositions(system);
 
-    let xStart: number;
-    if (startTick <= sysStart) {
-      xStart = leftEdge;
-    } else {
-      const match = sortedTicks.find(t => t >= startTick);
-      xStart = match !== undefined ? tickToX.get(match)! : leftEdge;
-    }
-
-    let xEnd: number;
-    if (endTick >= sysEnd) {
-      xEnd = rightEdge;
-    } else {
-      const match = sortedTicks.find(t => t >= endTick);
-      xEnd = match !== undefined ? tickToX.get(match)! : rightEdge;
-    }
+    const xStart = this.tickToX(startTick, sysStart, sysEnd, leftEdge, rightEdge, barlineXs);
+    const xEnd   = this.tickToX(endTick, sysStart, sysEnd, leftEdge, rightEdge, barlineXs);
 
     if (xEnd <= xStart) return null;
 
@@ -139,5 +89,55 @@ export class LoopOverlayRenderer {
     rect.setAttribute('height', (bottomY - topY).toString());
     rect.setAttribute('pointer-events', 'none');
     return rect;
+  }
+
+  /**
+   * Collect barline x-positions from the first staff, sorted ascending.
+   */
+  private collectBarlineXPositions(system: System): number[] {
+    const staff = system.staff_groups[0]?.staves[0];
+    if (!staff?.bar_lines?.length) return [];
+
+    const xs: number[] = [];
+    for (const bl of staff.bar_lines) {
+      if (bl.segments.length > 0) {
+        xs.push(bl.segments[0].x_position);
+      }
+    }
+    xs.sort((a, b) => a - b);
+    return xs;
+  }
+
+  /**
+   * Interpolate a tick position to an x coordinate using barline positions.
+   * Each barline marks the right edge of a measure.
+   */
+  private tickToX(
+    tick: number,
+    sysStart: number,
+    sysEnd: number,
+    leftEdge: number,
+    rightEdge: number,
+    barlineXs: number[],
+  ): number {
+    if (tick <= sysStart) return leftEdge;
+    if (tick >= sysEnd) return rightEdge;
+
+    const numMeasures = barlineXs.length;
+    if (numMeasures === 0) {
+      const frac = (tick - sysStart) / (sysEnd - sysStart);
+      return leftEdge + frac * (rightEdge - leftEdge);
+    }
+    const ticksPerMeasure = (sysEnd - sysStart) / numMeasures;
+
+    const measureOffset = (tick - sysStart) / ticksPerMeasure;
+    const measureIdx = Math.min(Math.floor(measureOffset), numMeasures - 1);
+    const frac = measureOffset - measureIdx;
+
+    const xBreaks = [leftEdge, ...barlineXs];
+    const x0 = xBreaks[measureIdx] ?? leftEdge;
+    const x1 = xBreaks[measureIdx + 1] ?? rightEdge;
+
+    return x0 + frac * (x1 - x0);
   }
 }
