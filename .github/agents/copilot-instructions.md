@@ -183,9 +183,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 078-session-practice-time-ux: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 - 077-arabesque-goal-review: Added Rust (stable ~1.83), TypeScript ~5.3, React 18 + wasm-bindgen (WASM bindings), Vitest (plugin tests), cargo test (Rust tests), React (Goals UI)
 - 075-core-plugins-i18n: Added TypeScript 5.x, React 18+ + React, Vite, host i18n module (`frontend/src/i18n/index.tsx`)
-- 073-landing-page-i18n: Added custom i18n module (LocaleProvider, useTranslation, 30-key EN+ES catalogs)
 
 
 <!-- MANUAL ADDITIONS START -->

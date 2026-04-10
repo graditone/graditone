@@ -1158,6 +1158,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           expandSessionId: sessionIdRef.current,
           expandTaskId: taskIdRef.current,
         }) : undefined}
+        loopCountLocked={!!taskIdRef.current}
       />
     </div>
   );
