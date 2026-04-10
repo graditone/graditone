@@ -106,8 +106,10 @@ if [ "$current_branch" = "main" ] || echo "$current_branch" | grep -qE '^[0-9]+-
     e2e_exit=$?
   fi
 
-  e2e_passed=$(grep -c ' ✓ ' /tmp/e2e-prepush.log 2>/dev/null || echo 0)
-  e2e_failed=$(grep -cE '^\s+[0-9]+\) \[' /tmp/e2e-prepush.log 2>/dev/null || echo 0)
+  e2e_passed=$(grep -c ' ✓ ' /tmp/e2e-prepush.log 2>/dev/null | tr -d '[:space:]' || echo 0)
+  e2e_failed=$(grep -cE '^\s+[0-9]+\) \[' /tmp/e2e-prepush.log 2>/dev/null | tr -d '[:space:]' || echo 0)
+  e2e_passed=${e2e_passed:-0}
+  e2e_failed=${e2e_failed:-0}
 
   if [ "$e2e_exit" -eq 124 ]; then
     # Killed by the 3-min timeout
