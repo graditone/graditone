@@ -46,27 +46,9 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Outline
 
-1. **Verify git worktree context**:
-   - Run `git rev-parse --show-toplevel` and `git branch --show-current` from the current working directory.
-   - Confirm that:
-     - The current branch is a feature branch (matches the pattern `###-*`).
-     - The working tree path contains `worktrees/<branch-name>` (i.e., the developer is working inside the dedicated worktree, not the main repository root).
-   - If the working directory is the main repository root (not a worktree), **STOP** and instruct the user to switch to the worktree:
-     ```
-     cd ../worktrees/<branch-name>
-     ```
-     Then re-run the implementation command from there.
-   - If the worktree path looks correct, proceed to step 2.
+1. Run `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks` from repo root and parse FEATURE_DIR and AVAILABLE_DOCS list. All paths must be absolute. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
 
-2. Resolve the active feature name, then run the script from repo root:
-   1. If `$ARGUMENTS` contains a segment matching `\d{3}-[a-z0-9-]+`, use it as `SPECIFY_FEATURE`.
-   2. Else scan all file paths in the current context (active editor path, terminal `Cwd` values) for a path segment matching `\d{3}-[a-z0-9-]+` and use the first match found.
-   3. If no match, leave `SPECIFY_FEATURE` unset (script falls back to `git rev-parse --abbrev-ref HEAD`).
-   Run, prefixing the env var when resolved:
-   `SPECIFY_FEATURE="<value>" .specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks`
-   Parse FEATURE_DIR and AVAILABLE_DOCS list. All paths must be absolute. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
-
-3. **Check checklists status** (if FEATURE_DIR/checklists/ exists):
+2. **Check checklists status** (if FEATURE_DIR/checklists/ exists):
    - Scan all checklist files in the checklists/ directory
    - For each checklist, count:
      - Total items: All lines matching `- [ ]` or `- [X]` or `- [x]`
@@ -91,13 +73,13 @@ You **MUST** consider the user input before proceeding (if not empty).
      - **STOP** and ask: "Some checklists are incomplete. Do you want to proceed with implementation anyway? (yes/no)"
      - Wait for user response before continuing
      - If user says "no" or "wait" or "stop", halt execution
-     - If user says "yes" or "proceed" or "continue", proceed to step 4
+     - If user says "yes" or "proceed" or "continue", proceed to step 3
 
    - **If all checklists are complete**:
      - Display the table showing all checklists passed
-     - Automatically proceed to step 4
+     - Automatically proceed to step 3
 
-4. Load and analyze the implementation context:
+3. Load and analyze the implementation context:
    - **REQUIRED**: Read tasks.md for the complete task list and execution plan
    - **REQUIRED**: Read plan.md for tech stack, architecture, and file structure
    - **IF EXISTS**: Read data-model.md for entities and relationships
@@ -105,7 +87,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **IF EXISTS**: Read research.md for technical decisions and constraints
    - **IF EXISTS**: Read quickstart.md for integration scenarios
 
-5. **Project Setup Verification**:
+4. **Project Setup Verification**:
    - **REQUIRED**: Create/verify ignore files based on actual project setup:
 
    **Detection & Creation Logic**:
@@ -149,27 +131,27 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **Terraform**: `.terraform/`, `*.tfstate*`, `*.tfvars`, `.terraform.lock.hcl`
    - **Kubernetes/k8s**: `*.secret.yaml`, `secrets/`, `.kube/`, `kubeconfig*`, `*.key`, `*.crt`
 
-6. Parse tasks.md structure and extract:
+5. Parse tasks.md structure and extract:
    - **Task phases**: Setup, Tests, Core, Integration, Polish
    - **Task dependencies**: Sequential vs parallel execution rules
    - **Task details**: ID, description, file paths, parallel markers [P]
    - **Execution flow**: Order and dependency requirements
 
-7. Execute implementation following the task plan:
+6. Execute implementation following the task plan:
    - **Phase-by-phase execution**: Complete each phase before moving to the next
    - **Respect dependencies**: Run sequential tasks in order, parallel tasks [P] can run together  
    - **Follow TDD approach**: Execute test tasks before their corresponding implementation tasks
    - **File-based coordination**: Tasks affecting the same files must run sequentially
    - **Validation checkpoints**: Verify each phase completion before proceeding
 
-8. Implementation execution rules:
+7. Implementation execution rules:
    - **Setup first**: Initialize project structure, dependencies, configuration
    - **Tests before code**: If you need to write tests for contracts, entities, and integration scenarios
    - **Core development**: Implement models, services, CLI commands, endpoints
    - **Integration work**: Database connections, middleware, logging, external services
    - **Polish and validation**: Unit tests, performance optimization, documentation
 
-9. Progress tracking and error handling:
+8. Progress tracking and error handling:
    - Report progress after each completed task
    - Halt execution if any non-parallel task fails
    - For parallel tasks [P], continue with successful tasks, report failed ones
@@ -177,7 +159,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Suggest next steps if implementation cannot proceed
    - **IMPORTANT** For completed tasks, make sure to mark the task off as [X] in the tasks file.
 
-10. Completion validation:
+9. Completion validation:
    - Verify all required tasks are completed
    - Check that implemented features match the original specification
    - Validate that tests pass and coverage meets requirements
@@ -186,7 +168,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 Note: This command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `/speckit.tasks` first to regenerate the task list.
 
-11. **Check for extension hooks**: After completion validation, check if `.specify/extensions.yml` exists in the project root.
+10. **Check for extension hooks**: After completion validation, check if `.specify/extensions.yml` exists in the project root.
     - If it exists, read it and look for entries under the `hooks.after_implement` key
     - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
     - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.

@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "extensions": {
+    "worktree": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:7b5d0963fcc6b0f13a38e81448be0604186ab699388b75adbe536387fdd9cf27",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "copilot": [
+          "speckit.worktree.create",
+          "speckit.worktree.list",
+          "speckit.worktree.clean"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-04-10T02:55:39.264197+00:00"
+    }
+  }
+}

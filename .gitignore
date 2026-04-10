@@ -58,3 +58,5 @@ android/app/google-services.json
 android/*.apk
 android/*.aab
 android/*.idsig
+
+.specify/extensions/.cache/

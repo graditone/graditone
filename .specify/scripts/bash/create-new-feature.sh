@@ -271,19 +271,13 @@ if [ ${#BRANCH_NAME} -gt $MAX_BRANCH_LENGTH ]; then
     >&2 echo "[specify] Truncated to: $BRANCH_NAME (${#BRANCH_NAME} bytes)"
 fi
 
-WORKTREE_DIR="$(dirname "$REPO_ROOT")/worktrees/$BRANCH_NAME"
-
 if [ "$HAS_GIT" = true ]; then
-    # Create branch without switching the main working tree to it
-    git branch "$BRANCH_NAME"
-    # Create parent worktrees directory and the dedicated worktree for this feature
-    mkdir -p "$(dirname "$REPO_ROOT")/worktrees"
-    git worktree add "$WORKTREE_DIR" "$BRANCH_NAME"
-    FEATURE_DIR="$WORKTREE_DIR/specs/$BRANCH_NAME"
+    git checkout -b "$BRANCH_NAME"
 else
-    >&2 echo "[specify] Warning: Git repository not detected; skipped branch and worktree creation for $BRANCH_NAME"
-    FEATURE_DIR="$SPECS_DIR/$BRANCH_NAME"
+    >&2 echo "[specify] Warning: Git repository not detected; skipped branch creation for $BRANCH_NAME"
 fi
+
+FEATURE_DIR="$SPECS_DIR/$BRANCH_NAME"
 
 mkdir -p "$FEATURE_DIR"
 
@@ -295,11 +289,10 @@ if [ -f "$TEMPLATE" ]; then cp "$TEMPLATE" "$SPEC_FILE"; else touch "$SPEC_FILE"
 export SPECIFY_FEATURE="$BRANCH_NAME"
 
 if $JSON_MODE; then
-    printf '{"BRANCH_NAME":"%s","SPEC_FILE":"%s","FEATURE_NUM":"%s","WORKTREE_DIR":"%s"}\n' "$BRANCH_NAME" "$SPEC_FILE" "$FEATURE_NUM" "$WORKTREE_DIR"
+    printf '{"BRANCH_NAME":"%s","SPEC_FILE":"%s","FEATURE_NUM":"%s"}\n' "$BRANCH_NAME" "$SPEC_FILE" "$FEATURE_NUM"
 else
     echo "BRANCH_NAME: $BRANCH_NAME"
     echo "SPEC_FILE: $SPEC_FILE"
     echo "FEATURE_NUM: $FEATURE_NUM"
-    echo "WORKTREE_DIR: $WORKTREE_DIR"
     echo "SPECIFY_FEATURE environment variable set to: $BRANCH_NAME"
 fi

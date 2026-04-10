@@ -161,6 +161,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - No persistence — locale detected from navigator.language on each load (073-landing-page-i18n)
 - TypeScript 5.x, React 18+ + React, Vite, host i18n module (`frontend/src/i18n/index.tsx`) (075-core-plugins-i18n)
 - N/A (no data model changes) (075-core-plugins-i18n)
+- Rust (stable ~1.83), TypeScript ~5.3, React 18 + wasm-bindgen (WASM bindings), Vitest (plugin tests), cargo test (Rust tests), React (Goals UI) (077-arabesque-goal-review)
+- IndexedDB via `sessionStorage.ts` / `goalStorage.ts` (client-side, no server persistence) (077-arabesque-goal-review)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -181,9 +183,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 077-arabesque-goal-review: Added Rust (stable ~1.83), TypeScript ~5.3, React 18 + wasm-bindgen (WASM bindings), Vitest (plugin tests), cargo test (Rust tests), React (Goals UI)
 - 075-core-plugins-i18n: Added TypeScript 5.x, React 18+ + React, Vite, host i18n module (`frontend/src/i18n/index.tsx`)
 - 073-landing-page-i18n: Added custom i18n module (LocaleProvider, useTranslation, 30-key EN+ES catalogs)
-- 073-sessions-tabs-order: Added TypeScript 5.x + React 19.2.0, Vitest, @testing-library/reac
 
 
 <!-- MANUAL ADDITIONS START -->

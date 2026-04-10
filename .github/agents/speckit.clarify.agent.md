@@ -22,13 +22,7 @@ Note: This clarification workflow is expected to run (and be completed) BEFORE i
 
 Execution steps:
 
-1. Resolve the active feature name, then run the script **once** from repo root:
-   1. If `$ARGUMENTS` contains a segment matching `\d{3}-[a-z0-9-]+`, use it as `SPECIFY_FEATURE`.
-   2. Else scan all file paths in the current context (active editor path, terminal `Cwd` values) for a path segment matching `\d{3}-[a-z0-9-]+` and use the first match found.
-   3. If no match, leave `SPECIFY_FEATURE` unset (script falls back to `git rev-parse --abbrev-ref HEAD`).
-   Prefix the env var when resolved:
-   `SPECIFY_FEATURE="<value>" .specify/scripts/bash/check-prerequisites.sh --json --paths-only`
-   (combined `--json --paths-only` mode / `-Json -PathsOnly`). Parse minimal JSON payload fields:
+1. Run `.specify/scripts/bash/check-prerequisites.sh --json --paths-only` from repo root **once** (combined `--json --paths-only` mode / `-Json -PathsOnly`). Parse minimal JSON payload fields:
    - `FEATURE_DIR`
    - `FEATURE_SPEC`
    - (Optionally capture `IMPL_PLAN`, `TASKS` for future chained flows.)
