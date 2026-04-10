@@ -64,6 +64,8 @@ export interface ResultsOverlayProps {
   saveError?: string | null;
   /** Feature 061: Navigate back to the sessions plugin (only shown for task practices). */
   onReturnToSession?: () => void;
+  /** Feature 078: When true, the loop count slider is disabled (practice was launched from a session task). */
+  loopCountLocked?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +90,7 @@ export function ResultsOverlay({
   isSaved,
   saveError,
   onReturnToSession,
+  loopCountLocked,
 }: ResultsOverlayProps) {
   const { t } = useTranslation();
   // ─── Replay internals ────────────────────────────────────────────────────────
@@ -573,6 +576,8 @@ export function ResultsOverlay({
               value={loopCount}
               onChange={(e) => setLoopCount(Number(e.target.value))}
               aria-label={t('practice.results.loops_aria')}
+              disabled={loopCountLocked}
+              title={loopCountLocked ? t('practice.results.loop_locked_hint') : undefined}
             />
           </div>
         )}
