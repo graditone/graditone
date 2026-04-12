@@ -572,7 +572,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
 
     // Track played note for live response staff using slot-relative onset so
     // the layout engine sees timestamps consistent with exerciseNoteEvents.
-    setResponseNoteEvents(prev => [...prev, {
+    // Replace any existing entry for this slot (same timestamp) so wrong notes
+    // do not stack — only the latest input is shown per slot (FR-002).
+    setResponseNoteEvents(prev => [...prev.filter(e => e.timestamp !== targetNote.expectedOnsetMs), {
       midiNote: detectedMidi,
       timestamp: targetNote.expectedOnsetMs,
       type: 'attack' as const,
