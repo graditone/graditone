@@ -1090,3 +1090,73 @@ describe('TrainPlugin — metronome button (Feature 035)', () => {
     expect(ctx.metronome.subscribe).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression: Issue #1 — step mode wrong-note overlap (079-fix-train-note-overlap)
+// ---------------------------------------------------------------------------
+
+describe('TrainPlugin — step mode note overlap regression (Issue #1)', () => {
+  /**
+   * In step mode, each wrong note input must REPLACE the previous entry for
+   * the current slot in responseNoteEvents, not append to it. Before the fix,
+   * handleStepInput called setResponseNoteEvents(prev => [...prev, newEvent]),
+   * which stacked multiple note heads at the same horizontal position on the
+   * response staff.
+   *
+   * Regression spec: specs/079-fix-train-note-overlap/spec.md
+   */
+  it('second wrong note replaces the first instead of stacking (FR-002)', async () => {
+    // Capture every notes array passed to any StaffViewer render.
+    // Exercise staff (low complexity = C-Major scale) always has exactly 8 notes.
+    // Response staff starts at 0 and grows with input — we filter for length ≠ 8.
+    const noteCaptures: Array<PluginNoteEvent[] | undefined> = [];
+
+    const ctx = makeMockContext();
+    // Replace the StaffViewer with a capturing stub.
+    // Cast needed: the original component type doesn't include data capture.
+    ctx.components.StaffViewer = (({ notes }: { notes?: PluginNoteEvent[] }) => {
+      noteCaptures.push(notes ? [...notes] : notes);
+      return <div data-testid="staff-viewer" role="img" aria-label="staff" />;
+    }) as typeof ctx.components.StaffViewer;
+
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
+
+    // Flush mount effects — applyComplexityLevel('low') sets mode: 'step', bpm: 40
+    await act(async () => { vi.advanceTimersByTime(0); });
+
+    // Discard captures from the initialisation phase so assertions are clean
+    noteCaptures.length = 0;
+
+    // Start the step-mode exercise (no countdown in step mode)
+    await act(async () => { fireEvent.click(screen.getByTestId('train-play-btn')); });
+
+    // Advance past the STEP_INPUT_DELAY_MS (700 ms) guard set in handleStartStep
+    await act(async () => { vi.advanceTimersByTime(800); });
+
+    // Fire first wrong note: MIDI 48 (C3).
+    // Slot 0 target is MIDI 60 (C4) in the C-Major scale, so 48 ≠ 60 → wrong.
+    await act(async () => {
+      ctx._midiSubscribers.forEach(h =>
+        h({ type: 'attack', midiNote: 48, timestamp: Date.now(), durationMs: 500 }),
+      );
+    });
+
+    // Fire second wrong note: MIDI 50 (D3).
+    // Different from the previous input (48) so it passes the debounce guard.
+    await act(async () => {
+      ctx._midiSubscribers.forEach(h =>
+        h({ type: 'attack', midiNote: 50, timestamp: Date.now(), durationMs: 500 }),
+      );
+    });
+
+    // Response calls are those whose notes array length differs from 8 (exercise).
+    // After two wrong inputs the last such render must have exactly 1 note (the
+    // latest input), not 2 (which would mean the entries were stacked).
+    const responseCalls = noteCaptures.filter(n => n !== undefined && n.length !== 8);
+    expect(responseCalls.length).toBeGreaterThan(0);
+
+    const lastResponseNotes = responseCalls[responseCalls.length - 1]!;
+    expect(lastResponseNotes).toHaveLength(1);          // BUG: would be 2 before fix
+    expect(lastResponseNotes[0].midiNote).toBe(50);     // latest input survives
+  });
+});
