@@ -61,6 +61,8 @@ const CAPTURE_MIDI_MAX = 84;
 const MIN_CONFIDENCE = 0.8;
 /** Milliseconds to ignore mic input right after playing a step note (speaker feedback guard) */
 const STEP_INPUT_DELAY_MS = 700;
+/** Milliseconds to absorb remaining chord-member MIDI events after a correct step advance */
+const CHORD_ABSORB_WINDOW_MS = 80;
 
 // ─── Countdown steps ──────────────────────────────────────────────────────────
 
@@ -210,6 +212,13 @@ export function TrainPlugin({ context }: TrainPluginProps) {
   const stepSlotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** setTimeout id for the debounce reset after advancing a slot */
   const stepDebounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * Chord absorption window: after a correct MIDI note advances a step-mode
+   * slot, all further MIDI events within this window (ms since epoch) are
+   * ignored.  This prevents remaining chord-member note-on events from leaking
+   * into the next slot as spurious wrong notes.
+   */
+  const stepChordAbsorbUntilRef = useRef<number>(0);
   /** setTimeout ids for flow-mode per-slot highlight timers */
   const highlightTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   /** Prevents auto-start from firing more than once per ready phase */
@@ -571,6 +580,10 @@ export function TrainPlugin({ context }: TrainPluginProps) {
       if (Date.now() - stepLastPlayTimeRef.current < STEP_INPUT_DELAY_MS) return;
       if (detectedMidi === lastStepMidiRef.current) return;
     }
+    // Chord absorption: after a correct note advances a slot, remaining chord-member
+    // MIDI events arrive within ~5 ms.  Absorb them so they don't leak into the next
+    // slot as spurious wrong notes (Issue #3 – Arabesque M3 same-chord detection).
+    if (inputSourceRef.current !== 'mic' && Date.now() < stepChordAbsorbUntilRef.current) return;
 
     lastStepMidiRef.current = detectedMidi;
     const stepIdx = stepIndexRef.current;
@@ -578,18 +591,29 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     const targetNote = ex.notes[stepIdx];
     if (!targetNote) return;
 
+    // Chord-aware match: accept any pitch that belongs to the chord at this slot.
+    const isChordMember = targetNote.chordPitches
+      ? targetNote.chordPitches.includes(detectedMidi)
+      : detectedMidi === targetNote.midiPitch;
+
     // Track played note for live response staff using slot-relative onset so
     // the layout engine sees timestamps consistent with exerciseNoteEvents.
     // Replace any existing entry for this slot (same timestamp) so wrong notes
     // do not stack — only the latest input is shown per slot (FR-002).
-    setResponseNoteEvents(prev => [...prev.filter(e => e.timestamp !== targetNote.expectedOnsetMs), {
-      midiNote: detectedMidi,
-      timestamp: targetNote.expectedOnsetMs,
-      type: 'attack' as const,
-      durationMs: (60_000 / ex.bpm) * 0.85,
-    }]);
+    // Only update the response staff for non-chord-member notes or the first
+    // chord member.  Chord members that arrive after the first (correct) one
+    // will be absorbed by the chord window, but even if they leak through,
+    // we only display the representative pitch (midiPitch).
+    if (!isChordMember || detectedMidi === targetNote.midiPitch) {
+      setResponseNoteEvents(prev => [...prev.filter(e => e.timestamp !== targetNote.expectedOnsetMs), {
+        midiNote: isChordMember ? targetNote.midiPitch : detectedMidi,
+        timestamp: targetNote.expectedOnsetMs,
+        type: 'attack' as const,
+        durationMs: (60_000 / ex.bpm) * 0.85,
+      }]);
+    }
 
-    if (detectedMidi === targetNote.midiPitch) {
+    if (isChordMember) {
       // ✓ Correct note — advance slot
       clearStepTimeout();
       setStepHint(null);
@@ -630,6 +654,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
         phaseRef.current = 'results';
       } else {
         stepIndexRef.current = nextIdx;
+        // Absorb remaining chord-member MIDI events so they don't leak into
+        // the next slot as wrong notes (Issue #3).
+        stepChordAbsorbUntilRef.current = Date.now() + CHORD_ABSORB_WINDOW_MS;
         // Briefly block carry-over of the just-played pitch into the new slot
         if (stepDebounceTimeoutRef.current !== null) clearTimeout(stepDebounceTimeoutRef.current);
         lastStepMidiRef.current = detectedMidi;
@@ -681,6 +708,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     lastStepMidiRef.current = null;
     stepPenalizedSlotsRef.current = new Set();
     stepWrongMidiMapRef.current = new Map();
+    stepChordAbsorbUntilRef.current = 0;
     stepLastPlayTimeRef.current = Date.now();
     exerciseStartMsRef.current = Date.now();
     setHighlightedSlotIndex(0);

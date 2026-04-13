@@ -1202,10 +1202,15 @@ describe('TrainPlugin — step mode MIDI debounce skip (Issue #2)', () => {
       );
     });
 
-    // Slot 1 expects D4 (MIDI 62).  Fire a wrong note (MIDI 50) IMMEDIATELY —
-    // no vi.advanceTimersByTime, so Date.now() - stepLastPlayTime == 0 ms.
+    // Advance past the chord absorption window (80 ms) so the next event
+    // is not absorbed as a chord member, but well within the old 700 ms block
+    // that the Issue #2 fix bypasses for MIDI.
+    await act(async () => { vi.advanceTimersByTime(100); });
+
+    // Slot 1 expects D4 (MIDI 62).  Fire a wrong note (MIDI 50).
+    // Date.now() - stepLastPlayTime == 100 ms, which is < 700 ms.
     //
-    // Old code: Guard 1 fires (0 < 700 ms) → BLOCKED → no hint rendered.
+    // Old code: Guard 1 fires (100 < 700 ms) → BLOCKED → no hint rendered.
     // New code: Guard 1 is skipped for MIDI discrete events → hint is rendered.
     await act(async () => {
       ctx._midiSubscribers.forEach(h =>
@@ -1218,5 +1223,120 @@ describe('TrainPlugin — step mode MIDI debounce skip (Issue #2)', () => {
     expect(hint).toBeInTheDocument();
     // The hint must reference the next expected pitch (D4 = slot 1 target).
     expect(hint.textContent).toContain('D4');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: Issue #3 — MIDI chord member notes leak into next slot
+// ---------------------------------------------------------------------------
+
+describe('TrainPlugin — step mode chord detection (Issue #3)', () => {
+  /**
+   * Arabesque M3 left hand: two consecutive A-minor chords (A3+C4+E4).
+   * The exercise reduces each chord to midiPitches[0] = A3 (MIDI 57).
+   * When the user plays the full chord, C4 (60) and E4 (64) should NOT be
+   * treated as wrong notes for the next slot — they belong to the same chord
+   * press and must be absorbed by the chord window.
+   *
+   * Additionally, playing any chord member (e.g. C4 or E4) should count as
+   * "correct" for the slot because the slot carries chordPitches = [57, 60, 64].
+   */
+  it('chord member notes do not leak into the next slot as wrong notes', async () => {
+    // Build a mock context whose scorePlayer returns chord data matching
+    // Arabesque M3 LH: two A-minor chords (A3+C4+E4).
+    const chordPitches = {
+      notes: [
+        { midiPitches: [57, 60, 64], noteIds: ['n1'], tick: 0 },
+        { midiPitches: [57, 60, 64], noteIds: ['n2'], tick: 480 },
+      ],
+      totalAvailable: 2,
+      clef: 'Bass' as const,
+      title: 'Arabesque M3',
+    };
+    const spPlayer = makeMockScorePlayer();
+    spPlayer.extractPracticeNotes = vi.fn(() => chordPitches);
+
+    const ctx = makeMockContext({ scorePlayer: spPlayer });
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
+
+    // Select Score preset → exercise from score
+    await act(async () => {
+      fireEvent.click(screen.getByRole('radio', { name: /score/i }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /beethoven/i }));
+    });
+    await act(async () => {
+      spPlayer._notify({ status: 'ready', currentTick: 0, totalDurationTicks: 1000, highlightedNoteIds: new Set<string>(), bpm: 120, title: null, error: null, staffCount: 2 });
+    });
+    await act(async () => { vi.advanceTimersByTime(0); });
+
+    // Switch to step mode via the selector
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/mode/i), { target: { value: 'step' } });
+    });
+    await act(async () => { vi.advanceTimersByTime(0); });
+
+    // Start the step exercise
+    await act(async () => { fireEvent.click(screen.getByTestId('train-play-btn')); });
+
+    // Advance past the initial STEP_INPUT_DELAY_MS guard (700 ms)
+    await act(async () => { vi.advanceTimersByTime(800); });
+
+    // --- Play chord 1: three MIDI note-on events for A3, C4, E4 ---
+    // The lowest note (A3 = 57 = midiPitches[0]) should match the target.
+    // C4 and E4 are also chord members and should be absorbed.
+    for (const midi of [57, 60, 64]) {
+      await act(async () => {
+        ctx._midiSubscribers.forEach(h =>
+          h({ type: 'attack', midiNote: midi, timestamp: Date.now(), durationMs: 500 }),
+        );
+      });
+    }
+
+    // After chord 1, slot 0 should have advanced.  Slot 1 should NOT be
+    // penalised — the C4/E4 events were absorbed.  No wrong-note hint.
+    const hintAfterChord1 = screen.queryByRole('status');
+    expect(hintAfterChord1).toBeNull();
+
+    // --- Play chord 2: same A-minor (A3, C4, E4) ---
+    // Advance past the chord absorption window (80 ms) so the new chord is accepted.
+    await act(async () => { vi.advanceTimersByTime(100); });
+
+    for (const midi of [57, 60, 64]) {
+      await act(async () => {
+        ctx._midiSubscribers.forEach(h =>
+          h({ type: 'attack', midiNote: midi, timestamp: Date.now(), durationMs: 500 }),
+        );
+      });
+    }
+
+    // After chord 2, both slots should be complete → results phase.
+    // No wrong-note hint should be visible (results overlay replaces it).
+    const hintAfterChord2 = screen.queryByRole('status');
+    expect(hintAfterChord2).toBeNull();
+  });
+
+  it('non-chord note arriving before the matching chord member is treated as wrong', async () => {
+    const ctx = makeMockContext();
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
+
+    // Low complexity: step mode, C-major scale, bpm: 40
+    await act(async () => { vi.advanceTimersByTime(0); });
+    await act(async () => { fireEvent.click(screen.getByTestId('train-play-btn')); });
+    await act(async () => { vi.advanceTimersByTime(800); });
+
+    // Slot 0 expects MIDI 60 (C4 in C-major scale, chordPitches: [60]).
+    // Play a completely wrong note first.
+    await act(async () => {
+      ctx._midiSubscribers.forEach(h =>
+        h({ type: 'attack', midiNote: 45, timestamp: Date.now(), durationMs: 500 }),
+      );
+    });
+
+    // Wrong-note hint must be shown.
+    const hint = screen.getByRole('status');
+    expect(hint).toBeInTheDocument();
+    expect(hint.textContent).toContain('C4'); // expected note
   });
 });

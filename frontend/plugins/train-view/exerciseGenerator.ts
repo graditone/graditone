@@ -140,6 +140,7 @@ export function generateScaleExercise(
     id: `ex-${i}`,
     slotIndex: i,
     midiPitch,
+    chordPitches: [midiPitch],
     expectedOnsetMs: i * msPerBeat,
   }));
   return { notes, bpm, keySignature: scale.fifths };
@@ -165,6 +166,7 @@ export function generateScoreExercise(
     id: `ex-${i}`,
     slotIndex: i,
     midiPitch: p.midiPitches[0],
+    chordPitches: [...p.midiPitches],
     expectedOnsetMs: i * msPerBeat,
   }));
   return { notes, bpm };
