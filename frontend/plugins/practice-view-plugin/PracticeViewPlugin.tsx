@@ -38,6 +38,7 @@ import { usePracticeMidi } from './usePracticeMidi';
 import { usePracticeHighlights } from './usePracticeHighlights';
 import { usePhantomTempo } from './usePhantomTempo';
 import { useHoldProgress } from './useHoldProgress';
+import { measureRangeToTicks } from './measureRangeToTicks';
 import { ResultsOverlay } from './ResultsOverlay';
 import type { ScoreRef, SavedPractice, SavedPerformanceData, SavedPracticeIndexEntry } from '../../src/plugin-api/index';
 import { savePracticeToIndexedDB, generatePracticeName, loadPracticeFromIndexedDB, deletePracticeFromIndexedDB } from '../../src/plugin-api/index';
@@ -67,26 +68,6 @@ async function loadProtectedPracticeMap(): Promise<ReadonlyMap<string, Protected
 }
 
 // ---------------------------------------------------------------------------
-// Feature 061: Measure-to-tick conversion
-// ---------------------------------------------------------------------------
-
-/**
- * Convert 1-based measure range to tick range using measure_end_ticks.
- * Returns null if inputs are out of range.
- */
-export function measureRangeToTicks(
-  startMeasure: number,
-  endMeasure: number,
-  measureEndTicks: ReadonlyArray<number>,
-): { startTick: number; endTick: number } | null {
-  const startIndex = startMeasure - 1; // 0-based
-  const endIndex = endMeasure - 1;     // 0-based
-  if (startIndex < 0 || endIndex >= measureEndTicks.length || startIndex > endIndex) return null;
-  const startTick = startIndex === 0 ? 0 : measureEndTicks[startIndex - 1];
-  const endTick = measureEndTicks[endIndex];
-  return { startTick, endTick };
-}
-
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { measureRangeToTicks } from './PracticeViewPlugin';
+import { measureRangeToTicks } from './measureRangeToTicks';
 
 // ---------------------------------------------------------------------------
 // measureRangeToTicks
