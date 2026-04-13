@@ -1160,3 +1160,63 @@ describe('TrainPlugin — step mode note overlap regression (Issue #1)', () => {
     expect(lastResponseNotes[0].midiNote).toBe(50);     // latest input survives
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression: Issue #2 — MIDI same-pitch consecutive slots ignored
+// ---------------------------------------------------------------------------
+
+describe('TrainPlugin — step mode MIDI debounce skip (Issue #2)', () => {
+  /**
+   * After a correct MIDI note advances slot N, the old code set
+   * `stepLastPlayTimeRef = now` and `lastStepMidiRef = detectedMidi`, then
+   * blocked all MIDI input for 700 ms.  For mic input this is intentional
+   * (the pitch detector streams continuously — the held note would carry over
+   * into the next slot).  For MIDI, events are discrete note-on pulses — no
+   * carry-over is possible — so the guard incorrectly drops the player's
+   * intentional re-press within 700 ms.
+   *
+   * This catches the Arabesque M3 scenario: N1 and N2 are the same chord.
+   * After N1 is accepted, immediately playing the same chord for N2 was
+   * silently ignored.  After the fix slotN+1 accepts MIDI input immediately.
+   *
+   * Regression spec: specs/079-fix-train-note-overlap/spec.md (Issue #2)
+   */
+  it('wrong MIDI note for slot 1 is processed immediately after slot 0 advances — no 700 ms wait', async () => {
+    const ctx = makeMockContext();
+    render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
+
+    // Flush mount effects — applyComplexityLevel('low') sets mode: 'step', bpm: 40
+    await act(async () => { vi.advanceTimersByTime(0); });
+
+    // Start the step-mode exercise
+    await act(async () => { fireEvent.click(screen.getByTestId('train-play-btn')); });
+
+    // Advance past the 700 ms initial guard set in handleStartStep
+    await act(async () => { vi.advanceTimersByTime(800); });
+
+    // Play slot 0 correctly: C4 (MIDI 60) in the C-major scale.
+    // This advances the slot and (with old code) sets a 700 ms block.
+    await act(async () => {
+      ctx._midiSubscribers.forEach(h =>
+        h({ type: 'attack', midiNote: 60, timestamp: Date.now(), durationMs: 500 }),
+      );
+    });
+
+    // Slot 1 expects D4 (MIDI 62).  Fire a wrong note (MIDI 50) IMMEDIATELY —
+    // no vi.advanceTimersByTime, so Date.now() - stepLastPlayTime == 0 ms.
+    //
+    // Old code: Guard 1 fires (0 < 700 ms) → BLOCKED → no hint rendered.
+    // New code: Guard 1 is skipped for MIDI discrete events → hint is rendered.
+    await act(async () => {
+      ctx._midiSubscribers.forEach(h =>
+        h({ type: 'attack', midiNote: 50, timestamp: Date.now(), durationMs: 500 }),
+      );
+    });
+
+    // The wrong-note hint element must be present — the input was NOT blocked.
+    const hint = screen.getByRole('status');
+    expect(hint).toBeInTheDocument();
+    // The hint must reference the next expected pitch (D4 = slot 1 target).
+    expect(hint.textContent).toContain('D4');
+  });
+});

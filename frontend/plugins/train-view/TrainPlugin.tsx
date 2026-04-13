@@ -561,8 +561,16 @@ export function TrainPlugin({ context }: TrainPluginProps) {
   const handleStepInput = useCallback((detectedMidi: number) => {
     if (configRef.current.mode !== 'step') return;
     if (phaseRef.current !== 'playing') return;
-    if (Date.now() - stepLastPlayTimeRef.current < STEP_INPUT_DELAY_MS) return;
-    if (detectedMidi === lastStepMidiRef.current) return; // debounce
+    // These two guards protect against mic continuous-pitch carry-over: the pitch
+    // detector streams the same value while a note is held, so without them slot N could
+    // auto-advance into slot N+1 while the player is still holding the key.
+    // MIDI and virtual-keyboard fire discrete note-on events — no carry-over is possible,
+    // so the guards are skipped.  They were causing same-pitch consecutive slots (e.g.
+    // repeated chords in Arabesque M3) to be silently missed (Issue #2).
+    if (inputSourceRef.current === 'mic') {
+      if (Date.now() - stepLastPlayTimeRef.current < STEP_INPUT_DELAY_MS) return;
+      if (detectedMidi === lastStepMidiRef.current) return;
+    }
 
     lastStepMidiRef.current = detectedMidi;
     const stepIdx = stepIndexRef.current;
