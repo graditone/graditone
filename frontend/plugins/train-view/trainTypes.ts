@@ -50,8 +50,14 @@ export interface ExerciseNote {
   id: string;
   /** 0-based slot index */
   slotIndex: number;
-  /** Target MIDI pitch */
+  /** Target MIDI pitch (first / representative pitch of a chord) */
   midiPitch: number;
+  /**
+   * All MIDI pitches belonging to the chord at this slot.
+   * For single notes this contains a single element equal to `midiPitch`.
+   * Used in step mode to accept any chord member as a correct press.
+   */
+  chordPitches: readonly number[];
   /** Expected onset time in ms from when Play is pressed */
   expectedOnsetMs: number;
 }

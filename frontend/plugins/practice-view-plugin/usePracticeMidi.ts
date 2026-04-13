@@ -6,7 +6,6 @@ import type {
 } from '../../src/plugin-api/index';
 import { ChordDetector } from '../../src/plugin-api/index';
 import type { PracticeState, PracticeAction } from './practiceEngine.types';
-import { LATE_THRESHOLD_MS } from './practiceEngine';
 
 // ---------------------------------------------------------------------------
 // Hook contract
@@ -244,21 +243,6 @@ export function usePracticeMidi({
           expectedTimeMs = baseExpectedTimeMs;
         }
         const responseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
-
-        if (ps.mode === 'active' && ps.currentIndex > 0) {
-          const prevEntry = ps.notes[ps.currentIndex - 1];
-          const hasRestGap = prevEntry && (prevEntry.tick + prevEntry.durationTicks < currentEntry.tick);
-          if (hasRestGap && expectedTimeMs - responseTimeMs > LATE_THRESHOLD_MS) {
-            chordDetectorRef.current.reset(allRequired);
-            for (const p of allRequired) {
-              if (heldMidiKeysRef.current.has(p)) {
-                chordDetectorRef.current.pin(p);
-              }
-            }
-            dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs });
-            return;
-          }
-        }
 
         const range = loopPracticeRangeRef.current;
         let effectiveDurTicks = currentEntry.durationTicks;
