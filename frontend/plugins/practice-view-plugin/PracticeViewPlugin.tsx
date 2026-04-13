@@ -365,9 +365,16 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           // engine and playback engine operate in expanded (repeat-unrolled)
           // tick space. Convert so loopPracticeRange, setPinnedStart, and
           // setLoopEnd all receive the correct tick values.
+          //
+          // endTick is an exclusive upper bound (first tick of the NEXT measure).
+          // When it falls exactly on a repeat-section boundary (e.g. m10 end =
+          // m11 start in Arabesque), rawTickToExpandedTick's <= binary search
+          // picks up the next section's offset, producing a much larger tick
+          // that spans both repeat passes. Subtract 1 to stay in the current
+          // section, convert, then add 1 back to preserve exclusive semantics.
           setPendingTaskLoopRegion({
             startTick: context.scorePlayer.rawTickToExpandedTick(result.startTick),
-            endTick: context.scorePlayer.rawTickToExpandedTick(result.endTick),
+            endTick: context.scorePlayer.rawTickToExpandedTick(result.endTick - 1) + 1,
           });
         }
       }
