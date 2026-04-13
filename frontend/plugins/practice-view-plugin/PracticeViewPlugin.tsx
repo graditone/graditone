@@ -74,7 +74,7 @@ async function loadProtectedPracticeMap(): Promise<ReadonlyMap<string, Protected
  * Convert 1-based measure range to tick range using measure_end_ticks.
  * Returns null if inputs are out of range.
  */
-function measureRangeToTicks(
+export function measureRangeToTicks(
   startMeasure: number,
   endMeasure: number,
   measureEndTicks: ReadonlyArray<number>,
