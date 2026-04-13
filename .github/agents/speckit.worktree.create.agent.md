@@ -65,6 +65,11 @@ You **MUST** consider the user input before proceeding (if not empty). The user 
    - When done, run `/speckit.worktree.clean` to remove the worktree
    ```
 
+6. **Open worktree in VS Code**: After reporting, open the worktree in a new VS Code window so all subsequent file edits land inside the worktree:
+   - Run: `.specify/scripts/bash/open-worktree.sh {branch-name}`
+   - This is **critical** for AI agent workflows: the agent's file-editing tools resolve paths relative to the VS Code workspace root. If the user stays in the main repo window, edits will land in the wrong directory.
+   - After the new window opens, inform the user: "A new VS Code window has been opened for the worktree. **Continue your work (including `/speckit.implement`) in that window** so all edits land in the correct directory."
+
 ## Rules
 
 - **Never modify the main working directory** — worktrees are created in `.worktrees/` only
