@@ -39,3 +39,13 @@
 
 - [x] T004 Run `npx vitest run` in `frontend/` — the new regression test (T002) must pass green, and all pre-existing tests must remain green.
 - [x] T005 Run `npm run build` in `frontend/` — zero TypeScript errors.
+
+---
+
+## Phase 5: Issue #2 — MIDI same-pitch consecutive slots silently dropped
+
+**Root cause**: The `stepLastPlayTimeRef` and `lastStepMidiRef` debounce guards in `handleStepInput` were applied to all input sources. Designed for mic continuous-pitch carry-over protection, they incorrectly blocked discrete MIDI events within 700 ms of a slot advance (e.g. Arabesque M3 N1→N2 same chord).
+
+- [x] T006 Wrap the two guards in `inputSourceRef.current === 'mic'` so they only fire for the continuous mic pitch-stream case. MIDI / virtual-keyboard discrete events bypass them.
+- [x] T007 Add regression test: 'wrong MIDI note for slot 1 is processed immediately after slot 0 advances — no 700 ms wait'.
+- [x] T008 Run `npx vitest run` — 1851 tests pass (0 failures).
