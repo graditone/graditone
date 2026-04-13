@@ -570,6 +570,9 @@ export function TrainPlugin({ context }: TrainPluginProps) {
   const handleStepInput = useCallback((detectedMidi: number) => {
     if (configRef.current.mode !== 'step') return;
     if (phaseRef.current !== 'playing') return;
+
+    const now = Date.now();
+
     // These two guards protect against mic continuous-pitch carry-over: the pitch
     // detector streams the same value while a note is held, so without them slot N could
     // auto-advance into slot N+1 while the player is still holding the key.
@@ -577,13 +580,13 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     // so the guards are skipped.  They were causing same-pitch consecutive slots (e.g.
     // repeated chords in Arabesque M3) to be silently missed (Issue #2).
     if (inputSourceRef.current === 'mic') {
-      if (Date.now() - stepLastPlayTimeRef.current < STEP_INPUT_DELAY_MS) return;
+      if (now - stepLastPlayTimeRef.current < STEP_INPUT_DELAY_MS) return;
       if (detectedMidi === lastStepMidiRef.current) return;
     }
     // Chord absorption: after a correct note advances a slot, remaining chord-member
     // MIDI events arrive within ~5 ms.  Absorb them so they don't leak into the next
     // slot as spurious wrong notes (Issue #3 – Arabesque M3 same-chord detection).
-    if (inputSourceRef.current !== 'mic' && Date.now() < stepChordAbsorbUntilRef.current) return;
+    if (inputSourceRef.current !== 'mic' && now < stepChordAbsorbUntilRef.current) return;
 
     lastStepMidiRef.current = detectedMidi;
     const stepIdx = stepIndexRef.current;
