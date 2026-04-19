@@ -76,7 +76,7 @@ describe('ProfilePanel', () => {
     expect(screen.getByText('Cancel')).toBeInTheDocument();
   });
 
-  it('calls createProfile and closes on valid create', async () => {
+  it('calls createProfile and keeps panel open on valid create', async () => {
     mockCreate.mockReturnValue(makeProfile({ id: 'p2', name: 'Bob' }));
     const user = userEvent.setup();
     render(<ProfilePanel onClose={onClose} onProfileChange={onProfileChange} />);
@@ -86,7 +86,7 @@ describe('ProfilePanel', () => {
     await user.click(screen.getByText('Create'));
 
     expect(mockCreate).toHaveBeenCalledWith('Bob');
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
     expect(onProfileChange).toHaveBeenCalled();
   });
 
