@@ -60,3 +60,4 @@ android/*.aab
 android/*.idsig
 
 .specify/extensions/.cache/
+.worktrees/

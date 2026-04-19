@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PluginContext, PluginPitchEvent, PluginNoteEvent, PluginScorePitches, ScorePlayerState, MetronomeState, MetronomeSubdivision } from '../../src/plugin-api/index';
-import { broadcastPracticeSaved } from '../../src/plugin-api/index';
+import { broadcastPracticeSaved, ProfileIcon } from '../../src/plugin-api/index';
 import type {
   TrainPhase,
   TrainExercise,
@@ -26,6 +26,7 @@ import type {
   SavedTrain,
 } from './trainTypes';
 import { COMPLEXITY_PRESETS, COMPLEXITY_LEVEL_STORAGE_KEY, midiToLabel } from './trainTypes';
+import { scopedGetItem, scopedSetItem } from './scopedStorage';
 import { TrainResultsOverlay } from './TrainResultsOverlay';
 import { generateExercise, generateScoreExercise, generateScaleExercise, DEFAULT_EXERCISE_CONFIG, SCALE_OPTIONS } from './exerciseGenerator';
 import { scoreCapture } from './exerciseScorer';
@@ -572,6 +573,17 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     if (phaseRef.current !== 'playing') return;
 
     const now = Date.now();
+    const stepIdx = stepIndexRef.current;
+    const _dbgTarget = exerciseRef.current.notes[stepIdx];
+    // --- DEBUG: trace every MIDI event through the guards ---
+    console.log(
+      `[STEP] midi=${detectedMidi} slot=${stepIdx}` +
+      ` target=${_dbgTarget?.midiPitch} chordPitches=${JSON.stringify(_dbgTarget?.chordPitches)}` +
+      ` inputSrc=${inputSourceRef.current}` +
+      ` lastStepMidi=${lastStepMidiRef.current}` +
+      ` absorbUntil=${stepChordAbsorbUntilRef.current > 0 ? stepChordAbsorbUntilRef.current - now : 0}ms` +
+      ` timeSincePlay=${now - stepLastPlayTimeRef.current}ms`,
+    );
 
     // These two guards protect against mic continuous-pitch carry-over: the pitch
     // detector streams the same value while a note is held, so without them slot N could
@@ -580,16 +592,24 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     // so the guards are skipped.  They were causing same-pitch consecutive slots (e.g.
     // repeated chords in Arabesque M3) to be silently missed (Issue #2).
     if (inputSourceRef.current === 'mic') {
-      if (now - stepLastPlayTimeRef.current < STEP_INPUT_DELAY_MS) return;
-      if (detectedMidi === lastStepMidiRef.current) return;
+      if (now - stepLastPlayTimeRef.current < STEP_INPUT_DELAY_MS) {
+        console.log('[STEP] BLOCKED by mic timing guard');
+        return;
+      }
+      if (detectedMidi === lastStepMidiRef.current) {
+        console.log('[STEP] BLOCKED by mic same-pitch guard');
+        return;
+      }
     }
     // Chord absorption: after a correct note advances a slot, remaining chord-member
     // MIDI events arrive within ~5 ms.  Absorb them so they don't leak into the next
     // slot as spurious wrong notes (Issue #3 – Arabesque M3 same-chord detection).
-    if (inputSourceRef.current !== 'mic' && now < stepChordAbsorbUntilRef.current) return;
+    if (inputSourceRef.current !== 'mic' && now < stepChordAbsorbUntilRef.current) {
+      console.log('[STEP] ABSORBED by chord window');
+      return;
+    }
 
     lastStepMidiRef.current = detectedMidi;
-    const stepIdx = stepIndexRef.current;
     const ex = exerciseRef.current;
     const targetNote = ex.notes[stepIdx];
     if (!targetNote) return;
@@ -598,6 +618,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     const isChordMember = targetNote.chordPitches
       ? targetNote.chordPitches.includes(detectedMidi)
       : detectedMidi === targetNote.midiPitch;
+    console.log(`[STEP] → isChordMember=${isChordMember} → ${isChordMember ? 'ADVANCE' : 'WRONG'}`);
 
     // Track played note for live response staff using slot-relative onset so
     // the layout engine sees timestamps consistent with exerciseNoteEvents.
@@ -1127,12 +1148,12 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     setPhase('ready');
     phaseRef.current = 'ready';
     setComplexityLevel(level);
-    localStorage.setItem(COMPLEXITY_LEVEL_STORAGE_KEY, level);
+    scopedSetItem(COMPLEXITY_LEVEL_STORAGE_KEY, level);
   }, [context, resetOnsetDetection, clearStepTimeout]);
 
   // ── Restore complexity level from localStorage on mount ───────────────────
   useEffect(() => {
-    const stored = localStorage.getItem(COMPLEXITY_LEVEL_STORAGE_KEY);
+    const stored = scopedGetItem(COMPLEXITY_LEVEL_STORAGE_KEY);
     const validLevels: ComplexityLevel[] = ['low', 'mid', 'high'];
     const level: ComplexityLevel = stored && validLevels.includes(stored as ComplexityLevel)
       ? (stored as ComplexityLevel)
@@ -1625,6 +1646,8 @@ export function TrainPlugin({ context }: TrainPluginProps) {
           >
             {inputBadgeLabel}
           </span>
+          {/* Feature 080: Profile icon — rightmost toolbar element */}
+          <ProfileIcon className="profile-icon-container--toolbar" />
         </div>
       </header>
 

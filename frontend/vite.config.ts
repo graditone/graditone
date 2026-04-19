@@ -2,6 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import basicSsl from '@vitejs/plugin-basic-ssl'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => {
@@ -18,6 +22,15 @@ export default defineConfig(({ command }) => {
   // For user/org pages: base: '/'
   // For project pages: base: '/repository-name/'
   base: process.env.VITE_BASE || '/',
+  
+  resolve: {
+    alias: [
+      {
+        find: /.*\/frontend\/src\/plugin-api/,
+        replacement: path.resolve(__dirname, 'src/plugin-api')
+      }
+    ]
+  },
   
   // Dev server configuration - listen on all interfaces for mobile testing
   server: {

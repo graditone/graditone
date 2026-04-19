@@ -41,6 +41,8 @@ import { useMidiInput } from './services/recording/useMidiInput'
 import { getThemeFromHash, isThemeInHash, getThemeById } from './themes/landing-themes'
 import { createDefaultConfig } from './utils/renderUtils'
 import { RenderConfigContext } from './contexts/RenderConfigContext'
+import { ProfileProvider } from './services/profiles/ProfileContext'
+import { ProfileIcon } from './components/ProfileIcon'
 import packageJson from '../package.json'
 import './App.css'
 
@@ -100,6 +102,13 @@ function App() {
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  // Feature 080: When profile changes inside a plugin view, navigate to landing.
+  useEffect(() => {
+    function onProfileChanged() { setActivePlugin(null) }
+    document.addEventListener('graditone:profile-changed', onProfileChanged)
+    return () => document.removeEventListener('graditone:profile-changed', onProfileChanged)
   }, [])
 
   // Keep body[data-landing-theme] always in sync — never removed — so the theme
@@ -553,9 +562,11 @@ function App() {
   // Feature 001-recording-view: Show RecordingView when navigated to from ScoreViewer
   if (showRecording) {
     return (
+      <ProfileProvider>
       <RenderConfigContext.Provider value={scoreRenderConfig}>
         <RecordingView onBack={() => { setShowRecording(false); }} />
       </RenderConfigContext.Provider>
+      </ProfileProvider>
     )
   }
 
@@ -595,14 +606,17 @@ function App() {
       // v3 plugins need TempoStateProvider for useScorePlayerBridge (→ useTempoState).
       // v2 plugins don't use TempoState so we skip the provider for backward compat.
       return (
+        <ProfileProvider>
         <RenderConfigContext.Provider value={scoreRenderConfig}>
           {isV3 ? <TempoStateProvider>{innerContent}</TempoStateProvider> : innerContent}
         </RenderConfigContext.Provider>
+        </ProfileProvider>
       )
     }
   }
 
   return (
+    <ProfileProvider>
     <RenderConfigContext.Provider value={scoreRenderConfig}>
     <TempoStateProvider>
       <FileStateProvider>
@@ -655,6 +669,7 @@ function App() {
             >
               {t('header.plugins_button')}
             </button>
+            <ProfileIcon onProfileChange={() => setActivePlugin(null)} />
           </header>
           {/* Feature 048: Unified plugin manager dialog */}
           {showPluginManager && (
@@ -768,6 +783,7 @@ function App() {
       </FileStateProvider>
     </TempoStateProvider>
     </RenderConfigContext.Provider>
+    </ProfileProvider>
   )
 }
 

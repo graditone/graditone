@@ -15,6 +15,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { PluginPlaybackStatus, MetronomeSubdivision } from '../../src/plugin-api/index';
+import { ProfileIcon } from '../../src/plugin-api/index';
 import type { PracticeMode } from './practiceEngine.types';
 import { useTranslation } from '../../src/i18n';
 
@@ -439,6 +440,9 @@ export function PracticeToolbar({
           🎹 MIDI
         </span>
       )}
+
+      {/* Feature 080: Profile icon — rightmost toolbar element */}
+      <ProfileIcon className="profile-icon-container--toolbar" />
     </div>
   );
 }

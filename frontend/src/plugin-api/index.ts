@@ -50,6 +50,10 @@ export { PLUGIN_API_VERSION } from './types';
 export { ChordDetector } from '../utils/chordDetector';
 export type { ChordDetectorOptions, ChordResult } from '../utils/chordDetector';
 
+// Feature 080: Profile icon for plugin toolbars
+export { ProfileIcon } from '../components/ProfileIcon';
+export { scopedGetItem, scopedSetItem, scopedRemoveItem, getActiveProfileId } from '../services/profiles/profileStorage';
+
 // Feature 056: Saved practice types and storage services
 export type { ScoreRef, SavedPractice, SavedPerformanceData, SavedPracticeIndexEntry } from '../services/savedPractice.types';
 export { savePracticeToIndexedDB, generatePracticeName, loadPracticeFromIndexedDB, deletePracticeFromIndexedDB } from '../services/savedPracticeStorage';

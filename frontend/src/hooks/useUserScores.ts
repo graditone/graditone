@@ -4,7 +4,7 @@
  *
  * Wraps userScoreIndex CRUD with useState so components re-render on changes.
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   listUserScores,
   addUserScore as indexAdd,
@@ -12,6 +12,7 @@ import {
   type UserScore,
 } from '../services/userScoreIndex';
 import type { DifficultyLevel } from '../types/score';
+import { useProfile } from '../services/profiles/ProfileContext';
 
 export interface UseUserScoresResult {
   userScores: UserScore[];
@@ -26,9 +27,15 @@ export interface UseUserScoresResult {
  * trigger re-renders wherever this hook is used.
  */
 export function useUserScores(): UseUserScoresResult {
+  const { activeProfile } = useProfile();
   const [userScores, setUserScores] = useState<UserScore[]>(() =>
     listUserScores()
   );
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUserScores(listUserScores());
+  }, [activeProfile.id]);
 
   const addUserScore = useCallback(
     (id: string, rawDisplayName: string, difficulty_level?: DifficultyLevel): { entry: UserScore; evictedIds: string[] } => {

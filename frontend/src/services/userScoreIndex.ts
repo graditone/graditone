@@ -7,6 +7,7 @@
  * All functions are synchronous over localStorage.
  */
 import type { DifficultyLevel } from '../types/score';
+import { scopedGetItem, scopedSetItem } from './profiles/profileStorage';
 
 /** Lightweight display metadata for a user-uploaded score. */
 export interface UserScore {
@@ -36,7 +37,7 @@ export const MAX_USER_SCORES = 20;
 
 function readIndex(): UserScore[] {
   try {
-    const raw = localStorage.getItem(USER_SCORES_INDEX_KEY);
+    const raw = scopedGetItem(USER_SCORES_INDEX_KEY);
     if (!raw) return [];
     return JSON.parse(raw) as UserScore[];
   } catch {
@@ -45,7 +46,7 @@ function readIndex(): UserScore[] {
 }
 
 function writeIndex(index: UserScore[]): void {
-  localStorage.setItem(USER_SCORES_INDEX_KEY, JSON.stringify(index));
+  scopedSetItem(USER_SCORES_INDEX_KEY, JSON.stringify(index));
 }
 
 // ---------------------------------------------------------------------------
