@@ -25,7 +25,7 @@ const PROFILE_BTN = (name: string) => `[aria-label="Profile: ${name}"]`;
 const PROFILE_PANEL = '[role="dialog"][aria-label="Profile management"]';
 const ADD_PROFILE_BTN = 'button.profile-panel-add-btn';
 const CREATE_INPUT = '.profile-panel-create .profile-panel-input';
-const CREATE_BTN = '.profile-panel-create button.profile-panel-btn';
+const CREATE_BTN = '.profile-panel-create button.profile-panel-btn:has-text("Create")';
 const PROFILE_NAME_ITEM = (name: string) => `[title="Switch to ${name}"]`;
 const ACTIVE_BADGE = '.profile-panel-active-badge';
 
@@ -54,8 +54,8 @@ async function createProfile(page: Page, name: string) {
 
 /** Seed the user-scores-index for the currently active profile. */
 async function seedUserScores(page: Page, entries: Array<{ id: string; displayName: string }>) {
-  const profileId = await page.evaluate(() => localStorage.getItem('graditone-active-profile-id') ?? 'default');
-  const key = profileId === 'default' ? 'graditone-user-scores-index' : `${profileId}:graditone-user-scores-index`;
+  const profileId = await page.evaluate(() => localStorage.getItem('graditone-active-profile') ?? '');
+  const key = profileId ? `profile:${profileId}:graditone-user-scores-index` : 'graditone-user-scores-index';
   const data = entries.map(e => ({ ...e, uploadedAt: new Date().toISOString() }));
   await page.evaluate(
     ([k, d]) => localStorage.setItem(k, JSON.stringify(d)),
