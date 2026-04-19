@@ -323,6 +323,7 @@
   "practice.results.session_aria": "Volver a la sesión",
   "practice.results.loop_count_aria": "Contador de repeticiones",
   "practice.results.loops_aria": "Número de repeticiones a practicar",
+  "practice.results.loop_locked_hint": "El número de repeticiones está definido por la tarea de la sesión y no se puede cambiar aquí",
   "practice.results.retry_hint": "Pulsa ♪ Practicar para volver a intentarlo",
   "practice.results.no_notes": "No se tocaron notas — la sesión se detuvo antes de recibir entrada.",
   "practice.results.stopped_at": "Detenido en la nota {x} de {y}",

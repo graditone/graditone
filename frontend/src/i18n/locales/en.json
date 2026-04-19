@@ -324,6 +324,7 @@
   "practice.results.session_aria": "Return to session",
   "practice.results.loop_count_aria": "Loop count",
   "practice.results.loops_aria": "Number of loops to practice",
+  "practice.results.loop_locked_hint": "Loop count is set by the session task and cannot be changed here",
   "practice.results.retry_hint": "Press ♪ Practice to try again",
   "practice.results.no_notes": "No notes played — session stopped before any input.",
   "practice.results.stopped_at": "Stopped at note {x} of {y}",

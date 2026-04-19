@@ -186,6 +186,7 @@ Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
 - 080-user-profile-support: Added TypeScript 5.x (frontend), React 18+ (UI) + React 18, Vite, vitest, Playwright (e2e)
+- 078-session-practice-time-ux: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 - 077-arabesque-goal-review: Added Rust (stable ~1.83), TypeScript ~5.3, React 18 + wasm-bindgen (WASM bindings), Vitest (plugin tests), cargo test (Rust tests), React (Goals UI)
 - 075-core-plugins-i18n: Added TypeScript 5.x, React 18+ + React, Vite, host i18n module (`frontend/src/i18n/index.tsx`)
 
