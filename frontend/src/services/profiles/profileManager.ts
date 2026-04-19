@@ -20,6 +20,9 @@ const SCOPED_KEYS = [
   'graditone-saved-trains-index',
   'ios-install-dismissed',
   'android-install-banner-dismissed',
+  // sessions plugin (feature 080)
+  'graditone-sessions-index',
+  'graditone-goals-index',
 ];
 
 function loadProfiles(): Profile[] {
