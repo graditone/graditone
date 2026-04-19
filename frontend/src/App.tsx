@@ -247,6 +247,22 @@ function App() {
                 <div style={{ padding: '24px', textAlign: 'center', color: '#666' }}>
                   <p>&#x26A0;&#xFE0F; Failed to load &ldquo;{pluginName}&rdquo;.</p>
                   <p style={{ fontSize: '0.8em' }}>Check the browser console for details.</p>
+                  <button
+                    type="button"
+                    onClick={() => setActivePlugin(null)}
+                    style={{
+                      marginTop: '16px',
+                      padding: '8px 20px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#c0392b',
+                      color: '#fff',
+                      fontSize: '0.9em',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ← Return to landing
+                  </button>
                 </div>
               ),
             }
@@ -358,6 +374,10 @@ function App() {
                 {...props}
               />
             ),
+            // Host-provided profile icon — bound to the platform's ProfileContext.
+            // External plugins MUST use this instead of importing ProfileIcon directly
+            // to avoid React context identity mismatch when the plugin is bundled.
+            ProfileIcon: (props) => <ProfileIcon {...props} />,
           },
           // v3 score player — proxy that delegates to hook-backed implementation
           // once V3PluginWrapper sets scorePlayerRef.current = bridge.api.

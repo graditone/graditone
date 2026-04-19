@@ -931,6 +931,17 @@ export interface PluginContext {
      * ```
      */
     readonly ScoreSelector: ComponentType<PluginScoreSelectorProps>;
+    /**
+     * Host-provided profile icon component (v9 — Feature 080).
+     * Renders the active profile avatar button and opens the profile panel on click.
+     * Use this instead of importing ProfileIcon directly to avoid React context
+     * bundling issues in external plugins.
+     *
+     * ```tsx
+     * <context.components.ProfileIcon className="my-toolbar-icon" />
+     * ```
+     */
+    readonly ProfileIcon: ComponentType<{ onProfileChange?: () => void; className?: string }>;
   };
   /**
    * Score player context — the primary v3 extension (Feature 033).
