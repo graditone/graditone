@@ -142,12 +142,14 @@ describe('getActiveProfile', () => {
 
 // --- createProfile ---
 describe('createProfile', () => {
-  it('creates and activates a new profile', () => {
+  it('creates a new profile without switching to it', () => {
     seedProfile({ id: 'existing', name: 'Existing' });
+    localStorage.setItem(ACTIVE_PROFILE_KEY, 'existing');
     const profile = createProfile('Bob');
     expect(profile.name).toBe('Bob');
     expect(profile.id).toBeTruthy();
-    expect(localStorage.getItem(ACTIVE_PROFILE_KEY)).toBe(profile.id);
+    // Active profile should remain unchanged
+    expect(localStorage.getItem(ACTIVE_PROFILE_KEY)).toBe('existing');
 
     const all = listProfiles();
     expect(all).toHaveLength(2);

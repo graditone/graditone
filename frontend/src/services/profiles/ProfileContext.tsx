@@ -71,7 +71,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const handleCreate = useCallback((name: string): Profile => {
     const profile = pmCreate(name);
-    setActiveProfile(profile);
     setProfiles(listProfiles());
     return profile;
   }, []);

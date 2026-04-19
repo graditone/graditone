@@ -88,7 +88,6 @@ export function createProfile(name: string): Profile {
   const profiles = loadProfiles();
   profiles.push(profile);
   saveProfiles(profiles);
-  setActiveProfileId(profile.id);
   return profile;
 }
 
