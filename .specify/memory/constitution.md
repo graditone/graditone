@@ -209,6 +209,8 @@ All features that manage, persist, or display user state MUST be profile-aware:
 
 - **Main Branch**: `main` is always deployable; protected with required reviews
 - **Feature Branches**: All work happens in `feature/###-short-description` branches
+- **Branch Base**: All new feature branches MUST be created from an up-to-date `main`. Run `git pull origin main` before creating any new branch.
+- **No Direct Commits to Main**: NEVER commit or push directly to `main`. All changes MUST go through a feature branch and a Pull Request, regardless of how small the change is. Merging without a PR is prohibited.
 - **PR Requirements**: Pull requests MUST include tests, pass CI, and update relevant specs
 
 ### Git Worktree Workflow
