@@ -614,7 +614,7 @@ function App() {
           {isV3 && proxyRefs ? (
             // v3: V3PluginWrapper calls useScorePlayerBridge() and keeps proxy refs current.
             // Must be inside TempoStateProvider (added below).
-            <V3PluginWrapper plugin={coreEntry.manifest} proxyRefs={proxyRefs}>
+            <V3PluginWrapper plugin={coreEntry.manifest} proxyRefs={proxyRefs} onDismiss={() => setActivePlugin(null)}>
               <FullScreenComponent />
             </V3PluginWrapper>
           ) : (
@@ -750,7 +750,7 @@ function App() {
                   // v3+ common plugins: wire up the score player proxy via V3PluginWrapper.
                   // Without this, getCatalogue() returns [] and loadScore() is a no-op
                   // because scorePlayerRef stays on the createNoOpScorePlayer() stub.
-                  <V3PluginWrapper plugin={entry.manifest} proxyRefs={proxyRefsCommon}>
+                  <V3PluginWrapper plugin={entry.manifest} proxyRefs={proxyRefsCommon} onDismiss={() => setActivePlugin(null)}>
                     <PluginComponent />
                   </V3PluginWrapper>
                 ) : (
