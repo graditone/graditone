@@ -46,7 +46,6 @@ export function ProfilePanel({ onClose, onProfileChange, style }: ProfilePanelPr
     setNewName('');
     setCreating(false);
     setCreateError(null);
-    onClose();
     document.dispatchEvent(new CustomEvent('graditone:profile-changed'));
     onProfileChange?.();
   }
