@@ -238,6 +238,8 @@ export interface V3PluginWrapperProps {
   plugin: PluginManifest;
   /** Proxy refs shared with App.tsx context assembly. */
   proxyRefs: V3ProxyRefs;
+  /** Called when the user clicks "Return to landing" in the error fallback. */
+  onDismiss?: () => void;
   /** Plugin component to render (coreEntry.plugin.Component). */
   children: ReactNode;
 }
@@ -254,7 +256,7 @@ export interface V3PluginWrapperProps {
  *
  * Must be rendered inside `<TempoStateProvider>`.
  */
-export function V3PluginWrapper({ plugin, proxyRefs, children }: V3PluginWrapperProps) {
+export function V3PluginWrapper({ plugin, proxyRefs, onDismiss, children }: V3PluginWrapperProps) {
   const { api, internal } = useScorePlayerBridge();
 
   // Build the real hook-backed metronome API, subscribed to the score player
@@ -275,7 +277,7 @@ export function V3PluginWrapper({ plugin, proxyRefs, children }: V3PluginWrapper
   internalRefStable.current = internal;
 
   return (
-    <PluginView plugin={plugin}>
+    <PluginView plugin={plugin} onDismiss={onDismiss}>
       {children}
     </PluginView>
   );
