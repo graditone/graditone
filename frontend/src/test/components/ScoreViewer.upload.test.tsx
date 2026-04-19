@@ -13,6 +13,20 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ScoreViewer } from '../../components/ScoreViewer';
 import { FileStateProvider } from '../../services/state/FileStateContext';
+
+// Bypass profile scoping so tests use plain localStorage keys
+vi.mock('../../services/profiles/profileStorage', () => ({
+  scopedGetItem: (key: string) => localStorage.getItem(key),
+  scopedSetItem: (key: string, val: string) => localStorage.setItem(key, val),
+  scopedRemoveItem: (key: string) => localStorage.removeItem(key),
+  getActiveProfileId: () => 'test',
+}));
+
+// Provide a stable ProfileContext so useProfile() inside useUserScores doesn't throw
+vi.mock('../../services/profiles/ProfileContext', () => ({
+  useProfile: () => ({ activeProfile: { id: 'test', name: 'Test' } }),
+  ProfileProvider: ({ children }: { children: unknown }) => children,
+}));
 import { TempoStateProvider } from '../../services/state/TempoStateContext';
 import { LocaleProvider } from '../../i18n/index';
 import type { ImportResult } from '../../services/import/MusicXMLImportService';

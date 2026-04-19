@@ -8,6 +8,12 @@ import { apiClient } from "../../services/score-api";
 import { loadScoreFromIndexedDB } from "../../services/storage/local-storage";
 import type { Score } from "../../types/score";
 
+// Stable ProfileContext so useUserScores (uses useProfile) doesn't throw
+vi.mock('../../services/profiles/ProfileContext', () => ({
+  useProfile: () => ({ activeProfile: { id: 'test', name: 'Test' } }),
+  ProfileProvider: ({ children }: { children: unknown }) => children,
+}));
+
 /**
  * T004 & T011: Unit tests for ScoreViewer component - Feature 014
  *

@@ -18,6 +18,12 @@ import * as scoreApi from '../../src/services/score-api';
 import * as wasmEngine from '../../src/services/wasm/music-engine';
 import type { Score } from '../../src/domain/types';
 
+// Stable ProfileContext so useUserScores (uses useProfile) doesn't throw
+vi.mock('../../src/services/profiles/ProfileContext', () => ({
+  useProfile: () => ({ activeProfile: { id: 'test', name: 'Test' } }),
+  ProfileProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // Mock modules
 vi.mock('../../src/services/storage/local-storage');
 vi.mock('../../src/services/score-api');

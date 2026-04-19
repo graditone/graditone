@@ -23,6 +23,12 @@ import { RecordingView } from '../../components/recording/RecordingView';
 import { FileStateProvider } from '../../services/state/FileStateContext';
 import { TempoStateProvider } from '../../services/state/TempoStateContext';
 import { LocaleProvider } from '../../i18n/index';
+
+// Stable ProfileContext so components using ProfileIcon/useUserScores don't throw
+vi.mock('../../services/profiles/ProfileContext', () => ({
+  useProfile: () => ({ activeProfile: { id: 'test', name: 'Test' } }),
+  ProfileProvider: ({ children }: { children: unknown }) => children,
+}));
 import {
   mockMidiSupported,
   mockMidiUnsupported,

@@ -4,7 +4,7 @@
  *
  * Constitution Principle V: Test-First Development
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   listSavedPractices,
   addSavedPracticeIndex,
@@ -12,6 +12,14 @@ import {
   SAVED_PRACTICES_INDEX_KEY,
   MAX_SAVED_PRACTICES,
 } from '../../src/services/savedPracticeIndex';
+
+// Bypass profile scoping so tests use plain localStorage keys
+vi.mock('../../src/services/profiles/profileStorage', () => ({
+  scopedGetItem: (key: string) => localStorage.getItem(key),
+  scopedSetItem: (key: string, val: string) => localStorage.setItem(key, val),
+  scopedRemoveItem: (key: string) => localStorage.removeItem(key),
+  getActiveProfileId: () => 'test',
+}));
 import type { SavedPracticeIndexEntry } from '../../src/services/savedPractice.types';
 
 // ---------------------------------------------------------------------------
