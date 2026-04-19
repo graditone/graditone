@@ -619,7 +619,7 @@ function App() {
             </V3PluginWrapper>
           ) : (
             // v2: plain error boundary, no hook-based context injection needed.
-            <PluginView plugin={coreEntry.manifest}>
+            <PluginView plugin={coreEntry.manifest} onDismiss={() => setActivePlugin(null)}>
               <FullScreenComponent />
             </PluginView>
           )}
@@ -791,7 +791,7 @@ function App() {
                         {entry.manifest.name}
                       </span>
                     </div>
-                    <PluginView plugin={entry.manifest}>
+                    <PluginView plugin={entry.manifest} onDismiss={() => setActivePlugin(null)}>
                       <PluginComponent />
                     </PluginView>
                   </>

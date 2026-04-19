@@ -28,6 +28,8 @@ export interface PluginViewProps {
   /** Manifest of the plugin whose Component is being wrapped. */
   plugin: PluginManifest;
   children: ReactNode;
+  /** Called when the user clicks "Return to landing" in the error fallback. */
+  onDismiss?: () => void;
 }
 
 interface PluginViewState {
@@ -55,7 +57,7 @@ export class PluginView extends Component<PluginViewProps, PluginViewState> {
 
   render() {
     const { hasError, error } = this.state;
-    const { plugin, children } = this.props;
+    const { plugin, children, onDismiss } = this.props;
 
     if (hasError) {
       return (
@@ -63,6 +65,7 @@ export class PluginView extends Component<PluginViewProps, PluginViewState> {
           plugin={plugin}
           error={error}
           onReset={this.handleReset}
+          onDismiss={onDismiss}
         />
       );
     }
@@ -75,10 +78,12 @@ function PluginErrorFallback({
   plugin,
   error,
   onReset,
+  onDismiss,
 }: {
   plugin: PluginManifest;
   error: Error | null;
   onReset: () => void;
+  onDismiss?: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -90,9 +95,16 @@ function PluginErrorFallback({
             error: error?.message ?? t('plugin_error.unknown'),
           })}
         </p>
-        <button onClick={onReset} style={styles.button}>
-          {t('plugin_error.reload')}
-        </button>
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button onClick={onReset} style={styles.button}>
+            {t('plugin_error.reload')}
+          </button>
+          {onDismiss && (
+            <button onClick={onDismiss} style={styles.dismissButton}>
+              {t('plugin_error.return_to_landing')}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -127,6 +139,16 @@ const styles = {
     fontWeight: 'bold' as const,
     color: '#fff',
     background: '#1976D2',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+  },
+  dismissButton: {
+    padding: '8px 20px',
+    fontSize: '0.875rem',
+    fontWeight: 'bold' as const,
+    color: '#fff',
+    background: '#c0392b',
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
