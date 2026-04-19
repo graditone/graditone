@@ -1,0 +1,92 @@
+.profile-icon-container {
+  position: absolute;
+  right: 8px;
+  top: 10px;
+  z-index: 2;
+}
+
+/* Push the Plugins button left to make room */
+.plugin-manage-btn {
+  right: 58px !important;
+}
+
+.profile-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #e0e0ff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 3px 8px;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.profile-icon-btn:hover,
+.profile-icon-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.55);
+  outline: none;
+}
+
+.profile-icon-avatar {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+
+/* Theme overrides — match the Plugins button landing theme */
+body[data-landing-theme] .profile-icon-btn {
+  color: var(--ls-body);
+  background: color-mix(in srgb, var(--ls-heading) 8%, var(--ls-navbar-bg));
+  border-color: color-mix(in srgb, var(--ls-heading) 25%, transparent);
+  font-family: var(--ls-font-body);
+}
+
+body[data-landing-theme] .profile-icon-btn:hover {
+  background: color-mix(in srgb, var(--ls-heading) 16%, var(--ls-navbar-bg));
+  border-color: var(--ls-heading);
+  color: var(--ls-heading);
+}
+
+/* ── Toolbar variant (plugin views) ──────────────────────────────── */
+.profile-icon-container--toolbar {
+  position: relative;
+  top: auto;
+  right: auto;
+  margin-left: auto;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+}
+
+/* Use !important to guarantee override of body[data-landing-theme] rules
+   and the base .profile-icon-btn styles. Toolbar button matches the back-btn
+   pattern: semi-transparent heading colour, white text. */
+.profile-icon-container--toolbar .profile-icon-btn {
+  min-height: 36px !important;
+  border-radius: 8px !important;
+  font-size: 0.85rem !important;
+  padding: 0 14px !important;
+  color: #fff !important;
+  background: color-mix(in srgb, var(--ls-heading, #4a4a5a) 60%, transparent) !important;
+  border: none !important;
+  font-weight: 600 !important;
+}
+
+.profile-icon-container--toolbar .profile-icon-btn:hover,
+.profile-icon-container--toolbar .profile-icon-btn:focus-visible {
+  filter: brightness(1.15);
+  outline: none;
+}
+
+.profile-icon-container--toolbar .profile-icon-avatar {
+  font-size: 0.85rem !important;
+}

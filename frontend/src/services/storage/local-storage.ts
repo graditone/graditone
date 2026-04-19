@@ -2,9 +2,10 @@
 // Provides offline persistence for scores using browser IndexedDB
 
 import type { Score } from '../../types/score';
+import { getActiveProfileId } from '../profiles/profileStorage';
 
 const DB_NAME = 'graditone-db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const SCORES_STORE = 'scores';
 const PRACTICES_STORE = 'practices';
 const SESSIONS_STORE = 'sessions';
@@ -77,6 +78,18 @@ export async function openDB(): Promise<IDBDatabase> {
         goalsStore.createIndex('status', 'status', { unique: false });
         console.log('[IndexedDB] Goals object store created');
       }
+
+      // Feature 080: Add profileId index to all stores (v4 → v5)
+      const allStores = [SCORES_STORE, PRACTICES_STORE, SESSIONS_STORE, GOALS_STORE];
+      for (const storeName of allStores) {
+        if (db.objectStoreNames.contains(storeName)) {
+          const store = (event.target as IDBOpenDBRequest).transaction!.objectStore(storeName);
+          if (!store.indexNames.contains('profileId')) {
+            store.createIndex('profileId', 'profileId', { unique: false });
+            console.log(`[IndexedDB] profileId index added to ${storeName}`);
+          }
+        }
+      }
     };
   });
 }
@@ -96,6 +109,7 @@ export async function saveScoreToIndexedDB(score: Score, rawMxlBlob?: ArrayBuffe
     const record: Record<string, unknown> = {
       ...score,
       lastModified: new Date().toISOString(),
+      profileId: getActiveProfileId(),
     };
     if (rawMxlBlob) {
       record.rawMxlBlob = rawMxlBlob;
@@ -174,12 +188,24 @@ export async function listScoreIdsFromIndexedDB(): Promise<string[]> {
     const db = await openDB();
     const transaction = db.transaction([SCORES_STORE], 'readonly');
     const store = transaction.objectStore(SCORES_STORE);
+    const profileId = getActiveProfileId();
 
-    const keys = await new Promise<string[]>((resolve, reject) => {
-      const request = store.getAllKeys();
-      request.onsuccess = () => resolve(request.result as string[]);
-      request.onerror = () => reject(new Error(`Failed to list scores: ${request.error?.message}`));
-    });
+    let keys: string[];
+    if (profileId && store.indexNames.contains('profileId')) {
+      const index = store.index('profileId');
+      const records = await new Promise<Score[]>((resolve, reject) => {
+        const request = index.getAll(profileId);
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(new Error(`Failed to list scores: ${request.error?.message}`));
+      });
+      keys = records.map(r => r.id);
+    } else {
+      keys = await new Promise<string[]>((resolve, reject) => {
+        const request = store.getAllKeys();
+        request.onsuccess = () => resolve(request.result as string[]);
+        request.onerror = () => reject(new Error(`Failed to list scores: ${request.error?.message}`));
+      });
+    }
 
     db.close();
     console.log(`[IndexedDB] Found ${keys.length} cached scores`);
@@ -226,12 +252,23 @@ export async function getAllScoresFromIndexedDB(currentSchemaVersion: number): P
     const db = await openDB();
     const transaction = db.transaction([SCORES_STORE], 'readonly');
     const store = transaction.objectStore(SCORES_STORE);
+    const profileId = getActiveProfileId();
 
-    const allScores = await new Promise<Score[]>((resolve, reject) => {
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(new Error(`Failed to get all scores: ${request.error?.message}`));
-    });
+    let allScores: Score[];
+    if (profileId && store.indexNames.contains('profileId')) {
+      const index = store.index('profileId');
+      allScores = await new Promise<Score[]>((resolve, reject) => {
+        const request = index.getAll(profileId);
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(new Error(`Failed to get all scores: ${request.error?.message}`));
+      });
+    } else {
+      allScores = await new Promise<Score[]>((resolve, reject) => {
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(new Error(`Failed to get all scores: ${request.error?.message}`));
+      });
+    }
 
     // Filter out incompatible schema versions
     const compatibleScores: Score[] = [];

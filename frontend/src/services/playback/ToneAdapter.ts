@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import { velocityToGain, applyCCScaling, DEFAULT_VELOCITY } from './volumeUtils';
+import { scopedGetItem, scopedSetItem } from '../profiles/profileStorage';
 
 /**
  * ToneAdapter - Singleton wrapper for Tone.js audio synthesis
@@ -507,7 +508,7 @@ export class ToneAdapter {
       Tone.Destination.volume.value = dB;
     }
     try {
-      localStorage.setItem(ToneAdapter.VOLUME_STORAGE_KEY, String(clamped));
+      scopedSetItem(ToneAdapter.VOLUME_STORAGE_KEY, String(clamped));
     } catch {
       // localStorage may be unavailable in some contexts
     }
@@ -531,7 +532,7 @@ export class ToneAdapter {
    */
   public loadPersistedVolume(): void {
     try {
-      const stored = localStorage.getItem(ToneAdapter.VOLUME_STORAGE_KEY);
+      const stored = scopedGetItem(ToneAdapter.VOLUME_STORAGE_KEY);
       if (stored !== null) {
         const parsed = Number(stored);
         if (!Number.isNaN(parsed)) {

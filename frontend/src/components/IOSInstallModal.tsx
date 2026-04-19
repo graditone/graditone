@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from '../i18n/index';
+import { scopedGetItem, scopedSetItem } from '../services/profiles/profileStorage';
 import './IOSInstallModal.css';
 
 // Extend Navigator interface for iOS-specific standalone property
@@ -38,7 +39,7 @@ export const IOSInstallModal: React.FC = () => {
     
     // Show modal only if iOS and not installed, and user hasn't dismissed it
     if (isIOS && !isStandalone) {
-      const dismissed = localStorage.getItem('ios-install-dismissed');
+      const dismissed = scopedGetItem('ios-install-dismissed');
       return !dismissed;
     }
     return false;
@@ -46,7 +47,7 @@ export const IOSInstallModal: React.FC = () => {
 
   const handleDismiss = () => {
     // Remember dismissal to avoid annoying user
-    localStorage.setItem('ios-install-dismissed', 'true');
+    scopedSetItem('ios-install-dismissed', 'true');
     setShowModal(false);
   };
 

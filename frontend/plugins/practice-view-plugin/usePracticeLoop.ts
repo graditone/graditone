@@ -144,10 +144,6 @@ export function usePracticeLoop({
         const range = loopPracticeRangeRef.current;
         if (range) {
           dispatchPractice({ type: 'LOOP_RESTART', startIndex: range.startIndex });
-          // Seek back to the loop region start so score-internal repeat barlines
-          // cannot redirect playback outside the pinned region (e.g. m10 → m3).
-          const lr = loopRegionRef.current;
-          if (lr) context.scorePlayer.seekToTick(lr.startTick);
           return;
         }
       }

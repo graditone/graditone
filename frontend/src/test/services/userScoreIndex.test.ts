@@ -12,6 +12,14 @@ import {
   MAX_USER_SCORES,
 } from '../../services/userScoreIndex';
 
+// Bypass profile scoping so tests use plain localStorage keys
+vi.mock('../../services/profiles/profileStorage', () => ({
+  scopedGetItem: (key: string) => localStorage.getItem(key),
+  scopedSetItem: (key: string, val: string) => localStorage.setItem(key, val),
+  scopedRemoveItem: (key: string) => localStorage.removeItem(key),
+  getActiveProfileId: () => 'test',
+}));
+
 // ── localStorage mock ──────────────────────────────────────────────────────
 // vitest's happy-dom environment usually provides localStorage,
 // but we reset it before each test for isolation.

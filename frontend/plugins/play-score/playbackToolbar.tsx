@@ -17,6 +17,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { PluginPlaybackStatus } from '../../src/plugin-api/index';
 import type { MetronomeSubdivision } from '../../src/plugin-api/index';
+import { ProfileIcon } from '../../src/plugin-api/index';
 import { useTranslation } from '../../src/i18n';
 
 // Mirror of PlaybackScheduler.PPQ — no host imports in plugin code
@@ -245,6 +246,9 @@ export function PlaybackToolbar({
           </div>
         )}
       </div>
+
+      {/* Feature 080: Profile icon — rightmost toolbar element */}
+      <ProfileIcon className="profile-icon-container--toolbar" />
     </div>
   );
 }

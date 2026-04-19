@@ -16,6 +16,12 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PlayScorePlugin } from './PlayScorePlugin';
+
+// Provide stable ProfileContext so ProfileIcon (added to toolbar) doesn't throw
+vi.mock('../../src/services/profiles/ProfileContext', () => ({
+  useProfile: () => ({ activeProfile: { id: 'test', name: 'Test' } }),
+  ProfileProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
 import type { PluginContext, ScorePlayerState, PluginPlaybackStatus, PluginScoreRendererProps, PluginScoreSelectorProps } from '../../src/plugin-api/index';
 import { LocaleProvider } from '../../src/i18n/index';
 

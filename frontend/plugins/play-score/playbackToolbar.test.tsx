@@ -12,6 +12,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PlaybackToolbar, type PlaybackToolbarProps } from './playbackToolbar';
 import { LocaleProvider } from '../../src/i18n/index';
 
+// Stable ProfileContext so ProfileIcon (added to toolbar) doesn't throw
+vi.mock('../../src/services/profiles/ProfileContext', () => ({
+  useProfile: () => ({ activeProfile: { id: 'test', name: 'Test' } }),
+  ProfileProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

@@ -37,6 +37,12 @@ import { TrainPlugin } from './TrainPlugin';
 import { TrainVirtualKeyboard } from './TrainVirtualKeyboard';
 import { LocaleProvider } from '../../src/i18n/index';
 
+// Stable ProfileContext so ProfileIcon (added to toolbar) doesn't throw
+vi.mock('../../src/services/profiles/ProfileContext', () => ({
+  useProfile: () => ({ activeProfile: { id: 'test', name: 'Test' } }),
+  ProfileProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // ---------------------------------------------------------------------------
 // Mock helpers (shared with TrainPlugin.test.tsx)
 // ---------------------------------------------------------------------------

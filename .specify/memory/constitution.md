@@ -1,11 +1,11 @@
 <!--
-SYNC IMPACT REPORT - Constitution v2.7.0
-Generated: 2026-04-04
+SYNC IMPACT REPORT - Constitution v2.8.0
+Generated: 2026-04-19
 
-VERSION CHANGE: 2.6.0 → 2.7.0
-BUMP RATIONALE: MINOR - Added mandatory Git Worktree Workflow section to Development Workflow;
-  all spec development MUST occur inside a dedicated git worktree located at
-  ../worktrees/<branch-name> relative to the repository root.
+VERSION CHANGE: 2.7.0 → 2.8.0
+BUMP RATIONALE: MINOR - Added Principle VIII (User Profile Awareness);
+  all features that manage user state MUST be profile-aware with scoped storage,
+  profile icon visibility on all pages, and cross-tab consistency.
 
 PRINCIPLES STATUS:
   ✓ I. Domain-Driven Design (UNCHANGED)
@@ -15,6 +15,7 @@ PRINCIPLES STATUS:
   ✓ V. Test-First Development (UNCHANGED)
   ✓ VI. Layout Engine Authority (UNCHANGED)
   ✓ VII. Regression Prevention (UNCHANGED)
+  + VIII. User Profile Awareness (NEW)
 
 NEW SECTIONS ADDED:
   + Development Workflow › Git Worktree Workflow
@@ -154,6 +155,19 @@ Every error, bug, or incorrect behavior MUST result in a test before being fixed
 - **Scope Coverage**: Applies to all error types—runtime errors, incorrect behavior, performance issues, UI/UX bugs, deployment failures, configuration issues
 
 **Rationale**: Test-first development (Principle V) covers new features, but real-world usage reveals edge cases and integration issues not anticipated during initial development. Every production error is an opportunity to strengthen the test suite. This practice creates a feedback loop where the test suite evolves to cover actual failure modes rather than just anticipated ones. Prevents the same bug from recurring, turns debugging into documentation, and builds confidence that fixed issues stay fixed. Recent experience (Feature 018 deployment) revealed missing TypeScript files and field naming inconsistencies—both now covered by tests, preventing future recurrence.
+
+---
+
+### VIII. User Profile Awareness
+
+All features that manage, persist, or display user state MUST be profile-aware:
+
+- **Profile Scoping**: Any new localStorage key or IndexedDB record that stores user-specific data MUST be scoped to the active profile (prefixed key or `profileId` field)
+- **Profile Icon Visibility**: All pages and plugin views MUST include the profile icon at the rightmost toolbar position so the active profile is always visible
+- **Cross-Tab Consistency**: Profile changes MUST propagate to all open browser tabs
+- **Migration Consideration**: When adding new user state, consider what happens for existing profiles that lack that state (graceful defaults)
+
+**Rationale**: Graditone supports multi-user scenarios (family sharing a tablet). Without consistent profile scoping, new features can inadvertently leak data between profiles, breaking user trust and data isolation. Making profile awareness a constitutional principle ensures every developer considers profile boundaries from the start, rather than retrofitting isolation after the fact.
 
 ---
 

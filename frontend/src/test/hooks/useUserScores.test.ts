@@ -7,6 +7,20 @@ import { renderHook, act } from '@testing-library/react';
 import { useUserScores } from '../../hooks/useUserScores';
 import { USER_SCORES_INDEX_KEY } from '../../services/userScoreIndex';
 
+// Bypass profile scoping so tests use plain localStorage keys
+vi.mock('../../services/profiles/profileStorage', () => ({
+  scopedGetItem: (key: string) => localStorage.getItem(key),
+  scopedSetItem: (key: string, val: string) => localStorage.setItem(key, val),
+  scopedRemoveItem: (key: string) => localStorage.removeItem(key),
+  getActiveProfileId: () => 'test',
+}));
+
+// Provide a stable ProfileContext so useProfile() doesn't throw
+vi.mock('../../services/profiles/ProfileContext', () => ({
+  useProfile: () => ({ activeProfile: { id: 'test', name: 'Test' } }),
+  ProfileProvider: ({ children }: { children: unknown }) => children,
+}));
+
 // ── localStorage mock ──────────────────────────────────────────────────────
 const localStorageMock = (() => {
   let store: Record<string, string> = {};

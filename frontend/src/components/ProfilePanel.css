@@ -1,0 +1,183 @@
+.profile-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  min-width: 240px;
+  max-width: 320px;
+  background: var(--dialog-bg, #1e1e2e);
+  color: var(--dialog-text, #cdd6f4);
+  border: 1px solid var(--dialog-border, #313244);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.profile-panel-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--dialog-border, #313244);
+}
+
+.profile-panel-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--dialog-text, #cdd6f4);
+}
+
+.profile-panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.profile-panel-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  gap: 4px;
+}
+
+.profile-panel-item--active {
+  background: var(--dialog-surface, #313244);
+}
+
+.profile-panel-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 4px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: var(--dialog-text, #cdd6f4);
+  text-align: left;
+}
+
+.profile-panel-name:hover {
+  background: var(--dialog-surface-hover, #45475a);
+}
+
+.profile-panel-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-weight: 700;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.profile-panel-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-panel-active-badge {
+  color: var(--dialog-selected-text, #cba6f7);
+  font-weight: 700;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.profile-panel-btn-sm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--dialog-subtext, #6c7086);
+  flex-shrink: 0;
+}
+
+.profile-panel-btn-sm:hover {
+  background: var(--dialog-surface-hover, #45475a);
+}
+
+.profile-panel-btn-danger {
+  color: #d32f2f;
+}
+
+.profile-panel-btn-danger:hover {
+  background: #ffebee;
+}
+
+.profile-panel-edit,
+.profile-panel-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  padding: 4px 0;
+}
+
+.profile-panel-confirm span {
+  font-size: 0.85rem;
+  flex: 1;
+}
+
+.profile-panel-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--dialog-border, #313244);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  outline: none;
+  background: var(--dialog-surface, #313244);
+  color: var(--dialog-text, #cdd6f4);
+}
+
+.profile-panel-input:focus {
+  border-color: var(--dialog-selected-text, #cba6f7);
+}
+
+.profile-panel-error {
+  display: block;
+  color: #d32f2f;
+  font-size: 0.78rem;
+  padding: 2px 4px;
+}
+
+.profile-panel-create {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--dialog-border, #313244);
+}
+
+.profile-panel-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: var(--ls-cta-bg, var(--dialog-selected-text, #cba6f7));
+  color: var(--ls-cta-text, white);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.profile-panel-btn:hover {
+  filter: brightness(0.9);
+}
+
+.profile-panel-add-btn {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 6px 12px 12px;
+  text-align: center;
+}

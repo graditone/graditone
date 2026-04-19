@@ -20,6 +20,12 @@ import { TempoStateProvider } from '../services/state/TempoStateContext';
 import { LocaleProvider } from '../i18n/index';
 import type { Score } from '../types/score';
 
+// Stable ProfileContext so useUserScores (uses useProfile) doesn't throw
+vi.mock('../services/profiles/ProfileContext', () => ({
+  useProfile: () => ({ activeProfile: { id: 'test', name: 'Test' } }),
+  ProfileProvider: ({ children }: { children: unknown }) => children,
+}));
+
 // ─── Module mocks ──────────────────────────────────────────────────────────
 
 vi.mock('../services/storage/local-storage', () => ({

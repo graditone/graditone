@@ -7,6 +7,7 @@
  * All functions are synchronous over localStorage.
  */
 import type { SavedPracticeIndexEntry } from './savedPractice.types';
+import { scopedGetItem, scopedSetItem } from './profiles/profileStorage';
 
 /** localStorage key for the JSON-serialised SavedPracticeIndexEntry[] index. */
 export const SAVED_PRACTICES_INDEX_KEY = 'graditone-saved-practices-index';
@@ -20,7 +21,7 @@ export const MAX_SAVED_PRACTICES = 100;
 
 function readIndex(): SavedPracticeIndexEntry[] {
   try {
-    const raw = localStorage.getItem(SAVED_PRACTICES_INDEX_KEY);
+    const raw = scopedGetItem(SAVED_PRACTICES_INDEX_KEY);
     if (!raw) return [];
     return JSON.parse(raw) as SavedPracticeIndexEntry[];
   } catch {
@@ -29,7 +30,7 @@ function readIndex(): SavedPracticeIndexEntry[] {
 }
 
 function writeIndex(index: SavedPracticeIndexEntry[]): void {
-  localStorage.setItem(SAVED_PRACTICES_INDEX_KEY, JSON.stringify(index));
+  scopedSetItem(SAVED_PRACTICES_INDEX_KEY, JSON.stringify(index));
 }
 
 // ---------------------------------------------------------------------------

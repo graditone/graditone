@@ -10,6 +10,7 @@
  */
 
 import type { SavedTrainIndexEntry } from './trainTypes';
+import { scopedGetItem, scopedSetItem } from './scopedStorage';
 
 /** localStorage key for the JSON-serialised SavedTrainIndexEntry[] index. */
 export const SAVED_TRAINS_INDEX_KEY = 'graditone-saved-trains-index';
@@ -23,7 +24,7 @@ export const MAX_SAVED_TRAINS = 50;
 
 function readIndex(): SavedTrainIndexEntry[] {
   try {
-    const raw = localStorage.getItem(SAVED_TRAINS_INDEX_KEY);
+    const raw = scopedGetItem(SAVED_TRAINS_INDEX_KEY);
     if (!raw) return [];
     return JSON.parse(raw) as SavedTrainIndexEntry[];
   } catch {
@@ -32,7 +33,7 @@ function readIndex(): SavedTrainIndexEntry[] {
 }
 
 function writeIndex(index: SavedTrainIndexEntry[]): void {
-  localStorage.setItem(SAVED_TRAINS_INDEX_KEY, JSON.stringify(index));
+  scopedSetItem(SAVED_TRAINS_INDEX_KEY, JSON.stringify(index));
 }
 
 // ---------------------------------------------------------------------------

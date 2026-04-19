@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from '../i18n/index';
+import { scopedGetItem, scopedSetItem } from '../services/profiles/profileStorage';
 import './AndroidInstallBanner.css';
 
 /**
@@ -29,7 +30,7 @@ export const AndroidInstallBanner: React.FC = () => {
     if (isStandalone) return false;
 
     // User already dismissed
-    if (localStorage.getItem(DISMISS_KEY)) return false;
+    if (scopedGetItem(DISMISS_KEY)) return false;
 
     return true;
   });
@@ -39,7 +40,7 @@ export const AndroidInstallBanner: React.FC = () => {
   if (!visible || dismissed) return null;
 
   const handleDismiss = () => {
-    localStorage.setItem(DISMISS_KEY, 'true');
+    scopedSetItem(DISMISS_KEY, 'true');
     setDismissed(true);
   };
 
