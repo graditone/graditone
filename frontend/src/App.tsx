@@ -76,6 +76,8 @@ function App() {
   const [activePlugin, setActivePlugin] = useState<string | null>(null)
   // Feature 060: One-shot navigation data for openPlugin → getNavigationData flow.
   const pluginNavDataRef = useRef<Record<string, unknown> | null>(null)
+  // Feature 080: Counter to force plugin remount on profile switch (stays on the same view).
+  const [profileVersion, setProfileVersion] = useState(0)
   // Feature 048: Show/hide unified plugin manager dialog
   const [showPluginManager, setShowPluginManager] = useState(false)
   // Feature 048 / T020: Plugin-requested ListDialog state
@@ -104,9 +106,10 @@ function App() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
-  // Feature 080: When profile changes inside a plugin view, navigate to landing.
+  // Feature 080: When profile changes inside a plugin view, remount the plugin
+  // so it reloads data for the new profile — without navigating to landing.
   useEffect(() => {
-    function onProfileChanged() { setActivePlugin(null) }
+    function onProfileChanged() { setProfileVersion(v => v + 1) }
     document.addEventListener('graditone:profile-changed', onProfileChanged)
     return () => document.removeEventListener('graditone:profile-changed', onProfileChanged)
   }, [])
@@ -580,7 +583,7 @@ function App() {
       const proxyRefs = v3ProxyRefsMap.current.get(coreEntry.manifest.id)
 
       const innerContent = (
-        <div style={{
+        <div key={profileVersion} style={{
           position: 'fixed',
           inset: 0,
           display: 'flex',
@@ -669,7 +672,7 @@ function App() {
             >
               {t('header.plugins_button')}
             </button>
-            <ProfileIcon onProfileChange={() => setActivePlugin(null)} />
+            <ProfileIcon onProfileChange={() => setProfileVersion(v => v + 1)} />
           </header>
           {/* Feature 048: Unified plugin manager dialog */}
           {showPluginManager && (
@@ -715,7 +718,7 @@ function App() {
             const isV3Common = Number(entry.manifest.pluginApiVersion) >= 3
             const proxyRefsCommon = v3ProxyRefsMap.current.get(entry.manifest.id)
             const innerPluginContent = (
-              <div style={{
+              <div key={profileVersion} style={{
                 position: 'fixed',
                 inset: 0,
                 display: 'flex',
