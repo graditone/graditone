@@ -21,6 +21,13 @@ vi.mock('../../src/services/profiles/ProfileContext', () => ({
   useProfile: () => ({ activeProfile: { id: 'test', name: 'Test' } }),
   ProfileProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
+
+// Mock useMidiConnectivity — in the test environment (happy-dom) Web MIDI API
+// is absent, so the hook would return { supported: false, connected: false },
+// disabling the Practice button and breaking all practice-related tests.
+vi.mock('./useMidiConnectivity', () => ({
+  useMidiConnectivity: () => ({ connected: true, supported: true }),
+}));
 import type {
   PluginContext,
   ScorePlayerState,

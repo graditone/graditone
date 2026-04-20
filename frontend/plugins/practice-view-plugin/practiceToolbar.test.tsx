@@ -281,3 +281,33 @@ describe('PracticeToolbar — Play/Stop controls', () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// T010 — MIDI not supported message (Feature 081)
+// ---------------------------------------------------------------------------
+
+describe('PracticeToolbar — MIDI not supported', () => {
+  it('renders "MIDI not supported" message when midiSupported={false}', () => {
+    render(
+      <PracticeToolbar {...makeDefaultProps({ midiSupported: false })} />,
+      { wrapper: TestWrapper },
+    );
+    expect(screen.getByText(/MIDI is not supported/i)).toBeTruthy();
+  });
+
+  it('does not render "MIDI not supported" message when midiSupported is true', () => {
+    render(
+      <PracticeToolbar {...makeDefaultProps({ midiSupported: true, midiConnected: true })} />,
+      { wrapper: TestWrapper },
+    );
+    expect(screen.queryByText(/MIDI is not supported/i)).toBeNull();
+  });
+
+  it('does not render "MIDI not supported" message when midiSupported is not provided (default)', () => {
+    render(
+      <PracticeToolbar {...makeDefaultProps()} />,
+      { wrapper: TestWrapper },
+    );
+    expect(screen.queryByText(/MIDI is not supported/i)).toBeNull();
+  });
+});

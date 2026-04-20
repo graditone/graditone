@@ -290,6 +290,7 @@
   "practice.toolbar.tempo_aria": "Tempo multiplier",
   "practice.toolbar.metronome_aria": "Toggle metronome",
   "practice.toolbar.metronome_sub_aria": "Metronome subdivision",
+  "practice.toolbar.midi_not_supported": "MIDI is not supported in this browser",
   "practice.toolbar.midi_connected_title": "MIDI keyboard detected",
   "practice.toolbar.midi_connected_aria": "MIDI keyboard connected",
   "practice.plugin.untitled": "Untitled",
