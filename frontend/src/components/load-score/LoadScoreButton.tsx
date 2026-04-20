@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes } from 'react';
+import { trackEvent } from '../../services/telemetry';
 import './LoadScoreButton.css';
 
 interface LoadScoreButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -18,7 +19,10 @@ export function LoadScoreButton({
   return (
     <button
       className="load-score-button"
-      onClick={onClick}
+      onClick={() => {
+        trackEvent('cta_click', { action: 'load_score' });
+        onClick();
+      }}
       disabled={disabled}
       aria-label={ariaLabel ?? 'Play Score'}
       {...rest}

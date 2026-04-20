@@ -4,9 +4,13 @@ import './index.css'
 import App from './App.tsx'
 import { LocaleProvider } from './i18n/index'
 import { registerServiceWorker } from './sw-registration'
+import { trackPageview } from './services/telemetry'
 
 // NOTE: WASM layout engine is now initialized lazily by services/wasm/loader.ts
 // when first needed (when LayoutView component mounts)
+
+// Record initial page load anonymously
+trackPageview()
 
 // Register service worker (T020-T021)
 registerServiceWorker({
