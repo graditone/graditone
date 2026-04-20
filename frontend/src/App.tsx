@@ -4,7 +4,6 @@ import { ScoreViewer } from './components/ScoreViewer'
 import { RecordingView } from './components/recording/RecordingView'
 import { OfflineBanner } from './components/OfflineBanner'
 import { IOSInstallModal } from './components/IOSInstallModal'
-import { AndroidInstallBanner } from './components/AndroidInstallBanner'
 import { FileStateProvider } from './services/state/FileStateContext'
 import { TempoStateProvider } from './services/state/TempoStateContext'
 import { initWasm } from './services/wasm/loader'
@@ -801,7 +800,6 @@ function App() {
             return innerPluginContent
           })()}
           <IOSInstallModal />
-          <AndroidInstallBanner />
         </div>
       </FileStateProvider>
     </TempoStateProvider>
