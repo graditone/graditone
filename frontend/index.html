@@ -21,6 +21,18 @@
     <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png" />
     <link rel="icon" type="image/svg+xml" href="icons/favicon.svg" />
 
+    <!-- Umami Analytics (Anonymous, cookie-less GDPR tracking, free tier available) -->
+    <!-- Feature 082: Inject only if not in an automated E2E test to prevent 30s timeouts -->
+    <script>
+      if (!navigator.webdriver) {
+        var umamiScript = document.createElement('script');
+        umamiScript.defer = true;
+        umamiScript.src = 'https://cloud.umami.is/script.js';
+        umamiScript.setAttribute('data-website-id', 'YOUR-UMAMI-WEBSITE-ID');
+        document.head.appendChild(umamiScript);
+      }
+    </script>
+
   </head>
   <body>
     <div id="root"></div>

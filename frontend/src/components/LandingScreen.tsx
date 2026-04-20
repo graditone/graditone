@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SMUFL_CODEPOINTS } from '../types/notation/config';
 import { useTranslation } from '../i18n/index';
+import { trackEvent } from '../services/telemetry';
 import './LandingScreen.css';
 
 // ---------------------------------------------------------------------------
@@ -309,13 +310,22 @@ export function LandingScreen({ onShowInstruments, corePlugins, onLaunchPlugin, 
             key={p.id}
             data-testid={`plugin-launch-${p.id}`}
             className="landing-plugin-btn"
-            onClick={() => onLaunchPlugin(p.id)}
+            onClick={() => {
+              trackEvent('cta_click', { action: 'launch_plugin', plugin_id: p.id });
+              onLaunchPlugin(p.id);
+            }}
           >
             {p.icon ? `${p.icon} ` : ''}{tDynamic(`plugin.name.${p.id}`, p.name)}
           </button>
         ))}
         {onShowInstruments && (
-          <button className="landing-instruments-btn" onClick={onShowInstruments}>
+          <button 
+            className="landing-instruments-btn" 
+            onClick={() => {
+              trackEvent('cta_click', { action: 'show_instruments' });
+              onShowInstruments();
+            }}
+          >
             {t('landing.instruments_button')}
           </button>
         )}
