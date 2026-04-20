@@ -38,6 +38,7 @@ import { usePracticeMidi } from './usePracticeMidi';
 import { usePracticeHighlights } from './usePracticeHighlights';
 import { usePhantomTempo } from './usePhantomTempo';
 import { useHoldProgress } from './useHoldProgress';
+import { useMidiConnectivity } from './useMidiConnectivity';
 import { measureRangeToTicks } from './measureRangeToTicks';
 import { ResultsOverlay } from './ResultsOverlay';
 import type { ScoreRef, SavedPractice, SavedPerformanceData, SavedPracticeIndexEntry } from '../../src/plugin-api/index';
@@ -138,35 +139,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   }, [context.metronome]);
 
   // ─── MIDI connectivity tracking ────────────────────────────────────────────
-  // Use Web MIDI API for real-time connect/disconnect detection.
-  // IMPORTANT: Uses addEventListener('statechange', ...) instead of assigning
-  // access.onstatechange — the browser returns the SAME MIDIAccess singleton
-  // from every requestMIDIAccess() call, so assigning onstatechange would
-  // overwrite the host's useMidiInput handler and vice-versa, causing MIDI
-  // to stop working until browser restart.
-  // null = check pending; false = checked, no devices; true = device present.
-  const [midiConnected, setMidiConnected] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !('requestMIDIAccess' in navigator)) return;
-    let midiAccess: MIDIAccess | null = null;
-    const nav = navigator as Navigator & { requestMIDIAccess: () => Promise<MIDIAccess> };
-    const handleStateChange = () => {
-      if (midiAccess) setMidiConnected(midiAccess.inputs.size > 0);
-    };
-    nav.requestMIDIAccess().then((access) => {
-      midiAccess = access;
-      // Reflect current state immediately
-      setMidiConnected(access.inputs.size > 0);
-      // Use addEventListener so multiple listeners can coexist on the singleton
-      access.addEventListener('statechange', handleStateChange);
-    }).catch(() => { /* MIDI permission denied or unavailable */ });
-    return () => {
-      if (midiAccess) {
-        midiAccess.removeEventListener('statechange', handleStateChange);
-      }
-    };
-  }, []);
+  // Extracted to useMidiConnectivity hook (feature 081) — fixes three bugs:
+  // 1. No timeout → requestMIDIAccess could wait forever on tablet
+  // 2. Silent catch → permission denial left state null
+  // 3. API absent → no setMidiConnected(false) call
+  const { connected: midiConnected, supported: midiSupported } = useMidiConnectivity();
 
   // ─── Two-tap seek-then-play state machine (mirrors play-score) ──────────────
   // First tap while not playing: seek + arm pendingPlay.
@@ -1054,6 +1031,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         onPracticeToggle={handlePracticeToggle}
         showStaffPicker={false}
         midiConnected={midiConnected}
+        midiSupported={midiSupported}
         metronomeActive={metronomeState.active}
         metronomeBeatIndex={metronomeState.beatIndex}
         metronomeIsDownbeat={metronomeState.isDownbeat}

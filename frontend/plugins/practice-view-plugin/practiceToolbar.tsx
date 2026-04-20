@@ -71,6 +71,11 @@ export interface PracticeToolbarProps {
    * Shows indicator in toolbar.
    */
   midiConnected: boolean | null;
+  /**
+   * Whether the Web MIDI API is available in this browser.
+   * When false, shows "MIDI not supported" message instead of "no MIDI device".
+   */
+  midiSupported?: boolean;
   // Metronome
   metronomeActive: boolean;
   metronomeBeatIndex: number;
@@ -111,6 +116,7 @@ export function PracticeToolbar({
   onPracticeToggle,
   showStaffPicker,
   midiConnected,
+  midiSupported = true,
   metronomeActive,
   metronomeBeatIndex,
   metronomeIsDownbeat,
@@ -313,10 +319,16 @@ export function PracticeToolbar({
         </span>
       )}
 
-      {/* Practice toggle button — disabled when no MIDI device connected */}
+      {/* Practice toggle button — disabled when no MIDI device connected or unsupported */}
       <span
         className="practice-plugin__practice-btn-wrapper"
-        title={midiConnected === false ? t('practice.toolbar.no_midi_device') : undefined}
+        title={
+          !midiSupported
+            ? t('practice.toolbar.midi_not_supported')
+            : midiConnected === false
+              ? t('practice.toolbar.no_midi_device')
+              : undefined
+        }
       >
         <button
           className={practiceBtnClass}
@@ -325,7 +337,7 @@ export function PracticeToolbar({
             practiceRunning ? t('practice.toolbar.practice_mode_stop_aria') : t('practice.toolbar.practice_mode_start_aria')
           }
           aria-pressed={practiceRunning}
-          disabled={!isLoaded || midiConnected === false || !!isReplaying}
+          disabled={!isLoaded || midiConnected === false || !midiSupported || !!isReplaying}
         >
           {practiceBtnLabel}
         </button>
@@ -346,9 +358,16 @@ export function PracticeToolbar({
       )}
 
       {/* No-MIDI notice — shown when practice is active but MIDI is disconnected */}
-      {practiceRunning && midiConnected === false && (
+      {practiceRunning && midiConnected === false && midiSupported && (
         <span className="practice-plugin__no-midi-notice" role="alert">
           {t('practice.toolbar.connect_midi')}
+        </span>
+      )}
+
+      {/* MIDI not supported notice — shown when Web MIDI API is unavailable */}
+      {!midiSupported && (
+        <span className="practice-plugin__no-midi-notice" role="alert">
+          {t('practice.toolbar.midi_not_supported')}
         </span>
       )}
 

@@ -289,6 +289,7 @@
   "practice.toolbar.tempo_aria": "Multiplicador de tempo",
   "practice.toolbar.metronome_aria": "Activar/desactivar metrónomo",
   "practice.toolbar.metronome_sub_aria": "Subdivisión del metrónomo",
+  "practice.toolbar.midi_not_supported": "MIDI no está disponible en este navegador",
   "practice.toolbar.midi_connected_title": "Teclado MIDI detectado",
   "practice.toolbar.midi_connected_aria": "Teclado MIDI conectado",
   "practice.plugin.untitled": "Sin título",
