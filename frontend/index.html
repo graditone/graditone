@@ -22,7 +22,16 @@
     <link rel="icon" type="image/svg+xml" href="icons/favicon.svg" />
 
     <!-- Umami Analytics (Anonymous, cookie-less GDPR tracking, free tier available) -->
-    <script defer src="https://cloud.umami.is/script.js" data-website-id="19e803c6-7c31-49e0-bef2-6c3a7f258a23"></script>
+    <!-- Feature 082: Inject only if not in an automated E2E test to prevent 30s timeouts -->
+    <script>
+      if (!navigator.webdriver) {
+        var umamiScript = document.createElement('script');
+        umamiScript.defer = true;
+        umamiScript.src = 'https://cloud.umami.is/script.js';
+        umamiScript.setAttribute('data-website-id', 'YOUR-UMAMI-WEBSITE-ID');
+        document.head.appendChild(umamiScript);
+      }
+    </script>
 
   </head>
   <body>
