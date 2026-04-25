@@ -426,6 +426,24 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     }
   }, [playerState.status]);
 
+  // Feature 084: Sync playback staff filter whenever the score becomes ready.
+  // This ensures the initial selectedStaffIndex (default 0 = Right hand) is
+  // applied immediately on first load, not only after the user changes the dropdown.
+  useEffect(() => {
+    if (['ready', 'playing', 'paused'].includes(playerState.status)) {
+      const idx = selectedStaffIndex;
+      if (idx === -1) context.scorePlayer.setPlaybackStaffFilter(null);
+      else context.scorePlayer.setPlaybackStaffFilter(idx);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerState.status, selectedStaffIndex]);
+
+  // Feature 084: Clear playback filter on unmount.
+  useEffect(() => {
+    return () => { context.scorePlayer.setPlaybackStaffFilter(null); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Keep a ref to practiceState so MIDI handler always sees latest state
   // without needing to re-subscribe.
   const practiceStateRef = useRef(practiceState);
@@ -607,6 +625,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const handleStaffChange = useCallback((index: number) => {
     setSelectedStaffIndex(index);
     taskStaffIndexRef.current = null; // user made an explicit choice — release the lock
+    // Feature 084: Sync playback audio filter with staff selection.
+    if (index === -1) context.scorePlayer.setPlaybackStaffFilter(null);
+    else context.scorePlayer.setPlaybackStaffFilter(index);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Practice toggle (T031, T033, T034)

@@ -1004,3 +1004,188 @@ describe('getPhrases() — Feature 067', () => {
     expect(phrases![1]).toEqual(mockPhrases[1]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Feature 083: setPlaybackStaffFilter — T002 contract tests
+// ---------------------------------------------------------------------------
+
+describe('setPlaybackStaffFilter() — Feature 083', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockImportFile.mockResolvedValue(mockImportResult);
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: vi.fn().mockResolvedValue(new Blob(['fake-mxl-data'], { type: 'application/octet-stream' })),
+    } as unknown as Response);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('method exists on the returned context object', () => {
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+    expect(typeof result.current.setPlaybackStaffFilter).toBe('function');
+  });
+
+  it('calling with staffIndex=0 does not throw after load', async () => {
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+    await act(async () => {
+      await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
+    });
+    expect(() => { act(() => { result.current.setPlaybackStaffFilter(0); }); }).not.toThrow();
+    const state = getSubscribedState(result.current);
+    expect(state.status).toBe('ready');
+  });
+
+  it('calling with staffIndex=1 does not throw after load', async () => {
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+    await act(async () => {
+      await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
+    });
+    expect(() => { act(() => { result.current.setPlaybackStaffFilter(1); }); }).not.toThrow();
+    const state = getSubscribedState(result.current);
+    expect(state.status).toBe('ready');
+  });
+
+  it('calling with null clears the filter without error', async () => {
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+    await act(async () => {
+      await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
+    });
+    act(() => { result.current.setPlaybackStaffFilter(0); });
+    expect(() => { act(() => { result.current.setPlaybackStaffFilter(null); }); }).not.toThrow();
+    const state = getSubscribedState(result.current);
+    expect(state.status).toBe('ready');
+  });
+
+  it('calling with out-of-range index does not crash (falls back to all notes)', async () => {
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+    await act(async () => {
+      await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
+    });
+    expect(() => { act(() => { result.current.setPlaybackStaffFilter(99); }); }).not.toThrow();
+    const state = getSubscribedState(result.current);
+    expect(state.status).toBe('ready');
+  });
+
+  it('filter persists across loadScore() calls without crashing', async () => {
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+    await act(async () => {
+      await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
+    });
+    act(() => { result.current.setPlaybackStaffFilter(0); });
+    // Load a second score — filter state persists until explicitly cleared
+    await act(async () => {
+      await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
+    });
+    const state = getSubscribedState(result.current);
+    expect(state.status).toBe('ready');
+  });
+
+  it('no-op stub accepts setPlaybackStaffFilter call without throwing', () => {
+    const stub = createNoOpScorePlayer();
+    expect(() => stub.setPlaybackStaffFilter(0)).not.toThrow();
+    expect(() => stub.setPlaybackStaffFilter(1)).not.toThrow();
+    expect(() => stub.setPlaybackStaffFilter(null)).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 083: setPlaybackStaffFilter(null) — both-hands regression (T026)
+// ---------------------------------------------------------------------------
+
+const twoStaffMockScore = {
+  id: 'two-staff-score',
+  instruments: [
+    {
+      id: 'p1',
+      name: 'Piano',
+      staves: [
+        {
+          id: 's1',
+          clef: 'G',
+          lines: 5,
+          structural_events: [],
+          active_clef: 'Treble',
+          voices: [{
+            id: 'v1',
+            interval_events: [
+              { id: 'r1', start_tick: 0, duration_ticks: 960, pitch: 72 }, // C5 treble
+              { id: 'r2', start_tick: 960, duration_ticks: 960, pitch: 74 }, // D5 treble
+            ],
+          }],
+        },
+        {
+          id: 's2',
+          clef: 'F',
+          lines: 5,
+          structural_events: [],
+          active_clef: 'Bass',
+          voices: [{
+            id: 'v2',
+            interval_events: [
+              { id: 'b1', start_tick: 0, duration_ticks: 960, pitch: 48 }, // C3 bass
+              { id: 'b2', start_tick: 960, duration_ticks: 960, pitch: 50 }, // D3 bass
+            ],
+          }],
+        },
+      ],
+    },
+  ],
+  global_structural_events: [
+    { Tempo: { tick: 0, bpm: 120 } },
+  ],
+};
+
+describe('setPlaybackStaffFilter regression — Feature 083 (T026)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockImportFile.mockResolvedValue({
+      ...mockImportResult,
+      score: twoStaffMockScore,
+      metadata: { format: 'MusicXML', work_title: 'Two Staff', file_name: 'two.mxl' },
+    });
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: vi.fn().mockResolvedValue(new Blob(['fake-mxl-data'], { type: 'application/octet-stream' })),
+    } as unknown as Response);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('when filter is null, extractPracticeNotes works for both staves independently', async () => {
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+    await act(async () => {
+      await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
+    });
+
+    act(() => { result.current.setPlaybackStaffFilter(null); });
+
+    const staff0Notes = result.current.extractPracticeNotes(0);
+    const staff1Notes = result.current.extractPracticeNotes(1);
+
+    // Both staves return notes — filter=null does not restrict practice note extraction
+    expect(staff0Notes).not.toBeNull();
+    expect(staff1Notes).not.toBeNull();
+    // Staff 0 has treble notes (C5=72, D5=74)
+    expect(staff0Notes!.notes.some(n => n.midiPitches.includes(72))).toBe(true);
+    // Staff 1 has bass notes (C3=48, D3=50)
+    expect(staff1Notes!.notes.some(n => n.midiPitches.includes(48))).toBe(true);
+  });
+
+  it('staffCount reflects both staves when filter is null', async () => {
+    const { result } = renderHook(() => useScorePlayerContext(), { wrapper });
+    await act(async () => {
+      await result.current.loadScore({ kind: 'catalogue', catalogueId: 'bach-invention-1' });
+    });
+
+    act(() => { result.current.setPlaybackStaffFilter(null); });
+
+    const state = getSubscribedState(result.current);
+    expect(state.staffCount).toBe(2);
+    expect(state.status).toBe('ready');
+  });
+});

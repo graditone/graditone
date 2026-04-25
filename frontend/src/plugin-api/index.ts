@@ -42,6 +42,8 @@ export type {
   OpenListDialogOptions,
   // v8 additions (Feature 060)
   PracticeSavedEvent,
+  // v11 additions (Feature 083)
+  HandMode,
 } from './types';
 
 export { PLUGIN_API_VERSION } from './types';
