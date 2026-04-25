@@ -78,6 +78,7 @@ function makeMockScorePlayer(): PluginScorePlayerContext & { _notify: (s: MockSc
     seek: vi.fn(),
     setTempo: vi.fn(),
     extractPracticeNotes: vi.fn(() => null),
+    setPlaybackStaffFilter: vi.fn(),
     _notify: notify,
   };
 }
