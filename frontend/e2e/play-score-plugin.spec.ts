@@ -122,7 +122,7 @@ test.describe('Feature 033: Play Score Plugin', () => {
 
     const slider = page.getByRole('slider', { name: /tempo/i });
     await expect(slider).toBeVisible();
-    await expect(slider).toHaveAttribute('min', '0.5');
+    await expect(slider).toHaveAttribute('min', '0.1');
     await expect(slider).toHaveAttribute('max', '2');
   });
 });
