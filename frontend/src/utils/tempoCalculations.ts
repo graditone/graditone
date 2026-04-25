@@ -5,9 +5,16 @@
  */
 
 /**
- * Minimum tempo multiplier: 50% (half speed)
+ * Minimum tempo multiplier: 10% (slowest selectable speed)
  */
-export const MIN_TEMPO_MULTIPLIER = 0.5;
+export const MIN_TEMPO_MULTIPLIER = 0.1;
+
+/**
+ * Absolute BPM floor: the lowest effective playback BPM allowed.
+ * Used by computeEffectiveMinMultiplier to prevent inaudibly slow playback
+ * for scores that have a slow original BPM.
+ */
+export const ABSOLUTE_BPM_FLOOR = 10;
 
 /**
  * Maximum tempo multiplier: 200% (double speed)
@@ -20,18 +27,39 @@ export const MAX_TEMPO_MULTIPLIER = 2.0;
 export const DEFAULT_TEMPO_MULTIPLIER = 1.0;
 
 /**
- * Clamp tempo multiplier to valid range (0.5 to 2.0)
- * 
+ * Clamp tempo multiplier to valid range [MIN_TEMPO_MULTIPLIER, MAX_TEMPO_MULTIPLIER].
+ *
  * @param multiplier - Tempo multiplier to clamp
- * @returns Clamped value between 0.5 and 2.0
- * 
+ * @returns Clamped value within [0.1, 2.0]
+ *
  * @example
- * clampTempoMultiplier(0.3);  // Returns 0.5
+ * clampTempoMultiplier(0.05); // Returns 0.1
  * clampTempoMultiplier(1.5);  // Returns 1.5
  * clampTempoMultiplier(3.0);  // Returns 2.0
  */
 export function clampTempoMultiplier(multiplier: number): number {
   return Math.max(MIN_TEMPO_MULTIPLIER, Math.min(MAX_TEMPO_MULTIPLIER, multiplier));
+}
+
+/**
+ * Compute the effective minimum tempo multiplier for a given score BPM.
+ *
+ * Ensures that the absolute playback BPM never drops below ABSOLUTE_BPM_FLOOR
+ * (10 BPM), even when the user drags the slider to the global minimum (10%).
+ * For scores with an original BPM ≥ 100, this returns MIN_TEMPO_MULTIPLIER
+ * (0.1) unchanged. For slower scores the floor is raised proportionally.
+ *
+ * @param originalBpm - Score's original BPM from the player state
+ * @returns Effective minimum multiplier in [0.1, 2.0]
+ *
+ * @example
+ * computeEffectiveMinMultiplier(120); // 0.1  (12 BPM > floor)
+ * computeEffectiveMinMultiplier(40);  // 0.25 (10/40)
+ * computeEffectiveMinMultiplier(0);   // 0.1  (defensive)
+ */
+export function computeEffectiveMinMultiplier(originalBpm: number): number {
+  if (originalBpm <= 0) return MIN_TEMPO_MULTIPLIER;
+  return Math.max(MIN_TEMPO_MULTIPLIER, ABSOLUTE_BPM_FLOOR / originalBpm);
 }
 
 /**

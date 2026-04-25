@@ -403,6 +403,19 @@
   animation: practice-metro-pulse-down 0.14s ease-out;
 }
 
+/* Armed state: metronome will start on the first MIDI note attack */
+.practice-plugin__metro-btn--armed,
+.practice-plugin__metro-btn--armed:hover {
+  color: #c8a000;
+  border-color: #c8a000;
+  animation: practice-metro-armed-pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes practice-metro-armed-pulse {
+  0%   { opacity: 0.4; }
+  100% { opacity: 1.0; }
+}
+
 @keyframes practice-metro-pulse {
   0% { filter: brightness(1.6); }
   100% { filter: brightness(1); }

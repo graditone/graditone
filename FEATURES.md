@@ -34,7 +34,7 @@ A tablet-native app for interactive scores, designed for practice and performanc
 - **Audio playback** with Web Audio API
 - **Auto-scroll** during playback
 - **Note highlighting** - Visual feedback showing current position
-- **Tempo control** - Adjust playback speed for practice
+- **Tempo control** - Adjust playback speed for practice from 10% to 200% with 1% precision (Feature 083)
 - **Score-defined tempo** - Playback starts at the tempo marked in the score (e.g. 60 BPM for Chopin Nocturne) instead of a fixed 120 BPM default; snap-to-score-tempo action resets both BPM and multiplier to the score's marked tempo
 - **Repeat/navigation** - Jump to any point in the score
 - **Tied note playback** - Tied notes sound as a single sustained note with combined duration, no re-attack at tie boundaries; chords with partial ties sustain only the tied pitch
@@ -115,7 +115,7 @@ The **Play Score** plugin is a built-in full-screen plugin that lets users load,
 - **Note seeking**: Short-tap a note to seek playback to that tick
 - **Pin & loop**: Long-press a note to set a loop start pin; long-press a second note to create a loop region; long-press inside the loop to clear it
 - **Return to start**: Dedicated button seeks to tick 0 (or to the pinned loop start if set)
-- **Tempo control**: Slider adjusts playback speed from 0.5× to 2.0×; snap-to-score-tempo resets to the score's marked BPM
+- **Tempo control**: Slider adjusts playback speed from 10% to 200% in 1% increments; BPM floor ensures minimum playback is always ≥10 BPM; ±3% snap zone at 100%; snap-to-score-tempo resets to the score's marked BPM (Feature 083)
 - **WASM loading state**: All controls are disabled while the audio engine initialises
 - **Audio teardown**: All audio stops automatically when the plugin is closed or the page navigates away (SC-005)
 
@@ -221,3 +221,25 @@ Completes internationalization (i18n) for all 5 internal builtin plugins: **Play
 
 **Spec**: `specs/075-core-plugins-i18n/`  
 **Updated**: June 2025
+
+
+---
+
+## Tempo Slider Precision & Metronome Deferred Start — Feature 083
+
+Extends tempo control precision for both Play Score and Practice View, and adds a smart metronome "armed" mode for practice sessions.
+
+### Capabilities
+
+- **Extended tempo range**: Slider minimum lowered from 50% to **10%** (was 0.5× → now 0.1×); maximum remains 200% (2.0×)
+- **1% step granularity**: Slider step reduced from 5% to **1%** (step=0.01) for fine-grained speed control
+- **BPM floor protection**: When the score's original tempo is slow, the slider minimum rises proportionally so playback never drops below **10 BPM** (e.g. 40 BPM score → min slider = 25%)
+- **Recalibrated 100% snap zone**: Snap-to-100% triggers within **±3 steps** (±3pp) of 1.0×, tightened from ±5pp for more precise control at normal speed
+- **Tick mark at 100%**: The 100% position is marked via `<datalist>` for browser snap UI hints
+- **BPM floor tooltip**: When the effective minimum is above 10% due to the BPM floor, the slider shows a tooltip explaining "Min. speed limited to 10 BPM"
+- **Metronome armed state** (Practice View only): Toggling the metronome button while practice is in "waiting" mode arms it — the metronome does **not** start immediately; instead it waits for the first MIDI note attack and starts in sync with the player's first note
+- **Armed visual indicator**: The metronome button shows a pulsing amber glow while armed (`--armed` CSS modifier)
+- **Auto-disarm on stop**: If the user stops practice before playing any note, the armed state is cleared automatically
+
+**Spec**: `specs/083-tempo-metronome-practice/`  
+**Updated**: July 2025

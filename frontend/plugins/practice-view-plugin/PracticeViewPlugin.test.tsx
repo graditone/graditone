@@ -1724,3 +1724,125 @@ describe('[US7] Feature 053: partial results on Stop', () => {
     expect(screen.getByText(/no notes played/i)).toBeTruthy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Feature 083 — Metronome deferred start (US3) (T014)
+// ---------------------------------------------------------------------------
+
+describe('PracticeViewPlugin — metronome deferred start (Feature 083 US3)', () => {
+  const notes = [
+    { midiPitches: [60], noteIds: ['n1'], tick: 0, durationTicks: 960, sustainedPitches: [] },
+    { midiPitches: [62], noteIds: ['n2'], tick: 960, durationTicks: 960, sustainedPitches: [] },
+  ];
+
+  it('toggling metronome outside practice mode calls toggle immediately', async () => {
+    const ctx = createMockContext({ status: 'ready', staffCount: 1 });
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    // Clear initial subscription calls
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+
+    // Click metronome toggle — practice is NOT running
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggling metronome during practice waiting mode does NOT call toggle (arms instead)', async () => {
+    const ctx = createMockContext({ status: 'ready', staffCount: 1 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes,
+      totalAvailable: notes.length,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    // Start practice (enters 'waiting' mode)
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Clear the toggle mock — practice-start may have called toggle 0 times
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+
+    // Click metronome toggle while practice is in waiting mode
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+
+    // Should NOT have started metronome yet (deferred until first MIDI note)
+    expect(ctx.context.metronome.toggle).not.toHaveBeenCalled();
+
+    // Metronome button should have the --armed CSS class
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
+  });
+
+  it('first MIDI note while armed fires toggle to start metronome', async () => {
+    const ctx = createMockContext({ status: 'ready', staffCount: 1 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes,
+      totalAvailable: notes.length,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    // Start practice + arm metronome
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    expect(ctx.context.metronome.toggle).not.toHaveBeenCalled(); // still armed
+
+    // Simulate first MIDI note attack
+    act(() => {
+      ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 });
+    });
+
+    // toggle should have been called once (deferred start)
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('starting practice while metronome is active stops it and arms it', async () => {
+    // Capture the metronome subscriber so we can simulate state changes
+    let metronomeHandler: ((state: { active: boolean; beatIndex: number; isDownbeat: boolean; bpm: number; subdivision: number }) => void) | null = null;
+    const ctx = createMockContext({ status: 'ready', staffCount: 1 });
+    (ctx.context.metronome.subscribe as ReturnType<typeof vi.fn>).mockImplementation((handler) => {
+      metronomeHandler = handler;
+      handler({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1 });
+      return () => {};
+    });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes,
+      totalAvailable: notes.length,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    // Simulate metronome becoming active
+    act(() => {
+      metronomeHandler?.({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1 });
+    });
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+
+    // Start practice — metronome should be stopped + armed automatically
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    // Should have called toggle once to stop the running metronome
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+
+    // Simulate the metronome service acknowledging it's now inactive (real app behaviour)
+    act(() => {
+      metronomeHandler?.({ active: false, beatIndex: -1, isDownbeat: false, bpm: 120, subdivision: 1 });
+    });
+
+    // Metronome button should be in armed state
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
+
+    // Simulate first MIDI note — metronome should now start
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+    act(() => {
+      ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 });
+    });
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+  });
+});

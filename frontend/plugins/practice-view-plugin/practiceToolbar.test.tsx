@@ -311,3 +311,137 @@ describe('PracticeToolbar — MIDI not supported', () => {
     expect(screen.queryByText(/MIDI is not supported/i)).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Feature 083 — Tempo slider precision: 1% steps, ±0.03 snap (T003)
+// ---------------------------------------------------------------------------
+
+describe('PracticeToolbar — tempo slider precision (Feature 083)', () => {
+  it('slider step is 0.01 (1% granularity)', () => {
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready' })} />, { wrapper: TestWrapper });
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
+    expect(slider.step).toBe('0.01');
+  });
+
+  it('slider has a datalist providing the 100% snap tick mark', () => {
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready' })} />, { wrapper: TestWrapper });
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
+    expect(slider.getAttribute('list')).toBeTruthy();
+    const datalist = document.getElementById(slider.getAttribute('list')!);
+    expect(datalist).not.toBeNull();
+    expect(datalist?.querySelector('option[value="1.0"]')).not.toBeNull();
+  });
+
+  it('snap zone is ±0.03: onChange at 0.96 does NOT snap to 1.0', () => {
+    const onTempoChange = vi.fn();
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i });
+    fireEvent.change(slider, { target: { value: '0.96' } });
+    expect(onTempoChange).toHaveBeenCalledWith(0.96);
+  });
+
+  it('snap zone is ±0.03: onChange at 0.97 snaps to 1.0', () => {
+    const onTempoChange = vi.fn();
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i });
+    fireEvent.change(slider, { target: { value: '0.97' } });
+    expect(onTempoChange).toHaveBeenCalledWith(1.0);
+  });
+
+  it('snap zone is ±0.03: onChange at 1.03 snaps to 1.0', () => {
+    const onTempoChange = vi.fn();
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i });
+    fireEvent.change(slider, { target: { value: '1.03' } });
+    expect(onTempoChange).toHaveBeenCalledWith(1.0);
+  });
+
+  it('snap zone is ±0.03: onChange at 1.04 does NOT snap to 1.0', () => {
+    const onTempoChange = vi.fn();
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i });
+    fireEvent.change(slider, { target: { value: '1.04' } });
+    expect(onTempoChange).toHaveBeenCalledWith(1.04);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 083 — Tempo slider dynamic minimum (FR-014) (T008)
+// ---------------------------------------------------------------------------
+
+describe('PracticeToolbar — tempo slider dynamic minimum (Feature 083 FR-014)', () => {
+  it('slider min is 0.1 when bpm=120 (BPM floor not triggered)', () => {
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120 })} />, { wrapper: TestWrapper });
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
+    expect(parseFloat(slider.min)).toBeCloseTo(0.1);
+  });
+
+  it('slider min is ~0.25 when bpm=40 (10 BPM floor: 10/40=0.25)', () => {
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 40 })} />, { wrapper: TestWrapper });
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
+    expect(parseFloat(slider.min)).toBeCloseTo(0.25);
+  });
+
+  it('shows BPM-floor tooltip on slider when effective min > 0.1 (bpm=40)', () => {
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 40 })} />, { wrapper: TestWrapper });
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
+    expect(slider.getAttribute('title')).toMatch(/10\s*BPM/i);
+  });
+
+  it('does NOT show BPM-floor tooltip when effective min equals 0.1 (bpm=120)', () => {
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120 })} />, { wrapper: TestWrapper });
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
+    expect(slider.getAttribute('title') ?? '').not.toMatch(/BPM/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 083 — Metronome armed state: deferred start (T013)
+// ---------------------------------------------------------------------------
+
+describe('PracticeToolbar — metronome armed state (Feature 083 US3)', () => {
+  const metronomeProps = {
+    metronomeActive: false,
+    metronomeBeatIndex: -1,
+    metronomeIsDownbeat: false,
+    onMetronomeToggle: vi.fn(),
+    metronomeSubdivision: 1 as const,
+    onMetronomeSubdivisionChange: vi.fn(),
+  };
+
+  it('metronome button has --armed CSS class when metronomeArmed=true', () => {
+    render(
+      <PracticeToolbar {...makeDefaultProps({ ...metronomeProps, metronomeArmed: true })} />,
+      { wrapper: TestWrapper },
+    );
+    const btn = screen.getByRole('button', { name: /toggle metronome/i });
+    expect(btn.className).toContain('practice-plugin__metro-btn--armed');
+    expect(btn.className).not.toContain('practice-plugin__metro-btn--active');
+  });
+
+  it('metronome button does NOT have --armed class when metronomeArmed=false', () => {
+    render(
+      <PracticeToolbar {...makeDefaultProps({ ...metronomeProps, metronomeArmed: false })} />,
+      { wrapper: TestWrapper },
+    );
+    const btn = screen.getByRole('button', { name: /toggle metronome/i });
+    expect(btn.className).not.toContain('practice-plugin__metro-btn--armed');
+  });
+
+  it('armed class absent when metronomeActive=true (active wins over armed)', () => {
+    render(
+      <PracticeToolbar
+        {...makeDefaultProps({
+          ...metronomeProps,
+          metronomeActive: true,
+          metronomeArmed: true,
+          metronomeBeatIndex: 0,
+        })}
+      />,
+      { wrapper: TestWrapper },
+    );
+    const btn = screen.getByRole('button', { name: /toggle metronome/i });
+    expect(btn.className).not.toContain('practice-plugin__metro-btn--armed');
+    expect(btn.className).toContain('practice-plugin__metro-btn--active');
+  });
+});

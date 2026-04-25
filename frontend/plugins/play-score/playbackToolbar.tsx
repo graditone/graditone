@@ -17,7 +17,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { PluginPlaybackStatus } from '../../src/plugin-api/index';
 import type { MetronomeSubdivision } from '../../src/plugin-api/index';
-import { ProfileIcon } from '../../src/plugin-api/index';
+import { ProfileIcon, computeEffectiveMinMultiplier, MIN_TEMPO_MULTIPLIER, ABSOLUTE_BPM_FLOOR } from '../../src/plugin-api/index';
 import { useTranslation } from '../../src/i18n';
 
 // Mirror of PlaybackScheduler.PPQ — no host imports in plugin code
@@ -186,22 +186,38 @@ export function PlaybackToolbar({
       {/* Tempo control */}
       <div className="play-score__toolbar-tempo">
         <span className="play-score__toolbar-tempo-label">{t('play_score.toolbar.tempo')}</span>
-        <input
-          id="play-score-tempo"
-          type="range"
-          min={0.5}
-          max={2.0}
-          step={0.05}
-          value={tempoMultiplier}
-          onChange={e => {
-            const raw = parseFloat(e.target.value);
-            // Snap to 100% when within one step (±0.05) of 1.0
-            onTempoChange(Math.abs(raw - 1.0) <= 0.05 ? 1.0 : raw);
-          }}
-          aria-label={t('play_score.toolbar.tempo_aria')}
-          className="play-score__toolbar-tempo-slider"
-          disabled={status === 'loading'}
-        />
+        {(() => {
+          // bpm prop is the effective BPM (scoreTempo × multiplier); derive original for floor calc
+          const originalBpm = tempoMultiplier > 0 ? bpm / tempoMultiplier : bpm;
+          const effectiveMin = computeEffectiveMinMultiplier(originalBpm);
+          const showFloorTooltip = effectiveMin > MIN_TEMPO_MULTIPLIER;
+          const floorTooltip = showFloorTooltip ? `Min. speed limited to ${ABSOLUTE_BPM_FLOOR} BPM` : undefined;
+          return (
+            <>
+              <input
+                id="play-score-tempo"
+                type="range"
+                min={effectiveMin}
+                max={2.0}
+                step={0.01}
+                value={tempoMultiplier}
+                onChange={e => {
+                  const raw = Math.round(parseFloat(e.target.value) * 100) / 100;
+                  // Snap to 100% when within ±3 steps (±3pp) of 1.0
+                  onTempoChange(Math.round(Math.abs(raw - 1.0) * 100) <= 3 ? 1.0 : raw);
+                }}
+                aria-label={t('play_score.toolbar.tempo_aria')}
+                className="play-score__toolbar-tempo-slider"
+                disabled={status === 'loading'}
+                list="play-score-tempo-ticks"
+                title={floorTooltip}
+              />
+              <datalist id="play-score-tempo-ticks">
+                <option value="1.0" />
+              </datalist>
+            </>
+          );
+        })()}
         {bpm > 0 && (
           <span className="play-score__toolbar-bpm">{bpm}</span>
         )}
