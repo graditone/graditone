@@ -68,3 +68,6 @@ export { openDB } from '../services/storage/local-storage';
 // Feature 060: Shared practice score computation
 export { computePracticeScore } from './computePracticeScore';
 export type { PracticeScoreBreakdown, ScorableNoteResult } from './computePracticeScore';
+
+// Feature 083: Tempo calculation utilities (re-exported so plugins can import from plugin-api)
+export { computeEffectiveMinMultiplier, MIN_TEMPO_MULTIPLIER, MAX_TEMPO_MULTIPLIER, ABSOLUTE_BPM_FLOOR } from '../utils/tempoCalculations';

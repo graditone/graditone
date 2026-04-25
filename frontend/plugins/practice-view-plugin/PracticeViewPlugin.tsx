@@ -129,10 +129,16 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // ─── Metronome state ───────────────────────────────────────────────────────
   const [metronomeState, setMetronomeState] = useState<MetronomeState>(INITIAL_METRONOME_STATE);
+  const metronomeStateRef = useRef<MetronomeState>(INITIAL_METRONOME_STATE);
   const [metronomeSubdivision, setMetronomeSubdivision] = useState<MetronomeSubdivision>(1);
+  // Feature 083 (US3): armed = toggled while practice is in 'waiting' mode;
+  // the metronome will start on the first MIDI note attack instead of immediately.
+  const [metronomeArmed, setMetronomeArmed] = useState(false);
+  const metronomeArmedRef = useRef(false);
 
   useEffect(() => {
     return context.metronome.subscribe((state) => {
+      metronomeStateRef.current = state;
       setMetronomeState(state);
       if (state.subdivision !== undefined) setMetronomeSubdivision(state.subdivision);
     });
@@ -436,6 +442,19 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     playerStateRef,
   });
 
+  // Feature 083 (US3): Callback passed to usePracticeMidi — fires once on the
+  // first MIDI note attack while the metronome is armed, starting the engine.
+  // Defined before usePracticeMidi to avoid temporal dead zone.
+  const onFirstNoteAttack = useCallback(() => {
+    if (!metronomeArmedRef.current) return;
+    metronomeArmedRef.current = false;
+    setMetronomeArmed(false);
+    context.metronome.toggle().catch((e) => {
+      console.error('[PracticeViewPlugin] metronome deferred start failed:', e);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context.metronome]);
+
   // ─── MIDI logic (extracted hook) ───────────────────────────────────────────
   const {
     midiPressedNoteIds, midiEventTick, heldMidiKeysRef, chordDetectorRef: _chordDetectorRef,
@@ -452,6 +471,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     loopStartTimesRef,
     practiceStartTimeRef,
     selectedStaffIndex,
+    onFirstNoteAttack,
   });
 
   // ─── Teardown (SC-006) ──────────────────────────────────────────────────────
@@ -554,9 +574,24 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   );
 
   const handleMetronomeToggle = useCallback(() => {
-    context.metronome.toggle().catch((e) => {
-      console.error('[PracticeViewPlugin] metronome.toggle failed:', e);
-    });
+    const ps = practiceStateRef.current;
+    const practiceRunning = ps.mode === 'waiting' || ps.mode === 'active' || ps.mode === 'holding';
+
+    if (practiceRunning && !metronomeStateRef.current.active && !metronomeArmedRef.current) {
+      // Practice is running but metronome is inactive — arm it (deferred start).
+      metronomeArmedRef.current = true;
+      setMetronomeArmed(true);
+    } else if (metronomeArmedRef.current) {
+      // Disarm without starting.
+      metronomeArmedRef.current = false;
+      setMetronomeArmed(false);
+    } else {
+      // Normal toggle: outside practice, or stopping an already-active metronome.
+      context.metronome.toggle().catch((e) => {
+        console.error('[PracticeViewPlugin] metronome.toggle failed:', e);
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.metronome]);
 
   const handleMetronomeSubdivisionChange = useCallback(
@@ -594,6 +629,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       setResultsOverlayVisible(true);
       // Stop practice — full reset so restarting begins from the beginning.
       dispatchPractice({ type: 'STOP' });
+      // Disarm metronome if it was armed (user stopped before first note).
+      metronomeArmedRef.current = false;
+      setMetronomeArmed(false);
       const lr = loopRegionRef.current;
       context.scorePlayer.seekToTick(lr ? lr.startTick : 0);
       return;
@@ -667,6 +705,17 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       staffIndex,
       startIndex,
     });
+
+    // Feature 083 (US3): If the metronome is already active when practice starts,
+    // stop it and arm it — it will restart on the first MIDI note attack.
+    if (metronomeStateRef.current.active && !metronomeArmedRef.current) {
+      context.metronome.toggle().catch((e) => {
+        console.error('[PracticeViewPlugin] metronome stop-on-practice-start failed:', e);
+      });
+      metronomeArmedRef.current = true;
+      setMetronomeArmed(true);
+    }
+
     // practiceStartTimeRef is set later — when the first correct note is played
     // (deferred start: the clock doesn't start until the user hits the first note).
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1038,6 +1087,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         onMetronomeToggle={handleMetronomeToggle}
         metronomeSubdivision={metronomeSubdivision}
         onMetronomeSubdivisionChange={handleMetronomeSubdivisionChange}
+        metronomeArmed={metronomeArmed}
         taskTag={taskTag}
         isReplaying={isReplaying}
         onTaskTagClick={() => context.openPlugin('sessions-plugin', {

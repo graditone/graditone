@@ -49,14 +49,14 @@ describe('TempoStateContext', () => {
       expect(result.current.tempoState.tempoMultiplier).toBe(0.8);
     });
 
-    it('should clamp multiplier to minimum 0.5', () => {
+    it('should clamp multiplier to minimum 0.1 (Feature 083: extended range)', () => {
       const { result } = renderHook(() => useTempoState(), { wrapper });
       
       act(() => {
-        result.current.setTempoMultiplier(0.3);
+        result.current.setTempoMultiplier(0.05);
       });
       
-      expect(result.current.tempoState.tempoMultiplier).toBe(0.5);
+      expect(result.current.tempoState.tempoMultiplier).toBe(0.1);
     });
 
     it('should clamp multiplier to maximum 2.0', () => {
@@ -111,18 +111,18 @@ describe('TempoStateContext', () => {
       expect(result.current.tempoState.tempoMultiplier).toBe(0.90);
     });
 
-    it('should clamp to 0.5 when adjusting below minimum', () => {
+    it('should clamp to 0.1 when adjusting below minimum (Feature 083: extended range)', () => {
       const { result } = renderHook(() => useTempoState(), { wrapper });
       
       act(() => {
-        result.current.setTempoMultiplier(0.6);
+        result.current.setTempoMultiplier(0.15);
       });
       
       act(() => {
-        result.current.adjustTempo(-20); // Would go to 0.4
+        result.current.adjustTempo(-10); // Would go to 0.05, clamps to 0.1
       });
       
-      expect(result.current.tempoState.tempoMultiplier).toBe(0.5);
+      expect(result.current.tempoState.tempoMultiplier).toBe(0.1);
     });
 
     it('should clamp to 2.0 when adjusting above maximum', () => {

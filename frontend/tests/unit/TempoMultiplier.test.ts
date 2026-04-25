@@ -19,10 +19,10 @@ describe('Tempo Multiplier Calculations', () => {
       expect(clampTempoMultiplier(1.5)).toBe(1.5);
     });
 
-    it('should clamp values below minimum to 0.5', () => {
-      expect(clampTempoMultiplier(0.3)).toBe(0.5);
-      expect(clampTempoMultiplier(0.0)).toBe(0.5);
-      expect(clampTempoMultiplier(-0.5)).toBe(0.5);
+    it('should clamp values below minimum to 0.1 (Feature 083: extended range)', () => {
+      expect(clampTempoMultiplier(0.05)).toBe(0.1);
+      expect(clampTempoMultiplier(0.0)).toBe(0.1);
+      expect(clampTempoMultiplier(-0.5)).toBe(0.1);
     });
 
     it('should clamp values above maximum to 2.0', () => {

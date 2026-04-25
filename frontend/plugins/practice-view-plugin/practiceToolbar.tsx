@@ -15,7 +15,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { PluginPlaybackStatus, MetronomeSubdivision } from '../../src/plugin-api/index';
-import { ProfileIcon } from '../../src/plugin-api/index';
+import { ProfileIcon, computeEffectiveMinMultiplier, MIN_TEMPO_MULTIPLIER, ABSOLUTE_BPM_FLOOR } from '../../src/plugin-api/index';
 import type { PracticeMode } from './practiceEngine.types';
 import { useTranslation } from '../../src/i18n';
 
@@ -83,6 +83,8 @@ export interface PracticeToolbarProps {
   onMetronomeToggle: () => void;
   metronomeSubdivision: MetronomeSubdivision;
   onMetronomeSubdivisionChange: (s: MetronomeSubdivision) => void;
+  /** When true, metronome is armed — will start on the first MIDI note attack. */
+  metronomeArmed?: boolean;
   /** When true, a replay is running — practice toggle should be disabled. */
   isReplaying?: boolean;
   /** Feature 061: Session task tag — when set, config is locked and tag is shown. */
@@ -123,6 +125,7 @@ export function PracticeToolbar({
   onMetronomeToggle,
   metronomeSubdivision,
   onMetronomeSubdivisionChange,
+  metronomeArmed = false,
   isReplaying,
   taskTag,
   onTaskTagClick,
@@ -141,6 +144,7 @@ export function PracticeToolbar({
     'practice-plugin__metro-btn',
     ...(metronomeActive ? ['practice-plugin__metro-btn--active'] : []),
     ...(metronomeActive && metronomeIsDownbeat ? ['practice-plugin__metro-btn--downbeat'] : []),
+    ...(metronomeArmed && !metronomeActive ? ['practice-plugin__metro-btn--armed'] : []),
   ].join(' ');
   const SUBDIV_ICONS: Record<MetronomeSubdivision, string> = { 1: '♩', 2: '♪', 4: '♬' };
   const SUBDIV_LABELS: Record<MetronomeSubdivision, string> = { 1: '♩ 1/4', 2: '♪ 1/8', 4: '♬ 1/16' };
@@ -385,22 +389,38 @@ export function PracticeToolbar({
       {/* Tempo */}
       <div className="practice-plugin__toolbar-tempo">
         <span className="practice-plugin__toolbar-tempo-label">{t('practice.toolbar.tempo')}</span>
-        <input
-          type="range"
-          min={0.5}
-          max={2.0}
-          step={0.05}
-          value={tempoMultiplier}
-          onChange={(e) => {
-            const raw = parseFloat(e.target.value);
-            onTempoChange(Math.abs(raw - 1.0) <= 0.05 ? 1.0 : raw);
-          }}
-          aria-label={t('practice.toolbar.tempo_aria')}
-          className="practice-plugin__toolbar-tempo-slider"
-          disabled={status === 'loading' || !!taskTag}
-        />
+        {(() => {
+          // bpm prop is the effective BPM (scoreTempo × multiplier); derive original for floor calc
+          const originalBpm = tempoMultiplier > 0 ? bpm / tempoMultiplier : bpm;
+          const effectiveMin = computeEffectiveMinMultiplier(originalBpm);
+          const showFloorTooltip = effectiveMin > MIN_TEMPO_MULTIPLIER;
+          const floorTooltip = showFloorTooltip ? `Min. speed limited to ${ABSOLUTE_BPM_FLOOR} BPM` : undefined;
+          return (
+            <>
+              <input
+                type="range"
+                min={effectiveMin}
+                max={2.0}
+                step={0.01}
+                value={tempoMultiplier}
+                onChange={(e) => {
+                  const raw = Math.round(parseFloat(e.target.value) * 100) / 100;
+                  onTempoChange(Math.round(Math.abs(raw - 1.0) * 100) <= 3 ? 1.0 : raw);
+                }}
+                aria-label={t('practice.toolbar.tempo_aria')}
+                className="practice-plugin__toolbar-tempo-slider"
+                disabled={status === 'loading' || !!taskTag}
+                list="practice-tempo-ticks"
+                title={floorTooltip}
+              />
+              <datalist id="practice-tempo-ticks">
+                <option value="1.0" />
+              </datalist>
+            </>
+          );
+        })()}
         {bpm > 0 && (
-          <span className="practice-plugin__toolbar-bpm">{Math.round(bpm * tempoMultiplier)}</span>
+          <span className="practice-plugin__toolbar-bpm">{bpm}</span>
         )}
       </div>
 

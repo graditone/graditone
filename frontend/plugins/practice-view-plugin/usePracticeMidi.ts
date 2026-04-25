@@ -24,6 +24,11 @@ export interface UsePracticeMidiParams {
   loopStartTimesRef: React.RefObject<number[]>;
   practiceStartTimeRef: React.RefObject<number>;
   selectedStaffIndex: number;
+  /**
+   * Feature 083 (US3): Called once on the first MIDI note attack while practice
+   * is in 'waiting' mode. Used to trigger deferred metronome start.
+   */
+  onFirstNoteAttack?: () => void;
 }
 
 export interface UsePracticeMidiReturn {
@@ -53,6 +58,7 @@ export function usePracticeMidi({
   loopStartTimesRef,
   practiceStartTimeRef,
   selectedStaffIndex: _selectedStaffIndex,
+  onFirstNoteAttack,
 }: UsePracticeMidiParams): UsePracticeMidiReturn {
   // ─── Chord detector ─────────────────────────────────────────────────────────
   const chordDetectorRef = useRef(new ChordDetector());
@@ -64,6 +70,20 @@ export function usePracticeMidi({
   // ─── MIDI-pressed note IDs ─────────────────────────────────────────────────
   const [midiPressedNoteIds, setMidiPressedNoteIds] = useState<ReadonlySet<string>>(new Set());
   const [midiEventTick, setMidiEventTick] = useState(0);
+
+  // ─── Feature 083: First-note attack callback (deferred metronome start) ────
+  // Keep a ref to the latest callback to avoid stale closures inside the MIDI
+  // subscription effect.
+  const onFirstNoteAttackRef = useRef(onFirstNoteAttack);
+  useEffect(() => { onFirstNoteAttackRef.current = onFirstNoteAttack; }, [onFirstNoteAttack]);
+
+  // Guard: fire exactly once per practice session. Reset when practice stops.
+  const hasCalledFirstNoteRef = useRef(false);
+  useEffect(() => {
+    if (practiceState.mode === 'inactive') {
+      hasCalledFirstNoteRef.current = false;
+    }
+  }, [practiceState.mode]);
 
   // ─── All-notes lookup for MIDI visual highlight ────────────────────────────
   const allNotesRef = useRef<PluginPracticeNoteEntry[]>([]);
@@ -187,6 +207,14 @@ export function usePracticeMidi({
 
       const ps = practiceStateRef.current;
       if (ps.mode !== 'active' && ps.mode !== 'waiting' && ps.mode !== 'holding') return;
+
+      // Feature 083 (US3): fire deferred-metronome callback on the first note
+      // attack of a practice session (mode === 'waiting'). The guard ref ensures
+      // simultaneous chord events only trigger the callback once.
+      if (ps.mode === 'waiting' && !hasCalledFirstNoteRef.current) {
+        hasCalledFirstNoteRef.current = true;
+        onFirstNoteAttackRef.current?.();
+      }
 
       const currentEntry = ps.notes[ps.currentIndex];
       if (!currentEntry) return;
