@@ -1,6 +1,6 @@
 # Feature Specification: One-Hand Playback in Practice Mode
 
-**Feature Branch**: `083-one-hand-playback`  
+**Feature Branch**: `084-one-hand-playback`  
 **Created**: 2026-04-25  
 **Status**: Draft  
 **Input**: User description: "When practising with one hand, playback only this hand"

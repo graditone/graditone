@@ -153,6 +153,7 @@ function createMockContext(
       },
       getCurrentTickLive: () => 0,
       extractPracticeNotes: mockExtractPracticeNotes,
+      setPlaybackStaffFilter: vi.fn(),
     },
     metronome: {
       toggle: vi.fn().mockResolvedValue(undefined),
@@ -1844,5 +1845,75 @@ describe('PracticeViewPlugin — metronome deferred start (Feature 083 US3)', ()
       ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 });
     });
     expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T016 — Feature 084: setPlaybackStaffFilter wiring via staff dropdown
+// T023 — Feature 084: staff filter applied on initial load
+// ---------------------------------------------------------------------------
+
+describe('PracticeViewPlugin — Hand mode via staff dropdown (Feature 084)', () => {
+  function makeReadyCtx(staffCount = 2) {
+    const ctx = createMockContext({ status: 'ready', staffCount });
+    return ctx;
+  }
+
+  afterEach(() => {
+    localStorage.removeItem('practice-hand-mode');
+  });
+
+  // T016 — integration tests
+  it('calls setPlaybackStaffFilter(0) on initial ready load (default staff = Right Hand)', () => {
+    const ctx = makeReadyCtx(2);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    expect(ctx.context.scorePlayer.setPlaybackStaffFilter).toHaveBeenCalledWith(0);
+  });
+
+  it('does not show staff selector when staffCount < 2', () => {
+    const ctx = makeReadyCtx(1);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    expect(screen.queryByRole('button', { name: /select hand/i })).toBeNull();
+  });
+
+  it('selecting "Left Hand" from dropdown calls setPlaybackStaffFilter(1)', () => {
+    const ctx = makeReadyCtx(2);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
+    fireEvent.click(screen.getByRole('option', { name: /left hand/i }));
+    expect(ctx.context.scorePlayer.setPlaybackStaffFilter).toHaveBeenCalledWith(1);
+  });
+
+  it('selecting "Both Hands" from dropdown calls setPlaybackStaffFilter(null)', () => {
+    const ctx = makeReadyCtx(2);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
+    fireEvent.click(screen.getByRole('option', { name: /both hands/i }));
+    expect(ctx.context.scorePlayer.setPlaybackStaffFilter).toHaveBeenCalledWith(null);
+  });
+
+  it('selecting "Right Hand" from dropdown calls setPlaybackStaffFilter(0)', () => {
+    const ctx = makeReadyCtx(2);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
+    fireEvent.click(screen.getByRole('option', { name: /left hand/i }));
+    fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
+    fireEvent.click(screen.getByRole('option', { name: /right hand/i }));
+    expect(ctx.context.scorePlayer.setPlaybackStaffFilter).toHaveBeenLastCalledWith(0);
+  });
+
+  // T023 — on-load filter sync
+  it('calls setPlaybackStaffFilter(0) when score becomes ready (initial sync)', () => {
+    const ctx = makeReadyCtx(2);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    expect(ctx.context.scorePlayer.setPlaybackStaffFilter).toHaveBeenCalledWith(0);
+  });
+
+  it('restores staff filter from saved practice (staffIndex=1 → setPlaybackStaffFilter(1))', () => {
+    const ctx = makeReadyCtx(2);
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
+    fireEvent.click(screen.getByRole('option', { name: /left hand/i }));
+    expect(ctx.context.scorePlayer.setPlaybackStaffFilter).toHaveBeenCalledWith(1);
   });
 });

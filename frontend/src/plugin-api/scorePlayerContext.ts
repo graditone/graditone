@@ -24,8 +24,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type { PluginScorePlayerContext, PluginPreloadedScore, ScoreLoadSource, ScorePlayerState, PluginScorePitches, PluginPracticeNoteEntry } from './types';
-import { usePlayback } from '../services/playback/MusicTimeline';
-import type { PlaybackStatus, ITickSource } from '../types/playback';
+import { usePlayback } from '../services/playback/MusicTimeline';import type { PlaybackStatus, ITickSource } from '../types/playback';
 import { useTempoState } from '../services/state/TempoStateContext';
 import { useNoteHighlight } from '../services/highlight/useNoteHighlight';
 import { MusicXMLImportService } from '../services/import/MusicXMLImportService';
@@ -184,13 +183,56 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
   const [scoreTimeSignature, setScoreTimeSignature] = useState<{ numerator: number; denominator: number }>({ numerator: 4, denominator: 4 });
   const [title, setTitle] = useState<string | null>(null);
 
+  /**
+   * Feature 083: When non-null, only notes from expandedNotesByStaff[playbackStaffFilter]
+   * are fed to usePlayback/useNoteHighlight. internal.notes always holds the full set
+   * for score rendering. Default null = all staves play.
+   */
+  const [playbackStaffFilter, setPlaybackStaffFilterState] = useState<number | null>(null);
+
   /** Overlay status for transitions the playback engine doesn't model */
   const [overlayStatus, setOverlayStatus] = useState<OverlayStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // ─── Filtered notes for playback ─────────────────────────────────────────
+
+  /**
+   * Notes fed to the playback engine.  When playbackStaffFilter is set to a
+   * valid staff index, only that staff's notes produce audio; all other staves
+   * are silent.  Falls back to the full `notes` array when filter is null or
+   * out-of-range (feature 083).
+   */
+  const filteredNotes = useMemo((): Note[] => {
+    if (playbackStaffFilter === null) return notes;
+    const staffNotes = expandedNotesByStaff[playbackStaffFilter];
+    if (!staffNotes) return notes; // out-of-range: fall back to all notes
+    return staffNotes;
+  }, [notes, expandedNotesByStaff, playbackStaffFilter]);
+
   // ─── Playback engine ─────────────────────────────────────────────────────
 
-  const playbackState = usePlayback(notes, scoreTempo);
+  const playbackState = usePlayback(filteredNotes, scoreTempo);
+
+  // ─── Feature 084: Restart playback when staff filter changes mid-play ────
+  // usePlayback receives new notes but does NOT reschedule automatically.
+  // We must seek to the current tick and call play() so Tone.js re-schedules
+  // only the filtered notes.  Refs avoid adding fast-changing values to the
+  // effect dep array (we only want to react to filteredNotes changes).
+  const playbackStatusRef = useRef<string>('stopped');
+  playbackStatusRef.current = playbackState.status;
+  const currentTickLiveRef = useRef<number>(0);
+  currentTickLiveRef.current = playbackState.currentTick;
+
+  useEffect(() => {
+    if (playbackStatusRef.current !== 'playing') return;
+    const tick = currentTickLiveRef.current;
+    // seekToTick clears the Tone.js schedule and stops audio, then play()
+    // re-schedules using filteredNotes captured in its closure (new notes).
+    playbackState.seekToTick(tick);
+    void playbackState.play();
+  // filteredNotes is the only trigger; seek/play refs are captured via ref.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredNotes]);
 
   // ─── Tempo context ───────────────────────────────────────────────────────
 
@@ -199,7 +241,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
   // ─── Note highlighting ────────────────────────────────────────────────────
 
   const highlightedNoteIds = useNoteHighlight(
-    notes,
+    filteredNotes,
     playbackState.currentTick,
     playbackState.status
   );
@@ -613,8 +655,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
   );
 
   /** Load a catalogue score ad-hoc (no React state change) and compute difficulty. */
-  const getRegionDifficultyForScore = useCallback(
-    async (catalogueId: string, startMeasure: number | null, endMeasure: number | null, staffIndex: number): Promise<import('../types/score').DifficultyRating | null> => {
+  const getRegionDifficultyForScore = useCallback(    async (catalogueId: string, startMeasure: number | null, endMeasure: number | null, staffIndex: number): Promise<import('../types/score').DifficultyRating | null> => {
       const preloaded = ALL_PRELOADED_SCORES.find(s => s.id === catalogueId);
       if (!preloaded) return null;
       try {
@@ -638,6 +679,16 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     [],
   );
 
+  // ─── setPlaybackStaffFilter (Feature 083) ────────────────────────────────
+
+  /**
+   * Set the staff index whose notes are fed to the playback engine.
+   * Pass null to restore full (all-staves) playback.
+   */
+  const setPlaybackStaffFilter = useCallback((staffIndex: number | null): void => {
+    setPlaybackStaffFilterState(staffIndex);
+  }, []);
+
   // ─── Return the bridge object ─────────────────────────────────────────────
 
   const api = useMemo((): PluginScorePlayerContext => ({
@@ -659,6 +710,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     getPhrases,
     getRegionDifficulty,
     getRegionDifficultyForScore,
+    setPlaybackStaffFilter,
   }), [
     getCatalogue,
     loadScore,
@@ -678,6 +730,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     getPhrases,
     getRegionDifficulty,
     getRegionDifficultyForScore,
+    setPlaybackStaffFilter,
   ]);
 
   const internal = useMemo((): ScorePlayerInternal => ({
@@ -753,6 +806,7 @@ export function createNoOpScorePlayer(): PluginScorePlayerContext {
     getPhrases: () => null,
     getRegionDifficulty: () => null,
     getRegionDifficultyForScore: async () => null,
+    setPlaybackStaffFilter: (_staffIndex: number | null) => {},
   };
 }
 
@@ -792,5 +846,6 @@ export function createScorePlayerProxy(
     getPhrases: () => proxyRef.current.getPhrases(),
     getRegionDifficulty: (...args) => proxyRef.current.getRegionDifficulty(...args),
     getRegionDifficultyForScore: (...args) => proxyRef.current.getRegionDifficultyForScore(...args),
+    setPlaybackStaffFilter: (...args) => proxyRef.current.setPlaybackStaffFilter(...args),
   };
 }

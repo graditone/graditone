@@ -149,6 +149,19 @@ export type ComplexityLevel = 'low' | 'mid' | 'high';
  */
 export type ActiveComplexityLevel = ComplexityLevel | null;
 
+// ─── Hand Mode (Feature 083) ──────────────────────────────────────────────────
+
+/**
+ * Which hand (staff) should produce audio during playback.
+ * - 'both': all staves play (default)
+ * - 'right': only staff index 0 (treble/right hand) plays
+ * - 'left': only staff index 1 (bass/left hand) plays
+ *
+ * Mirrors the HandMode type from the plugin API; redefined here so
+ * trainTypes.ts has no imports from src/ (plugin boundary rule).
+ */
+export type HandMode = 'both' | 'right' | 'left';
+
 /** A named preset that maps a ComplexityLevel to exercise configuration + tempo. */
 export interface ComplexityPreset {
   bpm: number;

@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PluginContext, PluginPitchEvent, PluginNoteEvent, PluginScorePitches, ScorePlayerState, MetronomeState, MetronomeSubdivision } from '../../src/plugin-api/index';
+import type { PluginContext, PluginPitchEvent, PluginNoteEvent, PluginScorePitches, ScorePlayerState, MetronomeState, MetronomeSubdivision, HandMode } from '../../src/plugin-api/index';
 import { broadcastPracticeSaved, ProfileIcon } from '../../src/plugin-api/index';
 import type {
   TrainPhase,
@@ -142,6 +142,13 @@ export function TrainPlugin({ context }: TrainPluginProps) {
   // Resets to true each time results phase is entered; can be dismissed by
   // tapping the backdrop so the user can see the staff underneath.
   const [resultsOverlayVisible, setResultsOverlayVisible] = useState(true);
+
+  // Feature 083: Hand mode — which staff produces audio during playback
+  const [handMode, setHandMode] = useState<HandMode>(() => {
+    const stored = scopedGetItem('train-hand-mode');
+    if (stored === 'right' || stored === 'left' || stored === 'both') return stored;
+    return 'both';
+  });
 
   // ── Save state ────────────────────────────────────────────────────────────────
   const [isSaved, setIsSaved] = useState(false);
@@ -298,6 +305,26 @@ export function TrainPlugin({ context }: TrainPluginProps) {
     const unsubscribe = context.metronome.subscribe(setMetronomeState);
     return unsubscribe;
   }, [context.metronome]);
+
+  // Feature 083: Apply persisted hand mode when the score becomes ready.
+  // When status transitions to 'ready' and a non-'both' hand mode is stored,
+  // call setPlaybackStaffFilter to activate the filter immediately.
+  useEffect(() => {
+    if (scorePlayerState.status === 'ready') {
+      if (handMode === 'right') context.scorePlayer.setPlaybackStaffFilter(0);
+      else if (handMode === 'left') context.scorePlayer.setPlaybackStaffFilter(1);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scorePlayerState.status]);
+
+  // Feature 083: Clear the playback staff filter on unmount so it does not
+  // leak into any plugin loaded after TrainPlugin.
+  useEffect(() => {
+    return () => {
+      context.scorePlayer.setPlaybackStaffFilter(null);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // When scorePlayerState transitions to 'ready' while the Score preset is active,
   // extract the practice notes.  This effect runs AFTER the host has committed its
@@ -1088,7 +1115,24 @@ export function TrainPlugin({ context }: TrainPluginProps) {
       } else {
         setExercise(generateScaleExercise(bpmRef.current, next.scaleId, next.octaveRange));
       }
+
+      // Feature 083: When switching to scales preset, clear the staff filter
+      // so the (hidden) hand mode control does not silently restrict playback.
+      if (patch.preset === 'scales') {
+        context.scorePlayer.setPlaybackStaffFilter(null);
+      }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Feature 083: Change the active hand mode and wire it to the playback filter.
+  const handleHandModeChange = useCallback((mode: HandMode) => {
+    setHandMode(mode);
+    scopedSetItem('train-hand-mode', mode);
+    if (mode === 'right') context.scorePlayer.setPlaybackStaffFilter(0);
+    else if (mode === 'left') context.scorePlayer.setPlaybackStaffFilter(1);
+    else context.scorePlayer.setPlaybackStaffFilter(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleBpmChange = useCallback((v: number) => {
@@ -1753,6 +1797,31 @@ export function TrainPlugin({ context }: TrainPluginProps) {
                   </button>
                 )}
               </div>
+
+              {/* HAND MODE — Feature 083: visible only when score is loaded with >= 2 staves */}
+              {scorePlayerState.staffCount >= 2 && (
+                <div className="train-sidebar__section">
+                  <p className="train-sidebar__section-title">Hand</p>
+                  <div className="train-hand-mode" role="group" aria-label="Hand">
+                    {([
+                      ['both', 'Both hands'],
+                      ['right', 'Right hand'],
+                      ['left', 'Left hand'],
+                    ] as [HandMode, string][]).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        aria-label={label}
+                        className={`train-hand-mode__btn${handMode === mode ? ' train-hand-mode__btn--active' : ''}`}
+                        disabled={isDisabled}
+                        onClick={() => handleHandModeChange(mode)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* NOTES */}
               <div className="train-sidebar__section">

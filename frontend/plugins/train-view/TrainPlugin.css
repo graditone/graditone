@@ -1197,3 +1197,44 @@
   width: 12px;
   flex-shrink: 0;
 }
+
+/* ─── Feature 083: Hand Mode segmented control ─────────────────────────────── */
+
+.train-hand-mode {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.train-hand-mode__btn {
+  flex: 1 1 auto;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  background: transparent;
+  color: #c4b5e8;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.train-hand-mode__btn:hover:not(:disabled) {
+  background: rgba(124, 58, 237, 0.18);
+  border-color: rgba(167, 139, 250, 0.4);
+  color: #e2d9f3;
+}
+
+.train-hand-mode__btn--active {
+  background: var(--ls-accent, var(--color-accent, #7c3aed));
+  border-color: var(--ls-accent, var(--color-accent, #7c3aed));
+  color: #fff;
+  font-weight: 600;
+}
+
+.train-hand-mode__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

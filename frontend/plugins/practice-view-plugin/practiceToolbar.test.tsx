@@ -445,3 +445,58 @@ describe('PracticeToolbar — metronome armed state (Feature 083 US3)', () => {
     expect(btn.className).toContain('practice-plugin__metro-btn--active');
   });
 });
+
+// ---------------------------------------------------------------------------
+// T015 — Feature 084: Staff dropdown controls hand mode (no separate hand-mode UI)
+// ---------------------------------------------------------------------------
+
+describe('PracticeToolbar — Staff dropdown hand mode (Feature 084)', () => {
+  it('staff selector is NOT shown when staffCount < 2', () => {
+    render(
+      <PracticeToolbar {...makeDefaultProps({ staffCount: 1 })} />,
+      { wrapper: TestWrapper },
+    );
+    expect(screen.queryByRole('button', { name: /select hand/i })).toBeNull();
+  });
+
+  it('staff selector is shown when staffCount >= 2', () => {
+    render(
+      <PracticeToolbar {...makeDefaultProps({ staffCount: 2 })} />,
+      { wrapper: TestWrapper },
+    );
+    expect(screen.getByRole('button', { name: /select hand/i })).toBeTruthy();
+  });
+
+  it('clicking "Left Hand" option calls onStaffChange(1)', () => {
+    const onStaffChange = vi.fn();
+    render(
+      <PracticeToolbar {...makeDefaultProps({ staffCount: 2, onStaffChange })} />,
+      { wrapper: TestWrapper },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
+    fireEvent.click(screen.getByRole('option', { name: /left hand/i }));
+    expect(onStaffChange).toHaveBeenCalledWith(1);
+  });
+
+  it('clicking "Both Hands" option calls onStaffChange(-1)', () => {
+    const onStaffChange = vi.fn();
+    render(
+      <PracticeToolbar {...makeDefaultProps({ staffCount: 2, onStaffChange })} />,
+      { wrapper: TestWrapper },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
+    fireEvent.click(screen.getByRole('option', { name: /both hands/i }));
+    expect(onStaffChange).toHaveBeenCalledWith(-1);
+  });
+
+  it('clicking "Right Hand" option calls onStaffChange(0)', () => {
+    const onStaffChange = vi.fn();
+    render(
+      <PracticeToolbar {...makeDefaultProps({ staffCount: 2, selectedStaffIndex: 1, onStaffChange })} />,
+      { wrapper: TestWrapper },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
+    fireEvent.click(screen.getByRole('option', { name: /right hand/i }));
+    expect(onStaffChange).toHaveBeenCalledWith(0);
+  });
+});

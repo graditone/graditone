@@ -509,6 +509,14 @@ export interface ScorePlayerState {
 }
 
 /**
+ * Feature 083: Selects which hand (staff) produces audio during playback.
+ * - 'both': all staves play (default)
+ * - 'right': only staff index 0 (treble/right hand) plays
+ * - 'left': only staff index 1 (bass/left hand) plays
+ */
+export type HandMode = 'both' | 'right' | 'left';
+
+/**
  * Score player context injected into plugins via context.scorePlayer.
  * v3 extension enabling score loading, playback control, and subscriptions.
  * For v2 plugins this namespace is injected as a no-op stub.
@@ -646,6 +654,21 @@ export interface PluginScorePlayerContext {
     endMeasure: number | null,
     staffIndex: number,
   ): Promise<DifficultyRating | null>;
+
+  /**
+   * Feature 083: Filter playback audio to a single staff (hand).
+   *
+   * When `staffIndex` is a valid 0-based staff index, only notes belonging to
+   * that staff produce audio during playback.  All other staves are silenced.
+   *
+   * Pass `null` to restore full (all-staves) playback — this is the default
+   * and must be called on plugin unmount to avoid leaking the filter into
+   * subsequently loaded plugins.
+   *
+   * Out-of-range indices (>= staffCount) are silently treated as `null`
+   * (full playback restored).
+   */
+  setPlaybackStaffFilter(staffIndex: number | null): void;
 }
 
 /**

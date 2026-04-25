@@ -88,6 +88,7 @@ function makeMockScorePlayer(): PluginScorePlayerContext & { _notify: (state: Mo
     seek: vi.fn(),
     setTempo: vi.fn(),
     extractPracticeNotes: vi.fn((_staffIndex: number, _maxCount?: number) => MOCK_PITCHES),
+    setPlaybackStaffFilter: vi.fn(),
     _notify: notify,
   };
 }
@@ -1344,5 +1345,153 @@ describe('TrainPlugin — step mode chord detection (Issue #3)', () => {
     const hint = screen.getByRole('status');
     expect(hint).toBeInTheDocument();
     expect(hint.textContent).toContain('C4'); // expected note
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 083: Hand Mode — T008 (US1), T014 (US2), T022 (US3), T027 (US4)
+// ---------------------------------------------------------------------------
+
+/** Helper: render TrainPlugin with a score-ready state (staffCount >= 2) */
+function renderWithTwoStaffScore(staffCount = 2) {
+  const scorePlayer = makeMockScorePlayer();
+  const ctx = makeMockContext({ scorePlayer });
+  render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
+  // Deliver score-ready state so scorePlayerState.staffCount is set
+  act(() => {
+    (scorePlayer as ReturnType<typeof makeMockScorePlayer>)._notify({
+      status: 'ready',
+      currentTick: 0,
+      totalDurationTicks: 1920,
+      highlightedNoteIds: new Set<string>(),
+      bpm: 120,
+      title: 'Arabesque',
+      error: null,
+      staffCount,
+    });
+  });
+  return { ctx, scorePlayer };
+}
+
+describe('Hand mode control — Feature 083', () => {
+  // ── T008: US1 — Right-hand tests ──────────────────────────────────────────
+
+  describe('US1 — right-hand-only playback', () => {
+    it('hand-mode control is hidden when staffCount < 2 (single-staff score)', () => {
+      renderWithTwoStaffScore(1);
+      // Switch to score preset by toggling (score preset shows when score is loaded)
+      // With staffCount=1, the hand-mode control must NOT appear
+      expect(screen.queryByRole('group', { name: /hand/i })).toBeNull();
+      expect(screen.queryByText(/right hand/i)).toBeNull();
+    });
+
+    it('hand-mode control is hidden when preset is scales', () => {
+      const ctx = makeMockContext();
+      render(<TrainPlugin context={ctx} />, { wrapper: TestWrapper });
+      // Default preset is scales — hand mode control should not appear
+      expect(screen.queryByText(/right hand/i)).toBeNull();
+    });
+
+    it('hand-mode control renders when staffCount >= 2 and preset is score (after score loaded)', () => {
+      renderWithTwoStaffScore(2);
+      // The plugin starts with default preset (scales/low complexity) — need to switch to score preset
+      // The hand mode control should appear when preset=score and staffCount>=2
+      // Check presence of Both/Right/Left buttons
+      expect(screen.queryByRole('button', { name: /right hand/i })).not.toBeNull();
+      expect(screen.queryByRole('button', { name: /left hand/i })).not.toBeNull();
+      expect(screen.queryByRole('button', { name: /both hands/i })).not.toBeNull();
+    });
+
+    it('"Right hand" button calls setPlaybackStaffFilter(0)', () => {
+      const { ctx } = renderWithTwoStaffScore(2);
+      const rightBtn = screen.queryByRole('button', { name: /right hand/i });
+      expect(rightBtn).not.toBeNull();
+      fireEvent.click(rightBtn!);
+      expect(ctx.scorePlayer.setPlaybackStaffFilter).toHaveBeenCalledWith(0);
+    });
+
+    // ── T014: US2 — Left-hand tests ─────────────────────────────────────────
+
+    it('"Left hand" button calls setPlaybackStaffFilter(1)', () => {
+      const { ctx } = renderWithTwoStaffScore(2);
+      const leftBtn = screen.queryByRole('button', { name: /left hand/i });
+      expect(leftBtn).not.toBeNull();
+      fireEvent.click(leftBtn!);
+      expect(ctx.scorePlayer.setPlaybackStaffFilter).toHaveBeenCalledWith(1);
+    });
+
+    it('"Right hand" button has active CSS class when selected', () => {
+      renderWithTwoStaffScore(2);
+      const rightBtn = screen.queryByRole('button', { name: /right hand/i })!;
+      fireEvent.click(rightBtn);
+      expect(rightBtn.className).toMatch(/active|selected/i);
+    });
+
+    it('"Left hand" button has active CSS class when selected', () => {
+      renderWithTwoStaffScore(2);
+      const leftBtn = screen.queryByRole('button', { name: /left hand/i })!;
+      fireEvent.click(leftBtn);
+      expect(leftBtn.className).toMatch(/active|selected/i);
+    });
+
+    // ── T027: US4 — Both-hands default tests ────────────────────────────────
+
+    it('"Both hands" button calls setPlaybackStaffFilter(null)', () => {
+      const { ctx } = renderWithTwoStaffScore(2);
+      // First switch to right hand
+      fireEvent.click(screen.queryByRole('button', { name: /right hand/i })!);
+      // Then switch back to both hands
+      fireEvent.click(screen.queryByRole('button', { name: /both hands/i })!);
+      expect(ctx.scorePlayer.setPlaybackStaffFilter).toHaveBeenLastCalledWith(null);
+    });
+
+    it('default initial state: setPlaybackStaffFilter is NOT called on mount (no filter active by default)', () => {
+      const { ctx } = renderWithTwoStaffScore(2);
+      // On mount with "both hands" default, setPlaybackStaffFilter should not be called
+      // (or may be called with null to reset from previous plugin — implementation choice)
+      // Critical: it must NOT be called with 0 or 1 by default
+      const calls = (ctx.scorePlayer.setPlaybackStaffFilter as ReturnType<typeof vi.fn>).mock.calls;
+      const badCalls = calls.filter(([arg]) => arg === 0 || arg === 1);
+      expect(badCalls).toHaveLength(0);
+    });
+  });
+
+  // ── T022: US3 — Persistence tests ─────────────────────────────────────────
+
+  describe('US3 — hand mode persistence', () => {
+    it('restores handMode="right" from scopedGetItem on mount and calls setPlaybackStaffFilter(0)', () => {
+      // Pre-seed storage with persisted hand mode
+      localStorage.setItem('train-hand-mode', 'right');
+      const { ctx } = renderWithTwoStaffScore(2);
+      // After mount with a ready score, the persisted mode should be applied
+      // setPlaybackStaffFilter(0) should have been called (right = staff 0)
+      expect(ctx.scorePlayer.setPlaybackStaffFilter).toHaveBeenCalledWith(0);
+    });
+
+    it('restores handMode="left" from scopedGetItem on mount and calls setPlaybackStaffFilter(1)', () => {
+      localStorage.setItem('train-hand-mode', 'left');
+      const { ctx } = renderWithTwoStaffScore(2);
+      expect(ctx.scorePlayer.setPlaybackStaffFilter).toHaveBeenCalledWith(1);
+    });
+
+    it('persists hand mode to scopedSetItem when "Right hand" is clicked', () => {
+      const { ctx } = renderWithTwoStaffScore(2);
+      void ctx; // suppress unused warning
+      fireEvent.click(screen.queryByRole('button', { name: /right hand/i })!);
+      expect(localStorage.getItem('train-hand-mode')).toBe('right');
+    });
+
+    it('persists hand mode to scopedSetItem when "Left hand" is clicked', () => {
+      renderWithTwoStaffScore(2);
+      fireEvent.click(screen.queryByRole('button', { name: /left hand/i })!);
+      expect(localStorage.getItem('train-hand-mode')).toBe('left');
+    });
+
+    it('persists "both" to scopedSetItem when "Both hands" is clicked', () => {
+      renderWithTwoStaffScore(2);
+      fireEvent.click(screen.queryByRole('button', { name: /right hand/i })!);
+      fireEvent.click(screen.queryByRole('button', { name: /both hands/i })!);
+      expect(localStorage.getItem('train-hand-mode')).toBe('both');
+    });
   });
 });
