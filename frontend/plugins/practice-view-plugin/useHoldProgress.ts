@@ -37,7 +37,11 @@ export function useHoldProgress({
         const progress = required > 0 ? Math.min(elapsed / required, 1) : 0;
         setHoldProgress(progress);
 
-        if (progress >= 0.9) {
+        // Accept the hold at 90% of the required duration, but cap the
+        // early-acceptance window at 500 ms so long notes (≥ 5 000 ms) at
+        // ultra-low tempos are not accepted more than 500 ms early.
+        const acceptanceMs = required - Math.min(required * 0.1, 500);
+        if (elapsed >= acceptanceMs) {
           dispatchPractice({ type: 'HOLD_COMPLETE', holdDurationMs: elapsed });
           setHoldProgress(0);
           rafRef.current = null;
