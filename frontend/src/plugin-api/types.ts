@@ -482,10 +482,19 @@ export interface ScorePlayerState {
    */
   readonly highlightedNoteIds: ReadonlySet<string>;
   /**
-   * Effective playback tempo in BPM (originalBpm × tempoMultiplier).
+   * Effective playback tempo in BPM (originalBpm × tempoMultiplier), rounded to
+   * the nearest integer.  Use this for display purposes.
    * 0 when no score is loaded.
    */
   readonly bpm: number;
+  /**
+   * Exact (unrounded) effective tempo in BPM (originalBpm × tempoMultiplier).
+   * Use this for audio-timing calculations (e.g. metronome beat interval) to
+   * avoid rounding errors that would cause progressive drift at slow tempos.
+   * Equals `bpm` when the product is already an integer.
+   * 0 when no score is loaded.
+   */
+  readonly exactBpm: number;
   /** Display title from score metadata; null until a score is loaded. */
   readonly title: string | null;
   /** Error message; non-null when status === 'error'. */
@@ -506,6 +515,14 @@ export interface ScorePlayerState {
     readonly numerator: number;
     readonly denominator: number;
   };
+  /**
+   * Duration of the pickup/anacrusis measure in ticks (0 = no pickup).
+   * When non-zero, tick 0 is NOT a measure downbeat — the first real downbeat
+   * falls at tick `pickupTicks`.  The metronome uses this to phase-lock beat
+   * counting so that beat 0 (downbeat) fires on the correct measure boundary
+   * in pieces like Für Elise (3/8 with a 2-beat pickup).
+   */
+  readonly pickupTicks: number;
 }
 
 /**
@@ -752,6 +769,14 @@ export interface MetronomeState {
    * Current beat subdivision (1 = quarter, 2 = eighth, 4 = sixteenth).
    */
   readonly subdivision: MetronomeSubdivision;
+  /**
+   * Position within the current beat subdivision cycle.
+   * 0 = on-beat (full beat boundary); 1..(subdivision-1) = intermediate
+   * subdivision tick within the current beat.
+   * Used by visual indicators to blink on every subdivision tick, not only
+   * on full beat boundaries (FR-006, FR-007, SC-003).
+   */
+  readonly subBeatIndex: number;
 }
 
 /**

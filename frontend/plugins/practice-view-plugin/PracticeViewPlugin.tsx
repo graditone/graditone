@@ -79,6 +79,7 @@ const INITIAL_METRONOME_STATE: MetronomeState = {
   isDownbeat: false,
   subdivision: 1,
   bpm: 0,
+  subBeatIndex: 0,
 };
 
 const INITIAL_PLAYER_STATE: ScorePlayerState = {

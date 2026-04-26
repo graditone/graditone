@@ -181,6 +181,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
   const [expandedNotesByStaff, setExpandedNotesByStaff] = useState<Note[][]>([]);
   const [scoreTempo, setScoreTempo] = useState<number>(120);
   const [scoreTimeSignature, setScoreTimeSignature] = useState<{ numerator: number; denominator: number }>({ numerator: 4, denominator: 4 });
+  const [scorePickupTicks, setScorePickupTicks] = useState<number>(0);
   const [title, setTitle] = useState<string | null>(null);
 
   /**
@@ -260,9 +261,13 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
 
   // ─── Effective BPM ───────────────────────────────────────────────────────
 
-  const effectiveBpm = useMemo(
-    () => Math.round(scoreTempo * tempoState.tempoMultiplier),
+  const exactBpm = useMemo(
+    () => scoreTempo * tempoState.tempoMultiplier,
     [scoreTempo, tempoState.tempoMultiplier]
+  );
+  const effectiveBpm = useMemo(
+    () => Math.round(exactBpm),
+    [exactBpm]
   );
 
   // ─── Subscribe system ─────────────────────────────────────────────────────
@@ -274,10 +279,12 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     totalDurationTicks: 0,
     highlightedNoteIds: new Set<string>(),
     bpm: 0,
+    exactBpm: 0,
     title: null,
     error: null,
     staffCount: 0,
     timeSignature: { numerator: 4, denominator: 4 },
+    pickupTicks: 0,
   });
 
   // Notify all subscribers when state changes
@@ -289,10 +296,12 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       totalDurationTicks: playbackState.totalDurationTicks,
       highlightedNoteIds,
       bpm: effectiveBpm,
+      exactBpm,
       title,
       error: errorMessage,
       staffCount,
       timeSignature: scoreTimeSignature,
+      pickupTicks: scorePickupTicks,
     };
     currentStateRef.current = newState;
     subscribersRef.current.forEach(h => h(newState));
@@ -302,10 +311,12 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     playbackState.totalDurationTicks,
     highlightedNoteIds,
     effectiveBpm,
+    exactBpm,
     title,
     errorMessage,
     score,
     scoreTimeSignature,
+    scorePickupTicks,
   ]);
 
   // ─── getCatalogue ─────────────────────────────────────────────────────────
@@ -416,6 +427,7 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
       setScoreTempo(parsedTempo);
       setOriginalTempo(parsedTempo);
       setScoreTimeSignature(parsedTimeSignature);
+      setScorePickupTicks(scoreObject.pickup_ticks ?? 0);
       setTitle(parsedTitle);
       setOverlayStatus(null); // reverts to playback-engine status ('stopped' → 'ready')
     } catch (err) {
@@ -778,10 +790,12 @@ export function createNoOpScorePlayer(): PluginScorePlayerContext {
     totalDurationTicks: 0,
     highlightedNoteIds: new Set<string>(),
     bpm: 0,
+    exactBpm: 0,
     title: null,
     error: null,
     staffCount: 0,
     timeSignature: { numerator: 4, denominator: 4 },
+    pickupTicks: 0,
   };
 
   return {

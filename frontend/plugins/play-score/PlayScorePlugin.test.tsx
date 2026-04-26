@@ -138,7 +138,7 @@ function createMockContext(stateOverride: Partial<ScorePlayerState> = {}, ScoreR
       toggle: vi.fn().mockResolvedValue(undefined),
       subscribe: vi.fn((handler) => {
         // Immediate call with inactive metronome state
-        handler({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1 });
+        handler({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1, subBeatIndex: 0 });
         return () => {};
       }),
     },

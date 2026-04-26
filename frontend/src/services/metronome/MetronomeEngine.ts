@@ -61,10 +61,10 @@ export class MetronomeEngine {
    * Emits a console.warn when clamping occurs (FR-008a).
    */
   public clampBpm(bpm: number): number {
-    const clamped = Math.min(300, Math.max(20, bpm));
+    const clamped = Math.min(300, Math.max(10, bpm));
     if (clamped !== bpm) {
       console.warn(
-        `[MetronomeEngine] BPM ${bpm} out of range [20, 300], clamped to ${clamped}.`
+        `[MetronomeEngine] BPM ${bpm} out of range [10, 300], clamped to ${clamped}.`
       );
     }
     return clamped;
@@ -84,6 +84,11 @@ export class MetronomeEngine {
    *   default 0 (fires at Transport position 0 / immediately after standalone Transport.start).
    *   Pass `Tone.Transport.seconds + timeUntilNextBeatBoundary` when the Transport is
    *   already running so the metronome phase-locks to the current measure position.
+   * @param subdivision          - Subdivision (1 = quarter/eighth, 2 = eighth/sixteenth...)
+   * @param skipTransportStart   - When true, skip the standalone `Transport.start()` at the
+   *   end of this method.  Pass true whenever the Transport is already running (or is about
+   *   to be started) by the playback engine so that engine.start() does NOT issue a second
+   *   Transport.start() call that would reset timing and cause a double-click artefact.
    */
   public async start(
     bpm: number,
@@ -92,6 +97,7 @@ export class MetronomeEngine {
     startBeatIndex = 0,
     scheduleOffsetSeconds = 0,
     subdivision: MetronomeSubdivision = 1,
+    skipTransportStart = false,
   ): Promise<void> {
     const adapter = ToneAdapter.getInstance();
 
@@ -143,10 +149,13 @@ export class MetronomeEngine {
     // Schedule repeat beat on Transport.
     // scheduleOffsetSeconds > 0 phase-locks the first click to a beat boundary
     // when the Transport is already running (playback mid-measure).
+    // The Transport callback forwards the scheduled audio-context time so that
+    // triggerAttackRelease() fires at the exact sample-accurate beat position
+    // rather than at Tone.now() (which is ~lookahead seconds early).
     const beatIntervalSeconds = this._computeBeatInterval(this._bpm, this._denominator);
     const tickIntervalSeconds = beatIntervalSeconds / this._subdivision;
     this._eventId = adapter.scheduleRepeat(
-      () => this._fireBeat(),
+      (time) => this._fireBeat(time),
       tickIntervalSeconds,
       scheduleOffsetSeconds > 0 ? scheduleOffsetSeconds : undefined,
     );
@@ -160,8 +169,11 @@ export class MetronomeEngine {
       this._clearEvent();
     });
 
-    // Start Transport in standalone mode — no-op if already running by playback.
-    if ((Tone.Transport as unknown as { state: string }).state !== 'started') {
+    // Start Transport in standalone mode — skipped when playback engine owns the Transport.
+    // When skipTransportStart=true the caller guarantees Transport is already running (or
+    // is about to be started by startTransport()).  A second Transport.start() here would
+    // reset Transport timing and produce a spurious double-click at the beat boundary.
+    if (!skipTransportStart && (Tone.Transport as unknown as { state: string }).state !== 'started') {
       Tone.Transport.start('+0.01');
     }
 
@@ -203,7 +215,7 @@ export class MetronomeEngine {
     const beatIntervalSeconds = this._computeBeatInterval(this._bpm, this._denominator);
     const tickIntervalSeconds = beatIntervalSeconds / this._subdivision;
     this._eventId = ToneAdapter.getInstance().scheduleRepeat(
-      () => this._fireBeat(),
+      (time) => this._fireBeat(time),
       tickIntervalSeconds,
     );
 
@@ -261,20 +273,20 @@ export class MetronomeEngine {
    * Called by the Transport-scheduled repeat callback on every beat.
    * Triggers the appropriate click sound and notifies subscribers.
    */
-  private _fireBeat(): void {
+  private _fireBeat(time?: number): void {
     const isOnBeat = this._subBeatIndex === 0;
     const isDownbeat = isOnBeat && this._beatIndex === 0;
 
     try {
       if (isDownbeat) {
-        // Measure downbeat: low percussive “tock”
-        this._downbeatSynth?.triggerAttackRelease('C2', '16n');
-      } else if (isOnBeat) {
-        // Regular beat within the measure
-        this._upbeatSynth?.triggerAttackRelease('G4', '32n');
+        // Measure downbeat: low percussive "tock".
+        // Pass the Tone.js-scheduled audio-context time for sample-accurate
+        // playback — without it triggerAttackRelease defaults to Tone.now()
+        // which fires ~lookahead ms early relative to music notes.
+        this._downbeatSynth?.triggerAttackRelease('C2', '16n', time);
       } else {
-        // Subdivision tick (8th or 16th): same pitch as regular beat
-        this._upbeatSynth?.triggerAttackRelease('G4', '32n');
+        // Regular beat or subdivision tick — same upbeat click sound.
+        this._upbeatSynth?.triggerAttackRelease('G4', '32n', time);
       }
     } catch {
       // Swallow audio errors — beat should still count even if synth fails
@@ -282,6 +294,7 @@ export class MetronomeEngine {
 
     // Capture indices before advancing for the subscriber snapshot
     const currentBeatIndex = this._beatIndex;
+    const currentSubBeatIndex = this._subBeatIndex;
 
     // Advance sub-beat; roll over to next beat when subdivision is complete
     this._subBeatIndex += 1;
@@ -290,18 +303,17 @@ export class MetronomeEngine {
       this._beatIndex = (this._beatIndex + 1) % this._numerator;
     }
 
-    // Notify subscribers only on real beat boundaries (not sub-ticks) to
-    // keep the visual pulse in sync with the score beat grid.
-    if (isOnBeat) {
-      const state: MetronomeState = {
-        active: this._active,
-        beatIndex: currentBeatIndex,
-        isDownbeat,
-        bpm: this._bpm,
-        subdivision: this._subdivision,
-      };
-      this._subscribers.forEach(h => h(state));
-    }
+    // Notify subscribers on every tick (beat AND subdivision) so that visual
+    // indicators blink on all subdivision ticks, not only beat boundaries.
+    const state: MetronomeState = {
+      active: this._active,
+      beatIndex: currentBeatIndex,
+      isDownbeat,
+      bpm: this._bpm,
+      subdivision: this._subdivision,
+      subBeatIndex: currentSubBeatIndex,
+    };
+    this._subscribers.forEach(h => h(state));
   }
 
   private _getState(): MetronomeState {
@@ -312,6 +324,7 @@ export class MetronomeEngine {
         isDownbeat: false,
         bpm: 0,
         subdivision: this._subdivision,
+        subBeatIndex: 0,
       };
     }
     return {
@@ -320,6 +333,7 @@ export class MetronomeEngine {
       isDownbeat: this._beatIndex === 0,
       bpm: this._bpm,
       subdivision: this._subdivision,
+      subBeatIndex: this._subBeatIndex,
     };
   }
 

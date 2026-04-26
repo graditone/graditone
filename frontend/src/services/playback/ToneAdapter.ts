@@ -402,12 +402,12 @@ export class ToneAdapter {
    * @returns Event ID that can be used with clearTransportEvent()
    */
   public scheduleRepeat(
-    callback: () => void,
+    callback: (time?: number) => void,
     intervalSeconds: number,
     startOffsetSeconds?: number,
   ): number {
     return Tone.Transport.scheduleRepeat(
-      () => callback(),
+      (time) => callback(time),
       intervalSeconds,
       startOffsetSeconds,
     );

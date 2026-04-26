@@ -40,6 +40,7 @@ const INACTIVE_STATE: MetronomeState = {
   isDownbeat: false,
   bpm: 0,
   subdivision: 1,
+  subBeatIndex: 0,
 };
 
 // ─── Beat-phase helper ────────────────────────────────────────────────────────
@@ -61,6 +62,10 @@ const INACTIVE_STATE: MetronomeState = {
  * @param bpm            - Effective BPM.
  * @param numerator      - Time-signature numerator.
  * @param denominator    - Time-signature denominator.
+ * @param pickupTicks    - Duration of the pickup/anacrusis measure in ticks (0 = no pickup).
+ *                         When non-zero, tick 0 is beat `numerator - pickupTicks/ticksPerBeat`
+ *                         within the first virtual measure, so the first real downbeat is at
+ *                         tick `pickupTicks`.
  * @returns startBeatIndex and scheduleOffsetSeconds to pass to engine.start()
  */
 function computeBeatPhase(
@@ -69,28 +74,44 @@ function computeBeatPhase(
   bpm: number,
   numerator: number,
   denominator: number,
+  pickupTicks = 0,
 ): { startBeatIndex: number; scheduleOffsetSeconds: number } {
   const ticksPerBeat = PPQ * (4 / denominator);
   const beatInterval = (60 / bpm) * (4 / denominator);
 
-  const ticksIntoCurrentBeat = currentTick % ticksPerBeat;
+  // Adjust currentTick relative to the first real downbeat.
+  // For pickup scores tick 0 is mid-measure; shifting by -pickupTicks makes
+  // tick `pickupTicks` (the true downbeat) align with offset 0, so that
+  // `beatOrdinal % numerator` correctly yields 0 there.
+  const adjustedTick = currentTick - pickupTicks;
+
+  const ticksIntoCurrentBeat = ((adjustedTick % ticksPerBeat) + ticksPerBeat) % ticksPerBeat;
   const fractionalBeat = ticksIntoCurrentBeat / ticksPerBeat;
 
-  // Always schedule the NEXT beat boundary so that:
-  //   1. scheduleOffsetSeconds is always strictly ahead of transportSeconds
-  //      → Tone.js never has to decide whether to fire "now" or "one cycle later"
-  //   2. startBeatIndex always matches the beat that actually fires first.
+  // ── Fresh-start optimisation ───────────────────────────────────────────────
+  // If we are still within the first beat (transportSeconds < beatInterval) AND
+  // the tick is at/near a beat boundary (fractionalBeat < 5%), schedule the
+  // first click at transportSeconds + 1 ms rather than skipping a full beat.
+  // Without this the downbeat is silently skipped — especially noticeable at
+  // slow tempos (13 BPM → 4.6 s/beat) where the user hears the first note with
+  // no click, then waits almost 5 s for the metronome to join in.
   //
-  // The old "snap to current boundary if fractionalBeat < 2%" case was the source
-  // of the strong-beat displacement: it set startBeatIndex=0 (downbeat) but
-  // passed scheduleOffsetSeconds ≈ transportSeconds.  Tone.js, seeing that
-  // startTime is at or behind the current Transport position, skipped one full
-  // interval — so the first click landed one beat later while still announcing
-  // "downbeat", shifting every subsequent strong-beat marker by one beat.
-  const nextBeatOrdinal = Math.floor(currentTick / ticksPerBeat) + 1;
-  const startBeatIndex = nextBeatOrdinal % numerator;
-  // Guard against exactly-zero fractional part (currentTick on a boundary):
-  // use a full interval rather than 0 to avoid a startTime == transportSeconds race.
+  // Using transportSeconds < beatInterval (not a fixed 50 ms threshold) handles
+  // React subscriber delays of 150–200 ms after startTransport().
+  // `fractionalBeat < 0.05` prevents this from firing when toggled on mid-song.
+  if (transportSeconds < beatInterval && fractionalBeat < 0.05) {
+    const beatOrdinal = Math.floor(adjustedTick / ticksPerBeat);
+    return {
+      startBeatIndex: ((beatOrdinal % numerator) + numerator) % numerator,
+      scheduleOffsetSeconds: transportSeconds + 0.001,
+    };
+  }
+
+  // Always schedule the NEXT beat boundary so that scheduleOffsetSeconds is
+  // strictly ahead of transportSeconds.  This avoids a Tone.js race where it
+  // would otherwise have to decide whether to fire "now" or "one cycle later".
+  const nextBeatOrdinal = Math.floor(adjustedTick / ticksPerBeat) + 1;
+  const startBeatIndex = ((nextBeatOrdinal % numerator) + numerator) % numerator;
   const timeUntilNextBeat = fractionalBeat < 1e-9
     ? beatInterval
     : beatInterval * (1 - fractionalBeat);
@@ -130,6 +151,7 @@ export function useMetronomeBridge(
     timeSignature: DEFAULT_TIME_SIGNATURE,
     status: 'idle' as string,
     currentTick: 0,
+    pickupTicks: 0,
   });
 
   // Current engine active state — stable ref so toggle() closure always reads latest.
@@ -141,10 +163,61 @@ export function useMetronomeBridge(
 
   // T020: Subscribe to scorePlayer for BPM + timeSignature.
   // On BPM change while engine is active, call engine.updateBpm() (FR-007a).
+  //
+  // FR-003 / FR-004 (Issue #2 — loop restart fix): Also subscribe to
+  // ToneAdapter.onTransportRestart so the engine re-registers its
+  // scheduleRepeat after every loop-boundary Transport restart.
+  // The listener fires synchronously BEFORE Transport.stop()/start(), so
+  // engine.start() is deferred via a microtask to ensure the Transport is
+  // already running at position 0 when scheduleRepeat is registered.
   useEffect(() => {
+    const adapter = ToneAdapter.getInstance();
+    const unsubTransportRestart = adapter.onTransportRestart(() => {
+      if (!engineStateRef.current.active) return;
+      // Capture state synchronously (before Transport restarts).
+      const { bpm, timeSignature, pickupTicks } = scoreStateRef.current;
+      const capturedStatus = scoreStateRef.current.status;
+      Promise.resolve().then(() => {
+        // ── Initial play (Transport restart triggered by user pressing Play) ──
+        // When status is NOT yet 'playing' (e.g. 'ready'), the subscriber's
+        // 'prevStatus !== playing → status === playing' branch will fire and
+        // call engine.start() with the correct beat phase via computeBeatPhase.
+        // Let it handle that — starting here would fire a wrong-phase click
+        // (beat 0 at tick 0 ignores pickup) that the subscriber cannot undo
+        // fast enough to prevent the user from hearing it.
+        if (capturedStatus !== 'playing') return;
+
+        // ── Loop-wrap restart (Transport resets to 0 mid-playback) ──
+        // Status stays 'playing' throughout a loop wrap.  Re-register the
+        // scheduleRepeat with the correct beat phase for the loop-start tick.
+        if (!engineStateRef.current.active) return;
+        const liveTick = scorePlayer.getCurrentTickLive();
+        const transportSeconds = adapter.getTransportSeconds();
+        const { startBeatIndex, scheduleOffsetSeconds } = computeBeatPhase(
+          liveTick,
+          transportSeconds,
+          bpm,
+          timeSignature.numerator,
+          timeSignature.denominator,
+          pickupTicks,
+        );
+        engine
+          .start(bpm, timeSignature.numerator, timeSignature.denominator, startBeatIndex, scheduleOffsetSeconds, subdivisionRef.current, /* skipTransportStart */ true)
+          .catch((err) => {
+            console.error('[useMetronomeBridge] failed to restart after loop wrap:', err);
+          });
+      });
+    });
+
     const unsubscribe = scorePlayer.subscribe((s) => {
-      const newBpm = s.bpm > 0 ? s.bpm : DEFAULT_BPM;
+      // Use exactBpm (unrounded) for all audio-timing calculations so the
+      // metronome beat interval matches the note schedule exactly.  The rounded
+      // s.bpm is only for display — at slow practice speeds (e.g. 120 BPM × 11 %
+      // = 13.2 BPM, rounds to 13) the rounding error is 1.5 % which causes ~70 ms
+      // of drift per beat.
+      const newBpm = (s.exactBpm ?? s.bpm) > 0 ? (s.exactBpm ?? s.bpm) : DEFAULT_BPM;
       const newTs = s.timeSignature ?? DEFAULT_TIME_SIGNATURE;
+      const newPickupTicks = s.pickupTicks ?? 0;
 
       const prevBpm = scoreStateRef.current.bpm;
       const prevStatus = scoreStateRef.current.status;
@@ -153,6 +226,7 @@ export function useMetronomeBridge(
         timeSignature: newTs,
         status: s.status,
         currentTick: s.currentTick,
+        pickupTicks: newPickupTicks,
       };
 
       // Update running engine if BPM changed while active
@@ -171,7 +245,7 @@ export function useMetronomeBridge(
         prevStatus !== 'playing' &&
         s.status === 'playing'
       ) {
-        const { bpm, timeSignature } = scoreStateRef.current;
+        const { bpm, timeSignature, pickupTicks } = scoreStateRef.current;
         // Synchronous: immediately kill old scheduleRepeat so no stale clicks fire
         // before we re-register at the correct beat phase.
         engine.stop();
@@ -189,9 +263,10 @@ export function useMetronomeBridge(
           bpm,
           timeSignature.numerator,
           timeSignature.denominator,
+          pickupTicks,
         );
         engine
-          .start(bpm, timeSignature.numerator, timeSignature.denominator, startBeatIndex, scheduleOffsetSeconds, subdivisionRef.current)
+          .start(bpm, timeSignature.numerator, timeSignature.denominator, startBeatIndex, scheduleOffsetSeconds, subdivisionRef.current, /* skipTransportStart */ true)
           .catch((err) => {
             console.error('[useMetronomeBridge] failed to sync on playback start:', err);
           });
@@ -199,21 +274,22 @@ export function useMetronomeBridge(
       }
 
       // ── Playback stops / pauses while metronome is active ────────────────
-      // Transport is halted; restart the engine in standalone mode from beat 1.
-      if (
-        engineStateRef.current.active &&
-        prevStatus === 'playing' &&
-        (s.status === 'ready' || s.status === 'idle' || s.status === 'paused')
-      ) {
-        const { bpm, timeSignature } = scoreStateRef.current;
-        // Synchronous stop first to avoid stale clicks
-        engine.stop();
-        engine.start(bpm, timeSignature.numerator, timeSignature.denominator, 0, 0, subdivisionRef.current).catch((err) => {
-          console.error('[useMetronomeBridge] failed to resume after playback stop:', err);
-        });
-      }
+      // When playback transitions playing → ready/paused (e.g. natural end of
+      // score, user stop/pause, or transient state during a loop wrap), we do
+      // NOT restart the engine here.  Doing so caused two bugs:
+      //   1. A phantom DOWNBEAT click at the moment of the transition (since
+      //      restart used startBeat=0, offset=0).
+      //   2. The metronome "beat 1" was misaligned for the rest of playback
+      //      because the standalone restart re-anchored the beat counter.
+      // The engine's scheduleRepeat naturally goes silent when the Transport
+      // stops, which is the correct behaviour: the metronome follows the score.
+      // If the user wants the metronome to keep ticking after a stop, they can
+      // toggle it off and on again.
     });
-    return unsubscribe;
+    return () => {
+      unsubTransportRestart();
+      unsubscribe();
+    };
     // scorePlayer is stable (proxy ref) — no dep array churn
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, scorePlayer]);
@@ -224,9 +300,11 @@ export function useMetronomeBridge(
     subdivisionRef.current = subdivision;
     // If engine is running, restart immediately at the new subdivision from beat 1
     if (engineStateRef.current.active) {
-      const { bpm, timeSignature } = scoreStateRef.current;
+      const { bpm, timeSignature, status } = scoreStateRef.current;
       const effectiveBpm = bpm > 0 ? bpm : DEFAULT_BPM;
-      await engine.start(effectiveBpm, timeSignature.numerator, timeSignature.denominator, 0, 0, subdivision);
+      // Skip Transport.start() if playback is running (it already owns the Transport)
+      const skipTransportStart = status === 'playing';
+      await engine.start(effectiveBpm, timeSignature.numerator, timeSignature.denominator, 0, 0, subdivision, skipTransportStart);
     }
   }, [engine]);
 
@@ -238,7 +316,7 @@ export function useMetronomeBridge(
     if (currentState.active) {
       engine.stop();
     } else {
-      const { bpm, timeSignature, status } = scoreStateRef.current;
+      const { bpm, timeSignature, status, pickupTicks } = scoreStateRef.current;
       const effectiveBpm = bpm > 0 ? bpm : DEFAULT_BPM;
 
       if (status === 'playing') {
@@ -252,7 +330,9 @@ export function useMetronomeBridge(
           effectiveBpm,
           timeSignature.numerator,
           timeSignature.denominator,
+          pickupTicks,
         );
+        // skipTransportStart=true: playback already owns the Transport
         await engine.start(
           effectiveBpm,
           timeSignature.numerator,
@@ -260,9 +340,11 @@ export function useMetronomeBridge(
           startBeatIndex,
           scheduleOffsetSeconds,
           subdivisionRef.current,
+          /* skipTransportStart */ true,
         );
       } else {
         // Standalone mode (no playback) — start from the downbeat.
+        // skipTransportStart=false (default): engine.start() will start Transport.
         await engine.start(effectiveBpm, timeSignature.numerator, timeSignature.denominator, 0, 0, subdivisionRef.current);
       }
     }

@@ -39,6 +39,8 @@ const INITIAL_PLAYER_STATE: ScorePlayerState = {
   totalDurationTicks: 0,
   highlightedNoteIds: new Set<string>(),
   bpm: 120,
+  exactBpm: 120,
+  pickupTicks: 0,
   title: null,
   error: null,
   staffCount: 0,
@@ -51,6 +53,7 @@ const INITIAL_METRONOME_STATE: MetronomeState = {
   isDownbeat: false,
   bpm: 0,
   subdivision: 1,
+  subBeatIndex: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -303,6 +306,7 @@ export function PlayScorePlugin({ context }: PlayScorePluginProps) {
         onMetronomeToggle={handleMetronomeToggle}
         metronomeSubdivision={metronomeSubdivision}
         onMetronomeSubdivisionChange={handleMetronomeSubdivisionChange}
+        metronomeSubBeatIndex={metronomeState.subBeatIndex}
       />
 
       {/* Loading indicator */}

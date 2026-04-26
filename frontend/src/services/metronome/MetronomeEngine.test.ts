@@ -19,10 +19,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // initialised before the factory functions run.
 
 const toneState = vi.hoisted(() => {
-  let _beatCallback: (() => void) | null = null;
+  let _beatCallback: ((time?: number) => void) | null = null;
   let _eventIdCounter = 0;
 
-  const scheduleRepeat = vi.fn((cb: () => void) => {
+  const scheduleRepeat = vi.fn((cb: (time?: number) => void) => {
     _beatCallback = cb;
     return ++_eventIdCounter;
   });
@@ -69,11 +69,11 @@ const toneState = vi.hoisted(() => {
 });
 
 const adapterState = vi.hoisted(() => {
-  let _beatCallback: (() => void) | null = null;
+  let _beatCallback: ((time?: number) => void) | null = null;
   let _eventIdCounter = 0;
 
   const init = vi.fn().mockResolvedValue(undefined);
-  const scheduleRepeat = vi.fn((cb: () => void) => {
+  const scheduleRepeat = vi.fn((cb: (time?: number) => void) => {
     _beatCallback = cb;
     return ++_eventIdCounter;
   });
@@ -149,10 +149,18 @@ function fireBeat(times = 1): void {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('MetronomeEngine — BPM clamping (T002)', () => {
-  it('clamps BPM below 20 to 20', async () => {
+  // FR-009, SC-001: supported range is 10–300 BPM
+  it('clamps BPM below 10 to 10 (new minimum — regression for 10 BPM desync)', async () => {
     const engine = new MetronomeEngine();
     await engine.start(5, 4, 4);
-    expect(engine.getState().bpm).toBe(20);
+    expect(engine.getState().bpm).toBe(10);
+    engine.dispose();
+  });
+
+  it('accepts 10 BPM without clamping (minimum supported tempo)', async () => {
+    const engine = new MetronomeEngine();
+    await engine.start(10, 4, 4);
+    expect(engine.getState().bpm).toBe(10);
     engine.dispose();
   });
 
@@ -170,10 +178,10 @@ describe('MetronomeEngine — BPM clamping (T002)', () => {
     engine.dispose();
   });
 
-  it('passes through valid boundary BPM values (20 and 300)', async () => {
+  it('passes through valid boundary BPM values (10 and 300)', async () => {
     const engine = new MetronomeEngine();
-    await engine.start(20, 4, 4);
-    expect(engine.getState().bpm).toBe(20);
+    await engine.start(10, 4, 4);
+    expect(engine.getState().bpm).toBe(10);
     engine.dispose();
 
     const engine2 = new MetronomeEngine();
@@ -408,12 +416,12 @@ describe('MetronomeEngine — updateBpm (T018)', () => {
     expect(engine.getState().bpm).toBe(140);
   });
 
-  it('clamps the new BPM to [20, 300]', async () => {
+  it('clamps the new BPM to [10, 300]', async () => {
     await engine.start(120, 4, 4);
     engine.updateBpm(999);
     expect(engine.getState().bpm).toBe(300);
     engine.updateBpm(1);
-    expect(engine.getState().bpm).toBe(20);
+    expect(engine.getState().bpm).toBe(10);
   });
 
   it('clears the existing event and reschedules at new interval', async () => {
@@ -496,5 +504,91 @@ describe('MetronomeEngine — beat interval computation (T002)', () => {
     const [, interval] = adapterState.scheduleRepeat.mock.calls[0];
     // beatIntervalSeconds = (60 / 60) * (4 / 8) = 1 * 0.5 = 0.5
     expect(interval).toBeCloseTo(0.5, 5);
+  });
+});
+
+// ─── Subdivision visual blink (US3 — FR-006, FR-007, SC-003) ─────────────────
+
+describe('MetronomeEngine — subdivision subscriber notifications (US3)', () => {
+  let engine: MetronomeEngine;
+
+  beforeEach(() => {
+    engine = new MetronomeEngine();
+    adapterState.resetBeatCallback();
+    adapterState.resetEventId();
+  });
+
+  afterEach(() => {
+    engine.dispose();
+  });
+
+  it('with subdivision 1, each tick emits one subscriber notification (on-beat only)', async () => {
+    const states: MetronomeState[] = [];
+    engine.subscribe(s => states.push(s));
+    await engine.start(120, 4, 4, 0, 0, 1);
+    const startCount = states.length;
+    fireBeat(1);
+    expect(states.length - startCount).toBe(1);
+    expect(states.at(-1)!.subBeatIndex).toBe(0);
+  });
+
+  it('with subdivision 2, each Transport tick emits a subscriber notification (not only on-beat)', async () => {
+    // Regression test for Issue #3: without the fix, only tick 1 of 2 fires subscriber.
+    const states: MetronomeState[] = [];
+    engine.subscribe(s => states.push(s));
+    await engine.start(120, 4, 4, 0, 0, 2);
+    const startCount = states.length;
+    // Two Transport ticks = one beat boundary (tick 1) + one subdivision tick (tick 2)
+    fireBeat(2);
+    expect(states.length - startCount).toBe(2);
+  });
+
+  it('first tick of subdivision 2 emits subBeatIndex: 0 (on-beat)', async () => {
+    const states: MetronomeState[] = [];
+    engine.subscribe(s => states.push(s));
+    await engine.start(120, 4, 4, 0, 0, 2);
+    const startCount = states.length;
+    fireBeat(1);
+    const tick1 = states[startCount];
+    expect(tick1.subBeatIndex).toBe(0);
+  });
+
+  it('second tick of subdivision 2 emits subBeatIndex: 1 (eighth-note subdivision)', async () => {
+    const states: MetronomeState[] = [];
+    engine.subscribe(s => states.push(s));
+    await engine.start(120, 4, 4, 0, 0, 2);
+    const startCount = states.length;
+    fireBeat(2);
+    const tick2 = states[startCount + 1];
+    expect(tick2.subBeatIndex).toBe(1);
+  });
+
+  it('after a full subdivision cycle (2 ticks), subBeatIndex resets to 0 and beatIndex advances', async () => {
+    const states: MetronomeState[] = [];
+    engine.subscribe(s => states.push(s));
+    await engine.start(120, 4, 4, 0, 0, 2);
+    const startCount = states.length;
+    fireBeat(3); // 3rd tick = start of next beat
+    const tick3 = states[startCount + 2];
+    expect(tick3.subBeatIndex).toBe(0);
+    expect(tick3.beatIndex).toBe(1); // advanced from beat 0 to beat 1
+  });
+
+  it('with subdivision 4, fires 4 notifications per beat', async () => {
+    const states: MetronomeState[] = [];
+    engine.subscribe(s => states.push(s));
+    await engine.start(120, 4, 4, 0, 0, 4);
+    const startCount = states.length;
+    fireBeat(4);
+    expect(states.length - startCount).toBe(4);
+    const subBeatIndexes = states.slice(startCount).map(s => s.subBeatIndex);
+    expect(subBeatIndexes).toEqual([0, 1, 2, 3]);
+  });
+
+  it('_getState() includes subBeatIndex', async () => {
+    await engine.start(120, 4, 4, 0, 0, 2);
+    const state = engine.getState();
+    expect(typeof state.subBeatIndex).toBe('number');
+    expect(state.subBeatIndex).toBe(0);
   });
 });
