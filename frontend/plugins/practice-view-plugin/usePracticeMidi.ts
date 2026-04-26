@@ -42,6 +42,25 @@ export interface UsePracticeMidiReturn {
 const PPQ = 960;
 
 // ---------------------------------------------------------------------------
+// Exported helpers (unit-testable hold-duration formula)
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimum wall-clock hold duration (ms) required before the hold gate is
+ * engaged. Notes whose computed duration is ≤ this value need no hold.
+ * Used by T008 to replace the tick-based gate condition.
+ */
+export const HOLD_FLOOR_MS = 500;
+
+/**
+ * Compute the required hold duration in milliseconds for a note.
+ * Returns 0 when `bpm ≤ 0` (guards against division-by-zero).
+ */
+export function computeRequiredHoldMs(durationTicks: number, bpm: number): number {
+  return bpm > 0 ? (durationTicks / ((bpm / 60) * PPQ)) * 1000 : 0;
+}
+
+// ---------------------------------------------------------------------------
 // Hook implementation
 // ---------------------------------------------------------------------------
 
@@ -282,7 +301,7 @@ export function usePracticeMidi({
           }
         }
         const entryRequiredHoldMs = bpm > 0 && effectiveDurTicks > PPQ
-          ? (effectiveDurTicks / ((bpm / 60) * PPQ)) * 1000
+          ? computeRequiredHoldMs(effectiveDurTicks, bpm)
           : 0;
         dispatchPractice({
           type: 'CORRECT_MIDI',

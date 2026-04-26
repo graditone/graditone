@@ -4,6 +4,9 @@ import { usePracticeMidi } from './usePracticeMidi';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
 import type { PluginContext, ScorePlayerState } from '../../src/plugin-api/index';
 
+type MidiEvent = { type: string; midiNote: number; timestamp: number };
+type MidiCallback = (event: MidiEvent) => void;
+
 function makeMockParams() {
   const practiceState = { ...INITIAL_PRACTICE_STATE };
   const playerState: ScorePlayerState = {
@@ -37,6 +40,20 @@ function makeMockParams() {
     practiceStartTimeRef: { current: 0 },
     selectedStaffIndex: 0,
   };
+}
+
+/** Capture the MIDI subscribe callback by rendering the hook. */
+function captureMidiCallback(params: ReturnType<typeof makeMockParams>): MidiCallback {
+  let midiCallback: MidiCallback | null = null;
+  (params.context.midi as { subscribe: ReturnType<typeof vi.fn> }).subscribe.mockImplementation(
+    (cb: MidiCallback) => {
+      midiCallback = cb;
+      return vi.fn();
+    },
+  );
+  renderHook(() => usePracticeMidi(params));
+  if (!midiCallback) throw new Error('MIDI callback not captured');
+  return midiCallback;
 }
 
 describe('usePracticeMidi', () => {
@@ -119,5 +136,37 @@ describe('usePracticeMidi', () => {
 
     expect(correctCalls).toHaveLength(1);
     expect(wrongCalls).toHaveLength(0);
+  });
+
+  // ─── T003: RED gate — tick-based gate skips hold for ≤ 1 quarter-note ──────
+  it('T003: at 10 BPM, quarter note (960 ticks) dispatches CORRECT_MIDI with requiredHoldMs = 6 000', () => {
+    const params = makeMockParams();
+
+    const quarterNote = {
+      tick: 0,
+      durationTicks: 960,
+      midiPitches: [60] as readonly number[],
+      sustainedPitches: [] as readonly number[],
+      noteIds: ['n1'] as readonly string[],
+    };
+    const practiceState = {
+      ...INITIAL_PRACTICE_STATE,
+      mode: 'active' as const,
+      currentIndex: 0,
+      notes: [quarterNote],
+    };
+    params.practiceState = practiceState;
+    params.practiceStateRef = { current: practiceState };
+    params.playerStateRef = {
+      current: { ...params.playerState, bpm: 10, status: 'ready' as const, staffCount: 1 },
+    };
+
+    const midiCallback = captureMidiCallback(params);
+    midiCallback({ type: 'attack', midiNote: 60, timestamp: Date.now() });
+
+    const calls = (params.dispatchPractice as ReturnType<typeof vi.fn>).mock.calls;
+    const correctCalls = calls.filter(([a]: [{ type: string }]) => a.type === 'CORRECT_MIDI');
+    expect(correctCalls).toHaveLength(1);
+    expect(correctCalls[0][0].requiredHoldMs).toBe(6_000);
   });
 });
