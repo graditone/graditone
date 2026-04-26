@@ -1041,4 +1041,28 @@ describe('[US5] Feature 053: semi-strict extra-notes policy (engine level)', () 
     expect(s.noteResults[0].outcome).toBe('correct');
     expect(s.noteResults[0].wrongAttempts).toBe(3);
   });
+
+  // ─── T019: integration smoke — CORRECT_MIDI → holding → HOLD_COMPLETE → correct ──
+  it('T019: CORRECT_MIDI with requiredHoldMs = 24 000 → holding mode → HOLD_COMPLETE → outcome correct', () => {
+    const holdNote = makeHoldNote([60]);
+    let s = activeState([holdNote]);
+
+    // Press the note with a long hold requirement (whole note at 10 BPM)
+    s = reduce(s, {
+      type: 'CORRECT_MIDI',
+      midiNote: 60,
+      responseTimeMs: 0,
+      expectedTimeMs: 0,
+      pressTimeMs: 1000,
+      requiredHoldMs: 24_000,
+    });
+    expect(s.mode).toBe('holding');
+
+    // Hold completes (called after ≥ 23 500 ms in practice, any value here exercises state machine)
+    s = reduce(s, { type: 'HOLD_COMPLETE', holdDurationMs: 23_600 });
+    expect(s.mode).not.toBe('holding');
+    const result = s.noteResults[0];
+    expect(result).toBeDefined();
+    expect(result.outcome).toBe('correct');
+  });
 });

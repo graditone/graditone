@@ -300,7 +300,7 @@ export function usePracticeMidi({
             effectiveDurTicks = gapTicks;
           }
         }
-        const entryRequiredHoldMs = bpm > 0 && effectiveDurTicks > PPQ
+        const entryRequiredHoldMs = computeRequiredHoldMs(effectiveDurTicks, bpm) > HOLD_FLOOR_MS
           ? computeRequiredHoldMs(effectiveDurTicks, bpm)
           : 0;
         dispatchPractice({
