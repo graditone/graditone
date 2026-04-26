@@ -99,7 +99,7 @@ export function usePracticeMidi({
   // Guard: fire exactly once per practice session. Reset when practice stops.
   const hasCalledFirstNoteRef = useRef(false);
   useEffect(() => {
-    if (practiceState.mode === 'inactive') {
+    if (practiceState.mode === 'inactive' || practiceState.mode === 'waiting') {
       hasCalledFirstNoteRef.current = false;
     }
   }, [practiceState.mode]);
