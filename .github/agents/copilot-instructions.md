@@ -171,6 +171,7 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - React component state (transient); `SavedPractice.tempoMultiplier` in IndexedDB (persisted — clamped on load) (083-tempo-metronome-practice)
 - TypeScript 5.x / React 18 (frontend); Rust stable (backend — no changes needed) + Vite, vitest, Tone.js (audio), wasm-pack (WASM build) (083-one-hand-playback)
 - `localStorage` via `scopedStorage.ts` for session-persistent hand mode (profile-scoped per Constitution VIII); no IndexedDB changes needed (083-one-hand-playback)
+- TypeScript 5.x, React 18+ + Tone.js (Transport scheduling, audio synthesis), Vitest, React Testing Library (085-fix-metronome-issues)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -191,10 +192,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 085-fix-metronome-issues: Added TypeScript 5.x, React 18+ + Tone.js (Transport scheduling, audio synthesis), Vitest, React Testing Library
 - 083-tempo-metronome-practice: Added TypeScript 5.x (strict), Rust 1.x WASM (no backend changes required) + React 19.2, Tone.js 14.9, Vite 6.x, Vitest 3.x, @testing-library/react, Playwrigh
 - 083-one-hand-playback: Added TypeScript 5.x / React 18 (frontend); Rust stable (backend — no changes needed) + Vite, vitest, Tone.js (audio), wasm-pack (WASM build)
-- 082-gdpr-logging: Added HTML, TypeScript, React 19 / Vite + Plausible Analytics script (frontend injection)
-- 080-user-profile-support: Added TypeScript 5.x (frontend), React 18+ (UI) + React 18, Vite, vitest, Playwright (e2e)
 
 
 <!-- MANUAL ADDITIONS START -->
