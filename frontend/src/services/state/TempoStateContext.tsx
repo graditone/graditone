@@ -54,23 +54,31 @@ export function TempoStateProvider({ children }: TempoStateProviderProps) {
   });
 
   /**
-   * Set tempo multiplier directly (with clamping)
-   * 
+   * Set tempo multiplier directly (with clamping and integer-BPM snapping).
+   *
+   * Snaps the multiplier so that originalTempo × multiplier is always a whole
+   * number BPM.  This guarantees the note schedule and the metronome use the
+   * exact same interval, eliminating progressive drift at fractional tempos
+   * (e.g. 120 BPM × 11% = 13.2 BPM would otherwise drift ~70 ms per beat).
+   *
    * @param multiplier - New tempo multiplier (0.5 to 2.0)
    */
   const setTempoMultiplier = useCallback((multiplier: number): void => {
-    const clampedMultiplier = clampTempoMultiplier(multiplier);
-    setTempoState((prev) => ({
-      ...prev,
-      tempoMultiplier: clampedMultiplier,
-    }));
+    setTempoState((prev) => {
+      const clamped = clampTempoMultiplier(multiplier);
+      // Snap: round(originalTempo × m) / originalTempo → integer BPM
+      const snapped = prev.originalTempo > 0
+        ? clampTempoMultiplier(Math.round(prev.originalTempo * clamped) / prev.originalTempo)
+        : clamped;
+      return { ...prev, tempoMultiplier: snapped };
+    });
   }, []);
 
   /**
-   * Adjust tempo by percentage change
-   * 
+   * Adjust tempo by percentage change (with integer-BPM snapping).
+   *
    * @param percentageChange - Change in percentage points (e.g., +1 for +1%, -10 for -10%)
-   * 
+   *
    * @example
    * adjustTempo(1);   // Increase by 1% (1.0 → 1.01)
    * adjustTempo(-1);  // Decrease by 1% (1.0 → 0.99)
@@ -79,12 +87,12 @@ export function TempoStateProvider({ children }: TempoStateProviderProps) {
    */
   const adjustTempo = useCallback((percentageChange: number): void => {
     setTempoState((prev) => {
-      const newMultiplier = prev.tempoMultiplier + percentageChange / 100;
-      const clampedMultiplier = clampTempoMultiplier(newMultiplier);
-      return {
-        ...prev,
-        tempoMultiplier: clampedMultiplier,
-      };
+      const raw = prev.tempoMultiplier + percentageChange / 100;
+      const clamped = clampTempoMultiplier(raw);
+      const snapped = prev.originalTempo > 0
+        ? clampTempoMultiplier(Math.round(prev.originalTempo * clamped) / prev.originalTempo)
+        : clamped;
+      return { ...prev, tempoMultiplier: snapped };
     });
   }, []);
 

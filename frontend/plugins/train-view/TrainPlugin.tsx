@@ -122,7 +122,8 @@ export function TrainPlugin({ context }: TrainPluginProps) {
   const [showScoreSelector, setShowScoreSelector] = useState(false);
   const [scorePlayerState, setScorePlayerState] = useState<ScorePlayerState>({
     status: 'idle', currentTick: 0, totalDurationTicks: 0,
-    highlightedNoteIds: new Set<string>(), bpm: 0, title: null, error: null,
+    highlightedNoteIds: new Set<string>(), bpm: 0, exactBpm: 0, pickupTicks: 0,
+    title: null, error: null,
     timeSignature: { numerator: 4, denominator: 4 }, staffCount: 0,
   });
   const scorePitchesRef = useRef<PluginScorePitches | null>(null);
@@ -130,7 +131,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
 
   // Feature 035: Metronome state
   const [metronomeState, setMetronomeState] = useState<MetronomeState>({
-    active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1,
+    active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1, subBeatIndex: 0,
   });
 
   // ── UI state ─────────────────────────────────────────────────────────────────

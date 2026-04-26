@@ -164,6 +164,7 @@ function createMockContext(
           isDownbeat: false,
           bpm: 0,
           subdivision: 1,
+          subBeatIndex: 0,
         });
         return () => {};
       }),
@@ -1807,7 +1808,7 @@ describe('PracticeViewPlugin — metronome deferred start (Feature 083 US3)', ()
     const ctx = createMockContext({ status: 'ready', staffCount: 1 });
     (ctx.context.metronome.subscribe as ReturnType<typeof vi.fn>).mockImplementation((handler) => {
       metronomeHandler = handler;
-      handler({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1 });
+      handler({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1, subBeatIndex: 0 });
       return () => {};
     });
     ctx.mockExtractPracticeNotes.mockReturnValue({
@@ -1820,7 +1821,7 @@ describe('PracticeViewPlugin — metronome deferred start (Feature 083 US3)', ()
 
     // Simulate metronome becoming active
     act(() => {
-      metronomeHandler?.({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1 });
+      metronomeHandler?.({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 });
     });
     vi.mocked(ctx.context.metronome.toggle).mockClear();
 
@@ -1832,7 +1833,7 @@ describe('PracticeViewPlugin — metronome deferred start (Feature 083 US3)', ()
 
     // Simulate the metronome service acknowledging it's now inactive (real app behaviour)
     act(() => {
-      metronomeHandler?.({ active: false, beatIndex: -1, isDownbeat: false, bpm: 120, subdivision: 1 });
+      metronomeHandler?.({ active: false, beatIndex: -1, isDownbeat: false, bpm: 120, subdivision: 1, subBeatIndex: 0 });
     });
 
     // Metronome button should be in armed state

@@ -78,7 +78,8 @@ describe('TempoStateContext', () => {
         result.current.adjustTempo(1);
       });
       
-      expect(result.current.tempoState.tempoMultiplier).toBe(1.01);
+      // Snapping rounds to nearest integer BPM: 120 * 1.01 = 121.2 → 121 BPM
+      expect(result.current.getEffectiveTempo()).toBe(121);
     });
 
     it('should decrease tempo by 1% (-1)', () => {
@@ -88,7 +89,8 @@ describe('TempoStateContext', () => {
         result.current.adjustTempo(-1);
       });
       
-      expect(result.current.tempoState.tempoMultiplier).toBe(0.99);
+      // Snapping rounds to nearest integer BPM: 120 * 0.99 = 118.8 → 119 BPM
+      expect(result.current.getEffectiveTempo()).toBe(119);
     });
 
     it('should increase tempo by 10% (+10)', () => {

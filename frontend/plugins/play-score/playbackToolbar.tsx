@@ -63,6 +63,8 @@ export interface PlaybackToolbarProps {
   metronomeSubdivision: MetronomeSubdivision;
   /** Called when the user picks a new subdivision */
   onMetronomeSubdivisionChange: (s: MetronomeSubdivision) => void;
+  /** Position within the current beat subdivision cycle (0 = on-beat) */
+  metronomeSubBeatIndex: number;
 }
 
 export function PlaybackToolbar({
@@ -84,6 +86,7 @@ export function PlaybackToolbar({
   onMetronomeToggle,
   metronomeSubdivision,
   onMetronomeSubdivisionChange,
+  metronomeSubBeatIndex,
 }: PlaybackToolbarProps) {
   const { t } = useTranslation();
   const isPlaying = status === 'playing';
@@ -105,7 +108,7 @@ export function PlaybackToolbar({
 
   // Using beatIndex as `key` forces React to remount the button on each beat,
   // which resets the CSS animation so it replays from 0% every beat.
-  const metronomeAnimKey = metronomeActive ? `metro-${metronomeBeatIndex}` : 'metro-off';
+  const metronomeAnimKey = metronomeActive ? `metro-${metronomeBeatIndex}-${metronomeSubBeatIndex}` : 'metro-off';
 
   // Subdivision dropdown state
   const [menuOpen, setMenuOpen] = useState(false);
