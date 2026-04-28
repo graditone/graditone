@@ -1,6 +1,8 @@
 import * as Tone from 'tone';
 import { velocityToGain, applyCCScaling, DEFAULT_VELOCITY } from './volumeUtils';
 import { scopedGetItem, scopedSetItem } from '../profiles/profileStorage';
+import { PlaybackChannel, type IPlaybackChannel } from './PlaybackChannel';
+import { getTimbre, type TimbreConfig } from './InstrumentTimbres';
 
 /**
  * ToneAdapter - Singleton wrapper for Tone.js audio synthesis
@@ -24,6 +26,12 @@ export class ToneAdapter {
   private static instance: ToneAdapter | null = null;
   private polySynth: Tone.PolySynth | null = null;
   private sampler: Tone.Sampler | null = null;
+  /**
+   * Samplers for non-piano sampled instruments (e.g. violin).
+   * Keyed by instrumentType string. Created lazily on first use and kept
+   * alive (like the piano sampler) so they survive destroyChannels().
+   */
+  private instrumentSamplers = new Map<string, Tone.Sampler>();
   private initialized = false;
   private useSampler = true; // Use piano samples for rich sound
   private scheduledEventIds: number[] = []; // Track scheduled Transport events
@@ -37,6 +45,14 @@ export class ToneAdapter {
   private ccExpression = 127;
   /** Limiter node to prevent clipping (Feature 063, FR-012). */
   private limiter: Tone.Limiter | null = null;
+  /** Per-instrument playback channels. Feature 088. */
+  private channels = new Map<number, PlaybackChannel>();
+  /**
+   * Channel configs registered before init() completes (score load races ahead
+   * of the first user-triggered init). Flushed in _doInit() once limiter +
+   * sampler are ready. Feature 088.
+   */
+  private pendingChannelInits = new Map<number, { instrumentType: string; config?: TimbreConfig }>();
 
   /** localStorage key for master volume persistence (Feature 063). */
   private static readonly VOLUME_STORAGE_KEY = 'graditone:volume:master';
@@ -154,12 +170,33 @@ export class ToneAdapter {
 
           // CRITICAL: Wait for samples to load before allowing playback
           // Timeout after 5 seconds to avoid hanging offline
+          // First, create any additional samplers needed for non-piano instruments
+          // that were pre-registered before init(). This must happen BEFORE
+          // Tone.loaded() so all buffers are included in the wait.
+          for (const { instrumentType, config } of this.pendingChannelInits.values()) {
+            const timbre = config ?? getTimbre(instrumentType);
+            if (
+              timbre.source === 'sampler' &&
+              timbre.sampleUrls &&
+              timbre.sampleBaseUrl &&
+              !this.instrumentSamplers.has(instrumentType)
+            ) {
+              this.instrumentSamplers.set(
+                instrumentType,
+                new Tone.Sampler({
+                  urls: timbre.sampleUrls,
+                  release: timbre.sampleRelease ?? 0.5,
+                  baseUrl: `${import.meta.env.BASE_URL}${timbre.sampleBaseUrl}`,
+                  volume: 0,
+                }).connect(this.limiter!),
+              );
+            }
+          }
           await Promise.race([
             Tone.loaded(),
             new Promise((_, reject) => setTimeout(() => reject(new Error('Sample load timeout')), 5000))
           ]);
           
-          console.log('[ToneAdapter] Piano samples loaded successfully (local/offline-ready)');
         } catch (sampleError) {
           console.warn('[ToneAdapter] Failed to load local piano samples, falling back to PolySynth:', sampleError);
           this.sampler = null;
@@ -170,7 +207,6 @@ export class ToneAdapter {
       // Create PolySynth if sampler is not available (disabled or failed to load)
       if (!this.sampler) {
         // Fallback: Basic synthesizer (works offline)
-        console.log('[ToneAdapter] Using PolySynth for audio playback');
         this.polySynth = new Tone.PolySynth(Tone.Synth, {
           volume: -3,
           envelope: {
@@ -183,6 +219,14 @@ export class ToneAdapter {
       }
 
       this.initialized = true;
+      // Feature 088: Flush channels that were registered before init() ran.
+      // Now that limiter and sampler are ready, create the real audio nodes.
+      for (const [partIndex, { instrumentType, config }] of this.pendingChannelInits) {
+        if (!this.channels.has(partIndex)) {
+          this._createChannel(partIndex, instrumentType, config);
+        }
+      }
+      this.pendingChannelInits.clear();
       // Feature 063: Restore persisted master volume
       this.loadPersistedVolume();
     } catch (error) {
@@ -282,6 +326,9 @@ export class ToneAdapter {
     } else if (this.polySynth) {
       this.polySynth.releaseAll();
     }
+
+    // Stop per-instrument channels (Feature 088)
+    this.stopAllChannels();
   }
 
   /**
@@ -545,5 +592,146 @@ export class ToneAdapter {
     }
     // Default: 80%
     this.setMasterVolume(80);
+  }
+
+  // ============================================================================
+  // Feature 088: Multi-channel audio (per instrument)
+  // ============================================================================
+
+  /**
+   * Internal helper — creates a PlaybackChannel and registers it in the channel map.
+   * Caller must ensure this.limiter is non-null before calling.
+   */
+  private _createChannel(
+    partIndex: number,
+    instrumentType: string,
+    config?: TimbreConfig,
+  ): IPlaybackChannel {
+    const timbre = config ?? getTimbre(instrumentType);
+    console.log(`[ToneAdapter] _createChannel partIndex=${partIndex} instrumentType="${instrumentType}" timbre.source=${timbre.source}`);
+    let samplerRef: Tone.Sampler | undefined;
+    if (timbre.source === 'sampler') {
+      if (timbre.sampleUrls && timbre.sampleBaseUrl) {
+        // Instrument-specific sample set (e.g. violin). Create sampler on first
+        // use if it wasn't pre-created during _doInit (late-init scenario).
+        if (!this.instrumentSamplers.has(instrumentType)) {
+          this.instrumentSamplers.set(
+            instrumentType,
+            new Tone.Sampler({
+              urls: timbre.sampleUrls,
+              release: timbre.sampleRelease ?? 0.5,
+              baseUrl: `${import.meta.env.BASE_URL}${timbre.sampleBaseUrl}`,
+              volume: 0,
+            }).connect(this.limiter!),
+          );
+        }
+        samplerRef = this.instrumentSamplers.get(instrumentType);
+      } else {
+        // Piano — shared Salamander sampler owned by ToneAdapter.
+        samplerRef = this.sampler ?? undefined;
+      }
+    }
+    const channel = new PlaybackChannel(timbre, this.limiter!, samplerRef);
+    this.channels.set(partIndex, channel);
+    return channel;
+  }
+
+  /**
+   * Initialise a playback channel for the given instrument part.
+   * If a channel already exists for partIndex, returns the existing channel.
+   *
+   * If called before ToneAdapter.init() (i.e. on score load before first play),
+   * the config is stored and realised in _doInit() once the audio graph is ready.
+   *
+   * @param partIndex   0-based part index (key in the channel map)
+   * @param instrumentType  Canonical instrument type string for registry lookup
+   * @param config      Optional timbre override — defaults to getTimbre(instrumentType)
+   */
+  public initChannel(
+    partIndex: number,
+    instrumentType: string,
+    config?: TimbreConfig,
+  ): IPlaybackChannel {
+    if (this.channels.has(partIndex)) {
+      return this.channels.get(partIndex)!;
+    }
+
+    if (this.limiter === null) {
+      // init() hasn't run yet — defer until _doInit() flushes pendingChannelInits.
+      this.pendingChannelInits.set(partIndex, { instrumentType, config });
+      // Return a no-op stub so the caller gets a valid IPlaybackChannel.
+      return {
+        playNote: () => {},
+        stopAll: () => {},
+        setMuted: () => {},
+        setVolume: () => {},
+        dispose: () => {},
+        get isMuted() { return false; },
+        get volume() { return 1; },
+      };
+    }
+
+    return this._createChannel(partIndex, instrumentType, config);
+  }
+
+  /**
+   * Play a note on the specified instrument channel.
+   * Falls back to the legacy playNote() if the channel has not been initialised.
+   *
+   * @param partIndex  0-based part index
+   * @param pitch      MIDI pitch 0–127
+   * @param duration   Duration in seconds
+   * @param time       Transport time in seconds
+   * @param velocity   MIDI velocity 1–127 (default DEFAULT_VELOCITY)
+   */
+  public playNoteOnChannel(
+    partIndex: number,
+    pitch: number,
+    duration: number,
+    time: number,
+    velocity?: number,
+  ): void {
+    const channel = this.channels.get(partIndex);
+    if (channel) {
+      const eventId = Tone.Transport.schedule((scheduleTime) => {
+        channel.playNote(pitch, duration, scheduleTime, velocity);
+      }, time);
+      this.scheduledEventIds.push(eventId);
+    } else {
+      // Backward-compat: single-instrument scores never call initChannel
+      console.warn(`[ToneAdapter] playNoteOnChannel partIndex=${partIndex} — no channel found, falling back to legacy playNote. channels=[${[...this.channels.keys()].join(',')}]`);
+      this.playNote(pitch, duration, time, velocity);
+    }
+  }
+
+  /**
+   * Stop all sounding notes on every registered instrument channel.
+   * Feature 088.
+   */
+  public stopAllChannels(): void {
+    for (const channel of this.channels.values()) {
+      channel.stopAll();
+    }
+  }
+
+  /**
+   * Dispose all instrument channels and clear the channel map.
+   * Called when a new score is loaded.
+   * Feature 088.
+   */
+  public destroyChannels(): void {
+    for (const channel of this.channels.values()) {
+      channel.dispose();
+    }
+    this.channels.clear();
+    this.pendingChannelInits.clear();
+  }
+
+  /**
+   * Retrieve a channel by part index, or null if not initialised.
+   * Feature 088.
+   */
+  public getChannel(partIndex: number): IPlaybackChannel | null {
+    return this.channels.get(partIndex) ?? null;
   }
 }

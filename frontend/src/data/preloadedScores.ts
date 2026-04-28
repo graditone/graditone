@@ -78,6 +78,11 @@ export const PRELOADED_SCORES: ReadonlyArray<PreloadedScore> = [
     displayName: 'Pachelbel — Canon in D',
     path: `${base}scores/Pachelbel_CanonD.mxl`,
   },
+  {
+    id: 'star-sky-two-steps-from-hell',
+    displayName: 'Two Steps from Hell — Star Sky',
+    path: `${base}scores/star-sky-two-steps-from-hell.mxl`,
+  },
 ] as const;
 
 /**
@@ -144,4 +149,5 @@ export const PRELOADED_DIFFICULTY_LEVELS: Readonly<Record<string, DifficultyLeve
   'burgmuller-la-candeur': 1,
   'chopin-nocturne-op9-2': 3,
   'pachelbel-canon-d': 1,
+  'star-sky-two-steps-from-hell': 2,
 };

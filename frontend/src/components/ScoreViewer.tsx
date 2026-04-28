@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import type { Score, Note } from "../types/score";
+import type { Score } from "../types/score";
+import type { TaggedNote } from "../types/playback";
 import { InstrumentList } from "./InstrumentList";
 import { useFileState } from "../services/state/FileStateContext";
 import type { ImportResult } from "../services/import/MusicXMLImportService";
@@ -19,6 +20,7 @@ import { useUserScores } from "../hooks/useUserScores";
 import type { UserScore } from "../services/userScoreIndex";
 import { VolumeSlider } from "./VolumeSlider";
 import { ToneAdapter } from "../services/playback/ToneAdapter";
+import { resolveInstrumentType } from "../services/playback/InstrumentTimbres";
 import "./ScoreViewer.css";
 
 interface ScoreViewerProps {
@@ -101,17 +103,30 @@ export function ScoreViewer({
 
   // ── Playback ─────────────────────────────────────────────────────────────────
 
-  /** Flatten all notes from voice 0 of every staff (mirrors LayoutView). */
-  const allNotes = useMemo((): Note[] => {
+  /** Flatten all notes from voice 0 of every staff (mirrors LayoutView). Tags each note with _partIndex. Feature 088. */
+  const allNotes = useMemo((): TaggedNote[] => {
     if (!score) return [];
-    const rawNotes: Note[] = [];
-    for (const instrument of score.instruments) {
+    const rawNotes: TaggedNote[] = [];
+    score.instruments.forEach((instrument, partIndex) => {
       for (const staff of instrument.staves) {
         const firstVoice = staff.voices[0];
-        if (firstVoice) rawNotes.push(...firstVoice.interval_events);
+        if (firstVoice) {
+          rawNotes.push(...firstVoice.interval_events.map(n => ({ ...n, _partIndex: partIndex })));
+        }
       }
-    }
-    return expandNotesWithRepeats(rawNotes, score.repeat_barlines, score.volta_brackets);
+    });
+    return expandNotesWithRepeats(rawNotes, score.repeat_barlines, score.volta_brackets) as TaggedNote[];
+  }, [score]);
+
+  // Initialise per-instrument audio channels when score changes. Feature 088.
+  useEffect(() => {
+    if (!score) return;
+    const adapter = ToneAdapter.getInstance();
+    adapter.destroyChannels();
+    score.instruments.forEach((instrument, partIndex) => {
+      const resolvedType = resolveInstrumentType(instrument.instrument_type, instrument.name);
+      adapter.initChannel(partIndex, resolvedType);
+    });
   }, [score]);
 
   const initialTempo = (() => {

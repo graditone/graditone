@@ -51,6 +51,15 @@ pub struct MusicXMLDocument {
     /// Populated during part-list parsing (T092 - User Story 3)
     pub part_names: HashMap<String, String>,
 
+    /// Mapping of part ID to MusicXML <instrument-sound> value
+    /// e.g. "P1" -> "strings.violin", "P2" -> "keyboard.piano"
+    /// Language-independent; takes precedence over part name for classification.
+    pub part_instrument_sounds: HashMap<String, String>,
+
+    /// Mapping of part ID to MIDI program number (1-based as in MusicXML).
+    /// Used as secondary fallback when instrument-sound is absent.
+    pub part_midi_programs: HashMap<String, u8>,
+
     /// Feature 022: Title from <work>/<work-title> element
     pub work_title: Option<String>,
 
@@ -370,6 +379,8 @@ impl Default for MusicXMLDocument {
             parts: Vec::new(),
             default_tempo: 120.0,
             part_names: HashMap::new(),
+            part_instrument_sounds: HashMap::new(),
+            part_midi_programs: HashMap::new(),
             work_title: None,
             movement_title: None,
             composer: None,

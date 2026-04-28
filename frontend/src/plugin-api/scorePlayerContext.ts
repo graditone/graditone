@@ -36,7 +36,10 @@ import { addUserScore, getUserScore } from '../services/userScoreIndex';
 import { getSchemaVersion } from '../services/wasm/music-engine';
 import { computeRegionDifficulty } from '../services/wasm/music-engine';
 import type { Note, Score } from '../types/score';
+import type { TaggedNote } from '../types/playback';
 import { expandNotesWithRepeats } from '../services/playback/RepeatNoteExpander';
+import { ToneAdapter } from '../services/playback/ToneAdapter';
+import { resolveInstrumentType } from '../services/playback/InstrumentTimbres';
 
 // ---------------------------------------------------------------------------
 // Bridge type (T005) — internal state exposed to the HOST only, never plugins
@@ -95,37 +98,45 @@ const CATALOGUE: ReadonlyArray<PluginPreloadedScore> = ALL_PRELOADED_SCORES.map(
 // ---------------------------------------------------------------------------
 
 /**
- * Extract all notes from a Score for use with usePlayback.
- * Mirrors ScoreViewer.tsx's allNotes useMemo — collects notes from all voices.
+/**
+ * Extract all notes from a Score, tagging each note with its 0-based instrument
+ * part index (`_partIndex`) for multi-channel audio routing.
+ * Feature 088: Piano and Violin Playback Support
  */
-function extractNotes(score: Score): Note[] {
-  const notes: Note[] = [];
-  for (const instrument of score.instruments) {
+function extractTaggedNotes(score: Score): TaggedNote[] {
+  const notes: TaggedNote[] = [];
+  score.instruments.forEach((instrument, partIndex) => {
     for (const staff of instrument.staves) {
       for (const voice of staff.voices) {
-        notes.push(...voice.interval_events);
+        for (const note of voice.interval_events) {
+          notes.push({ ...note, _partIndex: partIndex });
+        }
       }
     }
-  }
+  });
   return notes;
 }
 
 /**
- * Extract notes per staff from a Score (all voices merged).
+ * Extract notes per staff from a Score (all voices merged), tagging each note
+ * with its 0-based instrument part index (`_partIndex`) so audio routing still
+ * works when a staff filter is active. Feature 088.
  * Returns an array indexed by staff position across all instruments.
  * Used to build per-staff expanded note lists for practice mode.
  */
 function extractNotesByStaff(score: Score): Note[][] {
   const byStaff: Note[][] = [];
-  for (const instrument of score.instruments) {
+  score.instruments.forEach((instrument, partIndex) => {
     for (const staff of instrument.staves) {
       const allNotes: Note[] = [];
       for (const voice of staff.voices) {
-        allNotes.push(...voice.interval_events);
+        for (const note of voice.interval_events) {
+          allNotes.push({ ...note, _partIndex: partIndex } as Note & { _partIndex: number });
+        }
       }
       byStaff.push(allNotes);
     }
-  }
+  });
   return byStaff;
 }
 
@@ -405,10 +416,22 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
         parsedTitle = userScoreMeta?.displayName ?? null;
       }
 
-      const extractedNotes = extractNotes(scoreObject);
+      const extractedNotes = extractTaggedNotes(scoreObject);
       const parsedNotes = expandNotesWithRepeats(extractedNotes, scoreObject.repeat_barlines, scoreObject.volta_brackets);
       const parsedTempo = extractTempo(scoreObject);
       const parsedTimeSignature = extractTimeSignature(scoreObject);
+
+      // Initialise per-instrument audio channels (Feature 088)
+      const toneAdapter = ToneAdapter.getInstance();
+      toneAdapter.destroyChannels();
+      console.log('[scorePlayerContext] instruments:', scoreObject.instruments.map((inst, i) => {
+        const resolved = resolveInstrumentType(inst.instrument_type, inst.name);
+        return `${i}:name="${inst.name}" stored="${inst.instrument_type}" resolved="${resolved}"`;
+      }));
+      scoreObject.instruments.forEach((instrument, partIndex) => {
+        const resolvedType = resolveInstrumentType(instrument.instrument_type, instrument.name);
+        toneAdapter.initChannel(partIndex, resolvedType);
+      });
 
       // Per-staff expanded notes — used by extractPracticeNotes so the
       // practice engine sees repeat-expanded ticks matching the playback engine.

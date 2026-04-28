@@ -158,6 +158,8 @@ impl MusicXMLParser {
         let mut buf = Vec::new();
         let mut current_part_id: Option<String> = None;
         let mut current_part_name = String::new();
+        let mut current_instrument_sound: Option<String> = None;
+        let mut current_midi_program: Option<u8> = None;
 
         loop {
             match reader.read_event_into(&mut buf) {
@@ -171,6 +173,8 @@ impl MusicXMLParser {
                             }
                         }
                         current_part_name.clear();
+                        current_instrument_sound = None;
+                        current_midi_program = None;
                     }
                     b"part-name" => {
                         // Read part name text content
@@ -178,17 +182,43 @@ impl MusicXMLParser {
                             current_part_name = String::from_utf8_lossy(e.as_ref()).to_string();
                         }
                     }
+                    b"instrument-sound" => {
+                        // e.g. "strings.violin", "keyboard.piano.grand"
+                        if let Ok(Event::Text(e)) = reader.read_event_into(&mut buf) {
+                            let sound = e.unescape().unwrap_or_default().trim().to_string();
+                            if !sound.is_empty() {
+                                current_instrument_sound = Some(sound);
+                            }
+                        }
+                    }
+                    b"midi-program" => {
+                        // 1-based MIDI program number
+                        if let Ok(Event::Text(e)) = reader.read_event_into(&mut buf) {
+                            if let Ok(n) = e.unescape().unwrap_or_default().trim().parse::<u8>() {
+                                current_midi_program = Some(n);
+                            }
+                        }
+                    }
                     _ => {}
                 },
                 Ok(Event::End(e)) => match e.name().as_ref() {
                     b"score-part" => {
-                        // Store part name mapping when closing score-part element
+                        // Store all metadata when closing score-part element
                         if let Some(ref part_id) = current_part_id {
                             doc.part_names
                                 .insert(part_id.clone(), current_part_name.clone());
+                            if let Some(ref sound) = current_instrument_sound {
+                                doc.part_instrument_sounds
+                                    .insert(part_id.clone(), sound.clone());
+                            }
+                            if let Some(prog) = current_midi_program {
+                                doc.part_midi_programs.insert(part_id.clone(), prog);
+                            }
                         }
                         current_part_id = None;
                         current_part_name.clear();
+                        current_instrument_sound = None;
+                        current_midi_program = None;
                     }
                     b"part-list" => {
                         break;

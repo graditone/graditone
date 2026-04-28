@@ -21,6 +21,7 @@ use crate::domain::events::rest::RestEvent;
 use crate::domain::events::tempo::TempoEvent;
 use crate::domain::events::time_signature::TimeSignatureEvent;
 use crate::domain::instrument::Instrument;
+use crate::domain::instrument::classify_from_instrument_sound;
 use crate::domain::repeat::{RepeatBarline, VoltaBracket};
 use crate::domain::score::{OctaveShiftRegion, Score};
 use crate::domain::staff::Staff;
@@ -333,8 +334,13 @@ impl MusicXMLConverter {
 
         // Convert each part to an Instrument
         for part_data in doc.parts {
+            let part_id = part_data.id.clone();
+            let instrument_sound = doc.part_instrument_sounds.get(&part_id).cloned();
+            let midi_program = doc.part_midi_programs.get(&part_id).copied();
             let instrument = Self::convert_part(
                 part_data,
+                instrument_sound.as_deref(),
+                midi_program,
                 context,
                 ticks_per_measure,
                 pickup_ticks,
@@ -461,6 +467,8 @@ impl MusicXMLConverter {
     /// Converts PartData to Instrument
     fn convert_part(
         part_data: PartData,
+        instrument_sound: Option<&str>,
+        midi_program: Option<u8>,
         context: &mut ImportContext,
         ticks_per_measure: u32,
         pickup_ticks: u32,
@@ -472,9 +480,25 @@ impl MusicXMLConverter {
             part_data.name.clone()
         };
 
-        // Create instrument with default staff, then clear
-        let mut instrument = Instrument::new(name);
+        // Create instrument — Instrument::new() classifies from the display name.
+        // Override with higher-priority signals when available.
+        let mut instrument = Instrument::new(name.clone());
         instrument.staves.clear();
+
+        // <instrument-sound> is the most reliable signal (language-independent).
+        // Fall back to MIDI program, then the name-based classification already
+        // set by Instrument::new().
+        if let Some(itype) = instrument_sound.and_then(classify_from_instrument_sound) {
+            instrument.instrument_type = itype.to_string();
+        } else if let Some(prog) = midi_program {
+            // Re-classify using MIDI program via the existing classifier.
+            // Pass an empty name so only the MIDI path runs.
+            use crate::domain::instrument::classify_instrument_type;
+            let by_midi = classify_instrument_type("", Some(prog));
+            if by_midi != "default" {
+                instrument.instrument_type = by_midi;
+            }
+        }
 
         // Check staff count and route accordingly
         if part_data.staff_count <= 1 {

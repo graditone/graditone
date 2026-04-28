@@ -119,6 +119,12 @@ interface LayoutViewProps {
    * instead of window.
    */
   scrollContainerRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * Feature 088: CSS pixels reserved by the left mixer sidebar rendered by
+   * ScoreRendererPlugin. Subtracted from system width so the score fits without
+   * overflow when the sidebar is visible.
+   */
+  reservedLeftWidth?: number;
 }
 
 /**
@@ -266,7 +272,7 @@ export function convertScoreToLayoutFormat(score: Score): ConvertedScore {
   };
 }
 
-export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playbackStatus, onNoteClick, selectedNoteId, tickSourceRef, allNotes, rawNotes, pinnedNoteIds, errorNoteIds, expectedNoteIds, scrollTargetNoteIds, pinnedNoteId, onPin, onSeekAndPlay, loopRegion, phrases: phrasesProp, phrasesVisible, selectedPhraseIndex, onPhraseClick, scrollToTick, scrollContainerRef }: LayoutViewProps) {
+export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playbackStatus, onNoteClick, selectedNoteId, tickSourceRef, allNotes, rawNotes, pinnedNoteIds, errorNoteIds, expectedNoteIds, scrollTargetNoteIds, pinnedNoteId, onPin, onSeekAndPlay, loopRegion, phrases: phrasesProp, phrasesVisible, selectedPhraseIndex, onPhraseClick, scrollToTick, scrollContainerRef, reservedLeftWidth }: LayoutViewProps) {
   const [layout, setLayout] = useState<GlobalLayout | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -314,7 +320,7 @@ export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playba
    */
   const MAX_SYSTEM_WIDTH = 3000;
   const maxSystemWidth = containerWidth > 0
-    ? Math.min(MAX_SYSTEM_WIDTH, Math.max(800, Math.floor(containerWidth / BASE_SCALE) - LABEL_MARGIN - RIGHT_MARGIN))
+    ? Math.min(MAX_SYSTEM_WIDTH, Math.max(800, Math.floor((containerWidth - (reservedLeftWidth ?? 0)) / BASE_SCALE) - LABEL_MARGIN - RIGHT_MARGIN))
     : DEFAULT_SYSTEM_WIDTH;
 
   // Consume theme-derived render config from context (provided by App.tsx).
@@ -439,6 +445,7 @@ export function LayoutView({ score, highlightedNoteIds, onTogglePlayback, playba
         scrollToTick={scrollToTick}
         scrollContainerRef={scrollContainerRef}
       />
+
     </div>
   );
 }

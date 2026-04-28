@@ -157,6 +157,8 @@ export function add_voice(score_js: any, staff_id: string): any;
  */
 export function compute_layout_wasm(score_json: string, config_json: string): any;
 
+export function compute_region_difficulty(score_js: any, start_measure: number, end_measure: number, staff_index: number): any;
+
 /**
  * Create a new empty score with default structural events
  *
@@ -167,6 +169,12 @@ export function compute_layout_wasm(score_json: string, config_json: string): an
  * * JsValue representing the new Score with default tempo (120 BPM) and time signature (4/4)
  */
 export function create_score(_title?: string | null): any;
+
+/**
+ * Return the current score schema version so the frontend can validate
+ * cached scores without maintaining a duplicate constant.
+ */
+export function get_schema_version(): number;
 
 /**
  * Parse MusicXML content and return ImportResult with Score, metadata, statistics, and warnings
@@ -196,7 +204,9 @@ export interface InitOutput {
     readonly add_time_signature_event: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly add_voice: (a: number, b: number, c: number, d: number) => void;
     readonly compute_layout_wasm: (a: number, b: number, c: number, d: number, e: number) => void;
+    readonly compute_region_difficulty: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly create_score: (a: number, b: number, c: number) => void;
+    readonly get_schema_version: () => number;
     readonly layoutconfigwasm_max_system_width: (a: number) => number;
     readonly layoutconfigwasm_new: () => number;
     readonly layoutconfigwasm_set_max_system_width: (a: number, b: number) => void;
