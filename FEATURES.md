@@ -243,3 +243,25 @@ Extends tempo control precision for both Play Score and Practice View, and adds 
 
 **Spec**: `specs/083-tempo-metronome-practice/`  
 **Updated**: July 2025
+
+---
+
+## One-Goal 40% Session Time Cap — Feature 087
+
+Prevents a single goal from monopolising all practice time when multiple active goals exist. When a second (or subsequent) goal is created, the session planner redistributes pending tasks from all active goals using a **40% per-goal cap** per session.
+
+### Capabilities
+
+- **Per-goal time cap**: Each goal may contribute at most 40% of `availableTime` (3600 s) per session — i.e. ≤ 1440 s — when multiple goals are active
+- **Greedy round-robin distribution**: `distributeMultiGoalTasks()` fills sessions using per-goal FIFO phrase queues, iterating goals until nothing more fits
+- **Best-effort first group**: A goal's first phrase group in any session is always admitted even if it exceeds the 40% budget (avoids starving large phrase groups)
+- **Zero-duration tasks are free**: Tasks without `estimatedDurationSecs` contribute 0 s toward the goal budget and may be placed freely
+- **Single-goal bypass**: When only one goal is active, distribution delegates unchanged to `distributeTasks()` (no cap applied)
+- **Unlimited mode preserved**: Setting `availableTime = 0` still packs all tasks in one session regardless of goal count
+- **Excess deferral, no dropping**: Phrase groups that don't fit in session N roll to session N+1; no tasks are ever discarded
+- **Multi-goal session metadata**: `Session.goalIds` and `SessionIndexEntry.goalIds` record which goals contributed tasks to each session
+- **Redistribution on new goal**: Adding a goal triggers deletion of all existing sessions for other active goals and recreates them with the capped distribution
+- **GoalPhraseGroup reconstruction**: `reconstructPhraseGroupsFromTasks()` rebuilds phrase groups from flat `SessionTask[]` for redistribution
+
+**Spec**: `specs/087-one-goal-40pct-cap/`  
+**Updated**: July 2025
