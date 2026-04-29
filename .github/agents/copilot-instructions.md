@@ -176,6 +176,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - localStorage (profile-scoped via `scopedSetItem`) — per-instrument volumes only (088-piano-violin-playback)
 - TypeScript 5.5+, React 19 + React 19, Vitest 2, @testing-library/react 16, jsdom 24, Vite (build) (087-sessions-rescheduling)
 - IndexedDB (full `Session` objects via `saveSessionToIndexedDB`) + localStorage (lightweight `SessionIndexEntry[]` via `scopedSetItem`) — both already profile-scoped (087-sessions-rescheduling)
+- TypeScript 5.x (React 18+); no Rust/WASM changes + React 18+, Vite, Tone.js, Plugin API (`PluginScorePlayerContext`), `ToneAdapter`/`PlaybackChannel` (Feature 088) (089-piano-violin-practice)
+- Page-session module state only — no `localStorage`, no `IndexedDB` (089-piano-violin-practice)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -196,10 +198,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 089-piano-violin-practice: Added TypeScript 5.x (React 18+); no Rust/WASM changes + React 18+, Vite, Tone.js, Plugin API (`PluginScorePlayerContext`), `ToneAdapter`/`PlaybackChannel` (Feature 088)
 - 088-piano-violin-playback: Added Rust (stable 1.75+), TypeScript 5, React 18 + Tone.js (existing), wasm-pack/wasm-bindgen (existing), React 18, Vite
 - 087-sessions-rescheduling: Added TypeScript 5.5+, React 19 + React 19, Vitest 2, @testing-library/react 16, jsdom 24, Vite (build)
-- 085-fix-metronome-issues: Added TypeScript 5.x, React 18+ + Tone.js (Transport scheduling, audio synthesis), Vitest, React Testing Library
-- 083-tempo-metronome-practice: Added TypeScript 5.x (strict), Rust 1.x WASM (no backend changes required) + React 19.2, Tone.js 14.9, Vite 6.x, Vitest 3.x, @testing-library/react, Playwrigh
 
 
 <!-- MANUAL ADDITIONS START -->
