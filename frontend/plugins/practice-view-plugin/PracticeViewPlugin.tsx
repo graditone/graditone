@@ -38,6 +38,7 @@ import { usePracticeMidi } from './usePracticeMidi';
 import { usePracticeHighlights } from './usePracticeHighlights';
 import { usePhantomTempo } from './usePhantomTempo';
 import { useHoldProgress } from './useHoldProgress';
+import { useAccompaniment } from './useAccompaniment';
 import { useMidiConnectivity } from './useMidiConnectivity';
 import { measureRangeToTicks } from './measureRangeToTicks';
 import { ResultsOverlay } from './ResultsOverlay';
@@ -127,6 +128,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const [tempoMultiplier, setTempoMultiplier] = useState(1.0);
   const tempoMultiplierRef = useRef(tempoMultiplier);
   tempoMultiplierRef.current = tempoMultiplier;
+
+  // ─── Accompaniment (Feature 089) ───────────────────────────────────────────
+  const { playAccompanimentAtTick } =
+    useAccompaniment(context.scorePlayer);
 
   // ─── Metronome state ───────────────────────────────────────────────────────
   const [metronomeState, setMetronomeState] = useState<MetronomeState>(INITIAL_METRONOME_STATE);
@@ -491,6 +496,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     practiceStartTimeRef,
     selectedStaffIndex,
     onFirstNoteAttack,
+    onCorrectNote: (tick) => {
+      // Feature 089: trigger accompaniment (violin etc.) notes aligned with
+      // this practice step. PPQ=960 matches the usePracticeMidi constant.
+      playAccompanimentAtTick(tick, playerState.bpm, 960);
+    },
   });
 
   // ─── Teardown (SC-006) ──────────────────────────────────────────────────────

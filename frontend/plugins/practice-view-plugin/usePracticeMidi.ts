@@ -29,6 +29,12 @@ export interface UsePracticeMidiParams {
    * is in 'waiting' mode. Used to trigger deferred metronome start.
    */
   onFirstNoteAttack?: () => void;
+  /**
+   * Feature 089: Called when the user correctly plays a practice note.
+   * Used to trigger accompaniment (violin, etc.) audio in sync with the
+   * practice step. Receives the expanded tick and BPM for timing calculation.
+   */
+  onCorrectNote?: (tick: number, durationTicks: number) => void;
 }
 
 export interface UsePracticeMidiReturn {
@@ -78,6 +84,7 @@ export function usePracticeMidi({
   practiceStartTimeRef,
   selectedStaffIndex: _selectedStaffIndex,
   onFirstNoteAttack,
+  onCorrectNote,
 }: UsePracticeMidiParams): UsePracticeMidiReturn {
   // ─── Chord detector ─────────────────────────────────────────────────────────
   const chordDetectorRef = useRef(new ChordDetector());
@@ -312,6 +319,8 @@ export function usePracticeMidi({
           pressTimeMs: Date.now(),
           requiredHoldMs: entryRequiredHoldMs,
         });
+        // Feature 089: Sound the accompaniment notes that align with this practice tick.
+        onCorrectNote?.(currentEntry.tick, currentEntry.durationTicks);
       } else if (!isInChord && !isSustained) {
         const wrongResponseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
         dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs: wrongResponseTimeMs });

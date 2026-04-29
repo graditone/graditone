@@ -18,7 +18,6 @@ import type { PluginPlaybackStatus, MetronomeSubdivision } from '../../src/plugi
 import { ProfileIcon, computeEffectiveMinMultiplier, MIN_TEMPO_MULTIPLIER, ABSOLUTE_BPM_FLOOR } from '../../src/plugin-api/index';
 import type { PracticeMode } from './practiceEngine.types';
 import { useTranslation } from '../../src/i18n';
-
 // Mirror of PlaybackScheduler.PPQ — no host imports allowed
 const PPQ = 960;
 

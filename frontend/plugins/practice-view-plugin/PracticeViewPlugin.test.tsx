@@ -154,6 +154,11 @@ function createMockContext(
       getCurrentTickLive: () => 0,
       extractPracticeNotes: mockExtractPracticeNotes,
       setPlaybackStaffFilter: vi.fn(),
+      // v11 additions (Feature 089)
+      getInstruments: vi.fn(() => []),
+      setPartVolume: vi.fn(),
+      getAccompanimentNotesAtTick: vi.fn(() => []),
+      playAccompanimentAtTick: vi.fn(),
     },
     metronome: {
       toggle: vi.fn().mockResolvedValue(undefined),

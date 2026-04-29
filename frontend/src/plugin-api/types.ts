@@ -1,5 +1,5 @@
 /**
- * Graditone Plugin API — Types (v10)
+ * Graditone Plugin API — Types (v11)
  * Feature 030: Plugin Architecture (v1 baseline)
  * Feature 031: Practice View Plugin — adds recording namespace and offsetMs (v2)
  * Feature 033: Play Score Plugin — adds scorePlayer namespace, ScoreRenderer component (v3)
@@ -12,6 +12,8 @@
  *              protectedPracticeIds on ScoreSelector (v8)
  * Feature 067: Practice Goals — adds getPhrases() to PluginScorePlayerContext (v9)
  * Feature 070: Session task distribution — adds getRegionDifficulty() (v10)
+ * Feature 089: Piano practice with violin accompaniment — adds PluginInstrumentInfo,
+ *              getInstruments(), setPartVolume() (v11)
  *
  * Defines all public types for the Graditone Plugin API.
  * See specs/030-plugin-architecture/contracts/plugin-api.ts for the v1 canonical contract.
@@ -534,6 +536,35 @@ export interface ScorePlayerState {
 export type HandMode = 'both' | 'right' | 'left';
 
 /**
+ * Feature 089: Descriptor for a single instrument part from the loaded score.
+ * Returned by PluginScorePlayerContext.getInstruments().
+ *
+ * Piano detection: `instrumentType === "piano"`
+ * Accompaniment parts: all entries where `instrumentType !== "piano"`
+ */
+export interface PluginInstrumentInfo {
+  /**
+   * 0-based part index.
+   * Matches ToneAdapter channel keys and TaggedNote._partIndex.
+   * Used as the `partIndex` argument to setPartVolume().
+   */
+  partIndex: number;
+  /**
+   * Canonical instrument type resolved from MusicXML metadata.
+   * Resolved at score load via resolveInstrumentType() in InstrumentTimbres.ts.
+   * Examples: "piano", "violin", "cello", "viola", "flute", "guitar"
+   */
+  instrumentType: string;
+  /** Human-readable display name from the MusicXML <part-name> element. */
+  name: string;
+  /**
+   * Number of staves for this instrument.
+   * Piano typically has 2 (treble + bass grand staff); most others have 1.
+   */
+  staffCount: number;
+}
+
+/**
  * Score player context injected into plugins via context.scorePlayer.
  * v3 extension enabling score loading, playback control, and subscriptions.
  * For v2 plugins this namespace is injected as a no-op stub.
@@ -686,6 +717,69 @@ export interface PluginScorePlayerContext {
    * (full playback restored).
    */
   setPlaybackStaffFilter(staffIndex: number | null): void;
+
+  // ─── v11 additions ────────────────────────────────────────────────────────
+
+  /**
+   * Feature 089: Returns the instrument list from the currently-loaded score.
+   *
+   * Returns an empty array when no score is loaded.
+   * Parts are ordered by their 0-based partIndex (matching MusicXML part order).
+   *
+   * Use case: detect whether the score has piano and non-piano parts (accompaniment).
+   * Piano detection: `info.instrumentType === "piano"`
+   * Accompaniment parts: all entries where `instrumentType !== "piano"`
+   */
+  getInstruments(): ReadonlyArray<PluginInstrumentInfo>;
+
+  /**
+   * Feature 089: Set the audio gain for a specific instrument part channel.
+   *
+   * `volume` is a linear scalar in [0.0, 1.0]:
+   *   - 0.0 = fully muted (silence)
+   *   - 1.0 = full channel volume (default at score load)
+   *   - 0.7 = the recommended accompaniment default
+   *
+   * The change takes effect immediately on the Tone.js Volume node (≤16ms).
+   * `volume` is clamped to [0.0, 1.0] by the host. Out-of-range `partIndex`
+   * values are silently ignored. Has no effect before a score is loaded.
+   *
+   * @param partIndex 0-based instrument part index from PluginInstrumentInfo.partIndex
+   * @param volume    Linear gain scalar, clamped to [0.0, 1.0]
+   */
+  setPartVolume(partIndex: number, volume: number): void;
+
+  /**
+   * Feature 089: Returns all accompaniment (non-piano) notes whose
+   * start_tick is within `tickWindow` ticks of `tick`.
+   * Ticks are in repeat-expanded space (same as the practice engine).
+   * Used by the practice plugin to trigger accompaniment audio when
+   * a correct piano note is played in step-by-step practice mode.
+   *
+   * Returns an empty array if there are no accompaniment instruments
+   * or no score is loaded.
+   *
+   * @param tick       Expanded tick of the practice entry
+   * @param tickWindow Search radius in ticks (default 240)
+   */
+  getAccompanimentNotesAtTick(tick: number, tickWindow?: number): ReadonlyArray<{
+    pitch: number;
+    partIndex: number;
+    durationTicks: number;
+  }>;
+
+  /**
+   * Feature 089: Immediately play the accompaniment notes that align with
+   * the given tick (repeat-expanded tick space, same as the practice engine).
+   *
+   * Respects each channel's mute state — muted parts are silently skipped.
+   * No-op when there are no accompaniment instruments or no score is loaded.
+   *
+   * @param tick         Expanded tick of the practice entry
+   * @param bpm          Effective BPM (used to convert durationTicks → seconds)
+   * @param ticksPerBeat Ticks per quarter-note (typically 960)
+   */
+  playAccompanimentAtTick(tick: number, bpm: number, ticksPerBeat: number): void;
 }
 
 /**

@@ -40,6 +40,7 @@ import type { TaggedNote } from '../types/playback';
 import { expandNotesWithRepeats } from '../services/playback/RepeatNoteExpander';
 import { ToneAdapter } from '../services/playback/ToneAdapter';
 import { resolveInstrumentType } from '../services/playback/InstrumentTimbres';
+import * as Tone from 'tone';
 
 // ---------------------------------------------------------------------------
 // Bridge type (T005) — internal state exposed to the HOST only, never plugins
@@ -186,6 +187,25 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
   // ─── Score state ────────────────────────────────────────────────────────
 
   const [score, setScore] = useState<Score | null>(null);
+  /**
+   * Feature 089: Ref kept in sync with the `score` state so that
+   * getInstruments() can capture it with [] deps (stable callback).
+   */
+  const scoreRef = useRef<Score | null>(null);
+  /**
+   * Feature 089: 0-based index into expandedNotesByStaff where the piano
+   * instrument's staves begin. For single-instrument (piano-only) scores this
+   * is always 0. For violin+piano it is the violin's stave count (1).
+   * Stored as a ref so setPlaybackStaffFilter / extractPracticeNotes can
+   * use it with [] deps without stale-closure risk.
+   */
+  const pianoStaffOffsetRef = useRef(0);
+  /**
+   * Feature 089: Flat array of all notes from non-piano (accompaniment)
+   * instrument staves. Rebuilt at score load. Kept in a ref so
+   * getAccompanimentNotesAtTick() can use [] deps.
+   */
+  const accompanimentNotesRef = useRef<Array<{ pitch: number; partIndex: number; durationTicks: number; startTick: number }>>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [rawNotes, setRawNotes] = useState<Note[]>([]);
   /** Expanded notes per staff (indexed by staff position), used by extractPracticeNotes. */
@@ -218,7 +238,13 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     if (playbackStaffFilter === null) return notes;
     const staffNotes = expandedNotesByStaff[playbackStaffFilter];
     if (!staffNotes) return notes; // out-of-range: fall back to all notes
-    return staffNotes;
+    // Feature 089: accompaniment staves (e.g. violin) live at global indices
+    // 0..(pianoStaffOffset-1). They must always play regardless of which piano
+    // hand is selected. Concatenate them with the selected piano staff's notes.
+    const offset = pianoStaffOffsetRef.current;
+    if (offset === 0) return staffNotes;
+    const accompanimentNotes = expandedNotesByStaff.slice(0, offset).flat() as Note[];
+    return [...accompanimentNotes, ...staffNotes];
   }, [notes, expandedNotesByStaff, playbackStaffFilter]);
 
   // ─── Playback engine ─────────────────────────────────────────────────────
@@ -300,7 +326,12 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
 
   // Notify all subscribers when state changes
   useEffect(() => {
-    const staffCount = score ? (score.instruments[0]?.staves.length ?? 0) : 0;
+    // Feature 089: use piano instrument's stave count so the hands dropdown
+    // shows correctly in multi-instrument scores (violin+piano).
+    const pianoInst = score?.instruments.find(i =>
+      resolveInstrumentType(i.instrument_type, i.name) === 'piano'
+    ) ?? score?.instruments[0];
+    const staffCount = pianoInst?.staves.length ?? 0;
     const newState: ScorePlayerState = {
       status: pluginStatus,
       currentTick: playbackState.currentTick,
@@ -432,7 +463,19 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
         const resolvedType = resolveInstrumentType(instrument.instrument_type, instrument.name);
         toneAdapter.initChannel(partIndex, resolvedType);
       });
-
+      // Feature 089: Find the piano instrument's global staff offset so that
+      // hand selection and practice note extraction target the piano part in
+      // multi-instrument scores (e.g. violin+piano where violin is part 0).
+      // Fall back to instrument[0] for single-instrument / non-piano scores.
+      const pianoInstIndex = scoreObject.instruments.findIndex(inst =>
+        resolveInstrumentType(inst.instrument_type, inst.name) === 'piano'
+      );
+      const practiceInstIndex = pianoInstIndex >= 0 ? pianoInstIndex : 0;
+      let pianoOffset = 0;
+      for (let i = 0; i < practiceInstIndex; i++) {
+        pianoOffset += scoreObject.instruments[i].staves.length;
+      }
+      pianoStaffOffsetRef.current = pianoOffset;
       // Per-staff expanded notes — used by extractPracticeNotes so the
       // practice engine sees repeat-expanded ticks matching the playback engine.
       const rawNotesByStaff = extractNotesByStaff(scoreObject);
@@ -440,10 +483,35 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
         expandNotesWithRepeats(staffNotes, scoreObject!.repeat_barlines, scoreObject!.volta_brackets)
       );
 
+      // Feature 089: Build flat accompaniment note list from the pre-piano staves.
+      // Uses repeat-expanded ticks so they match the practice engine's tick space.
+      // partIndex is the instrument index (same as ToneAdapter channel index).
+      {
+        const accompNotes: Array<{ pitch: number; partIndex: number; durationTicks: number; startTick: number }> = [];
+        let staffGlobalIdx = 0;
+        for (let instrIdx = 0; instrIdx < practiceInstIndex; instrIdx++) {
+          const instr = scoreObject.instruments[instrIdx];
+          for (let staffIdx = 0; staffIdx < instr.staves.length; staffIdx++) {
+            const expanded = parsedNotesByStaff[staffGlobalIdx] ?? [];
+            for (const note of expanded) {
+              accompNotes.push({
+                pitch: note.pitch,
+                partIndex: instrIdx,
+                durationTicks: note.duration_ticks,
+                startTick: note.start_tick,
+              });
+            }
+            staffGlobalIdx++;
+          }
+        }
+        accompanimentNotesRef.current = accompNotes;
+      }
+
       // Reset playback state for the new score
       playbackState.resetPlayback();
 
       setScore(scoreObject);
+      scoreRef.current = scoreObject;
       setNotes(parsedNotes);
       setRawNotes(extractedNotes);
       setExpandedNotesByStaff(parsedNotesByStaff);
@@ -528,7 +596,10 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
 
       // Use pre-expanded per-staff notes so the practice engine sees repeat-
       // expanded ticks that match the playback engine tick space.
-      const staffNotes = expandedNotesByStaff[staffIndex] ?? expandedNotesByStaff[0] ?? [];
+      // Feature 089: map the piano-local staffIndex to the global index in
+      // expandedNotesByStaff by adding the piano instrument's staff offset.
+      const globalStaffIndex = pianoStaffOffsetRef.current + staffIndex;
+      const staffNotes = expandedNotesByStaff[globalStaffIndex] ?? expandedNotesByStaff[pianoStaffOffsetRef.current] ?? [];
 
       // Feature 051: Exclude tie continuation notes — only independently-attacked notes
       // should appear as practice steps.
@@ -721,8 +792,87 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
    * Pass null to restore full (all-staves) playback.
    */
   const setPlaybackStaffFilter = useCallback((staffIndex: number | null): void => {
-    setPlaybackStaffFilterState(staffIndex);
+    // Feature 089: map the piano-local staff index to the global index in
+    // expandedNotesByStaff by adding the piano instrument's staff offset.
+    // For single-instrument piano scores the offset is always 0.
+    if (staffIndex === null) {
+      setPlaybackStaffFilterState(null);
+    } else {
+      setPlaybackStaffFilterState(pianoStaffOffsetRef.current + staffIndex);
+    }
   }, []);
+  // ─── getInstruments (Feature 089) ───────────────────────────────────────────────────
+
+  /**
+   * Returns the instrument list from the currently-loaded score.
+   * Reads from scoreRef (stable ref kept in sync with score state) so this
+   * callback can be memoized with [] deps.
+   */
+  const getInstruments = useCallback((): ReadonlyArray<import('./types').PluginInstrumentInfo> => {
+    const currentScore = scoreRef.current;
+    if (!currentScore) return [];
+    return currentScore.instruments.map((instrument, index) => ({
+      partIndex: index,
+      instrumentType: resolveInstrumentType(instrument.instrument_type, instrument.name),
+      name: instrument.name,
+      staffCount: instrument.staves.length,
+    }));
+  }, []);
+
+  // ─── setPartVolume (Feature 089) ─────────────────────────────────────────────────────
+
+  /**
+   * Set the audio gain for a specific instrument channel.
+   * Delegates to ToneAdapter.getInstance().getChannel(partIndex)?.setVolume().
+   * Volume is clamped to [0.0, 1.0]. Out-of-range partIndex silently ignored.
+   */
+  const setPartVolume = useCallback((partIndex: number, volume: number): void => {
+    const clamped = Math.max(0, Math.min(1, volume));
+    ToneAdapter.getInstance().getChannel(partIndex)?.setVolume(clamped);
+  }, []);
+
+  // ─── getAccompanimentNotesAtTick (Feature 089) ───────────────────────────
+
+  /**
+   * Returns all accompaniment (non-piano) notes whose start_tick is within
+   * `tickWindow` ticks of `tick`. Used by the practice plugin to sound the
+   * accompaniment note that corresponds to a correct piano key press.
+   *
+   * Notes use the raw (non-repeat-expanded) score ticks because the practice
+   * engine operates in expanded tick space; callers should provide the
+   * expanded tick and a generous window (default 240 = 1/8 note at 120 BPM).
+   */
+  const getAccompanimentNotesAtTick = useCallback(
+    (tick: number, tickWindow = 240): ReadonlyArray<{ pitch: number; partIndex: number; durationTicks: number }> => {
+      const notes = accompanimentNotesRef.current;
+      if (notes.length === 0) return [];
+      return notes.filter(n => Math.abs(n.startTick - tick) <= tickWindow);
+    },
+    [],
+  );
+
+  // ─── playAccompanimentAtTick (Feature 089) ────────────────────────────────
+
+  /**
+   * Immediately plays all accompaniment notes at the given tick via ToneAdapter.
+   * Host-side implementation: plugins call this via the API without needing to
+   * import ToneAdapter directly (plugin API boundary enforcement).
+   */
+  const playAccompanimentAtTick = useCallback(
+    (tick: number, bpm: number, ticksPerBeat: number): void => {
+      const notes = accompanimentNotesRef.current;
+      if (notes.length === 0 || bpm <= 0 || ticksPerBeat <= 0) return;
+      const matching = notes.filter(n => Math.abs(n.startTick - tick) <= 240);
+      if (matching.length === 0) return;
+      const secondsPerTick = (60 / bpm) / ticksPerBeat;
+      const now = Tone.now();
+      for (const note of matching) {
+        const durationSec = note.durationTicks * secondsPerTick;
+        ToneAdapter.getInstance().getChannel(note.partIndex)?.playNote(note.pitch, durationSec, now, 64);
+      }
+    },
+    [],
+  );
 
   // ─── Return the bridge object ─────────────────────────────────────────────
 
@@ -746,6 +896,10 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     getRegionDifficulty,
     getRegionDifficultyForScore,
     setPlaybackStaffFilter,
+    getInstruments,
+    setPartVolume,
+    getAccompanimentNotesAtTick,
+    playAccompanimentAtTick,
   }), [
     getCatalogue,
     loadScore,
@@ -766,6 +920,10 @@ export function useScorePlayerBridge(): ScorePlayerBridge {
     getRegionDifficulty,
     getRegionDifficultyForScore,
     setPlaybackStaffFilter,
+    getInstruments,
+    setPartVolume,
+    getAccompanimentNotesAtTick,
+    playAccompanimentAtTick,
   ]);
 
   const internal = useMemo((): ScorePlayerInternal => ({
@@ -844,6 +1002,10 @@ export function createNoOpScorePlayer(): PluginScorePlayerContext {
     getRegionDifficulty: () => null,
     getRegionDifficultyForScore: async () => null,
     setPlaybackStaffFilter: (_staffIndex: number | null) => {},
+    getInstruments: () => [],
+    setPartVolume: (_partIndex: number, _volume: number) => {},
+    getAccompanimentNotesAtTick: () => [],
+    playAccompanimentAtTick: () => {},
   };
 }
 
@@ -884,5 +1046,9 @@ export function createScorePlayerProxy(
     getRegionDifficulty: (...args) => proxyRef.current.getRegionDifficulty(...args),
     getRegionDifficultyForScore: (...args) => proxyRef.current.getRegionDifficultyForScore(...args),
     setPlaybackStaffFilter: (...args) => proxyRef.current.setPlaybackStaffFilter(...args),
+    getInstruments: () => proxyRef.current.getInstruments(),
+    setPartVolume: (...args) => proxyRef.current.setPartVolume(...args),
+    getAccompanimentNotesAtTick: (...args) => proxyRef.current.getAccompanimentNotesAtTick(...args),
+    playAccompanimentAtTick: (...args) => proxyRef.current.playAccompanimentAtTick(...args),
   };
 }
