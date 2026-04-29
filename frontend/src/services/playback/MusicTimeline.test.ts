@@ -22,6 +22,7 @@ describe('MusicTimeline - usePlayback hook', () => {
           stopAll: vi.fn(),
           getCurrentTime: vi.fn(() => 0),
           playNote: vi.fn(), // US2: Add playNote mock for scheduler
+          playNoteOnChannel: vi.fn(), // US3: Multi-channel playback
           startTransport: vi.fn(),
           stopTransport: vi.fn(),
           clearSchedule: vi.fn(),

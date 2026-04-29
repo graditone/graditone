@@ -13,14 +13,16 @@
  *   - Renders a "back to start" button at the bottom of the score area (FR-010)
  */
 
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useEffect } from 'react';
 import { LayoutView } from '../layout/LayoutView';
+import { InstrumentMixerOverlay } from '../notation/InstrumentMixerOverlay';
 import type { PluginScoreRendererProps } from '../../plugin-api/types';
 import { usePhraseState } from '../../hooks/usePhraseState';
 import { useTranslation } from '../../i18n/index';
 import './ScoreRendererPlugin.css';
 import type { Note, Score } from '../../types/score';
 import type { PlaybackStatus, ITickSource } from '../../types/playback';
+import { useInstrumentMixer } from '../../services/profiles/useInstrumentMixer';
 
 // ---------------------------------------------------------------------------
 // Internal props (host-to-host, never exposed to plugins)
@@ -114,6 +116,17 @@ export function ScoreRendererPlugin({
   // Ref to the scrollable wrapper — passed to LayoutView so ScoreViewer
   // drives scroll on this element instead of window.
   const layoutWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Feature 088: Instrument mixer (mute/volume per instrument)
+  const { mixerState, toggleMute, setVolume: setInstrumentVolume, initMixer } = useInstrumentMixer();
+  useEffect(() => {
+    if (score?.instruments) {
+      // Use an empty string for scoreId when we don't have access to it here —
+      // persistence is best-effort; scoreId-scoped persistence is handled in
+      // scorePlayerContext.initChannel which already knows the scoreId.
+      initMixer(score.instruments, score.id ?? '');
+    }
+  }, [score?.instruments, score?.id, initMixer]);
 
   // Feature 062: Filter phrases to primary instrument (index 0) so that
   // multi-instrument scores (e.g. piano with treble+bass) don't produce
@@ -250,83 +263,94 @@ export function ScoreRendererPlugin({
 
   return (
     <div style={styles.container} onContextMenu={e => e.preventDefault()}>
-      <div ref={layoutWrapperRef} style={styles.layoutViewWrapper}>
-        <LayoutView
-          score={score}
-          allNotes={allNotes}
-          rawNotes={rawNotes}
-          tickSourceRef={tickSourceRef}
-          highlightedNoteIds={highlightedNoteIds instanceof Set ? highlightedNoteIds : new Set(highlightedNoteIds)}
-          pinnedNoteIds={pinnedNoteIds instanceof Set ? pinnedNoteIds : new Set(pinnedNoteIds)}
-          errorNoteIds={errorNoteIds ? (errorNoteIds instanceof Set ? errorNoteIds : new Set(errorNoteIds)) : undefined}
-          expectedNoteIds={expectedNoteIds ? (expectedNoteIds instanceof Set ? expectedNoteIds : new Set(expectedNoteIds)) : undefined}
-          scrollTargetNoteIds={scrollTargetNoteIds ? (scrollTargetNoteIds instanceof Set ? scrollTargetNoteIds : new Set(scrollTargetNoteIds)) : undefined}
-          pinnedNoteId={pinnedNoteId}
-          loopRegion={overlayLoopRegion}
-          phrasesVisible={phrasesVisible}
-          selectedPhraseIndex={selectedPhraseIndex}
-          onPhraseClick={selectPhrase}
-          phrases={instrumentPhrases}
-          scrollToTick={phrasesVisible && selectedPhraseIndex != null && instrumentPhrases[selectedPhraseIndex] ? instrumentPhrases[selectedPhraseIndex].start_tick : null}
-          playbackStatus={playbackStatus}
-          scrollContainerRef={layoutWrapperRef}
-          onTogglePlayback={onCanvasTap}
-          onNoteClick={(noteId: string) => {
-            const tick = noteIdToTick.get(noteId) ?? 0;
-            onNoteShortTap(tick, noteId);
-          }}
-          onPin={handlePin}
-          onSeekAndPlay={(tick: number) => {
-            onNoteShortTap(tick, '');
-          }}
+      {/* Feature 088: Left mixer sidebar — outside scroll container, never drifts */}
+      {mixerState.isMultiInstrument && (
+        <InstrumentMixerOverlay
+          mixerState={mixerState}
+          onToggleMute={toggleMute}
+          onVolumeChange={setInstrumentVolume}
         />
-      </div>
+      )}
+      <div style={styles.scoreColumn}>
+        <div ref={layoutWrapperRef} style={styles.layoutViewWrapper}>
+          <LayoutView
+            score={score}
+            allNotes={allNotes}
+            rawNotes={rawNotes}
+            tickSourceRef={tickSourceRef}
+            highlightedNoteIds={highlightedNoteIds instanceof Set ? highlightedNoteIds : new Set(highlightedNoteIds)}
+            pinnedNoteIds={pinnedNoteIds instanceof Set ? pinnedNoteIds : new Set(pinnedNoteIds)}
+            errorNoteIds={errorNoteIds ? (errorNoteIds instanceof Set ? errorNoteIds : new Set(errorNoteIds)) : undefined}
+            expectedNoteIds={expectedNoteIds ? (expectedNoteIds instanceof Set ? expectedNoteIds : new Set(expectedNoteIds)) : undefined}
+            scrollTargetNoteIds={scrollTargetNoteIds ? (scrollTargetNoteIds instanceof Set ? scrollTargetNoteIds : new Set(scrollTargetNoteIds)) : undefined}
+            pinnedNoteId={pinnedNoteId}
+            loopRegion={overlayLoopRegion}
+            phrasesVisible={phrasesVisible}
+            selectedPhraseIndex={selectedPhraseIndex}
+            onPhraseClick={selectPhrase}
+            phrases={instrumentPhrases}
+            scrollToTick={phrasesVisible && selectedPhraseIndex != null && instrumentPhrases[selectedPhraseIndex] ? instrumentPhrases[selectedPhraseIndex].start_tick : null}
+            playbackStatus={playbackStatus}
+            scrollContainerRef={layoutWrapperRef}
+            onTogglePlayback={onCanvasTap}
+            onNoteClick={(noteId: string) => {
+              const tick = noteIdToTick.get(noteId) ?? 0;
+              onNoteShortTap(tick, noteId);
+            }}
+            onPin={handlePin}
+            onSeekAndPlay={(tick: number) => {
+              onNoteShortTap(tick, '');
+            }}
+            reservedLeftWidth={mixerState.isMultiInstrument ? 52 : 0}
+          />
+        </div>
 
-      {/* Feature 062: Phrases toggle + FR-010: Back to start */}
-      <div className="score-renderer-bottom-bar">
-        <button
-          className={`score-renderer-phrases-btn${phrasesVisible ? ' active' : ''}`}
-          onClick={togglePhrases}
-          disabled={!hasPhrases}
-          aria-label={phrasesVisible ? t('score.phrases.hide_aria') : t('score.phrases.show_aria')}
-          aria-pressed={phrasesVisible}
-          title={hasPhrases ? (phrasesVisible ? t('score.phrases.hide_aria') : t('score.phrases.show_aria')) : t('score.phrases.none_title')}
-        >
-          {t('score.phrases.toggle')}
-        </button>
-        {phrasesVisible && (
-          <>
-            <button
-              className="score-renderer-nav-btn"
-              onClick={goToPreviousPhrase}
-              aria-label={t('score.phrases.prev_aria')}
-              title={t('score.phrases.prev_aria')}
-            >
-              {t('score.phrases.prev')}
-            </button>
-            <button
-              className="score-renderer-nav-btn"
-              onClick={goToNextPhrase}
-              aria-label={t('score.phrases.next_aria')}
-              title={t('score.phrases.next_aria')}
-            >
-              {t('score.phrases.next')}
-            </button>
-          </>
-        )}
-        <button
-          className="score-renderer-return-btn"
-          onClick={() => {
-            onReturnToStart();
-            if (layoutWrapperRef.current) {
-              layoutWrapperRef.current.scrollTop = 0;
-            }
-          }}
-          aria-label={t('score.return_to_start_aria')}
-          title={t('score.return_to_start_aria')}
-        >
-          {t('score.return_to_start')}
-        </button>
+        {/* Feature 062: Phrases toggle + FR-010: Back to start */}
+        <div className="score-renderer-bottom-bar">
+          <button
+            className={`score-renderer-phrases-btn${phrasesVisible ? ' active' : ''}`}
+            onClick={togglePhrases}
+            disabled={!hasPhrases}
+            aria-label={phrasesVisible ? t('score.phrases.hide_aria') : t('score.phrases.show_aria')}
+            aria-pressed={phrasesVisible}
+            title={hasPhrases ? (phrasesVisible ? t('score.phrases.hide_aria') : t('score.phrases.show_aria')) : t('score.phrases.none_title')}
+          >
+            {t('score.phrases.toggle')}
+          </button>
+          {phrasesVisible && (
+            <>
+              <button
+                className="score-renderer-nav-btn"
+                onClick={goToPreviousPhrase}
+                aria-label={t('score.phrases.prev_aria')}
+                title={t('score.phrases.prev_aria')}
+              >
+                {t('score.phrases.prev')}
+              </button>
+              <button
+                className="score-renderer-nav-btn"
+                onClick={goToNextPhrase}
+                aria-label={t('score.phrases.next_aria')}
+                title={t('score.phrases.next_aria')}
+              >
+                {t('score.phrases.next')}
+              </button>
+            </>
+          )}
+          <button
+            className="score-renderer-return-btn"
+            onClick={() => {
+              onReturnToStart();
+              if (layoutWrapperRef.current) {
+                layoutWrapperRef.current.scrollTop = 0;
+              }
+            }}
+            aria-label={t('score.return_to_start_aria')}
+            title={t('score.return_to_start_aria')}
+          >
+            {t('score.return_to_start')}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -340,10 +364,18 @@ const styles = {
   container: {
     position: 'relative' as const,
     display: 'flex',
-    flexDirection: 'column' as const,
+    flexDirection: 'row' as const,   // ← mixer sidebar left | score right
     width: '100%',
     flex: 1,
     minHeight: 0,
+    overflow: 'hidden',
+  },
+  scoreColumn: {
+    flex: 1,
+    minHeight: 0,
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column' as const,
     overflow: 'hidden',
   },
   layoutViewWrapper: {

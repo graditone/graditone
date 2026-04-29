@@ -173,3 +173,53 @@ export interface ScrollCalculation {
   /** Whether we're near the end of the score */
   nearEnd: boolean;
 }
+
+// ============================================================================
+// Feature 088: Multi-Instrument Playback
+// ============================================================================
+
+/**
+ * Identifies a single instrument's audio channel at runtime.
+ * Feature 088 — Piano and Violin Playback Support
+ */
+export interface InstrumentChannelConfig {
+  /** 0-based index into Score.instruments — also the channel key in ToneAdapter */
+  partIndex: number;
+  /** Instrument name (e.g., "Violin I") — from Score.instruments[partIndex].name */
+  partName: string;
+  /** Canonical instrument type string — from Score.instruments[partIndex].instrument_type */
+  instrumentType: string;
+}
+
+/**
+ * Runtime mutable state for one instrument part in the mixer.
+ * Feature 088 — Piano and Violin Playback Support
+ */
+export interface InstrumentMixerEntry {
+  /** Identifies the channel */
+  channel: InstrumentChannelConfig;
+  /** Current mute state */
+  isMuted: boolean;
+  /** Current volume (0.0–1.0) */
+  volume: number;
+}
+
+/**
+ * Full mixer state for a loaded score.
+ * Feature 088 — Piano and Violin Playback Support
+ */
+export interface InstrumentMixerState {
+  /** One entry per instrument part; empty for single-instrument scores */
+  entries: InstrumentMixerEntry[];
+  /** True when entries.length > 1 — convenience flag for UI show/hide */
+  isMultiInstrument: boolean;
+}
+
+import type { Note } from './score';
+
+/**
+ * A Note tagged with its 0-based instrument part index for audio channel routing.
+ * Internal to PlaybackScheduler — never serialised or exposed externally.
+ * Feature 088 — Piano and Violin Playback Support
+ */
+export type TaggedNote = Note & { readonly _partIndex?: number };

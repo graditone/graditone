@@ -175,34 +175,70 @@ if (typeof ImageData === 'undefined') {
 }
 
 // Mock Tone.js to avoid module resolution issues in tests
-vi.mock('tone', () => ({
-  default: {},
-  Sampler: vi.fn(),
-  PolySynth: vi.fn(),
-  Synth: vi.fn(),
-  Limiter: vi.fn(() => ({ toDestination: vi.fn(() => ({})) })),
-  Frequency: vi.fn(() => ({ toNote: vi.fn(() => 'C4') })),
-  Destination: {
-    mute: false,
-    volume: { value: -12 },
-  },
-  Transport: {
-    start: vi.fn(),
-    stop: vi.fn(),
-    pause: vi.fn(),
-    cancel: vi.fn(),
-    schedule: vi.fn(),
-    clear: vi.fn(),
-    seconds: 0,
-    bpm: { value: 120 },
-  },
-  start: vi.fn().mockResolvedValue(undefined),
-  now: vi.fn(() => 0),
-  loaded: vi.fn().mockResolvedValue(undefined),
-  context: {
-    resume: vi.fn().mockResolvedValue(undefined),
-  },
-}));
+vi.mock('tone', () => {
+  return {
+    default: {},
+    Sampler: function SamplerStub(this: Record<string, unknown>) {
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const self = this;
+      this.connect = function() { return self; };
+      this.disconnect = function() {};
+      this.dispose = function() {};
+      this.triggerAttackRelease = function() {};
+      this.releaseAll = function() {};
+    },
+    PolySynth: function PolySynthStub(this: Record<string, unknown>) {
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const self = this;
+      this.connect = function() { return self; };
+      this.disconnect = function() {};
+      this.dispose = function() {};
+      this.triggerAttackRelease = function() {};
+      this.releaseAll = function() {};
+      this.set = function() {};
+    },
+    Synth: function SynthStub(this: Record<string, unknown>) {
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const self = this;
+      this.connect = function() { return self; };
+      this.dispose = function() {};
+    },
+    Volume: function VolumeStub(this: Record<string, unknown>) {
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const self = this;
+      this.connect = function() { return self; };
+      this.volume = { value: 0 };
+      this.dispose = function() {};
+    },
+    Limiter: function LimiterStub(this: Record<string, unknown>) {
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const self = this;
+      this.toDestination = function() { return self; };
+      this.connect = function() { return self; };
+    },
+    Frequency: vi.fn(() => ({ toNote: vi.fn(() => 'C4') })),
+    Destination: {
+      mute: false,
+      volume: { value: -12 },
+    },
+    Transport: {
+      start: vi.fn(),
+      stop: vi.fn(),
+      pause: vi.fn(),
+      cancel: vi.fn(),
+      schedule: vi.fn(),
+      clear: vi.fn(),
+      seconds: 0,
+      bpm: { value: 120 },
+    },
+    start: vi.fn().mockResolvedValue(undefined),
+    now: vi.fn(() => 0),
+    loaded: vi.fn().mockResolvedValue(undefined),
+    context: {
+      resume: vi.fn().mockResolvedValue(undefined),
+    },
+  };
+});
 
 // Cleanup after each test case
 afterEach(() => {

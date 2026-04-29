@@ -1,6 +1,7 @@
 import { ToneAdapter } from './ToneAdapter';
 import { resolveTiedNotes } from './TieResolver';
 import type { Note } from '../../types/score';
+import type { TaggedNote } from '../../types/playback';
 
 /**
  * PPQ - Pulses Per Quarter Note
@@ -202,7 +203,8 @@ export class PlaybackScheduler {
         durationSeconds = MIN_NOTE_DURATION;
       }
 
-      this.toneAdapter.playNote(note.pitch, durationSeconds, transportTime, note.velocity);
+      const partIndex = (note as TaggedNote)._partIndex ?? 0;
+      this.toneAdapter.playNoteOnChannel(partIndex, note.pitch, durationSeconds, transportTime, note.velocity);
       this.pendingIndex++;
     }
 
@@ -241,14 +243,19 @@ export class PlaybackScheduler {
 
     // Feature 051: Resolve tied notes — merge tie chains and skip continuations
     const resolved = resolveTiedNotes(notes);
+    // Build an index so we can carry extra fields (e.g. _partIndex from Feature 088)
+    // from the original note into the resolved shape without an O(n²) find().
+    const noteById = new Map<string, Note>();
+    for (const n of notes) noteById.set(n.id, n);
     const resolvedAsNotes: Note[] = resolved.map(r => ({
+      ...(noteById.get(r.id) ?? {}), // carry _partIndex and any other extras
       id: r.id,
       pitch: r.pitch,
       start_tick: r.start_tick,
       duration_ticks: r.combinedDurationTicks,
       staccato: r.staccato,
       velocity: r.velocity,
-    }));
+    } as Note));
 
     // Filter out notes already past, then sort by start_tick
     this.pendingNotes = resolvedAsNotes

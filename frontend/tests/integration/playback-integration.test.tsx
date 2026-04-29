@@ -22,6 +22,7 @@ describe('Playback Integration - Note Timing', () => {
   beforeEach(() => {
     vi.mock('../../src/services/playback/ToneAdapter', () => {
       const mockPlayNote = vi.fn();
+      const mockPlayNoteOnChannel = vi.fn();
       const mockStopAll = vi.fn();
       const mockInit = vi.fn().mockResolvedValue(undefined);
       const mockGetCurrentTime = vi.fn(() => 0);
@@ -34,6 +35,7 @@ describe('Playback Integration - Note Timing', () => {
           getInstance: vi.fn(() => ({
             init: mockInit,
             playNote: mockPlayNote,
+            playNoteOnChannel: mockPlayNoteOnChannel,
             stopAll: mockStopAll,
             getCurrentTime: mockGetCurrentTime,
             startTransport: mockStartTransport,

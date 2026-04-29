@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { PRELOADED_SCORES } from './preloadedScores';
 
 describe('PRELOADED_SCORES', () => {
-  it('contains exactly 6 entries', () => {
-    expect(PRELOADED_SCORES).toHaveLength(6);
+  it('contains exactly 7 entries', () => {
+    expect(PRELOADED_SCORES).toHaveLength(7);
   });
 
   it('all IDs are unique', () => {

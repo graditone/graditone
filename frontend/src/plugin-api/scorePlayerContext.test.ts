@@ -64,6 +64,8 @@ vi.mock('../services/playback/ToneAdapter', () => ({
       scheduleRepeat: vi.fn(() => 999),
       clearSchedule: vi.fn(),
       clearTransportEvent: vi.fn(),
+      destroyChannels: vi.fn(),
+      initChannel: vi.fn(),
     })),
   },
 }));

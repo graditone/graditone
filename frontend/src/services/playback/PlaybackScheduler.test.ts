@@ -5,6 +5,7 @@ import type { Note } from '../../types/score';
 // Mock ToneAdapter to avoid loading tone.js in tests
 vi.mock('./ToneAdapter', () => {
   const mockPlayNote = vi.fn();
+  const mockPlayNoteOnChannel = vi.fn();
   const mockStopAll = vi.fn();
   const mockInit = vi.fn().mockResolvedValue(undefined);
   const mockGetCurrentTime = vi.fn(() => 0);
@@ -17,6 +18,7 @@ vi.mock('./ToneAdapter', () => {
       getInstance: vi.fn(() => ({
         init: mockInit,
         playNote: mockPlayNote,
+        playNoteOnChannel: mockPlayNoteOnChannel,
         stopAll: mockStopAll,
         getCurrentTime: mockGetCurrentTime,
         getTransportSeconds: mockGetTransportSeconds,
@@ -119,10 +121,10 @@ describe('PlaybackScheduler', () => {
       scheduler.scheduleNotes(notes, 120, 0);
 
       // At 120 BPM: 960 ticks = 0.5s
-      expect(mockToneAdapter.playNote).toHaveBeenCalledTimes(3);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(1, 60, 0.5, 0, undefined);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(2, 62, 0.5, 0.5, undefined);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(3, 64, 0.5, 1.0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenCalledTimes(3);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(1, 0, 60, 0.5, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(2, 0, 62, 0.5, 0.5, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(3, 0, 64, 0.5, 1.0, undefined);
     });
 
     it('should calculate note durations correctly', () => {
@@ -135,8 +137,8 @@ describe('PlaybackScheduler', () => {
 
       // Half note duration = 1920 ticks = 1.0s at 120 BPM
       // Eighth note duration = 480 ticks = 0.25s at 120 BPM
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(1, 60, 1.0, 0, undefined);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(2, 62, 0.25, 1.0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(1, 0, 60, 1.0, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(2, 0, 62, 0.25, 1.0, undefined);
     });
 
     it('should apply currentTick offset to start times', () => {
@@ -150,8 +152,8 @@ describe('PlaybackScheduler', () => {
 
       // Note 1 should not play (start_tick 0 < currentTick 960)
       // Note 2 should play immediately (start_tick 960 - currentTick 960 = 0)
-      expect(mockToneAdapter.playNote).toHaveBeenCalledTimes(1);
-      expect(mockToneAdapter.playNote).toHaveBeenCalledWith(62, 0.5, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenCalledTimes(1);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenCalledWith(0, 62, 0.5, 0, undefined);
     });
 
     it('should handle simultaneous notes (same start_tick)', () => {
@@ -164,10 +166,10 @@ describe('PlaybackScheduler', () => {
       scheduler.scheduleNotes(notes, 120, 0);
 
       // All three notes should schedule at exactly time 0
-      expect(mockToneAdapter.playNote).toHaveBeenCalledTimes(3);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(1, 60, 0.5, 0, undefined);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(2, 64, 0.5, 0, undefined);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(3, 67, 0.5, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenCalledTimes(3);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(1, 0, 60, 0.5, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(2, 0, 64, 0.5, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(3, 0, 67, 0.5, 0, undefined);
     });
 
     it('should enforce minimum duration for very short notes', () => {
@@ -178,14 +180,14 @@ describe('PlaybackScheduler', () => {
       scheduler.scheduleNotes(notes, 120, 0);
 
       // Duration should be at least 0.05 seconds (50ms)
-      const call = mockToneAdapter.playNote.mock.calls[0];
-      expect(call[1]).toBeGreaterThanOrEqual(0.05);
+      const call = mockToneAdapter.playNoteOnChannel.mock.calls[0];
+      expect(call[2]).toBeGreaterThanOrEqual(0.05);
     });
 
     it('should handle empty notes array', () => {
       scheduler.scheduleNotes([], 120, 0);
 
-      expect(mockToneAdapter.playNote).not.toHaveBeenCalled();
+      expect(mockToneAdapter.playNoteOnChannel).not.toHaveBeenCalled();
     });
 
     it('should use default tempo of 120 BPM if tempo is invalid', () => {
@@ -197,7 +199,7 @@ describe('PlaybackScheduler', () => {
       scheduler.scheduleNotes(notes, 0, 0);
 
       // Should use 120 BPM as fallback: 960 ticks = 0.5s
-      expect(mockToneAdapter.playNote).toHaveBeenCalledWith(60, 0.5, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenCalledWith(0, 60, 0.5, 0, undefined);
     });
 
     it('should clear schedule when clearSchedule is called', () => {
@@ -245,8 +247,8 @@ describe('PlaybackScheduler', () => {
       scheduler.scheduleNotes(notes, 120, 0, 1.0);
 
       // At 120 BPM with 1.0 multiplier: 960 ticks = 0.5s (unchanged)
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(1, 60, 0.5, 0, undefined);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(2, 62, 0.5, 0.5, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(1, 0, 60, 0.5, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(2, 0, 62, 0.5, 0.5, undefined);
     });
 
     it('should schedule notes twice as fast with 2.0 multiplier (200%)', () => {
@@ -260,8 +262,8 @@ describe('PlaybackScheduler', () => {
       // At 120 BPM with 2.0 multiplier: 960 ticks = 0.25s (half the time = twice the speed)
       // Note 1: duration = 0.5 / 2.0 = 0.25s, start = 0s
       // Note 2: duration = 0.5 / 2.0 = 0.25s, start = 0.5 / 2.0 = 0.25s
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(1, 60, 0.25, 0, undefined);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(2, 62, 0.25, 0.25, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(1, 0, 60, 0.25, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(2, 0, 62, 0.25, 0.25, undefined);
     });
 
     it('should schedule notes half as fast with 0.5 multiplier (50%)', () => {
@@ -275,8 +277,8 @@ describe('PlaybackScheduler', () => {
       // At 120 BPM with 0.5 multiplier: 960 ticks = 1.0s (double the time = half the speed)
       // Note 1: duration = 0.5 / 0.5 = 1.0s, start = 0s
       // Note 2: duration = 0.5 / 0.5 = 1.0s, start = 0.5 / 0.5 = 1.0s
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(1, 60, 1.0, 0, undefined);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(2, 62, 1.0, 1.0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(1, 0, 60, 1.0, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(2, 0, 62, 1.0, 1.0, undefined);
     });
 
     it('should use 1.0 multiplier as default when parameter omitted', () => {
@@ -288,7 +290,7 @@ describe('PlaybackScheduler', () => {
       scheduler.scheduleNotes(notes, 120, 0);
 
       // Should behave as 1.0 multiplier (backward compatible)
-      expect(mockToneAdapter.playNote).toHaveBeenCalledWith(60, 0.5, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenCalledWith(0, 60, 0.5, 0, undefined);
     });
 
     it('should scale durations correctly with 0.8 multiplier (80%)', () => {
@@ -302,8 +304,8 @@ describe('PlaybackScheduler', () => {
       // At 120 BPM with 0.8 multiplier:
       // duration = 0.5 / 0.8 = 0.625s
       // Note 2 start = 0.5 / 0.8 = 0.625s
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(1, 60, 0.625, 0, undefined);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(2, 62, 0.625, 0.625, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(1, 0, 60, 0.625, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(2, 0, 62, 0.625, 0.625, undefined);
     });
 
     it('should apply multiplier to currentTick offset', () => {
@@ -318,8 +320,8 @@ describe('PlaybackScheduler', () => {
 
       // Note 1 should not play (start_tick 0 < currentTick 960)
       // Note 2 should play immediately: (960 - 960) / 0.5 = 0s
-      expect(mockToneAdapter.playNote).toHaveBeenCalledTimes(1);
-      expect(mockToneAdapter.playNote).toHaveBeenCalledWith(62, 1.0, 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenCalledTimes(1);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenCalledWith(0, 62, 1.0, 0, undefined);
     });
 
     it('should handle minimum duration with tempo multiplier', () => {
@@ -331,8 +333,8 @@ describe('PlaybackScheduler', () => {
       scheduler.scheduleNotes(notes, 120, 0, 2.0);
 
       // Duration should still be at least 0.05 seconds (50ms)
-      const call = mockToneAdapter.playNote.mock.calls[0];
-      expect(call[1]).toBeGreaterThanOrEqual(0.05);
+      const call = mockToneAdapter.playNoteOnChannel.mock.calls[0];
+      expect(call[2]).toBeGreaterThanOrEqual(0.05);
     });
 
     it('should handle simultaneous notes with tempo multiplier', () => {
@@ -345,9 +347,9 @@ describe('PlaybackScheduler', () => {
 
       // Both notes at time 0 with scaled duration
       // duration = 0.5 / 1.5 ≈ 0.333s
-      expect(mockToneAdapter.playNote).toHaveBeenCalledTimes(2);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(1, 60, expect.closeTo(0.333, 2), 0, undefined);
-      expect(mockToneAdapter.playNote).toHaveBeenNthCalledWith(2, 64, expect.closeTo(0.333, 2), 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenCalledTimes(2);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(1, 0, 60, expect.closeTo(0.333, 2), 0, undefined);
+      expect(mockToneAdapter.playNoteOnChannel).toHaveBeenNthCalledWith(2, 0, 64, expect.closeTo(0.333, 2), 0, undefined);
     });
   });
 });
