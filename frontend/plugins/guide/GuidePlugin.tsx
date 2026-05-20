@@ -129,7 +129,7 @@ export function GuidePlugin() {
 
         <h3>{t('guide.piano.section_workflow_title')}</h3>
         <ol>
-          <li>{t('guide.piano.workflow_step1')}</li>
+          <li dangerouslySetInnerHTML={{ __html: t('guide.piano.workflow_step1') }} />
           <li>{t('guide.piano.workflow_step2')}</li>
           <li>{t('guide.piano.workflow_step3')}</li>
           <li>{t('guide.piano.workflow_step4')}</li>

@@ -22,7 +22,7 @@ service worker. No new domain entities, no backend changes, no new storage.
 **Project Type**: Web application — `frontend/` only; no backend changes  
 **Performance Goals**: Page renders within 16ms; fully offline-capable (service worker caches all static assets)  
 **Constraints**: All text MUST use i18n keys (no hardcoded strings); WCAG 2.1 AA contrast; responsive 375px–1440px  
-**Scale/Scope**: 1 new component, ~1 CSS file, ~30 new i18n string keys (EN + ES stubs)
+**Scale/Scope**: 1 new component, ~1 CSS file, ~30 new i18n string keys (EN full text + ES full translations — stubs are not acceptable for a shipped release)
 
 ## Constitution Check
 
@@ -66,7 +66,7 @@ frontend/
 │   ├── i18n/
 │   │   └── locales/
 │   │       ├── en.json                     ← MODIFIED: new guide.* keys
-│   │       └── es.json                     ← MODIFIED: ES stubs for guide.* keys
+│   │       └── es.json                     ← MODIFIED: full Spanish translations for guide.piano.* keys (FR-013)
 │   └── App.tsx                             ← MODIFIED: add showGuide state + nav entry
 └── src/test/components/
     └── PianoLearningGuidePage.test.tsx     ← NEW: component tests (TDD)
@@ -140,7 +140,7 @@ Tests in `frontend/src/test/components/PianoLearningGuidePage.test.tsx`:
 
 ### i18n Contract
 
-New keys added to `en.json` (EN full text) and `es.json` (ES stubs = EN text with `[ES]` prefix until translated):
+New keys added to `en.json` (EN full text) and `es.json` (ES must be fully translated before release — `[ES]` stubs are a temporary development placeholder only, NOT acceptable in a shipped build; see FR-013):
 
 ```json
 // en.json additions (excerpt)
@@ -164,3 +164,7 @@ No complexity entries required. All implementation follows established patterns:
 - CSS co-located with component (same as `LandingScreen`)
 - i18n via `useTranslation` (same as all other components)
 - Tests via Vitest + Testing Library (same as `LandingScreen.test.tsx`)
+
+---
+
+**Bugfix**: 2026-05-20 — BUG-001 Updated `Scale/Scope` to clarify that ES stubs are a temporary development placeholder only, not acceptable in a shipped release. Updated i18n Contract note to make clear `[ES]` stubs must be replaced with proper translations before release (FR-013). Added T041 to Phase 7 of tasks.md requiring full Spanish translation delivery.

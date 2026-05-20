@@ -353,7 +353,7 @@
   "guide.piano.piano_midi_prerequisite": "Requires a MIDI keyboard connected via USB or a MIDI adapter supported by your device and browser.",
 
   "guide.piano.section_workflow_title": "Practice Workflow",
-  "guide.piano.workflow_step1": "Load a piano score — drag and drop a MusicXML file or choose from the built-in scales and demo pieces.",
+  "guide.piano.workflow_step1": "Load a piano score — open the Play plugin and tap <strong>Load score</strong> to choose from the built-in demo pieces or import your own MusicXML file.",
   "guide.piano.workflow_step2": "Listen to the full piece at normal tempo to get familiar with it before you start practicing.",
   "guide.piano.workflow_step3": "Reduce the tempo to a comfortable learning speed using the tempo slider.",
   "guide.piano.workflow_step4": "Tap two notes in the score to set the start and end of a loop region around the passage you want to drill.",
