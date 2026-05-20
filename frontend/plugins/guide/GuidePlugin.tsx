@@ -2,8 +2,8 @@
  * GuidePlugin.tsx — Feature 001-docs-plugin: Graditone Documentation Plugin
  *
  * Stateless React component rendering the complete Guide view.
- * Single scrollable page with five sections: overview, playback, practice,
- * train, and MusicXML loading.
+ * Single scrollable page with seven sections: overview, playback, practice,
+ * train, MusicXML loading, piano learning, and credits (Feature 091).
  *
  * Receives no props — all content is static and fully offline (FR-010, FR-011).
  * CSS uses --color-* custom properties so the active landing theme cascades in
@@ -15,6 +15,7 @@
  */
 
 import { useTranslation } from '../../src/i18n/index';
+import { CREDITS_CATALOG } from './creditsCatalog';
 import './GuidePlugin.css';
 
 export function GuidePlugin() {
@@ -144,6 +145,40 @@ export function GuidePlugin() {
           <li>{t('guide.piano.tip3')}</li>
           <li>{t('guide.piano.tip4')}</li>
         </ul>
+      </section>
+
+      {/* ── Section 7: Credits ───────────────────────────────────────────── */}
+      <section className="guide-section" aria-labelledby="guide-h-credits">
+        <h2 id="guide-h-credits">{t('guide.credits.heading')}</h2>
+        <p>{t('guide.credits.intro')}</p>
+        <table className="guide-credits__table">
+          <thead>
+            <tr>
+              <th>{t('guide.credits.label.song')}</th>
+              <th>{t('guide.credits.label.composer')}</th>
+              <th>{t('guide.credits.label.license')}</th>
+              <th>{t('guide.credits.label.source')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {CREDITS_CATALOG.map((credit) => (
+              <tr key={credit.id} className="guide-credits__entry">
+                <td>{credit.displayName}</td>
+                <td>{credit.composer}</td>
+                <td>{t(credit.licenseKey)}</td>
+                <td>
+                  {credit.sourceUrl ? (
+                    <a href={credit.sourceUrl} target="_blank" rel="noopener noreferrer">
+                      MuseScore
+                    </a>
+                  ) : (
+                    t('guide.credits.source.internal')
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       </div>

@@ -124,6 +124,26 @@
   opacity: 0.8;
 }
 
+/* ── Credits table ───────────────────────────────────────────────────────── */
+
+.guide-credits__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.guide-credits__table th,
+.guide-credits__table td {
+  text-align: left;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
+}
+
+.guide-credits__table thead th {
+  font-weight: 600;
+  background: var(--color-surface, #f5f5f5);
+}
+
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 480px) {

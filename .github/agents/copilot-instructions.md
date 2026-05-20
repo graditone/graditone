@@ -180,6 +180,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - Page-session module state only — no `localStorage`, no `IndexedDB` (089-piano-violin-practice)
 - TypeScript 5.x, React 18 + React, Vitest, @testing-library/react (existing test stack) (090-fix-rescheduling-bugs)
 - IndexedDB (full `Session` objects) + localStorage (lightweight `SessionIndexEntry[]` index) (090-fix-rescheduling-bugs)
+- TypeScript 5 / React 18 + React 18, Vitest + React Testing Library, flat-key i18n catalog (custom) (091-guide-credits-preloaded-songs)
+- N/A — static data, no persistence (091-guide-credits-preloaded-songs)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -201,9 +203,8 @@ Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
 - 091-piano-learning-guide-page: Added TypeScript 5.x (React 18+); frontend-only, no Rust/WASM changes. New PianoLearningGuidePage component + i18n keys (guide.piano.*) + showGuide state in App.tsx
+- 091-guide-credits-preloaded-songs: Added Credits section (Section 7) to Guide plugin; new creditsCatalog.ts data file + 10 guide.credits.* i18n keys (en + es)
 - 090-fix-rescheduling-bugs: Added TypeScript 5.x, React 18 + React, Vitest, @testing-library/react (existing test stack)
-- 089-piano-violin-practice: Added TypeScript 5.x (React 18+); no Rust/WASM changes + React 18+, Vite, Tone.js, Plugin API (`PluginScorePlayerContext`), `ToneAdapter`/`PlaybackChannel` (Feature 088)
-- 088-piano-violin-playback: Added Rust (stable 1.75+), TypeScript 5, React 18 + Tone.js (existing), wasm-pack/wasm-bindgen (existing), React 18, Vite
 
 
 <!-- MANUAL ADDITIONS START -->
