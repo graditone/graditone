@@ -104,6 +104,12 @@ export function GuidePlugin() {
         <h2 id="guide-h-piano">{t('guide.piano.page_title')}</h2>
         <p>{t('guide.piano.page_subtitle')}</p>
 
+        <img
+          src="/piano-learning-infographic.png"
+          alt={t('guide.piano.page_title')}
+          style={{ width: '100%', maxWidth: '720px', display: 'block', margin: '1rem auto', borderRadius: '8px' }}
+        />
+
         <h3>{t('guide.piano.section_highlights_title')}</h3>
         <ul>
           <li><strong>{t('guide.piano.highlight_notes_title')}</strong> — {t('guide.piano.highlight_notes_benefit')}</li>
