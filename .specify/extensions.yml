@@ -10,3 +10,11 @@ hooks:
     prompt: Create an isolated worktree for this new feature?
     description: Auto-spawn a worktree after a new feature is specified
     condition: null
+  after_implement:
+  - extension: bugfix
+    command: speckit.bugfix.verify
+    enabled: true
+    optional: true
+    prompt: Run bugfix consistency check after implementation?
+    description: Verify spec artifact consistency after implementation completes
+    condition: null
