@@ -105,7 +105,7 @@ export function GuidePlugin() {
         <p>{t('guide.piano.page_subtitle')}</p>
 
         <img
-          src="/piano-learning-infographic.png"
+          src="/piano-learning-infographic.jpg"
           alt={t('guide.piano.page_title')}
           style={{ width: '100%', maxWidth: '720px', display: 'block', margin: '1rem auto', borderRadius: '8px' }}
         />
