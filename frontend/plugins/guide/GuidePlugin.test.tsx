@@ -73,9 +73,9 @@ describe('GuidePlugin — manifest', () => {
 // ─── US2: Feature Discovery by Section ──────────────────────────────────────
 
 describe('GuidePlugin — sections (US2)', () => {
-  it('renders exactly five <section> elements (FR-004)', () => {
+  it('renders exactly six <section> elements (FR-004)', () => {
     const { container } = render(<GuidePlugin />, { wrapper: W });
-    expect(container.querySelectorAll('section')).toHaveLength(5);
+    expect(container.querySelectorAll('section')).toHaveLength(6);
   });
 
   it('displays heading "Playing a Score" (FR-006)', () => {
@@ -96,5 +96,10 @@ describe('GuidePlugin — sections (US2)', () => {
   it('displays heading "Loading a Score" (FR-009)', () => {
     render(<GuidePlugin />, { wrapper: W });
     expect(screen.getByRole('heading', { name: /loading a score/i })).toBeInTheDocument();
+  });
+
+  it('displays heading "Learning Piano with Graditone" (FR-010)', () => {
+    render(<GuidePlugin />, { wrapper: W });
+    expect(screen.getByRole('heading', { name: /learning piano with graditone/i })).toBeInTheDocument();
   });
 });

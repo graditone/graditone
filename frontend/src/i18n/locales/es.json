@@ -324,5 +324,44 @@
   "vkeyboard.title": "Teclado Virtual",
   "vkeyboard.staff": "Pentagrama",
   "vkeyboard.clear": "Borrar",
-  "vkeyboard.clear_aria": "Borrar pentagrama"
+  "vkeyboard.clear_aria": "Borrar pentagrama",
+
+  "guide.piano.page_title": "[ES] Learning Piano with Graditone",
+  "guide.piano.page_subtitle": "[ES] How Graditone helps you practice and improve",
+  "guide.piano.back_button": "[ES] ← Back",
+
+  "guide.piano.section_highlights_title": "[ES] Core Practice Features",
+  "guide.piano.highlight_notes_title": "[ES] Note Highlighting",
+  "guide.piano.highlight_notes_benefit": "[ES] Highlighted notes follow playback in real time — always know exactly where you are in the score.",
+  "guide.piano.highlight_tempo_title": "[ES] Tempo Control",
+  "guide.piano.highlight_tempo_benefit": "[ES] Slow down to 10% of the original speed to learn difficult passages, then gradually build up to 200%.",
+  "guide.piano.highlight_loops_title": "[ES] Loop Regions",
+  "guide.piano.highlight_loops_benefit": "[ES] Mark the start and end of any section and loop it continuously to drill tricky bars.",
+  "guide.piano.highlight_vkeyboard_title": "[ES] Virtual Keyboard",
+  "guide.piano.highlight_vkeyboard_benefit": "[ES] See the notes lit up on an on-screen piano keyboard as they play — perfect for ear training and hand position awareness.",
+
+  "guide.piano.section_piano_title": "[ES] Piano-Specific Features",
+  "guide.piano.piano_stacked_title": "[ES] Grand Staff View",
+  "guide.piano.piano_stacked_benefit": "[ES] View treble and bass clef staves simultaneously — the way piano music is meant to be read.",
+  "guide.piano.piano_dynamics_title": "[ES] Dynamics Playback",
+  "guide.piano.piano_dynamics_benefit": "[ES] Playback respects the score's dynamics (pp to ff, crescendo, diminuendo) so you hear the music as written.",
+  "guide.piano.piano_onehand_title": "[ES] One-Hand Playback",
+  "guide.piano.piano_onehand_benefit": "[ES] Isolate either the treble or bass clef for playback — useful for practicing hands separately.",
+  "guide.piano.piano_midi_title": "[ES] MIDI Keyboard Input",
+  "guide.piano.piano_midi_benefit": "[ES] Connect a MIDI keyboard to play along with the score and hear your notes through the app.",
+  "guide.piano.piano_midi_prerequisite": "[ES] Requires a MIDI keyboard connected via USB or a MIDI adapter supported by your device and browser.",
+
+  "guide.piano.section_workflow_title": "[ES] Practice Workflow",
+  "guide.piano.workflow_step1": "[ES] Load a piano score — drag and drop a MusicXML file or choose from the built-in scales and demo pieces.",
+  "guide.piano.workflow_step2": "[ES] Listen to the full piece at normal tempo to get familiar with it before you start practicing.",
+  "guide.piano.workflow_step3": "[ES] Reduce the tempo to a comfortable learning speed using the tempo slider.",
+  "guide.piano.workflow_step4": "[ES] Tap two notes in the score to set the start and end of a loop region around the passage you want to drill.",
+  "guide.piano.workflow_step5": "[ES] Open the Practice plugin to train note by note with real-time MIDI feedback.",
+  "guide.piano.workflow_step6": "[ES] Gradually increase the tempo as you gain confidence until you reach the target performance speed.",
+
+  "guide.piano.section_tips_title": "[ES] Practice Tips",
+  "guide.piano.tip1": "[ES] Start slow — use the tempo control to set a pace where you can play every note cleanly before speeding up.",
+  "guide.piano.tip2": "[ES] Practice hands separately — use one-hand playback to focus on treble or bass clef in isolation.",
+  "guide.piano.tip3": "[ES] Loop the hard bars — set a loop region around the 2–4 measures that trip you up and repeat them until they feel easy.",
+  "guide.piano.tip4": "[ES] Use the virtual keyboard — watch how notes map to hand positions while the score plays to build your spatial awareness."
 }
