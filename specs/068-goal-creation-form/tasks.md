@@ -92,7 +92,7 @@
 ### Implementation for User Story 3
 
 - [X] T015 [US3] Implement submit guard: disable submit button when `selectedScore === null`; show inline error "Please select a score to continue" in plugins-external/sessions-plugin/GoalCreationForm.tsx
-- [X] T016 [US3] Implement unavailable score detection: check selected score against current catalogue on each render; if unavailable show `sessions-plugin__task-score-warning` span with `⚠ Score no longer available — please select a different score` and set `disabled={scoreUnavailable}` on submit in plugins-external/sessions-plugin/GoalCreationForm.tsx
+- [X] T016 [US3] Fix unavailable score detection: add `selectedScore.ref.type === 'preloaded'` guard so only preloaded catalogue scores are checked against `getCatalogue()`; user-uploaded scores (`type: 'user'`) MUST never set `scoreUnavailable = true`. Show `sessions-plugin__task-score-warning` and disable submit only for preloaded scores absent from the catalogue. (fixed — BUG-001)
 - [X] T017 [US3] Implement duplicate active goal inline warning: call `hasGoalForScoreAsync()` after score selection; if duplicate found set `duplicateWarning = true`; render dismissible warning using `goals-view__form-warning` CSS class; warning does NOT disable submit in plugins-external/sessions-plugin/GoalCreationForm.tsx
 
 **Checkpoint**: US3 fully functional. All three validation behaviors work. `npm test` — T013 and T014 tests must pass.
@@ -106,7 +106,7 @@
 - [X] T021 [P] Fix pre-existing TypeScript spread-argument errors (TS2556) on GoalsView.test.tsx lines 32–46 in plugins-external/sessions-plugin/GoalsView.test.tsx
 - [X] T022 [P] Fix pre-existing `DaySummary` type-not-found errors (TS2304) on calendarUtils.test.ts lines 533 and 577 in plugins-external/sessions-plugin/calendarUtils.test.ts
 - [X] T023 Run `npm run typecheck` in plugins-external/sessions-plugin/ and confirm zero errors
-- [X] T024 Run `npm test` in plugins-external/sessions-plugin/ and confirm 270+ tests pass (includes new T020 checkDuplicate block)
+- [X] T024 Run `npm test` in plugins-external/sessions-plugin/ and confirm all tests pass — 395/395 (fixed — BUG-001)
 - [X] T025 Run quickstart.md validation per specs/068-goal-creation-form/quickstart.md
 
 ---
@@ -141,8 +141,21 @@
 - T023 depends on T020 + T021 + T022 (all three files clean before typecheck)
 - T024 depends on T023 (clean typecheck then full test run)
 - T025 (quickstart) depends on T024
+- T026 must be written and confirmed FAILING before T027 (Constitution Principle V)
+- T027 depends on T026
 
 ---
+
+## Bugfix Tasks (BUG-001)
+
+**Purpose**: Fix the `scoreUnavailable` type-guard omission that blocks user-uploaded scores from goal creation.
+
+- [X] T026 [P] [US3] Write failing regression test: given a user-uploaded score (`type: 'user'`) is selected in `GoalCreationForm`, no unavailability warning is rendered and the submit button is enabled in plugins-external/sessions-plugin/GoalCreationForm.test.tsx
+- [X] T027 [US3] Fix `GoalCreationForm.tsx`: replace `const scoreUnavailable = selectedScore !== null && !catalogue.some(c => c.id === selectedScore.ref.id)` with `const scoreUnavailable = selectedScore !== null && selectedScore.ref.type === 'preloaded' && !catalogue.some(c => c.id === selectedScore.ref.id)` in plugins-external/sessions-plugin/GoalCreationForm.tsx
+
+**Checkpoint**: T026 regression test passes. User-uploaded scores no longer blocked. Re-run `npm test` for T024.
+
+**Bugfix**: 2026-05-20 — BUG-001 Updated from bugfix patch
 
 ## Parallel Execution Examples
 

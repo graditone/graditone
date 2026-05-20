@@ -53,6 +53,7 @@ The form validates user input before submission. If a required field is missing 
 1. **Given** the form is open with no score selected, **When** the user attempts to submit, **Then** the form shows an error indicating a score must be selected.
 2. **Given** the form is open with a score selected and all sliders at valid positions, **When** the user taps the submit button, **Then** the button is active and submission proceeds.
 3. **Given** the iterations, min result, and tempo fields are rendered as sliders, **When** the user drags any slider, **Then** the slider constrains the value within its defined range (iterations: 1–20; min result: 0–100%; tempo: 50–200%) — no out-of-range value can be entered.
+4. **Given** the user selects a user-uploaded score (score loaded via file picker, `type: 'user'`), **When** the selection is made, **Then** no unavailability warning is shown and the submit button is enabled — user scores are always considered available once selected.
 
 ---
 
@@ -78,7 +79,7 @@ The form validates user input before submission. If a required field is missing 
 - **FR-008**: The form MUST validate all fields before allowing submission, showing inline error messages for invalid values.
 - **FR-009**: Upon submission, the system MUST create a goal whose auto-generated tasks use the user-specified iterations (as loop count), min result, and tempo (as tempo multiplier) instead of hardcoded defaults.
 - **FR-010**: The phrase detection, staff-based task generation (RH/LH/TH for multi-staff, TH-only for single-staff), and scheduled session creation MUST continue to work as they do today, unchanged.
-- **FR-011**: The form MUST block submission if no score is selected or if the selected score is unavailable. When a selected score becomes unavailable, the score selector MUST display a warning icon and the submit button MUST be disabled until the user selects a valid score.
+- **FR-011**: The form MUST block submission if no score is selected or if the selected score is unavailable. "Unavailable" applies only to **preloaded catalogue scores** that are no longer present in the catalogue after selection; when such a score is detected as removed, the score selector MUST display a warning icon and the submit button MUST be disabled until the user selects a valid score. User-uploaded scores (`type: 'user'`) MUST always be treated as available once selected — they MUST NOT trigger the unavailability warning or disable the submit button.
 - **FR-013**: Upon successful goal creation, the form MUST close and the user MUST be returned to the Goals tab, where the new goal is visible at the top of the list. No intermediate confirmation screen or success notification is required.
 - **FR-014**: When the user selects a score that already has an active goal, the form MUST display a dismissible inline warning. The warning MUST NOT block submission — the user may dismiss it or proceed regardless.
 - **FR-012**: The "Type of goal" and "Score breakdown" fields MUST be visually distinct as non-editable (e.g., disabled styling, label-only display) so users understand they cannot change them in this version.
@@ -108,6 +109,8 @@ The form validates user input before submission. If a required field is missing 
 - Q: What input control should be used for the three editable fields (iterations, min result, tempo)? → A: All three use sliders, matching the existing TaskBuilder controls. Iterations slider spans 1–20 at step 1; tempo and min result match current TaskBuilder slider ranges and steps.
 - Q: When the user selects a score that already has an active goal, what should happen? → A: Show a dismissible warning inside the form but allow the user to proceed and submit.
 - Q: If the selected score becomes unavailable before the user submits, should the form block submission or warn-and-allow? → A: Block submission — show a warning icon on the score selector and disable the submit button until a valid score is re-selected.
+
+**Bugfix**: 2026-05-20 — BUG-001 Clarified FR-011 to restrict "unavailable" check to preloaded catalogue scores only; added US3 acceptance scenario 4 for user-uploaded score selection.
 
 ## Assumptions
 
