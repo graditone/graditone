@@ -200,6 +200,7 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 091-piano-learning-guide-page: Added TypeScript 5.x (React 18+); frontend-only, no Rust/WASM changes. New PianoLearningGuidePage component + i18n keys (guide.piano.*) + showGuide state in App.tsx
 - 090-fix-rescheduling-bugs: Added TypeScript 5.x, React 18 + React, Vitest, @testing-library/react (existing test stack)
 - 089-piano-violin-practice: Added TypeScript 5.x (React 18+); no Rust/WASM changes + React 18+, Vite, Tone.js, Plugin API (`PluginScorePlayerContext`), `ToneAdapter`/`PlaybackChannel` (Feature 088)
 - 088-piano-violin-playback: Added Rust (stable 1.75+), TypeScript 5, React 18 + Tone.js (existing), wasm-pack/wasm-bindgen (existing), React 18, Vite

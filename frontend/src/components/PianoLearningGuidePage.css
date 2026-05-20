@@ -1,0 +1,168 @@
+/* Piano Learning Guide Page — Feature 091 */
+
+.piano-guide {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+  font-family: inherit;
+  color: var(--ls-text, #1a1a2e);
+  background: var(--ls-bg, #fff);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* ── Header ── */
+
+.piano-guide__header {
+  margin-bottom: 2rem;
+}
+
+.piano-guide__back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  padding: 0.375rem 0.875rem;
+  border: 1px solid var(--ls-border, #ddd);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ls-text, #1a1a2e);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.piano-guide__back-btn:hover {
+  background: var(--ls-hover, #f4f4f8);
+}
+
+.piano-guide__back-btn:focus-visible {
+  outline: 2px solid var(--ls-accent, #5ac481);
+  outline-offset: 2px;
+}
+
+.piano-guide__title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0 0 0.375rem;
+  line-height: 1.2;
+}
+
+.piano-guide__subtitle {
+  font-size: 1rem;
+  color: var(--ls-muted, #666);
+  margin: 0;
+}
+
+/* ── Sections ── */
+
+.piano-guide__section {
+  margin-bottom: 2.5rem;
+}
+
+.piano-guide__section > h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+  padding-bottom: 0.375rem;
+  border-bottom: 2px solid var(--ls-border, #eee);
+}
+
+/* ── Feature cards grid ── */
+
+.piano-guide__cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 600px) {
+  .piano-guide__cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.piano-guide__card {
+  padding: 1rem 1.125rem;
+  border: 1px solid var(--ls-border, #e2e2ea);
+  border-radius: 8px;
+  background: var(--ls-card-bg, #fafafa);
+}
+
+.piano-guide__card > h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.375rem;
+}
+
+.piano-guide__card > p {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  margin: 0;
+  color: var(--ls-text, #333);
+}
+
+/* ── MIDI prerequisite note ── */
+
+.piano-guide__prerequisite {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--ls-muted, #888);
+}
+
+/* ── Workflow steps ── */
+
+.piano-guide__steps {
+  margin: 0;
+  padding-left: 1.5rem;
+  counter-reset: workflow-step;
+  list-style: none;
+}
+
+.piano-guide__steps > li {
+  counter-increment: workflow-step;
+  position: relative;
+  padding: 0.75rem 0 0.75rem 2.25rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  border-bottom: 1px solid var(--ls-border, #f0f0f0);
+}
+
+.piano-guide__steps > li:last-child {
+  border-bottom: none;
+}
+
+.piano-guide__steps > li::before {
+  content: counter(workflow-step);
+  position: absolute;
+  left: 0;
+  top: 0.75rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--ls-accent, #5ac481);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
+}
+
+/* ── Practice tips ── */
+
+.piano-guide__tips-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+
+.piano-guide__tips-list > li {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  padding: 0.375rem 0;
+  color: var(--ls-text, #333);
+}
