@@ -43,7 +43,6 @@ import { RenderConfigContext } from './contexts/RenderConfigContext'
 import { ProfileProvider } from './services/profiles/ProfileContext'
 import { ProfileIcon } from './components/ProfileIcon'
 import packageJson from '../package.json'
-import { PianoLearningGuidePage } from './components/PianoLearningGuidePage'
 import './App.css'
 
 // Expose the host's React instance on window so imported plugins loaded as Blob
@@ -70,9 +69,6 @@ function App() {
   // Feature 001-recording-view: Recording debug view (?debug=true)
   const [showRecording, setShowRecording] = useState(false)
   const [debugMode, setDebugMode] = useState(false)
-
-  // Feature 091: Piano Learning Guide page
-  const [showGuide, setShowGuide] = useState(false)
 
   // Feature 030: Plugin navigation state
   const [allPlugins, setAllPlugins] = useState<BuiltinPluginEntry[]>([])
@@ -596,17 +592,6 @@ function App() {
     )
   }
 
-  // Feature 091: Show Piano Learning Guide page
-  if (showGuide) {
-    return (
-      <ProfileProvider>
-      <RenderConfigContext.Provider value={scoreRenderConfig}>
-        <PianoLearningGuidePage onBack={() => setShowGuide(false)} />
-      </RenderConfigContext.Provider>
-      </ProfileProvider>
-    )
-  }
-
   // Core plugin fullscreen — early return replaces the entire app tree,
   // exactly like the old PracticeView / RecordingView pattern (position: fixed + inset: 0).
   if (activePlugin) {
@@ -705,15 +690,6 @@ function App() {
               className="plugin-manage-btn"
             >
               {t('header.plugins_button')}
-            </button>
-            {/* Feature 091: Piano Learning Guide */}
-            <button
-              type="button"
-              className="piano-guide-btn"
-              onClick={() => setShowGuide(true)}
-              title="Piano Learning Guide"
-            >
-              📖 Learn Piano
             </button>
             <ProfileIcon onProfileChange={() => setProfileVersion(v => v + 1)} />
           </header>

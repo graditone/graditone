@@ -99,6 +99,47 @@ export function GuidePlugin() {
         <p dangerouslySetInnerHTML={{ __html: t('guide.loading.sources') }} />
       </section>
 
+      {/* ── Section 6: Learning Piano with Graditone ─────────────────────── */}
+      <section className="guide-section" aria-labelledby="guide-h-piano">
+        <h2 id="guide-h-piano">{t('guide.piano.page_title')}</h2>
+        <p>{t('guide.piano.page_subtitle')}</p>
+
+        <h3>{t('guide.piano.section_highlights_title')}</h3>
+        <ul>
+          <li><strong>{t('guide.piano.highlight_notes_title')}</strong> — {t('guide.piano.highlight_notes_benefit')}</li>
+          <li><strong>{t('guide.piano.highlight_tempo_title')}</strong> — {t('guide.piano.highlight_tempo_benefit')}</li>
+          <li><strong>{t('guide.piano.highlight_loops_title')}</strong> — {t('guide.piano.highlight_loops_benefit')}</li>
+          <li><strong>{t('guide.piano.highlight_vkeyboard_title')}</strong> — {t('guide.piano.highlight_vkeyboard_benefit')}</li>
+        </ul>
+
+        <h3>{t('guide.piano.section_piano_title')}</h3>
+        <ul>
+          <li><strong>{t('guide.piano.piano_stacked_title')}</strong> — {t('guide.piano.piano_stacked_benefit')}</li>
+          <li><strong>{t('guide.piano.piano_dynamics_title')}</strong> — {t('guide.piano.piano_dynamics_benefit')}</li>
+          <li><strong>{t('guide.piano.piano_onehand_title')}</strong> — {t('guide.piano.piano_onehand_benefit')}</li>
+          <li><strong>{t('guide.piano.piano_midi_title')}</strong> — {t('guide.piano.piano_midi_benefit')}</li>
+        </ul>
+        <p><em>{t('guide.piano.piano_midi_prerequisite')}</em></p>
+
+        <h3>{t('guide.piano.section_workflow_title')}</h3>
+        <ol>
+          <li>{t('guide.piano.workflow_step1')}</li>
+          <li>{t('guide.piano.workflow_step2')}</li>
+          <li>{t('guide.piano.workflow_step3')}</li>
+          <li>{t('guide.piano.workflow_step4')}</li>
+          <li>{t('guide.piano.workflow_step5')}</li>
+          <li>{t('guide.piano.workflow_step6')}</li>
+        </ol>
+
+        <h3>{t('guide.piano.section_tips_title')}</h3>
+        <ul>
+          <li>{t('guide.piano.tip1')}</li>
+          <li>{t('guide.piano.tip2')}</li>
+          <li>{t('guide.piano.tip3')}</li>
+          <li>{t('guide.piano.tip4')}</li>
+        </ul>
+      </section>
+
       </div>
     </div>
   );
