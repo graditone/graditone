@@ -79,7 +79,7 @@ A motivated learner wants advice on how to get the most out of their practice se
 - What happens if the user accesses the guide on a very small screen (< 360px wide)? Content should remain readable with appropriate text wrapping.
 - How should the guide page behave when the app is offline? Since Graditone is a PWA, the guide page must be cached and accessible without a network connection.
 - What if a described feature (e.g., MIDI input) is not available on the user's device or browser? The guide should indicate when a feature depends on specific hardware or browser support.
-- How does the page handle multiple languages if i18n is added later? All guide content should be authored using the existing i18n infrastructure so translations can be added incrementally.
+- How does the page handle multiple languages? All guide content MUST use the existing i18n infrastructure **and** all supported app languages (currently English and Spanish) MUST be fully translated at launch — stub placeholders are not acceptable for a shipped release.
 - What happens when the user navigates to the guide from within an active practice session? The guide should be accessible without interrupting or resetting the current session state.
 
 ## Requirements *(mandatory)*
@@ -98,6 +98,7 @@ A motivated learner wants advice on how to get the most out of their practice se
 - **FR-010**: The guide page MUST use the existing i18n infrastructure so that content strings are ready for translation.
 - **FR-011**: Feature descriptions that depend on optional hardware (MIDI keyboard) or specific browser capabilities MUST include a note about the prerequisite.
 - **FR-012**: The guide page MUST be navigable from the landing screen without requiring the user to load a score first.
+- **FR-013**: The guide page MUST be fully available in all supported app languages at launch. Currently this means English (`en.json`) and Spanish (`es.json`). The `es.json` locale file MUST NOT contain `[ES]` stub prefixes for any `guide.piano.*` key at the time of release.
 
 ### Key Entities
 
@@ -116,8 +117,10 @@ A motivated learner wants advice on how to get the most out of their practice se
 - **SC-004**: The guide page loads and is fully readable in offline mode (verified by disabling network in DevTools after first load).
 - **SC-005**: The practice workflow section accurately reflects the current app behavior — every step can be performed in the live app without errors.
 - **SC-006**: The guide page renders without layout issues (overflow, clipping, broken sections) on mobile (375px), tablet (768px), and desktop (1440px) viewports.
-- **SC-007**: All i18n strings used on the guide page are defined in the existing translation files with at least English content; no hardcoded strings outside i18n.
+- **SC-007**: All i18n strings used on the guide page are defined in the existing translation files with full content in all supported languages (English and Spanish); no hardcoded strings outside i18n; no `[ES]` stub prefixes present in any locale file for `guide.piano.*` keys.
 
 ## Known Issues & Regression Tests *(if applicable)*
 
 <!-- This section is intentionally empty at spec creation time. Issues will be documented here as they are discovered during implementation. -->
+
+**Bugfix**: 2026-05-20 — BUG-001 Added FR-013 (Spanish translation parity required at launch); updated SC-007 to require full Spanish parity with no `[ES]` stub prefixes; updated multilingual edge case to prohibit deferred translation stubs in shipped releases.

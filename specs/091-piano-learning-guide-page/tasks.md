@@ -20,7 +20,7 @@
 **Purpose**: Add i18n keys and the test file skeleton — the foundation everything else builds on.
 
 - [X] T001 Add all 30 `guide.piano.*` keys to `frontend/src/i18n/locales/en.json` (full English text per data-model.md)
-- [X] T002 [P] Add matching `guide.piano.*` stub keys to `frontend/src/i18n/locales/es.json` (copy EN text; prefix each value with `[ES]` pending translation)
+- [X] T002 [P] ⚠️ Reopened (BUG-001) — **Replace** all 34 `guide.piano.*` stub values in `frontend/src/i18n/locales/es.json` with proper Spanish translations; remove every `[ES]` prefix following the tone and vocabulary of existing translated keys in `es.json` *(was: add stub keys with `[ES]` prefix — stubs were committed but actual translation was never delivered)*
 
 **Checkpoint**: i18n keys compile; `TranslationKey` union type includes all new `guide.piano.*` keys (verified by TypeScript build).
 
@@ -143,8 +143,9 @@
 - [ ] T038 Run full frontend test suite `npm test` in `frontend/` — confirm all existing tests still pass (no regressions introduced by App.tsx changes)
 - [ ] T039 [P] Verify offline availability: open app, load guide page, disable network in DevTools, reload — confirm guide page is served from service worker cache without errors
 - [ ] T040 Follow `specs/091-piano-learning-guide-page/quickstart.md` validation steps end-to-end and confirm all steps succeed
+- [X] T041 **[FR-013] Spanish translation delivery** — verify that T002 is complete (all 34 `guide.piano.*` entries in `es.json` contain proper Spanish text with no `[ES]` prefix); run `grep -c '\[ES\]' frontend/src/i18n/locales/es.json` and confirm the result is `0`; this gate MUST pass before the feature is considered production-ready
 
-**Checkpoint**: All 10 feature tests green; full test suite green; no regressions; guide page accessible, responsive, and offline-capable.
+**Checkpoint**: All 10 feature tests green; full test suite green; no regressions; guide page accessible, responsive, and offline-capable. **T002 and T041 must both be complete (zero `[ES]` stubs in `es.json`) before this checkpoint is considered passed (FR-013).**
 
 ---
 
@@ -152,7 +153,7 @@
 
 ### Phase Dependencies
 
-- **Phase 1 (Setup)**: No dependencies — start immediately; T001 and T002 are parallel
+- **Phase 1 (Setup)**: No dependencies — start immediately; T001 and T002 are parallel. **T002 is reopened (BUG-001) — stubs were committed but translation was never delivered; T002 is not done until all `[ES]` stubs are replaced with real Spanish text**
 - **Phase 2 (Foundational/Tests)**: Depends on Phase 1 (i18n keys must exist for tests to reference translated strings) — T003 must precede T004–T013; T004–T013 are all parallel; T014 must follow T003–T013
 - **Phase 3 (US1)**: Depends on Phase 2 complete (all tests failing). T015 → T016 → T017 → T018 → T019 → T020 (sequential within story)
 - **Phase 4 (US2)**: Depends on Phase 3 complete (component scaffold exists). T021 → T022 → T023 → T024
@@ -217,3 +218,7 @@ Task: "Implement test T10 (MIDI prerequisite note present) in PianoLearningGuide
 - **Commit cadence**: Commit after each completed phase (at minimum after T014, T020, T024, T028, T032, T040)
 - **App.tsx edit (T019)**: This is the only edit outside `frontend/src/components/` — make it last within US1 so the component is complete before wiring navigation
 - **CSS variables**: Use existing `var(--ls-*)` tokens from the landing theme system where possible so the guide page respects the active theme automatically
+
+---
+
+**Bugfix**: 2026-05-20 — BUG-001 Reopened T002 (stub-only completion was a false completion; actual Spanish translation work was never done). Added T041 as a Phase 7 gate requiring zero `[ES]` stubs in `es.json` before the feature ships. Updated Phase 7 checkpoint to require both T002 and T041 to pass.

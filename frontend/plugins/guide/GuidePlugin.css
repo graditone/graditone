@@ -71,6 +71,14 @@
   border-bottom: 2px solid var(--color-accent, #4a90e2);
 }
 
+.guide-section h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-text, #222);
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
 /* ── Body text ────────────────────────────────────────────────────────────── */
 
 .guide-section p {
