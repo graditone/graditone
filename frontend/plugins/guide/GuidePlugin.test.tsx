@@ -3,6 +3,7 @@
  *
  * Tests written BEFORE implementation (TDD — Constitution Principle V).
  * Tests covering US1, US2, and US3 contract requirements.
+ * Updated for Feature 091: 5→6 sections, credits heading + entry tests (FR-004).
  *
  * Run: npm run test -- plugins/guide
  */
@@ -11,6 +12,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { GuidePlugin } from './GuidePlugin';
 import { LocaleProvider } from '../../src/i18n/index';
+
 import guidePlugin from './index';
 import manifest from './plugin.json';
 
@@ -73,9 +75,9 @@ describe('GuidePlugin — manifest', () => {
 // ─── US2: Feature Discovery by Section ──────────────────────────────────────
 
 describe('GuidePlugin — sections (US2)', () => {
-  it('renders exactly six <section> elements (FR-004)', () => {
+  it('renders exactly seven <section> elements (FR-004, Feature 091)', () => {
     const { container } = render(<GuidePlugin />, { wrapper: W });
-    expect(container.querySelectorAll('section')).toHaveLength(6);
+    expect(container.querySelectorAll('section')).toHaveLength(7);
   });
 
   it('displays heading "Playing a Score" (FR-006)', () => {
@@ -101,5 +103,54 @@ describe('GuidePlugin — sections (US2)', () => {
   it('displays heading "Learning Piano with Graditone" (FR-010)', () => {
     render(<GuidePlugin />, { wrapper: W });
     expect(screen.getByRole('heading', { name: /learning piano with graditone/i })).toBeInTheDocument();
+  });
+});
+
+// ─── US1 (Feature 091): Credits section ─────────────────────────────────────
+
+describe('GuidePlugin — Credits section (US1, Feature 091)', () => {
+  it('renders a Credits heading in English', () => {
+    render(<GuidePlugin />, { wrapper: W });
+    expect(screen.getByRole('heading', { name: /credits/i })).toBeInTheDocument();
+  });
+
+  it('renders a Créditos heading when locale is Spanish', () => {
+    render(
+      <LocaleProvider locale="es">
+        <GuidePlugin />
+      </LocaleProvider>,
+    );
+    expect(screen.getByRole('heading', { name: /créditos/i })).toBeInTheDocument();
+  });
+
+  it('renders all 7 song display names', () => {
+    render(<GuidePlugin />, { wrapper: W });
+    const displayNames = [
+      'Bach — Invention No. 1',
+      'Beethoven — Für Elise',
+      'Burgmüller — Arabesque',
+      'Burgmüller — La Candeur',
+      'Chopin — Nocturne Op. 9 No. 2',
+      'Pachelbel — Canon in D',
+      'Two Steps from Hell — Star Sky',
+    ];
+    for (const name of displayNames) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+  });
+
+  it('Star Sky entry contains "CC BY-SA" license text', () => {
+    render(<GuidePlugin />, { wrapper: W });
+    expect(screen.getAllByText(/CC BY-SA/)[0]).toBeInTheDocument();
+  });
+});
+
+// ─── US3 (Feature 091): Catalog-driven rendering ────────────────────────────
+
+describe('GuidePlugin — catalog-driven rendering (US3, Feature 091)', () => {
+  it('renders exactly CREDITS_CATALOG.length credit entries', () => {
+    const { container } = render(<GuidePlugin />, { wrapper: W });
+    // 7 = number of entries in CREDITS_CATALOG (src/data/creditsCatalog.ts)
+    expect(container.querySelectorAll('.guide-credits__entry')).toHaveLength(7);
   });
 });
