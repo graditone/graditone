@@ -77,6 +77,7 @@ A student has two large goals, each with enough tasks to fill two sessions on th
 - **FR-006**: Tasks that have no estimated duration MUST be excluded from per-goal time calculations and distributed freely without consuming any goal's 40% allocation.
 - **FR-007**: The system MUST re-apply the 40% per-goal cap to each generated session independently when excess tasks spill into future sessions.
 - **FR-008**: The cap enforcement MUST be transparent to the user — no warnings, labels, or indicators about the cap are displayed in the session view.
+- **FR-009**: When a session contains tasks from goals linked to two or more distinct scores, the session's `name` MUST be recomputed as the contributing score titles sorted alphabetically and joined by `' · '` (e.g. `'Arabesque · Bach: Invention No. 1'`). The composite name MUST be derived at session-creation or redistribution time from the union of all contributing goal score titles — it MUST NOT retain a single-score name from a prior creation pass.
 
 ### Key Entities
 
@@ -94,6 +95,7 @@ A student has two large goals, each with enough tasks to fill two sessions on th
 - **SC-003**: All tasks from all active goals are accounted for across scheduled sessions — zero tasks are silently dropped as a result of the 40% cap enforcement.
 - **SC-004**: The existing session generation behaviour for unlimited-time sessions remains unchanged; no regression in task distribution for sessions without a time budget.
 - **SC-005**: The time to generate sessions does not increase perceptibly compared to the pre-feature baseline — the cap calculation is a lightweight O(n) pass over task lists.
+- **SC-006**: Every session containing tasks from two or more distinct scores carries a composite `name` equal to the sorted score titles joined by `' · '` — verifiable by inspecting the session's `name` field after `redistributeWithMultiGoalCap` completes.
 
 ## Assumptions
 
@@ -101,5 +103,9 @@ A student has two large goals, each with enough tasks to fill two sessions on th
 - The 40% cap is computed using each task's estimated duration. Tasks without an estimated duration are treated as zero-duration for cap purposes and do not count against any goal's allocation.
 - The cap is applied at session-generation time, not retroactively to already-created sessions.
 - Goal identity is tracked per task (each task records which goal created it). Tasks with no goal association (legacy/manual tasks) are not subject to the cap and are distributed freely.
+
+## Known Issues & Regression Tests
+
+**Bugfix**: 2026-05-22 — BUG-002 Added FR-009 (composite session naming) and SC-006 (verifiable composite title). T023 and T009 in tasks.md reopened; regression task T028 added. Root cause: no spec defined session `name` composition for multi-score sessions — `redistributeWithMultiGoalCap` created sessions using only the creating goal's score title.
 - When a single task exceeds the per-goal 40% budget, it is included regardless — best-effort enforcement, not strict enforcement.
 

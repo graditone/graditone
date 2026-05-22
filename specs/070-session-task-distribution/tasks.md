@@ -114,7 +114,7 @@
 
 - [X] T035 [US3] Create `PhraseGroup` type `{ phraseIndex: number, tasks: SessionTask[], totalDuration: number }` in plugins-external/sessions-plugin/sessionDistribution.ts
 - [X] T036 [US3] Implement `distributeTasks(phraseGroups: PhraseGroup[], availableTime: number): DistributedSession[]` using greedy first-fit algorithm per research.md Topic 3 in plugins-external/sessions-plugin/sessionDistribution.ts
-- [X] T037 [US3] Each `DistributedSession` has `tasks: SessionTask[]`, `totalEstimatedDurationSecs: number`, `availableTime: number` in plugins-external/sessions-plugin/sessionDistribution.ts
+- [X] T037 [US3] Each `DistributedSession` has `tasks: SessionTask[]`, `totalEstimatedDurationSecs: number`, `availableTime: number`, **and `scoreTitles: string[]` (sorted score titles of all contributing goals — used by caller to set session `name`)** in plugins-external/sessions-plugin/sessionDistribution.ts (reopened — BUG-002: `scoreTitles` field was missing; session naming left to ad-hoc caller logic)
 - [X] T038 [US3] Verify all distribution tests pass: `npm test -- --filter sessionDistribution`
 
 **Checkpoint**: Session distribution algorithm ready — tasks correctly binned into time-limited sessions.
@@ -147,7 +147,7 @@
 
 **Purpose**: Wire up all modules in the GoalsView orchestration flow and persist sessions
 
-- [X] T045 Update `processScoreSelection()` in plugins-external/sessions-plugin/GoalsView.tsx to: call `getRegionDifficulty()` for each phrase × staff, call `estimateTaskDuration()` for each task, call `distributeTasks()` to get session groups, call `findFreeDays()` for scheduling
+- [X] T045 Update `processScoreSelection()` in plugins-external/sessions-plugin/GoalsView.tsx to: call `getRegionDifficulty()` for each phrase × staff, call `estimateTaskDuration()` for each task, call `distributeTasks()` to get session groups, call `findFreeDays()` for scheduling, **and set each created session's `name` from `distributedSession.scoreTitles.sort().join(' · ')` — MUST NOT set name from creating goal's score title alone** (reopened — BUG-002: session-creation step after `distributeTasks()` set name ad-hoc without recomputing when a second goal's tasks are present)
 - [X] T046 Add eviction warning check in plugins-external/sessions-plugin/GoalsView.tsx: if `currentSessionCount + newSessionCount > MAX_SESSIONS`, show confirm dialog with eviction impact per research.md Topic 5 (FR-016)
 - [X] T047 Create and persist multiple sessions with assigned targetDates and `availableTime=3600` in plugins-external/sessions-plugin/GoalsView.tsx
 - [X] T048 Set `goal.sessionIds` to array of all created session IDs in plugins-external/sessions-plugin/GoalsView.tsx
@@ -285,3 +285,7 @@ Phase 1 (Setup) ─────────────► Phase 2 (Foundational
 2. Add US2 (Duration) + US1 (Multi-phrase) → MVP: all tasks generated with estimates
 3. Add US3 (Distribution) + US4 (Scheduling) → Full: tasks distributed into time-limited, scheduled sessions
 4. Integration + Polish → Production-ready with UI display and eviction warnings
+
+---
+
+**Bugfix**: 2026-05-22 — BUG-002 Updated from bugfix patch. T037 reopened (`DistributedSession` missing `scoreTitles: string[]` field per new FR-017). T045 reopened (`processScoreSelection()` session-creation step must derive `name` from `distributedSession.scoreTitles.sort().join(' · ')`). No new tasks added here — the regression test is tracked in specs/087-one-goal-40pct-cap/tasks.md as T028.
