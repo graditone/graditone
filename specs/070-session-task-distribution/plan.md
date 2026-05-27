@@ -7,7 +7,7 @@
 
 Evolve goal-based task generation from creating tasks for a single phrase to generating tasks for **all** detected phrases (RH, LH, BH per phrase for piano). Each task receives a computed difficulty rating and estimated practice duration. Tasks are distributed into time-limited sessions (default 1 hour), keeping phrase triplets as atomic units. Sessions are scheduled on the next available free days.
 
-**Key changes**: (1) goalEngine.ts expanded to iterate all phrases, (2) new Rust WASM function for per-region difficulty, (3) new TypeScript duration estimation module, (4) new session distribution algorithm, (5) free-day scheduling logic.
+**Key changes**: (1) goalEngine.ts expanded to iterate all phrases, applying a silent-region filter (skip task creation when `getRegionDifficulty()` returns `null`), (2) new Rust WASM function for per-region difficulty, (3) new TypeScript duration estimation module, (4) new session distribution algorithm updated to handle phrase groups with fewer than 3 tasks, (5) free-day scheduling logic.
 
 ## Technical Context
 
@@ -68,13 +68,13 @@ backend/
     \u2514\u2500\u2500 difficulty_region_tests.rs  # NEW: tests for per-region difficulty
 
 plugins-external/sessions-plugin/
-\u251c\u2500\u2500 goalEngine.ts               # MODIFY: iterate all phrases, generate tasks per phrase
-\u251c\u2500\u2500 goalEngine.test.ts           # MODIFY: add tests for multi-phrase generation
+\u251c\u2500\u2500 goalEngine.ts               # MODIFY: iterate all phrases, generate tasks per phrase; skip task when getRegionDifficulty() returns null (FR-017 silent-region guard)
+\u251c\u2500\u2500 goalEngine.test.ts           # MODIFY: add tests for multi-phrase generation, add silent-hand regression test
 \u251c\u2500\u2500 goalTypes.ts                 # MODIFY: Goal.sessionIds (was sessionId)
 \u251c\u2500\u2500 sessionTypes.ts              # MODIFY: Session.availableTime, SessionTask.difficulty/estimatedDurationSecs
 \u251c\u2500\u2500 durationEstimation.ts        # NEW: practice time estimation module
 \u251c\u2500\u2500 durationEstimation.test.ts   # NEW: unit tests
-\u251c\u2500\u2500 sessionDistribution.ts       # NEW: task-to-session distribution algorithm
+\u251c\u2500\u2500 sessionDistribution.ts       # NEW: task-to-session distribution algorithm; must handle phrase groups with fewer than 3 tasks (BUG-001 / FR-017)
 \u251c\u2500\u2500 sessionDistribution.test.ts  # NEW: unit tests
 \u251c\u2500\u2500 GoalsView.tsx                # MODIFY: create multiple sessions, eviction warning
 \u251c\u2500\u2500 GoalsView.test.tsx            # MODIFY: update for multi-session creation
@@ -87,3 +87,5 @@ plugins-external/sessions-plugin/
 ## Complexity Tracking
 
 No constitution violations — table not needed.
+
+**Bugfix**: 2026-06-07 — BUG-001 Updated Phase 4 task generation to document the silent-region filter step: for each (phrase × hand), skip task creation when `getRegionDifficulty()` returns `null`. Updated `sessionDistribution.ts` note to reflect variable-size phrase groups.

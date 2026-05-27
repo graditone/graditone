@@ -20,6 +20,7 @@ A user creates a "learn score" goal for a piano score that contains multiple phr
 1. **Given** a two-staff (piano) score with 4 detected phrases, **When** the user creates a score play goal, **Then** 12 tasks are generated: 3 per phrase (staffIndex 0 for RH, staffIndex 1 for LH, staffIndex -1 for BH), each covering the correct start/end measure range.
 2. **Given** a single-staff score with 3 detected phrases, **When** the user creates a score play goal, **Then** 3 tasks are generated (one BH task per phrase, staffIndex -1), since there is only one staff.
 3. **Given** a two-staff score where phrase detection falls back to default 4-measure grouping, **When** the user creates a score play goal, **Then** tasks are still generated for every default phrase region with RH, LH, BH variants.
+4. **Given** a two-staff (piano) score where the Left Hand staff is silent (no notes) in phrase 2, **When** the user creates a score play goal, **Then** phrase 2 produces only 2 tasks (RH + BH) — no LH task is created, because `getRegionDifficulty()` returns `null` for staffIndex 1 in that phrase range.
 
 ---
 
@@ -78,13 +79,14 @@ When a goal generates multiple sessions, those sessions are scheduled on consecu
 - What happens when a phrase group's combined estimated duration exceeds the session's availableTime? The phrase group (RH+LH+BH) is still assigned together to a new session — the phrase triplet is the atomic unit and a session always accepts at least one phrase group.
 - What happens when there are no free days in the foreseeable future? The system schedules on the next days after the last occupied day, effectively queuing sessions sequentially.
 - What happens when a score has only one staff? Only BH tasks are generated (one per phrase), not RH/LH/BH triplets.
+- What happens when a hand (staff) is silent (no notes) in a phrase? No task is created for that hand/phrase combination — `getRegionDifficulty()` returns `null` for that (startMeasure, endMeasure, staffIndex), and the task is skipped. The phrase group for that phrase may therefore contain fewer than 3 tasks (e.g., only RH + BH when LH is silent).
 - What happens when availableTime is set to 0? A value of 0 is treated the same as unset (no time limit).
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: When a score play goal is created for a multi-staff (piano) score, the system MUST generate 3 tasks per detected phrase: one for Right Hand (staffIndex 0), one for Left Hand (staffIndex 1), one for Both Hands (staffIndex -1).
+- **FR-001**: When a score play goal is created for a multi-staff (piano) score, the system MUST generate 3 tasks per detected phrase: one for Right Hand (staffIndex 0), one for Left Hand (staffIndex 1), one for Both Hands (staffIndex -1), **except** where FR-017 applies.
 - **FR-002**: When a score play goal is created for a single-staff score, the system MUST generate 1 task per detected phrase for Both Hands (staffIndex -1).
 - **FR-003**: Each auto-generated task MUST have a difficulty rating (easy, medium, hard) computed using the same algorithm as the global score difficulty, scoped to the task's measure range and assigned staff.
 - **FR-004**: Each auto-generated task MUST have an estimatedDurationSecs field representing the total practice time needed to reach the minResult threshold (not a single playback duration). The estimate is computed from: number of measures in the task, loopCount (repetitions), difficulty rating, and minResult (target score percentage). Base calibration: a medium-difficulty measure requires approximately 3-4 minutes of practice time; easy measures require less, hard measures require more.
@@ -100,6 +102,7 @@ When a goal generates multiple sessions, those sessions are scheduled on consecu
 - **FR-014**: The duration estimation formula MUST produce longer estimates for higher difficulty and lower minResult targets.
 - **FR-015**: Tasks MUST be ordered by phrase progression: all three hand variants (RH, LH, BH) of phrase 1 first, then phrase 2, etc. When distributing across sessions, same-phrase tasks MUST always be kept together in the same session (phrase triplet is the atomic distribution unit). A session may exceed its availableTime to keep a phrase group intact.
 - **FR-016**: If creating a goal would generate sessions that push the total session count above the 50-session storage cap, the system MUST warn the user with the number of sessions to be created and the number of oldest closed sessions that will be evicted, and proceed only upon user confirmation.
+- **FR-017**: A hand-specific task MUST NOT be created for a given (phrase, staffIndex) pair when `getRegionDifficulty()` returns `null` for that pair — meaning the staff has no playable notes within the phrase's measure range. A `null` return MUST be treated as a skip condition, not as a fallback to medium difficulty. As a result, a phrase group may contain fewer than 3 tasks when one or more hands are silent in that phrase.
 
 ### Key Entities
 
@@ -112,7 +115,7 @@ When a goal generates multiple sessions, those sessions are scheduled on consecu
 
 ### Measurable Outcomes
 
-- **SC-001**: A score play goal for a piano score with N phrases generates exactly 3xN tasks (RH, LH, BH per phrase).
+- **SC-001**: A score play goal for a piano score with N phrases generates at most 3×N tasks (RH, LH, BH per phrase); the actual count may be less when one or more hands are silent in a given phrase (FR-017).
 - **SC-002**: Every auto-generated task has a computed difficulty and a positive estimated duration before the user interacts with it.
 - **SC-003**: No session with a defined availableTime exceeds its time budget (exception: the first phrase group assigned to an empty session may exceed the budget to keep the triplet intact).
 - **SC-004**: All auto-generated sessions are scheduled on distinct days, with no day hosting more than one newly created session.
@@ -128,3 +131,5 @@ When a goal generates multiple sessions, those sessions are scheduled on consecu
 - Q: How should the system handle goal creation when resulting sessions would exceed the 50-session storage cap? → A: Warn user with session count and eviction impact, proceed on confirmation.
 - Q: What should the base duration per measure be for the estimation formula? → A: Duration estimates total practice time to reach minResult (not playback time). Base ~3-4 min per measure at medium difficulty (covers memorizing notes, fingering, rhythm, accidentals).
 - Q: If a phrase triplet (RH+LH+BH) exceeds the session's availableTime, should it be split across sessions? → A: No. Keep phrase triplet together — session may exceed availableTime for that phrase group. Phrase triplet is the atomic distribution unit.
+
+**Bugfix**: 2026-06-07 — BUG-001 Added FR-017 (skip task creation for silent staves), updated FR-001 to reference FR-017, added silent-hand edge case, updated SC-001 to reflect variable phrase group size.
