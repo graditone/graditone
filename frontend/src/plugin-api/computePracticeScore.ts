@@ -18,9 +18,9 @@ export interface PracticeScoreBreakdown {
   readonly lateCount: number;
   readonly earlyReleaseCount: number;
   readonly totalWrongAttempts: number;
-  /** 0–100, clamped. Reflects tempo weighting when tempoMultiplier < 1.0. */
+  /** 0–100, clamped. Based solely on accuracy — tempo does not affect max score. */
   readonly score: number;
-  /** The tempoMultiplier applied to produce `score`. 1.0 when not supplied. */
+  /** The tempoMultiplier recorded for informational purposes. 1.0 when not supplied. */
   readonly tempoMultiplier: number;
 }
 
@@ -28,10 +28,9 @@ export interface PracticeScoreBreakdown {
  * Compute the practice score from an array of note results.
  *
  * @param noteResults    Per-note outcomes and wrong-attempt counts.
- * @param tempoMultiplier  Optional tempo multiplier (0–∞). Values ≤ 0 or absent
- *                         default to 1.0. Values > 1.0 are clamped to 1.0 so a
- *                         perfect performance at any speed still earns 100.
- *                         Formula: `score = clamp(round(rawAccuracy × min(1.0, mult)), 0, 100)`
+ * @param tempoMultiplier  Optional tempo multiplier, recorded in the breakdown for
+ *                         informational purposes only. Does not affect the score —
+ *                         a perfect performance always earns 100 regardless of tempo.
  *
  * Returns `null` when the array is empty (no notes to score).
  */
@@ -55,11 +54,8 @@ export function computePracticeScore(
         )
       : 0;
 
-  // Feature 072: Apply multiplicative tempo weighting.
-  // Guard: treat absent, zero, or negative multipliers as neutral (1.0).
+  const score = Math.max(0, Math.min(100, rawScore));
   const safeMult = tempoMultiplier != null && tempoMultiplier > 0 ? tempoMultiplier : 1.0;
-  const effectiveMult = Math.min(1.0, safeMult);
-  const score = Math.max(0, Math.min(100, Math.round(rawScore * effectiveMult)));
 
-  return { totalNotes, correctCount, lateCount, earlyReleaseCount, totalWrongAttempts, score, tempoMultiplier: effectiveMult };
+  return { totalNotes, correctCount, lateCount, earlyReleaseCount, totalWrongAttempts, score, tempoMultiplier: safeMult };
 }
