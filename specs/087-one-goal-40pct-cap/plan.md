@@ -74,3 +74,7 @@ No changes to `backend/`, `frontend/`, or any other plugin.
 ## Complexity Tracking
 
 No constitution violations — table not needed.
+
+---
+
+**Bugfix**: 2026-05-22 — BUG-002 Updated from bugfix patch. `redistributeWithMultiGoalCap` in `GoalsView.tsx` must compute each new session's `name` from `[...new Set(distributedSession.goalIds.map(gid => goalMap[gid]?.scoreTitle ?? gid))].sort().join(' · ')` before persisting. The existing plan's step 8 ("create new sessions with `goalIds` field") implicitly omitted the `name` field derivation — that omission is the root cause tracked in BUG-002. New regression task T028 added to Phase 6.

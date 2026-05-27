@@ -51,7 +51,7 @@
 - [X] T006 [P] [US1] Add `distributeMultiGoalTasks` test: two goals, each capped at 40% of `availableTime` per session — in `sessionDistribution.test.ts`
 - [X] T007 [P] [US1] Add `distributeMultiGoalTasks` test: oversized first phrase group of a goal is always admitted (best-effort, FR-005) — in `sessionDistribution.test.ts`
 - [X] T008 [P] [US1] Add `distributeMultiGoalTasks` test: three goals simultaneously balanced in a session (each ≤ 40%) — in `sessionDistribution.test.ts`
-- [X] T009 [P] [US1] Add `distributeMultiGoalTasks` test: `DistributedSession.goalIds` is populated with the correct goal IDs per session — in `sessionDistribution.test.ts`
+- [X] T009 [P] [US1] Add `distributeMultiGoalTasks` test: `DistributedSession.goalIds` is populated with the correct goal IDs per session; **also assert that when two goals reference different scores, every session spanning both scores carries a composite `name` equal to the sorted score titles joined by `' · '`** — in `sessionDistribution.test.ts` (reopened — BUG-002: test never asserted composite session title; naming defect passed undetected)
 - [X] T010 [P] [US1] Add `distributeMultiGoalTasks` test: zero-duration tasks (no `estimatedDurationSecs`) do not consume any goal budget and are placed freely — in `sessionDistribution.test.ts`
 
 ### Implementation for User Story 1
@@ -104,7 +104,7 @@
 
 - [X] T021 [US3] Implement `reconstructPhraseGroupsFromTasks(tasks: readonly SessionTask[]): GoalPhraseGroup[]` in `goalEngine.ts` — groups tasks by `(goalId, startMeasure, endMeasure)`, sorts by `startMeasure`, excludes warmup and non-todo tasks (see data-model.md §6)
 - [X] T022 [US3] Update `GoalsView.tsx` `handleGoalSubmit` to detect other active `learn-score-phrase` goals via `listGoalsIndex()` and select the multi-goal redistribution path when `otherActiveGoalIds.length > 0`
-- [X] T023 [US3] Implement `redistributeWithMultiGoalCap` orchestration in `GoalsView.tsx`: (1) load other active goals from IndexedDB, (2) load their `scheduled` sessions, (3) extract pending tasks, (4) cancel those sessions (delete IndexedDB + remove index), (5) call `reconstructPhraseGroupsFromTasks` for each goal, (6) annotate new goal's phrase groups with `goalId`, (7) call `distributeMultiGoalTasks`, (8) create new sessions with `goalIds` field, (9) assign free days via `findFreeDays`, (10) update each contributing goal's `sessionIds`
+- [X] T023 [US3] Implement `redistributeWithMultiGoalCap` orchestration in `GoalsView.tsx`: (1) load other active goals from IndexedDB, (2) load their `scheduled` sessions, (3) extract pending tasks, (4) cancel those sessions (delete IndexedDB + remove index), (5) call `reconstructPhraseGroupsFromTasks` for each goal, (6) annotate new goal's phrase groups with `goalId`, (7) call `distributeMultiGoalTasks`, (8) create new sessions with `goalIds` field, (9) assign free days via `findFreeDays`, (10) update each contributing goal's `sessionIds`, **(11) compute each new session's `name` as `[...new Set(distributedSession.goalIds.map(gid => goalMap[gid]?.scoreTitle ?? gid))].sort().join(' · ')` — MUST NOT reuse prior session name** (reopened — BUG-002: step 11 was missing; sessions were named after only the creating goal's score title)
 - [X] T024 [US3] Update session creation in `redistributeWithMultiGoalCap` to populate `Session.goalIds` and `SessionIndexEntry.goalIds` from `DistributedSession.goalIds` — in `GoalsView.tsx`
 
 **Checkpoint**: All T018–T020 tests pass. Multi-goal redistribution creates balanced sessions and every task from every goal appears in exactly one scheduled session.
@@ -118,6 +118,7 @@
 - [X] T025 [P] Run full `sessions-plugin` test suite (`npx vitest run --reporter=verbose`) and confirm all tests pass with no regressions
 - [X] T026 [P] Update `FEATURES.md` at repo root to reflect the 40% per-goal cap as a new balancing behaviour of the Goals system
 - [X] T027 Run the quickstart.md §Verification Scenario manually (Goal A then Goal B) and confirm balanced distribution and no dropped tasks
+- [X] T028 [P] [US3] Add regression test: create two goals linked to different scores (e.g. Arabesque and Bach Invention No. 1), trigger `redistributeWithMultiGoalCap`, and assert that every `DistributedSession` whose `goalIds` spans both scores has `name === 'Arabesque · Bach: Invention No. 1'` (sorted, joined by `' · '`) — in `plugins-external/sessions-plugin/GoalsView.test.tsx` or `sessionDistribution.test.ts` (added — BUG-002)
 
 ---
 
@@ -202,3 +203,7 @@ npx vitest run sessionDistribution --reporter=verbose  # verify T006-T010 PASS
 - User story tasks: [US1], [US2], or [US3] label ✅
 - Parallelizable tasks: [P] marker ✅
 - All tasks include file paths ✅
+
+---
+
+**Bugfix**: 2026-05-22 — BUG-002 Updated from bugfix patch. T009 reopened (missing composite-title assertion). T023 reopened (session `name` derivation step 11 missing). T028 added (regression test: composite title on multi-score sessions). Total tasks: 28 (27 previously, +1 added, 2 reopened).

@@ -100,6 +100,7 @@ When a goal generates multiple sessions, those sessions are scheduled on consecu
 - **FR-014**: The duration estimation formula MUST produce longer estimates for higher difficulty and lower minResult targets.
 - **FR-015**: Tasks MUST be ordered by phrase progression: all three hand variants (RH, LH, BH) of phrase 1 first, then phrase 2, etc. When distributing across sessions, same-phrase tasks MUST always be kept together in the same session (phrase triplet is the atomic distribution unit). A session may exceed its availableTime to keep a phrase group intact.
 - **FR-016**: If creating a goal would generate sessions that push the total session count above the 50-session storage cap, the system MUST warn the user with the number of sessions to be created and the number of oldest closed sessions that will be evicted, and proceed only upon user confirmation.
+- **FR-017**: The `DistributedSession` intermediate type MUST include a `scoreTitles: string[]` field populated with the score titles of all goals whose phrase groups were assigned to that session. The session's human-readable `name` MUST be derived from `scoreTitles.sort().join(' · ')` at the point where the caller (e.g. `GoalsView.tsx`) persists the session. A `DistributedSession` with tasks from only one score MUST carry a single-element `scoreTitles` array.
 
 ### Key Entities
 
@@ -107,6 +108,11 @@ When a goal generates multiple sessions, those sessions are scheduled on consecu
 - **SessionTask**: Extended with difficulty (easy | medium | hard) and estimatedDurationSecs (number, seconds). estimatedDurationSecs represents the total practice time needed to master the phrase (memorize notes, learn fingering, rhythm, accidentals) to reach minResult. Computed at creation time from the task's measure range, staff, loopCount, and minResult.
 - **Goal**: Extended from single sessionId to support multiple session references (sessionIds), since a goal may now span multiple sessions.
 - **PhraseRegion**: Existing entity used for phrase detection. Tasks are generated for each detected phrase.
+- **DistributedSession**: An intermediate (in-memory) result type returned by `distributeTasks()`. Carries `tasks: SessionTask[]`, `totalEstimatedDurationSecs: number`, `availableTime: number`, and `scoreTitles: string[]` (added — BUG-002). The caller derives the persisted session `name` from `scoreTitles.sort().join(' · ')`.
+
+## Known Issues & Regression Tests
+
+**Bugfix**: 2026-05-22 — BUG-002 Added FR-017 mandating `DistributedSession.scoreTitles` and composite session `name` derivation. T037 and T045 in tasks.md reopened. Root cause: `DistributedSession` had no `name`/`scoreTitles` field; `GoalsView.tsx` set session names ad-hoc without recomputing when tasks from a second goal were added.
 
 ## Success Criteria *(mandatory)*
 
