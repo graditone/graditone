@@ -312,7 +312,6 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   freeStaffBpmRef.current = freeStaffBpm;
 
   // Feature 092: Subscribe to raw MIDI events during free practice.
-  // Feature 092: Subscribe to raw MIDI events during free practice.
   // Attacks go into the current-measure buffer; releases update the duration.
   // Notes are finalized (quantized + rests filled) when the measure clock fires.
   // Runs in addition to usePracticeMidi — the practice engine is never started
@@ -323,6 +322,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const [freeSessionActive, setFreeSessionActive] = useState(false);
   /** Notes buffered in the currently-recording measure (not yet finalized). */
   const freeMeasureBufferRef = useRef<MeasureNoteEntry[]>([]);
+  /** Wall-clock ms when the current measure started. */
+  const freeMeasureStartMsRef = useRef(0);
+  /** setInterval ID that fires once per measure to finalize and commit notes. */
+  const freeMeasureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     return context.midi.subscribe((event) => {
       if (!isFreePracticeRef.current || !freeSessionActiveRef.current) return;
