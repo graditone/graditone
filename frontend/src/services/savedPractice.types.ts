@@ -37,6 +37,11 @@ export interface FreeMidiEvent {
   midiNote: number;
   /** Wall-clock ms elapsed from session start at the moment of the note-attack. */
   timestampMs: number;
+  /**
+   * Note duration in ms (attack → release). Populated since the VirtualKeyboard-style
+   * release-tracking fix; undefined for events recorded before that change.
+   */
+  durationMs?: number;
 }
 
 /** Snapshot of a completed free practice session — used for display and replay. */
