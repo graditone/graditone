@@ -73,6 +73,58 @@ async function loadProtectedPracticeMap(): Promise<ReadonlyMap<string, Protected
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
+// Feature 092: Measure-by-measure MIDI recording helpers
+// ---------------------------------------------------------------------------
+
+/** One note captured into the current-measure buffer during free practice. */
+interface MeasureNoteEntry {
+  midiNote: number;
+  /** Wall-clock ms when the key was pressed. */
+  attackMs: number;
+  /** Wall-clock duration ms — null while the key is still held. */
+  durationMs: number | null;
+}
+
+/** 4/4 in 960-PPQ: 16 sixteenth-note steps per measure. */
+const FREE_STEPS_PER_MEASURE = 16;
+
+/**
+ * Quantize and cap a measure buffer into PluginNoteEvents with timestamps
+ * aligned to the 16th-note grid.  `measureEndMs` is used to clamp durations
+ * of notes still held at the measure boundary.
+ */
+function finalizeMeasureNotes(
+  buffer: MeasureNoteEntry[],
+  measureStartMs: number,
+  bpm: number,
+  measureEndMs: number,
+): PluginNoteEvent[] {
+  const msPerBeat = 60_000 / bpm;
+  const msPerSixteenth = msPerBeat / 4;
+
+  return buffer.map(({ midiNote, attackMs, durationMs }) => {
+    const relMs = Math.max(0, attackMs - measureStartMs);
+    const startStep = Math.max(
+      0,
+      Math.min(FREE_STEPS_PER_MEASURE - 1, Math.round(relMs / msPerSixteenth)),
+    );
+    const quantizedAttackMs = measureStartMs + startStep * msPerSixteenth;
+
+    const rawDuration = durationMs ?? measureEndMs - attackMs;
+    const durSteps = Math.max(1, Math.round(rawDuration / msPerSixteenth));
+    const clampedDurSteps = Math.min(durSteps, FREE_STEPS_PER_MEASURE - startStep);
+    const quantizedDurationMs = clampedDurSteps * msPerSixteenth;
+
+    return {
+      midiNote,
+      timestamp: quantizedAttackMs,
+      type: 'attack' as const,
+      durationMs: quantizedDurationMs,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -260,49 +312,37 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   freeStaffBpmRef.current = freeStaffBpm;
 
   // Feature 092: Subscribe to raw MIDI events during free practice.
-  // Tracks both attack and release so each note gets an accurate durationMs
-  // for correct WASM voice layout (rest symbols, note values) — mirrors VirtualKeyboard.
+  // Feature 092: Subscribe to raw MIDI events during free practice.
+  // Attacks go into the current-measure buffer; releases update the duration.
+  // Notes are finalized (quantized + rests filled) when the measure clock fires.
   // Runs in addition to usePracticeMidi — the practice engine is never started
   // during free practice, so usePracticeMidi won't consume events.
   const isFreePracticeRef = useRef(false);
   isFreePracticeRef.current = isFreePractice;
   const freeSessionActiveRef = useRef(false);
   const [freeSessionActive, setFreeSessionActive] = useState(false);
-  /** Attack wall-clock timestamps per MIDI note — used to compute durationMs on release. */
-  const freeAttackTimestampsRef = useRef<Map<number, number>>(new Map());
-  /** Wall-clock time of the first note attack — used as freeDisplayOriginMs. */
-  const freeFirstNoteTimeRef = useRef<number | null>(null);
+  /** Notes buffered in the currently-recording measure (not yet finalized). */
+  const freeMeasureBufferRef = useRef<MeasureNoteEntry[]>([]);
   useEffect(() => {
     return context.midi.subscribe((event) => {
       if (!isFreePracticeRef.current || !freeSessionActiveRef.current) return;
       const now = Date.now();
 
       if (event.type === 'attack') {
-        // Store attack time for duration calculation on release.
-        freeAttackTimestampsRef.current.set(event.midiNote, now);
-        // Increment live note counter immediately for responsive UI.
+        freeMeasureBufferRef.current.push({ midiNote: event.midiNote, attackMs: now, durationMs: null });
         setFreeNoteCount((c) => c + 1);
-        // Align origin to first note so beat 1 = measure 1 (VirtualKeyboard technique).
-        if (freeFirstNoteTimeRef.current === null) {
-          freeFirstNoteTimeRef.current = now;
-          setFreeDisplayOriginMs(now);
-        }
         return;
       }
 
       if (event.type === 'release') {
-        const attackedAt = freeAttackTimestampsRef.current.get(event.midiNote);
-        if (attackedAt == null) return;
-        freeAttackTimestampsRef.current.delete(event.midiNote);
-        const durationMs = now - attackedAt;
-        const timestampMs = attackedAt - freeStartMsRef.current;
-        freeMidiEventsRef.current.push({ midiNote: event.midiNote, timestampMs, durationMs });
-        // Sort to maintain chronological order (chords released out of order stay sorted).
-        freeMidiEventsRef.current.sort((a, b) => a.timestampMs - b.timestampMs);
-        setFreeDisplayNotes((prev) =>
-          [...prev, { midiNote: event.midiNote, timestamp: attackedAt, type: 'attack' as const, durationMs }]
-            .sort((a, b) => a.timestamp - b.timestamp)
-        );
+        // Update durationMs for the most-recent matching attack still in the buffer.
+        const buf = freeMeasureBufferRef.current;
+        for (let i = buf.length - 1; i >= 0; i--) {
+          if (buf[i].midiNote === event.midiNote && buf[i].durationMs === null) {
+            buf[i] = { ...buf[i], durationMs: now - buf[i].attackMs };
+            break;
+          }
+        }
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -595,6 +635,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       if (errorFlashTimerRef.current !== null) clearTimeout(errorFlashTimerRef.current);
       // Feature 092: Free practice timer cleanup
       if (freeIntervalRef.current !== null) clearInterval(freeIntervalRef.current);
+      if (freeMeasureIntervalRef.current !== null) clearInterval(freeMeasureIntervalRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -636,6 +677,40 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     context.close();
   }, [context]);
 
+  /**
+   * Feature 092: Start (or restart) the per-measure clock for free practice.
+   * Fires every `msPerMeasure = 4 * 60000/bpm` ms.  On each tick it
+   * finalizes the measure buffer (quantizes + caps durations), appends the
+   * quantized notes to freeDisplayNotes, records them in freeMidiEventsRef,
+   * and resets the buffer for the next measure.
+   */
+  const startMeasureClock = useCallback(() => {
+    if (freeMeasureIntervalRef.current !== null) clearInterval(freeMeasureIntervalRef.current);
+    const bpm = freeStaffBpmRef.current;
+    const msPerMeasure = (4 * 60_000) / bpm;
+    freeMeasureIntervalRef.current = setInterval(() => {
+      const measureEnd = Date.now();
+      const measureStart = freeMeasureStartMsRef.current;
+      const buffer = freeMeasureBufferRef.current.slice();
+      freeMeasureBufferRef.current = [];
+      freeMeasureStartMsRef.current = measureEnd;
+
+      if (buffer.length === 0) return; // empty measure — rests added by toConvertedScore gap-fill
+
+      const quantized = finalizeMeasureNotes(buffer, measureStart, bpm, measureEnd);
+      setFreeDisplayNotes((prev) => [...prev, ...quantized]);
+      const sessionStart = freeStartMsRef.current;
+      for (const note of quantized) {
+        freeMidiEventsRef.current.push({
+          midiNote: note.midiNote,
+          timestampMs: note.timestamp - sessionStart,
+          durationMs: note.durationMs,
+        });
+      }
+    }, msPerMeasure);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Feature 092: Launch a free (score-less) practice session
   const handleFreePractice = useCallback(() => {
     freeMidiEventsRef.current = [];
@@ -643,6 +718,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     freeStartMsRef.current = now;
     const activeBpm = metronomeStateRef.current.bpm > 0 ? metronomeStateRef.current.bpm : 120;
     setFreeStaffBpm(activeBpm);
+    freeStaffBpmRef.current = activeBpm;
     setFreeNoteCount(0);
     setFreeMidiRecord(null);
     setResultsOverlayVisible(false);
@@ -651,8 +727,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     setFreeElapsedMs(0);
     setFreeDisplayNotes([]);
     setFreeDisplayOriginMs(now);
-    freeAttackTimestampsRef.current.clear();
-    freeFirstNoteTimeRef.current = null;
+    freeMeasureBufferRef.current = [];
+    freeMeasureStartMsRef.current = now;
     loadedScoreRefRef.current = { type: 'free', id: '' };
     setIsFreePractice(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -806,23 +882,35 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     // ─── Feature 092: Free practice toggle ─────────────────────────────────
     if (isFreePracticeRef.current) {
       if (freeSessionActiveRef.current) {
-        // Stop free session
+        // ── Stop free session ─────────────────────────────────────────────
         freeSessionActiveRef.current = false;
         setFreeSessionActive(false);
         if (freeIntervalRef.current !== null) {
           clearInterval(freeIntervalRef.current);
           freeIntervalRef.current = null;
         }
-        // Flush any notes still held at stop time (key pressed but not yet released).
-        const stopTime = Date.now();
-        for (const [midiNote, attackedAt] of freeAttackTimestampsRef.current.entries()) {
-          const durationMs = stopTime - attackedAt;
-          const timestampMs = attackedAt - freeStartMsRef.current;
-          freeMidiEventsRef.current.push({ midiNote, timestampMs, durationMs });
+        // Stop the measure clock.
+        if (freeMeasureIntervalRef.current !== null) {
+          clearInterval(freeMeasureIntervalRef.current);
+          freeMeasureIntervalRef.current = null;
         }
-        freeAttackTimestampsRef.current.clear();
-        freeFirstNoteTimeRef.current = null;
-        freeMidiEventsRef.current.sort((a, b) => a.timestampMs - b.timestampMs);
+        // Finalize any notes still in the current (partial) measure.
+        const stopTime = Date.now();
+        const partialBuffer = freeMeasureBufferRef.current.slice();
+        freeMeasureBufferRef.current = [];
+        if (partialBuffer.length > 0) {
+          const bpm = freeStaffBpmRef.current;
+          const quantized = finalizeMeasureNotes(partialBuffer, freeMeasureStartMsRef.current, bpm, stopTime);
+          setFreeDisplayNotes((prev) => [...prev, ...quantized]);
+          const sessionStart = freeStartMsRef.current;
+          for (const note of quantized) {
+            freeMidiEventsRef.current.push({
+              midiNote: note.midiNote,
+              timestampMs: note.timestamp - sessionStart,
+              durationMs: note.durationMs,
+            });
+          }
+        }
         const elapsedMs = stopTime - freeStartMsRef.current;
         const events = [...freeMidiEventsRef.current];
         const record: FreeMidiRecord = {
@@ -834,27 +922,29 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         setFreeMidiRecord(record);
         setResultsOverlayVisible(true);
       } else {
-        // Start free session
+        // ── Start free session ────────────────────────────────────────────
         freeMidiEventsRef.current = [];
         const now = Date.now();
         freeStartMsRef.current = now;
         const activeBpm = metronomeStateRef.current.bpm > 0 ? metronomeStateRef.current.bpm : 120;
         setFreeStaffBpm(activeBpm);
+        freeStaffBpmRef.current = activeBpm;
         setFreeNoteCount(0);
         setFreeElapsedMs(0);
         setFreeMidiRecord(null);
         setResultsOverlayVisible(false);
         setFreeDisplayNotes([]);
         setFreeDisplayOriginMs(now);
-        freeAttackTimestampsRef.current.clear();
-        freeFirstNoteTimeRef.current = null;
+        freeMeasureBufferRef.current = [];
+        freeMeasureStartMsRef.current = now;
         freeSessionActiveRef.current = true;
         setFreeSessionActive(true);
-        // Start wall-clock elapsed timer
+        // Start wall-clock elapsed timer and measure clock.
         if (freeIntervalRef.current !== null) clearInterval(freeIntervalRef.current);
         freeIntervalRef.current = setInterval(() => {
           setFreeElapsedMs(Date.now() - freeStartMsRef.current);
         }, 1000);
+        startMeasureClock();
       }
       return;
     }
@@ -968,6 +1058,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   }, [
     context.scorePlayer,
     selectedStaffIndex,
+    startMeasureClock,
   ]);
 
   // Ref to handlePracticeToggle so the auto-start effect can call it without
@@ -1039,13 +1130,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // ─── Repractice handler (called from ResultsOverlay after replay cleanup) ──
   const handleRepractice = useCallback(() => {
-    // Feature 092: Free practice repractice — just start a fresh free session
+    // Feature 092: Free practice repractice — start a fresh free session
     if (isFreePracticeRef.current) {
       freeMidiEventsRef.current = [];
       const now = Date.now();
       freeStartMsRef.current = now;
       const activeBpm = metronomeStateRef.current.bpm > 0 ? metronomeStateRef.current.bpm : 120;
       setFreeStaffBpm(activeBpm);
+      freeStaffBpmRef.current = activeBpm;
       setFreeNoteCount(0);
       setFreeElapsedMs(0);
       setFreeMidiRecord(null);
@@ -1054,14 +1146,15 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       setSaveError(null);
       setFreeDisplayNotes([]);
       setFreeDisplayOriginMs(now);
-      freeAttackTimestampsRef.current.clear();
-      freeFirstNoteTimeRef.current = null;
+      freeMeasureBufferRef.current = [];
+      freeMeasureStartMsRef.current = now;
       freeSessionActiveRef.current = true;
       setFreeSessionActive(true);
       if (freeIntervalRef.current !== null) clearInterval(freeIntervalRef.current);
       freeIntervalRef.current = setInterval(() => {
         setFreeElapsedMs(Date.now() - freeStartMsRef.current);
       }, 1000);
+      startMeasureClock();
       return;
     }
     setResultsOverlayVisible(false);
@@ -1075,7 +1168,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     // Also restore loopCount since handlePracticeToggle sets it to 1.
     setLoopCount(loopCount);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handlePracticeToggle, loopCount]);
+  }, [handlePracticeToggle, loopCount, startMeasureClock]);
 
   // ─── Feature 056 + 092: Save practice handler ─────────────────────────────────
   const handleSave = useCallback(async () => {
@@ -1419,6 +1512,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
               clearInterval(freeIntervalRef.current);
               freeIntervalRef.current = null;
             }
+            if (freeMeasureIntervalRef.current !== null) {
+              clearInterval(freeMeasureIntervalRef.current);
+              freeMeasureIntervalRef.current = null;
+            }
             return;
           }
           handleBack();
@@ -1562,6 +1659,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
             if (freeIntervalRef.current !== null) {
               clearInterval(freeIntervalRef.current);
               freeIntervalRef.current = null;
+            }
+            if (freeMeasureIntervalRef.current !== null) {
+              clearInterval(freeMeasureIntervalRef.current);
+              freeMeasureIntervalRef.current = null;
             }
             freeSessionActiveRef.current = false;
             setFreeSessionActive(false);
