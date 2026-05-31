@@ -1457,6 +1457,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         loopCountLocked={!!taskIdRef.current}
         isFreePractice={isFreePractice}
         freeMidiRecord={freeMidiRecord}
+        onHideOverlay={() => setResultsOverlayVisible(false)}
       />
     </div>
   );

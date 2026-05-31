@@ -71,6 +71,8 @@ export interface ResultsOverlayProps {
   isFreePractice?: boolean;
   /** Feature 092: MIDI event log for free practice — present only when isFreePractice is true. */
   freeMidiRecord?: FreeMidiRecord | null;
+  /** Feature 092: Hides the overlay without resetting free-practice state (used by Replay). */
+  onHideOverlay?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -98,6 +100,7 @@ export function ResultsOverlay({
   loopCountLocked,
   isFreePractice = false,
   freeMidiRecord,
+  onHideOverlay,
 }: ResultsOverlayProps) {
   const { t } = useTranslation();
   // ─── Replay internals ────────────────────────────────────────────────────────
@@ -225,8 +228,10 @@ export function ResultsOverlay({
     timers.push(finishTimer);
 
     replayTimersRef.current = timers;
-    onDismiss();
-  }, [context, freeMidiRecord, isReplaying, setIsReplaying, onDismiss]);
+    // Use onHideOverlay instead of onDismiss so free-practice state is preserved
+    // while replay is in progress (onDismiss would navigate back to score selector).
+    onHideOverlay?.();
+  }, [context, freeMidiRecord, isReplaying, setIsReplaying, onHideOverlay]);
 
   // ─── Results computation ───────────────────────────────────────────────────
   const practiceReport = useMemo(() => {
