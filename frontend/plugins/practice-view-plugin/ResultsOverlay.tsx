@@ -73,6 +73,8 @@ export interface ResultsOverlayProps {
   freeMidiRecord?: FreeMidiRecord | null;
   /** Feature 092: Hides the overlay without resetting free-practice state (used by Replay). */
   onHideOverlay?: () => void;
+  /** Feature 092: Triggered when the user presses Replay in free-practice mode. */
+  onFreeReplay?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,6 +103,7 @@ export function ResultsOverlay({
   isFreePractice = false,
   freeMidiRecord,
   onHideOverlay,
+  onFreeReplay,
 }: ResultsOverlayProps) {
   const { t } = useTranslation();
   // ─── Replay internals ────────────────────────────────────────────────────────
@@ -201,37 +204,6 @@ export function ResultsOverlay({
     if (isReplaying) handleReplayStop();
     onRepractice();
   }, [isReplaying, handleReplayStop, onRepractice]);
-
-  // ─── Free Practice replay handler (Feature 092) ───────────────────────────
-  const handleFreeReplay = useCallback(() => {
-    if (!freeMidiRecord || isReplaying) return;
-    setIsReplaying(true);
-
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    for (const event of freeMidiRecord.events) {
-      context.playNote({
-        midiNote: event.midiNote,
-        timestamp: Date.now(),
-        type: 'attack',
-        offsetMs: event.timestampMs,
-        durationMs: 200,
-      });
-    }
-
-    const lastMs = freeMidiRecord.events.length > 0
-      ? freeMidiRecord.events[freeMidiRecord.events.length - 1].timestampMs
-      : 0;
-    const finishTimer = setTimeout(() => {
-      context.stopPlayback();
-      setIsReplaying(false);
-    }, lastMs + 500);
-    timers.push(finishTimer);
-
-    replayTimersRef.current = timers;
-    // Use onHideOverlay instead of onDismiss so free-practice state is preserved
-    // while replay is in progress (onDismiss would navigate back to score selector).
-    onHideOverlay?.();
-  }, [context, freeMidiRecord, isReplaying, setIsReplaying, onHideOverlay]);
 
   // ─── Results computation ───────────────────────────────────────────────────
   const practiceReport = useMemo(() => {
@@ -765,7 +737,7 @@ export function ResultsOverlay({
           {!isReplaying ? (
             <button
               className="practice-results__replay-btn"
-              onClick={handleFreeReplay}
+              onClick={onFreeReplay}
               aria-label={t('practice.results.replay_aria')}
             >
               ▶ Replay

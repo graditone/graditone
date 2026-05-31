@@ -26,6 +26,7 @@ import type {
   PluginPlaybackStatus,
   MetronomeState,
   MetronomeSubdivision,
+  PluginNoteEvent,
 } from '../../src/plugin-api/index';
 import type { PluginPracticeNoteEntry } from '../../src/plugin-api/types';
 import { PracticeToolbar } from './practiceToolbar';
@@ -241,6 +242,12 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const [freeElapsedMs, setFreeElapsedMs] = useState(0);
   /** Interval ID for elapsed-time tracking (wall-clock 1s tick). */
   const freeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** PluginNoteEvents shown in the StaffViewer — accumulates during live recording and replay. */
+  const [freeDisplayNotes, setFreeDisplayNotes] = useState<PluginNoteEvent[]>([]);
+  /** Timestamp origin for StaffViewer (session start or replay start) — used as timestampOffset. */
+  const [freeDisplayOriginMs, setFreeDisplayOriginMs] = useState(0);
+  /** setTimeout handles for free-replay note scheduling — cleared when replay stops. */
+  const freeReplayTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // Feature 092: Subscribe to raw MIDI attacks during free practice.
   // This runs in addition to usePracticeMidi — the practice engine is
@@ -253,9 +260,15 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     return context.midi.subscribe((event) => {
       if (!isFreePracticeRef.current || !freeSessionActiveRef.current) return;
       if (event.type !== 'attack') return;
-      const timestampMs = Date.now() - freeStartMsRef.current;
+      const now = Date.now();
+      const timestampMs = now - freeStartMsRef.current;
       freeMidiEventsRef.current.push({ midiNote: event.midiNote, timestampMs });
       setFreeNoteCount((c) => c + 1);
+      // Add to display notes so the StaffViewer updates in real time.
+      setFreeDisplayNotes((prev) => [
+        ...prev,
+        { midiNote: event.midiNote, timestamp: now, type: 'attack' as const },
+      ]);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.midi]);
@@ -591,17 +604,63 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // Feature 092: Launch a free (score-less) practice session
   const handleFreePractice = useCallback(() => {
     freeMidiEventsRef.current = [];
-    freeStartMsRef.current = Date.now();
+    const now = Date.now();
+    freeStartMsRef.current = now;
     setFreeNoteCount(0);
     setFreeMidiRecord(null);
     setResultsOverlayVisible(false);
     setIsSaved(false);
     setSaveError(null);
     setFreeElapsedMs(0);
+    setFreeDisplayNotes([]);
+    setFreeDisplayOriginMs(now);
     loadedScoreRefRef.current = { type: 'free', id: '' };
     setIsFreePractice(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Feature 092: Replay a completed free practice session.
+  // Lifted from ResultsOverlay so it can drive freeDisplayNotes progressively.
+  const handleFreeReplay = useCallback(() => {
+    if (!freeMidiRecord || isReplaying) return;
+    // Clear any previous replay timers.
+    freeReplayTimersRef.current.forEach(clearTimeout);
+    freeReplayTimersRef.current = [];
+    // Reset the display and set the replay origin to now.
+    const replayOrigin = Date.now();
+    setFreeDisplayOriginMs(replayOrigin);
+    setFreeDisplayNotes([]);
+    setResultsOverlayVisible(false);
+    setIsReplaying(true);
+    // Schedule a context.playNote + note addition to the StaffViewer for each event.
+    for (const event of freeMidiRecord.events) {
+      const t = setTimeout(() => {
+        context.playNote({ midiNote: event.midiNote, timestamp: Date.now(), type: 'attack', durationMs: 200 });
+        setFreeDisplayNotes((prev) => [
+          ...prev,
+          { midiNote: event.midiNote, timestamp: replayOrigin + event.timestampMs, type: 'attack' as const },
+        ]);
+      }, event.timestampMs);
+      freeReplayTimersRef.current.push(t);
+    }
+    const lastMs = freeMidiRecord.events.length > 0
+      ? freeMidiRecord.events[freeMidiRecord.events.length - 1].timestampMs
+      : 0;
+    const doneTimer = setTimeout(() => {
+      context.stopPlayback();
+      setIsReplaying(false);
+    }, lastMs + 500);
+    freeReplayTimersRef.current.push(doneTimer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context, freeMidiRecord, isReplaying]);
+
+  // Clean up free-replay timers whenever replay ends (stop button or natural finish).
+  useEffect(() => {
+    if (!isReplaying && freeReplayTimersRef.current.length > 0) {
+      freeReplayTimersRef.current.forEach(clearTimeout);
+      freeReplayTimersRef.current = [];
+    }
+  }, [isReplaying]);
 
   // Playback controls
   const handlePlay = useCallback(() => {
@@ -725,11 +784,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       } else {
         // Start free session
         freeMidiEventsRef.current = [];
-        freeStartMsRef.current = Date.now();
+        const now = Date.now();
+        freeStartMsRef.current = now;
         setFreeNoteCount(0);
         setFreeElapsedMs(0);
         setFreeMidiRecord(null);
         setResultsOverlayVisible(false);
+        setFreeDisplayNotes([]);
+        setFreeDisplayOriginMs(now);
         freeSessionActiveRef.current = true;
         setFreeSessionActive(true);
         // Start wall-clock elapsed timer
@@ -924,13 +986,16 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     // Feature 092: Free practice repractice — just start a fresh free session
     if (isFreePracticeRef.current) {
       freeMidiEventsRef.current = [];
-      freeStartMsRef.current = Date.now();
+      const now = Date.now();
+      freeStartMsRef.current = now;
       setFreeNoteCount(0);
       setFreeElapsedMs(0);
       setFreeMidiRecord(null);
       setResultsOverlayVisible(false);
       setIsSaved(false);
       setSaveError(null);
+      setFreeDisplayNotes([]);
+      setFreeDisplayOriginMs(now);
       freeSessionActiveRef.current = true;
       setFreeSessionActive(true);
       if (freeIntervalRef.current !== null) clearInterval(freeIntervalRef.current);
@@ -1404,14 +1469,15 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         </div>
       )}
 
-      {/* Feature 092: Free practice canvas placeholder (no score to render) */}
+      {/* Feature 092: Free practice canvas — shows notes as the user plays or during replay */}
       {isFreePractice && !resultsOverlayVisible && (
         <div className="practice-plugin__score-area practice-plugin__free-canvas" aria-label={t('practice.free.title')}>
-          <div className="practice-plugin__free-prompt">
-            {freeSessionActive
-              ? t('practice.free.note_count', { n: freeNoteCount })
-              : null}
-          </div>
+          <context.components.StaffViewer
+            notes={freeDisplayNotes}
+            bpm={80}
+            timestampOffset={freeDisplayOriginMs}
+            autoScroll
+          />
         </div>
       )}
 
@@ -1458,6 +1524,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         isFreePractice={isFreePractice}
         freeMidiRecord={freeMidiRecord}
         onHideOverlay={() => setResultsOverlayVisible(false)}
+        onFreeReplay={handleFreeReplay}
       />
     </div>
   );
