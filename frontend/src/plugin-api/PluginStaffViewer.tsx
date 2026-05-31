@@ -160,12 +160,24 @@ function toConvertedScore(events: readonly PluginNoteEvent[], clef: string, bpm:
   if (notes.length > 0) {
     const sorted = [...notes].sort((a, b) => a.tick - b.tick);
 
+    // Legato pass: extend each note's duration to fill to the next note's start
+    // when the gap is smaller than one quarter note.  This prevents tiny rest
+    // symbols from appearing between legato or staccato notes where the player
+    // intended no rest.  Deliberate rests (gap >= 1 quarter note) are kept.
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const noteEnd = sorted[i].tick + sorted[i].duration;
+      const nextStart = sorted[i + 1].tick;
+      if (nextStart > noteEnd && nextStart - noteEnd < WASM_QUARTER_TICKS) {
+        sorted[i] = { ...sorted[i], duration: nextStart - sorted[i].tick };
+      }
+    }
+
     // Gap before first note (if first note doesn't start at tick 0).
     if (sorted[0].tick > 0) {
       restEvents.push(...decomposeGapRests(0, sorted[0].tick));
     }
 
-    // Gaps between consecutive notes.
+    // Gaps between consecutive notes (only genuine gaps >= 1 quarter note remain).
     for (let i = 0; i < sorted.length - 1; i++) {
       const gapStart = sorted[i].tick + sorted[i].duration;
       const gapEnd = sorted[i + 1].tick;

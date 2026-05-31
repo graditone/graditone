@@ -312,8 +312,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   freeStaffBpmRef.current = freeStaffBpm;
 
   // Feature 092: Subscribe to raw MIDI events during free practice.
-  // Attacks go into the current-measure buffer; releases update the duration.
-  // Notes are finalized (quantized + rests filled) when the measure clock fires.
+  // Attacks are shown in real-time immediately; the measure-clock quantizes them
+  // into FreeMidiEvents for saving/replaying without affecting the live display.
   // Runs in addition to usePracticeMidi — the practice engine is never started
   // during free practice, so usePracticeMidi won't consume events.
   const isFreePracticeRef = useRef(false);
@@ -334,17 +334,38 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       if (event.type === 'attack') {
         freeMeasureBufferRef.current.push({ midiNote: event.midiNote, attackMs: now, durationMs: null });
         setFreeNoteCount((c) => c + 1);
+        // Real-time: add to display immediately (durationMs filled on release).
+        setFreeDisplayNotes((prev) => [
+          ...prev,
+          { midiNote: event.midiNote, timestamp: now, type: 'attack' as const },
+        ]);
         return;
       }
 
       if (event.type === 'release') {
-        // Update durationMs for the most-recent matching attack still in the buffer.
+        // Update durationMs in measure buffer.
+        let attackedAt: number | null = null;
         const buf = freeMeasureBufferRef.current;
         for (let i = buf.length - 1; i >= 0; i--) {
           if (buf[i].midiNote === event.midiNote && buf[i].durationMs === null) {
+            attackedAt = buf[i].attackMs;
             buf[i] = { ...buf[i], durationMs: now - buf[i].attackMs };
             break;
           }
+        }
+        // Real-time: update durationMs on the matching display note.
+        if (attackedAt !== null) {
+          const durationMs = now - attackedAt;
+          setFreeDisplayNotes((prev) => {
+            const result = [...prev];
+            for (let i = result.length - 1; i >= 0; i--) {
+              if (result[i].midiNote === event.midiNote && result[i].durationMs == null) {
+                result[i] = { ...result[i], durationMs };
+                break;
+              }
+            }
+            return result;
+          });
         }
       }
     });
@@ -683,9 +704,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   /**
    * Feature 092: Start (or restart) the per-measure clock for free practice.
    * Fires every `msPerMeasure = 4 * 60000/bpm` ms.  On each tick it
-   * finalizes the measure buffer (quantizes + caps durations), appends the
-   * quantized notes to freeDisplayNotes, records them in freeMidiEventsRef,
-   * and resets the buffer for the next measure.
+   * quantizes the measure buffer and records events in freeMidiEventsRef for
+   * saving/replaying.  It does NOT touch freeDisplayNotes — notes are shown
+   * in real-time via the MIDI subscription (attack/release handlers above).
    */
   const startMeasureClock = useCallback(() => {
     if (freeMeasureIntervalRef.current !== null) clearInterval(freeMeasureIntervalRef.current);
@@ -698,10 +719,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       freeMeasureBufferRef.current = [];
       freeMeasureStartMsRef.current = measureEnd;
 
-      if (buffer.length === 0) return; // empty measure — rests added by toConvertedScore gap-fill
+      if (buffer.length === 0) return; // empty measure — no events to record
 
       const quantized = finalizeMeasureNotes(buffer, measureStart, bpm, measureEnd);
-      setFreeDisplayNotes((prev) => [...prev, ...quantized]);
       const sessionStart = freeStartMsRef.current;
       for (const note of quantized) {
         freeMidiEventsRef.current.push({
@@ -897,14 +917,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           clearInterval(freeMeasureIntervalRef.current);
           freeMeasureIntervalRef.current = null;
         }
-        // Finalize any notes still in the current (partial) measure.
+        // Finalize any notes still in the current (partial) measure for saving.
+        // Display notes are already shown in real-time — don't add them again.
         const stopTime = Date.now();
         const partialBuffer = freeMeasureBufferRef.current.slice();
         freeMeasureBufferRef.current = [];
         if (partialBuffer.length > 0) {
           const bpm = freeStaffBpmRef.current;
           const quantized = finalizeMeasureNotes(partialBuffer, freeMeasureStartMsRef.current, bpm, stopTime);
-          setFreeDisplayNotes((prev) => [...prev, ...quantized]);
           const sessionStart = freeStartMsRef.current;
           for (const note of quantized) {
             freeMidiEventsRef.current.push({
