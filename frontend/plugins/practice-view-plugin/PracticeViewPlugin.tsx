@@ -248,6 +248,16 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const [freeDisplayOriginMs, setFreeDisplayOriginMs] = useState(0);
   /** setTimeout handles for free-replay note scheduling — cleared when replay stops. */
   const freeReplayTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  /**
+   * BPM used for StaffViewer layout during free practice.
+   * Captured from the actual metronome BPM at session start so notes land
+   * on the correct measures regardless of what the metronome default is.
+   * Defaults to 120 to match MetronomeContext's DEFAULT_BPM (the fallback
+   * when no score is loaded).
+   */
+  const [freeStaffBpm, setFreeStaffBpm] = useState(120);
+  const freeStaffBpmRef = useRef(120);
+  freeStaffBpmRef.current = freeStaffBpm;
 
   // Feature 092: Subscribe to raw MIDI attacks during free practice.
   // This runs in addition to usePracticeMidi — the practice engine is
@@ -611,6 +621,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     freeMidiEventsRef.current = [];
     const now = Date.now();
     freeStartMsRef.current = now;
+    const activeBpm = metronomeStateRef.current.bpm > 0 ? metronomeStateRef.current.bpm : 120;
+    setFreeStaffBpm(activeBpm);
     setFreeNoteCount(0);
     setFreeMidiRecord(null);
     setResultsOverlayVisible(false);
@@ -634,6 +646,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     // event.timestampMs values are relative to session start, not first note.
     const firstTs = freeMidiRecord.events.length > 0 ? freeMidiRecord.events[0].timestampMs : 0;
     const replayStart = Date.now();
+    // Restore the BPM from the original recording so replay layout matches.
+    setFreeStaffBpm(freeMidiRecord.bpm);
     setFreeDisplayOriginMs(replayStart);
     setFreeDisplayNotes([]);
     setResultsOverlayVisible(false);
@@ -783,7 +797,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           events,
           elapsedMs,
           noteCount: events.length,
-          bpm: 80,
+          bpm: freeStaffBpmRef.current,
         };
         setFreeMidiRecord(record);
         setResultsOverlayVisible(true);
@@ -792,6 +806,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         freeMidiEventsRef.current = [];
         const now = Date.now();
         freeStartMsRef.current = now;
+        const activeBpm = metronomeStateRef.current.bpm > 0 ? metronomeStateRef.current.bpm : 120;
+        setFreeStaffBpm(activeBpm);
         setFreeNoteCount(0);
         setFreeElapsedMs(0);
         setFreeMidiRecord(null);
@@ -994,6 +1010,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       freeMidiEventsRef.current = [];
       const now = Date.now();
       freeStartMsRef.current = now;
+      const activeBpm = metronomeStateRef.current.bpm > 0 ? metronomeStateRef.current.bpm : 120;
+      setFreeStaffBpm(activeBpm);
       setFreeNoteCount(0);
       setFreeElapsedMs(0);
       setFreeMidiRecord(null);
@@ -1349,9 +1367,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         scoreTitle={isFreePractice ? t('practice.free.title') : playerState.title}
         status={isFreePractice ? 'ready' as const : playerState.status}
         // showStaffPicker removed — toolbar dropdown is always the selector
-        currentTick={isFreePractice ? Math.round((freeElapsedMs / 1000) * (80 / 60) * 960) : playerState.currentTick}
+        currentTick={isFreePractice ? Math.round((freeElapsedMs / 1000) * (freeStaffBpm / 60) * 960) : playerState.currentTick}
         totalDurationTicks={isFreePractice ? 0 : playerState.totalDurationTicks}
-        bpm={isFreePractice ? 80 : playerState.bpm}
+        bpm={isFreePractice ? freeStaffBpm : playerState.bpm}
         tempoMultiplier={tempoMultiplier}
         onBack={() => {
           // Feature 092: Exit free practice on back
@@ -1480,7 +1498,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         <div className="practice-plugin__score-area practice-plugin__free-canvas" aria-label={t('practice.free.title')}>
           <context.components.StaffViewer
             notes={freeDisplayNotes}
-            bpm={80}
+            bpm={freeStaffBpm}
             timestampOffset={freeDisplayOriginMs}
             autoScroll
           />
