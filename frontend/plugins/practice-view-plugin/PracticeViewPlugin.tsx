@@ -1427,7 +1427,22 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         setLoopCount={setLoopCount}
         context={context}
         onRepractice={handleRepractice}
-        onDismiss={() => { setResultsOverlayVisible(false); setPartialPerformanceRecord(null); }}
+        onDismiss={() => {
+          setResultsOverlayVisible(false);
+          setPartialPerformanceRecord(null);
+          // Feature 092: Dismissing free practice results returns to the score
+          // selector so the user can immediately see and load their saved practice.
+          if (isFreePracticeRef.current) {
+            if (freeIntervalRef.current !== null) {
+              clearInterval(freeIntervalRef.current);
+              freeIntervalRef.current = null;
+            }
+            freeSessionActiveRef.current = false;
+            setFreeSessionActive(false);
+            setIsFreePractice(false);
+            setFreeMidiRecord(null);
+          }
+        }}
         isReplaying={isReplaying}
         replayHighlightedNoteIds={replayHighlightedNoteIds}
         setIsReplaying={setIsReplaying}
