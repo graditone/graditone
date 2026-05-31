@@ -264,7 +264,12 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       const timestampMs = now - freeStartMsRef.current;
       freeMidiEventsRef.current.push({ midiNote: event.midiNote, timestampMs });
       setFreeNoteCount((c) => c + 1);
-      // Add to display notes so the StaffViewer updates in real time.
+      // Align the StaffViewer origin to the first note so it always lands at
+      // beat 1 of measure 1, regardless of how long the user waited before playing.
+      // (Same technique as VirtualKeyboard: first note's timestamp = display origin.)
+      if (freeMidiEventsRef.current.length === 1) {
+        setFreeDisplayOriginMs(now);
+      }
       setFreeDisplayNotes((prev) => [
         ...prev,
         { midiNote: event.midiNote, timestamp: now, type: 'attack' as const },
@@ -623,33 +628,34 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // Lifted from ResultsOverlay so it can drive freeDisplayNotes progressively.
   const handleFreeReplay = useCallback(() => {
     if (!freeMidiRecord || isReplaying) return;
-    // Clear any previous replay timers.
     freeReplayTimersRef.current.forEach(clearTimeout);
     freeReplayTimersRef.current = [];
-    // Reset the display and set the replay origin to now.
-    const replayOrigin = Date.now();
-    setFreeDisplayOriginMs(replayOrigin);
+    // Normalize to first-note offset so beat 1 of measure 1 is always at tick 0.
+    // event.timestampMs values are relative to session start, not first note.
+    const firstTs = freeMidiRecord.events.length > 0 ? freeMidiRecord.events[0].timestampMs : 0;
+    const replayStart = Date.now();
+    setFreeDisplayOriginMs(replayStart);
     setFreeDisplayNotes([]);
     setResultsOverlayVisible(false);
     setIsReplaying(true);
-    // Schedule a context.playNote + note addition to the StaffViewer for each event.
     for (const event of freeMidiRecord.events) {
+      const delay = event.timestampMs - firstTs;
       const t = setTimeout(() => {
         context.playNote({ midiNote: event.midiNote, timestamp: Date.now(), type: 'attack', durationMs: 200 });
         setFreeDisplayNotes((prev) => [
           ...prev,
-          { midiNote: event.midiNote, timestamp: replayOrigin + event.timestampMs, type: 'attack' as const },
+          { midiNote: event.midiNote, timestamp: replayStart + delay, type: 'attack' as const },
         ]);
-      }, event.timestampMs);
+      }, delay);
       freeReplayTimersRef.current.push(t);
     }
-    const lastMs = freeMidiRecord.events.length > 0
-      ? freeMidiRecord.events[freeMidiRecord.events.length - 1].timestampMs
+    const lastDelay = freeMidiRecord.events.length > 0
+      ? freeMidiRecord.events[freeMidiRecord.events.length - 1].timestampMs - firstTs
       : 0;
     const doneTimer = setTimeout(() => {
       context.stopPlayback();
       setIsReplaying(false);
-    }, lastMs + 500);
+    }, lastDelay + 500);
     freeReplayTimersRef.current.push(doneTimer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context, freeMidiRecord, isReplaying]);
