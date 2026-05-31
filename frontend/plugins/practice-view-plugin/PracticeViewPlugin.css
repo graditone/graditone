@@ -961,3 +961,28 @@
   }
 }
 
+/* ─── Feature 092: Free Practice canvas area ───────────────────────────────── */
+
+.practice-plugin__free-canvas {
+  justify-content: center;
+  align-items: center;
+  background: var(--ls-content-bg, #fff);
+}
+
+.practice-plugin__free-prompt {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--ls-text-secondary, #888);
+  text-align: center;
+}
+
+/* ─── Feature 092: Free Practice results overlay title ─────────────────────── */
+
+.practice-results__free-title {
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0.5rem 0 1rem;
+  color: var(--ls-text-primary, #222);
+}
+

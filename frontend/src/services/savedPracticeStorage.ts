@@ -105,3 +105,18 @@ export function generatePracticeName(
 
   return `${sanitized}-${hand}-${scope}-${datetime}`;
 }
+
+/**
+ * Generate a name for a free practice session (Feature 092).
+ *
+ * Format: FreePractice-{YYYYMMDDTHHmmss}
+ *
+ * @param date - Date/time of saving (local time).
+ */
+export function generateFreePracticeName(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const datetime =
+    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
+    `T${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  return `FreePractice-${datetime}`;
+}

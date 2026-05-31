@@ -58,7 +58,8 @@ export { scopedGetItem, scopedSetItem, scopedRemoveItem, getActiveProfileId } fr
 
 // Feature 056: Saved practice types and storage services
 export type { ScoreRef, SavedPractice, SavedPerformanceData, SavedPracticeIndexEntry } from '../services/savedPractice.types';
-export { savePracticeToIndexedDB, generatePracticeName, loadPracticeFromIndexedDB, deletePracticeFromIndexedDB } from '../services/savedPracticeStorage';
+export type { FreeMidiEvent, FreeMidiRecord } from '../services/savedPractice.types';
+export { savePracticeToIndexedDB, generatePracticeName, generateFreePracticeName, loadPracticeFromIndexedDB, deletePracticeFromIndexedDB } from '../services/savedPracticeStorage';
 export { addSavedPracticeIndex, listSavedPractices, removeSavedPracticeIndex } from '../services/savedPracticeIndex';
 
 // Feature 060: Practice-saved event bus (allows plugins to emit/subscribe to practice-save events)

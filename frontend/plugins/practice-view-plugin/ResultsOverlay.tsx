@@ -16,6 +16,7 @@ import type {
   PerformanceRecord,
   PartialPerformanceRecord,
 } from './practiceEngine.types';
+import type { FreeMidiRecord } from '../../src/services/savedPractice.types';
 
 // ---------------------------------------------------------------------------
 // Helpers (moved from PracticeViewPlugin.tsx)
@@ -66,6 +67,10 @@ export interface ResultsOverlayProps {
   onReturnToSession?: () => void;
   /** Feature 078: When true, the loop count slider is disabled (practice was launched from a session task). */
   loopCountLocked?: boolean;
+  /** Feature 092: When true, show a simplified free practice results overlay. */
+  isFreePractice?: boolean;
+  /** Feature 092: MIDI event log for free practice — present only when isFreePractice is true. */
+  freeMidiRecord?: FreeMidiRecord | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,6 +96,8 @@ export function ResultsOverlay({
   saveError,
   onReturnToSession,
   loopCountLocked,
+  isFreePractice = false,
+  freeMidiRecord,
 }: ResultsOverlayProps) {
   const { t } = useTranslation();
   // ─── Replay internals ────────────────────────────────────────────────────────
@@ -191,6 +198,35 @@ export function ResultsOverlay({
     if (isReplaying) handleReplayStop();
     onRepractice();
   }, [isReplaying, handleReplayStop, onRepractice]);
+
+  // ─── Free Practice replay handler (Feature 092) ───────────────────────────
+  const handleFreeReplay = useCallback(() => {
+    if (!freeMidiRecord || isReplaying) return;
+    setIsReplaying(true);
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (const event of freeMidiRecord.events) {
+      context.playNote({
+        midiNote: event.midiNote,
+        timestamp: Date.now(),
+        type: 'attack',
+        offsetMs: event.timestampMs,
+        durationMs: 200,
+      });
+    }
+
+    const lastMs = freeMidiRecord.events.length > 0
+      ? freeMidiRecord.events[freeMidiRecord.events.length - 1].timestampMs
+      : 0;
+    const finishTimer = setTimeout(() => {
+      context.stopPlayback();
+      setIsReplaying(false);
+    }, lastMs + 500);
+    timers.push(finishTimer);
+
+    replayTimersRef.current = timers;
+    onDismiss();
+  }, [context, freeMidiRecord, isReplaying, setIsReplaying, onDismiss]);
 
   // ─── Results computation ───────────────────────────────────────────────────
   const practiceReport = useMemo(() => {
@@ -680,6 +716,86 @@ export function ResultsOverlay({
       </div>
     </>
   );
+
+  // ─── Feature 092: Free Practice results overlay ────────────────────────────
+  const freePracticeOverlay = isFreePractice && resultsOverlayVisible && freeMidiRecord && (
+    <>
+      <div className="practice-results__backdrop" />
+      <div
+        className="practice-results"
+        role="region"
+        aria-label={t('practice.results.overlay_aria')}
+      >
+        <button
+          className="practice-results__close"
+          aria-label={t('practice.results.close_aria')}
+          onClick={onDismiss}
+        >
+          ×
+        </button>
+
+        <h2 className="practice-results__free-title">{t('practice.free.title')}</h2>
+
+        {/* Summary stats: duration + note count */}
+        <div className="practice-results__stats">
+          <div className="practice-results__stat">
+            <span className="practice-results__stat-value">{formatTimeMs(freeMidiRecord.elapsedMs)}</span>
+            <span className="practice-results__stat-label">{t('practice.results.free_elapsed')}</span>
+          </div>
+          <div className="practice-results__stat">
+            <span className="practice-results__stat-value">{freeMidiRecord.noteCount}</span>
+            <span className="practice-results__stat-label">{t('practice.results.notes')}</span>
+          </div>
+        </div>
+
+        {/* Action row: Repractice / Replay / Save */}
+        <div className="practice-results__replay-row">
+          <button
+            className="practice-results__repractice-btn"
+            onClick={handleRepractice}
+            aria-label={t('practice.results.repractice_aria')}
+          >
+            ↺ Repractice
+          </button>
+          {!isReplaying ? (
+            <button
+              className="practice-results__replay-btn"
+              onClick={handleFreeReplay}
+              aria-label={t('practice.results.replay_aria')}
+            >
+              ▶ Replay
+            </button>
+          ) : (
+            <button
+              className="practice-results__replay-btn practice-results__replay-btn--stop"
+              onClick={handleReplayStop}
+              aria-label={t('practice.results.stop_replay_aria')}
+            >
+              ■ Stop
+            </button>
+          )}
+          {onSave && (
+            <button
+              className={`practice-results__save-btn${isSaved ? ' practice-results__save-btn--saved' : ''}`}
+              onClick={onSave}
+              disabled={isSaved}
+              aria-label={isSaved ? t('practice.results.saved_aria') : t('practice.results.save_aria')}
+            >
+              {isSaved ? '✓ Saved' : '💾 Save'}
+            </button>
+          )}
+          {saveError && (
+            <span className="practice-results__save-error" role="alert">{saveError}</span>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  // When in free practice mode, render only the free overlay
+  if (isFreePractice) {
+    return <>{freePracticeOverlay}</>;
+  }
 
   return <>{completeOverlay}{partialOverlay}</>;
 }

@@ -43,7 +43,8 @@ import { useMidiConnectivity } from './useMidiConnectivity';
 import { measureRangeToTicks } from './measureRangeToTicks';
 import { ResultsOverlay } from './ResultsOverlay';
 import type { ScoreRef, SavedPractice, SavedPerformanceData, SavedPracticeIndexEntry } from '../../src/plugin-api/index';
-import { savePracticeToIndexedDB, generatePracticeName, loadPracticeFromIndexedDB, deletePracticeFromIndexedDB } from '../../src/plugin-api/index';
+import type { FreeMidiEvent, FreeMidiRecord } from '../../src/plugin-api/index';
+import { savePracticeToIndexedDB, generatePracticeName, generateFreePracticeName, loadPracticeFromIndexedDB, deletePracticeFromIndexedDB } from '../../src/plugin-api/index';
 import { addSavedPracticeIndex, listSavedPractices, removeSavedPracticeIndex } from '../../src/plugin-api/index';
 import { broadcastPracticeSaved, computePracticeScore } from '../../src/plugin-api/index';
 import './PracticeViewPlugin.css';
@@ -224,6 +225,40 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   }, [savedPractices]);
   // Pending saved practice to restore once the score finishes loading
   const pendingSavedPracticeRef = useRef<SavedPractice | null>(null);
+
+  // ─── Feature 092: Free Practice state ──────────────────────────────────────
+  /** True while a free (score-less) practice session is active or in results. */
+  const [isFreePractice, setIsFreePractice] = useState(false);
+  /** Live note-attack counter shown in the toolbar during free practice. */
+  const [freeNoteCount, setFreeNoteCount] = useState(0);
+  /** Finalized record set when Stop is pressed — drives ResultsOverlay. */
+  const [freeMidiRecord, setFreeMidiRecord] = useState<FreeMidiRecord | null>(null);
+  /** All MIDI attack events captured since the free session started. */
+  const freeMidiEventsRef = useRef<FreeMidiEvent[]>([]);
+  /** Wall-clock start time (ms) of the current free session. */
+  const freeStartMsRef = useRef(0);
+  /** Current elapsed ms for toolbar display (updates every 1s during free session). */
+  const [freeElapsedMs, setFreeElapsedMs] = useState(0);
+  /** Interval ID for elapsed-time tracking (wall-clock 1s tick). */
+  const freeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Feature 092: Subscribe to raw MIDI attacks during free practice.
+  // This runs in addition to usePracticeMidi — the practice engine is
+  // never started during free practice, so usePracticeMidi won't consume events.
+  const isFreePracticeRef = useRef(false);
+  isFreePracticeRef.current = isFreePractice;
+  const freeSessionActiveRef = useRef(false);
+  const [freeSessionActive, setFreeSessionActive] = useState(false);
+  useEffect(() => {
+    return context.midi.subscribe((event) => {
+      if (!isFreePracticeRef.current || !freeSessionActiveRef.current) return;
+      if (event.type !== 'attack') return;
+      const timestampMs = Date.now() - freeStartMsRef.current;
+      freeMidiEventsRef.current.push({ midiNote: event.midiNote, timestampMs });
+      setFreeNoteCount((c) => c + 1);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context.midi]);
 
   // Feature 056: Apply pending saved practice once the score is ready.
   // This runs in a useEffect so the state updates happen in the same React
@@ -510,6 +545,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       context.stopPlayback();
       // Error flash cleanup
       if (errorFlashTimerRef.current !== null) clearTimeout(errorFlashTimerRef.current);
+      // Feature 092: Free practice timer cleanup
+      if (freeIntervalRef.current !== null) clearInterval(freeIntervalRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -551,6 +588,21 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     context.close();
   }, [context]);
 
+  // Feature 092: Launch a free (score-less) practice session
+  const handleFreePractice = useCallback(() => {
+    freeMidiEventsRef.current = [];
+    freeStartMsRef.current = Date.now();
+    setFreeNoteCount(0);
+    setFreeMidiRecord(null);
+    setResultsOverlayVisible(false);
+    setIsSaved(false);
+    setSaveError(null);
+    setFreeElapsedMs(0);
+    loadedScoreRefRef.current = { type: 'free', id: '' };
+    setIsFreePractice(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Playback controls
   const handlePlay = useCallback(() => {
     // If a loop region is set and current position is outside the region,
@@ -573,6 +625,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       setReplayHighlightedNoteIds(new Set());
       return;
     }
+    // Feature 092: Free practice stop is handled via handlePracticeToggle — this
+    // dedicated stop button is hidden in free practice mode, so guard defensively.
+    if (isFreePracticeRef.current) return;
     // US7: Snapshot partial results before STOP clears engine state
     const ps = practiceStateRef.current;
     if (ps.mode === 'active' || ps.mode === 'waiting' || ps.mode === 'holding') {
@@ -646,6 +701,46 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const handlePracticeToggle = useCallback(() => {
     setIsSaved(false); // Reset save state for new practice session
     setSaveError(null);
+
+    // ─── Feature 092: Free practice toggle ─────────────────────────────────
+    if (isFreePracticeRef.current) {
+      if (freeSessionActiveRef.current) {
+        // Stop free session
+        freeSessionActiveRef.current = false;
+        setFreeSessionActive(false);
+        if (freeIntervalRef.current !== null) {
+          clearInterval(freeIntervalRef.current);
+          freeIntervalRef.current = null;
+        }
+        const elapsedMs = Date.now() - freeStartMsRef.current;
+        const events = [...freeMidiEventsRef.current];
+        const record: FreeMidiRecord = {
+          events,
+          elapsedMs,
+          noteCount: events.length,
+          bpm: 80,
+        };
+        setFreeMidiRecord(record);
+        setResultsOverlayVisible(true);
+      } else {
+        // Start free session
+        freeMidiEventsRef.current = [];
+        freeStartMsRef.current = Date.now();
+        setFreeNoteCount(0);
+        setFreeElapsedMs(0);
+        setFreeMidiRecord(null);
+        setResultsOverlayVisible(false);
+        freeSessionActiveRef.current = true;
+        setFreeSessionActive(true);
+        // Start wall-clock elapsed timer
+        if (freeIntervalRef.current !== null) clearInterval(freeIntervalRef.current);
+        freeIntervalRef.current = setInterval(() => {
+          setFreeElapsedMs(Date.now() - freeStartMsRef.current);
+        }, 1000);
+      }
+      return;
+    }
+
     const ps = practiceStateRef.current;
 
     if (ps.mode === 'active' || ps.mode === 'waiting' || ps.mode === 'holding') {
@@ -826,6 +921,24 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // ─── Repractice handler (called from ResultsOverlay after replay cleanup) ──
   const handleRepractice = useCallback(() => {
+    // Feature 092: Free practice repractice — just start a fresh free session
+    if (isFreePracticeRef.current) {
+      freeMidiEventsRef.current = [];
+      freeStartMsRef.current = Date.now();
+      setFreeNoteCount(0);
+      setFreeElapsedMs(0);
+      setFreeMidiRecord(null);
+      setResultsOverlayVisible(false);
+      setIsSaved(false);
+      setSaveError(null);
+      freeSessionActiveRef.current = true;
+      setFreeSessionActive(true);
+      if (freeIntervalRef.current !== null) clearInterval(freeIntervalRef.current);
+      freeIntervalRef.current = setInterval(() => {
+        setFreeElapsedMs(Date.now() - freeStartMsRef.current);
+      }, 1000);
+      return;
+    }
     setResultsOverlayVisible(false);
     setPartialPerformanceRecord(null);
     handlePracticeToggle();
@@ -839,10 +952,70 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handlePracticeToggle, loopCount]);
 
-  // ─── Feature 056: Save practice handler ──────────────────────────────────────
+  // ─── Feature 056 + 092: Save practice handler ─────────────────────────────────
   const handleSave = useCallback(async () => {
     const scoreRef = loadedScoreRefRef.current;
     if (!scoreRef) return;
+
+    // Feature 092: Free practice save path
+    if (scoreRef.type === 'free') {
+      if (!freeMidiRecord) return;
+      const now = new Date();
+      const id = crypto.randomUUID();
+      const practice: SavedPractice = {
+        id,
+        name: generateFreePracticeName(now),
+        savedAt: now.toISOString(),
+        scoreRef: { type: 'free', id: '' },
+        scoreTitle: t('practice.free.title'),
+        staffIndex: 0,
+        loopRegion: null,
+        tempoMultiplier: 1.0,
+        loopCount: 1,
+        completionStatus: 'complete',
+        performanceData: {
+          notes: [],
+          noteResults: [],
+          wrongNoteEvents: [],
+          bpmAtCompletion: freeMidiRecord.bpm,
+          stoppedAtIndex: null,
+          totalNoteCount: null,
+        },
+        freeMidiRecord,
+      };
+      try {
+        await savePracticeToIndexedDB(practice);
+        const { evictedIds } = addSavedPracticeIndex({
+          id,
+          name: practice.name,
+          savedAt: practice.savedAt,
+          completionStatus: 'complete',
+          scoreTitle: practice.scoreTitle,
+        });
+        for (const evictedId of evictedIds) {
+          await deletePracticeFromIndexedDB(evictedId);
+        }
+        setIsSaved(true);
+        setSaveError(null);
+        setSavedPractices(listSavedPractices());
+        broadcastPracticeSaved({
+          savedPracticeId: id,
+          practiceName: practice.name,
+          scoreTitle: practice.scoreTitle,
+          completionStatus: 'complete',
+          savedAt: practice.savedAt,
+          practiceScore: 0,
+          correctCount: 0,
+          totalNotes: freeMidiRecord.noteCount,
+          practiceTimeMs: freeMidiRecord.elapsedMs,
+        });
+      } catch (e) {
+        console.error('[PracticeViewPlugin] Failed to save free practice:', e);
+        const isQuota = e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22);
+        setSaveError(isQuota ? t('practice.plugin.storage_full') : t('practice.plugin.save_failed'));
+      }
+      return;
+    }
 
     const isComplete = practiceState.mode === 'complete' && !!performanceRecord;
     const isPartial = !!partialPerformanceRecord;
@@ -927,7 +1100,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   }, [
     practiceState.mode, performanceRecord, partialPerformanceRecord,
     playerState.title, loopRegion, selectedStaffIndex,
-    tempoMultiplier, loopCount,
+    tempoMultiplier, loopCount, freeMidiRecord,
   ]);
 
   // ─── Feature 056: Delete saved practice handler ─────────────────────────────
@@ -954,6 +1127,18 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       loadPracticeFromIndexedDB(id).then((saved) => {
         if (!saved) return;
         loadedScoreRefRef.current = saved.scoreRef;
+        // Feature 092: Free practice — restore directly, no score player needed
+        if (saved.scoreRef.type === 'free') {
+          freeMidiEventsRef.current = [];
+          freeSessionActiveRef.current = false;
+          setFreeNoteCount(saved.freeMidiRecord?.noteCount ?? 0);
+          setFreeMidiRecord(saved.freeMidiRecord ?? null);
+          setIsSaved(true);
+          setSaveError(null);
+          setIsFreePractice(true);
+          setResultsOverlayVisible(!!saved.freeMidiRecord);
+          return;
+        }
         pendingSavedPracticeRef.current = saved;
         if (saved.scoreRef.type === 'preloaded') {
           context.scorePlayer.loadScore({ kind: 'catalogue', catalogueId: saved.scoreRef.id });
@@ -1005,6 +1190,20 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       return;
     }
 
+    // Feature 092: Restore a saved free practice — no score loading needed
+    if (saved.scoreRef.type === 'free') {
+      loadedScoreRefRef.current = saved.scoreRef;
+      freeMidiEventsRef.current = [];
+      freeSessionActiveRef.current = false;
+      setFreeNoteCount(saved.freeMidiRecord?.noteCount ?? 0);
+      setFreeMidiRecord(saved.freeMidiRecord ?? null);
+      setIsSaved(true);
+      setSaveError(null);
+      setIsFreePractice(true);
+      setResultsOverlayVisible(!!saved.freeMidiRecord);
+      return;
+    }
+
     // Track score ref for potential re-save
     loadedScoreRefRef.current = saved.scoreRef;
 
@@ -1042,7 +1241,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   const { ScoreSelector, ScoreRenderer } = context.components;
 
-  if (!isLoaded) {
+  if (!isLoaded && !isFreePractice) {
     // Score selector screen
     return (
       <div className="practice-plugin practice-plugin--selection" data-testid="practice-plugin-root">
@@ -1066,32 +1265,49 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
             expandSessionId: sessionId,
             expandTaskId: taskId,
           })}
+          onFreePractice={handleFreePractice}
         />
       </div>
     );
   }
 
   return (
-    <div className={`practice-plugin${practiceActive ? ' practice-plugin--phantom' : ''}${((practiceState.mode === 'complete' || (practiceState.mode === 'inactive' && performanceRecord)) && resultsOverlayVisible) || (partialPerformanceRecord && resultsOverlayVisible) ? ' practice-plugin--results' : ''}`} data-testid="practice-plugin-root">
+    <div className={`practice-plugin${practiceActive ? ' practice-plugin--phantom' : ''}${isFreePractice && resultsOverlayVisible ? ' practice-plugin--results' : ''}${!isFreePractice && (((practiceState.mode === 'complete' || (practiceState.mode === 'inactive' && performanceRecord)) && resultsOverlayVisible) || (partialPerformanceRecord && resultsOverlayVisible)) ? ' practice-plugin--results' : ''}`} data-testid="practice-plugin-root">
       {/* Toolbar — top */}
       <PracticeToolbar
-        scoreTitle={playerState.title}
-        status={playerState.status}
+        scoreTitle={isFreePractice ? t('practice.free.title') : playerState.title}
+        status={isFreePractice ? 'ready' as const : playerState.status}
         // showStaffPicker removed — toolbar dropdown is always the selector
-        currentTick={playerState.currentTick}
-        totalDurationTicks={playerState.totalDurationTicks}
-        bpm={playerState.bpm}
+        currentTick={isFreePractice ? Math.round((freeElapsedMs / 1000) * (80 / 60) * 960) : playerState.currentTick}
+        totalDurationTicks={isFreePractice ? 0 : playerState.totalDurationTicks}
+        bpm={isFreePractice ? 80 : playerState.bpm}
         tempoMultiplier={tempoMultiplier}
-        onBack={handleBack}
+        onBack={() => {
+          // Feature 092: Exit free practice on back
+          if (isFreePractice) {
+            freeSessionActiveRef.current = false;
+            setFreeSessionActive(false);
+            setIsFreePractice(false);
+            setFreeMidiRecord(null);
+            setResultsOverlayVisible(false);
+            if (freeIntervalRef.current !== null) {
+              clearInterval(freeIntervalRef.current);
+              freeIntervalRef.current = null;
+            }
+            return;
+          }
+          handleBack();
+        }}
         onPlay={handlePlay}
         onPause={handlePause}
         onStop={handleStop}
         onTempoChange={handleTempoChange}
-        staffCount={playerState.staffCount}
+        staffCount={isFreePractice ? 0 : playerState.staffCount}
         selectedStaffIndex={selectedStaffIndex}
         onStaffChange={handleStaffChange}
-        practiceMode={practiceState.mode}
+        practiceMode={isFreePractice ? (freeSessionActive ? 'active' : 'inactive') : practiceState.mode}
         currentPracticeIndex={(() => {
+          if (isFreePractice) return 0;
           const range = loopPracticeRange;
           const mode = practiceState.mode;
           if (range && (mode === 'active' || mode === 'holding' || mode === 'waiting')) {
@@ -1102,6 +1318,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           return practiceState.currentIndex;
         })()}
         totalPracticeNotes={(() => {
+          if (isFreePractice) return 0;
           const range = loopPracticeRange;
           const mode = practiceState.mode;
           if (range && (mode === 'active' || mode === 'holding' || mode === 'waiting')) {
@@ -1127,6 +1344,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           expandSessionId: sessionIdRef.current,
           expandTaskId: taskIdRef.current,
         })}
+        isFreePractice={isFreePractice}
+        freeNoteCount={freeNoteCount}
       />
 
       {/* Hold indicator — visible while player holds a note longer than a quarter note */}
@@ -1147,7 +1366,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       )}
 
       {/* Real-time note display — pressed vs expected (only on wrong note) */}
-      {(practiceActive || practiceWaiting) &&
+      {!isFreePractice && (practiceActive || practiceWaiting) &&
         practiceState.currentWrongAttempts > 0 && (
         <div className="practice-plugin__note-display" aria-live="polite">
           <span className="practice-plugin__note-display-label">{t('practice.plugin.expected')}</span>
@@ -1162,26 +1381,39 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         </div>
       )}
 
-      {/* Score */}
-      <div className="practice-plugin__score-area">
-        <ScoreRenderer
-          currentTick={playerState.currentTick}
-          highlightedNoteIds={highlightedNoteIds}
-          errorNoteIds={errorNoteIds}
-          expectedNoteIds={practiceActive ? targetNoteIds : undefined}
-          pinnedNoteIds={
-            practiceActive
-              ? confirmedNoteIds  // full green = keys the user is pressing correctly
-              : (practiceState.mode === 'waiting' ? new Set<string>() : pinnedNoteIds)
-          }
-          scrollTargetNoteIds={practiceActive ? targetNoteIds : undefined}
-          loopRegion={loopRegion}
-          onNoteShortTap={handleNoteShortTap}
-          onNoteLongPress={handleNoteLongPress}
-          onCanvasTap={handleCanvasTap}
-          onReturnToStart={handleReturnToStart}
-        />
-      </div>
+      {/* Score — not shown during free practice */}
+      {!isFreePractice && (
+        <div className="practice-plugin__score-area">
+          <ScoreRenderer
+            currentTick={playerState.currentTick}
+            highlightedNoteIds={highlightedNoteIds}
+            errorNoteIds={errorNoteIds}
+            expectedNoteIds={practiceActive ? targetNoteIds : undefined}
+            pinnedNoteIds={
+              practiceActive
+                ? confirmedNoteIds  // full green = keys the user is pressing correctly
+                : (practiceState.mode === 'waiting' ? new Set<string>() : pinnedNoteIds)
+            }
+            scrollTargetNoteIds={practiceActive ? targetNoteIds : undefined}
+            loopRegion={loopRegion}
+            onNoteShortTap={handleNoteShortTap}
+            onNoteLongPress={handleNoteLongPress}
+            onCanvasTap={handleCanvasTap}
+            onReturnToStart={handleReturnToStart}
+          />
+        </div>
+      )}
+
+      {/* Feature 092: Free practice canvas placeholder (no score to render) */}
+      {isFreePractice && !resultsOverlayVisible && (
+        <div className="practice-plugin__score-area practice-plugin__free-canvas" aria-label={t('practice.free.title')}>
+          <div className="practice-plugin__free-prompt">
+            {freeSessionActive
+              ? t('practice.free.note_count', { n: freeNoteCount })
+              : null}
+          </div>
+        </div>
+      )}
 
       {/* Results overlay — shown when practice finishes or on mid-session stop */}
       <ResultsOverlay
@@ -1208,6 +1440,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           expandTaskId: taskIdRef.current,
         }) : undefined}
         loopCountLocked={!!taskIdRef.current}
+        isFreePractice={isFreePractice}
+        freeMidiRecord={freeMidiRecord}
       />
     </div>
   );

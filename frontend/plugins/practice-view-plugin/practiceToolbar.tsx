@@ -90,6 +90,10 @@ export interface PracticeToolbarProps {
   taskTag?: { taskNumber: number; sessionName: string; difficulty?: 1 | 2 | 3 } | null;
   /** Feature 061: Called when the task tag badge is clicked. */
   onTaskTagClick?: () => void;
+  /** Feature 092: When true, this is a score-less free practice session. */
+  isFreePractice?: boolean;
+  /** Feature 092: Running count of MIDI note attacks captured so far (free practice only). */
+  freeNoteCount?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +132,8 @@ export function PracticeToolbar({
   isReplaying,
   taskTag,
   onTaskTagClick,
+  isFreePractice = false,
+  freeNoteCount = 0,
 }: PracticeToolbarProps) {
   const { t } = useTranslation();
   const isPlaying = status === 'playing';
@@ -243,8 +249,8 @@ export function PracticeToolbar({
         </span>
       )}
 
-      {/* Play / Pause toggle */}
-      {isPlaying ? (
+      {/* Play / Pause toggle — hidden in free practice (no score to play) */}
+      {!isFreePractice && (isPlaying ? (
         <button
           className="practice-plugin__toolbar-btn practice-plugin__toolbar-btn--pause"
           onClick={onPause}
@@ -261,17 +267,19 @@ export function PracticeToolbar({
         >
           ▶
         </button>
-      )}
+      ))}
 
-      {/* Stop */}
-      <button
-        className="practice-plugin__toolbar-btn practice-plugin__toolbar-btn--stop"
-        onClick={onStop}
-        aria-label={t('practice.toolbar.stop_aria')}
-        disabled={!isLoaded}
-      >
-        ■
-      </button>
+      {/* Stop — hidden in free practice */}
+      {!isFreePractice && (
+        <button
+          className="practice-plugin__toolbar-btn practice-plugin__toolbar-btn--stop"
+          onClick={onStop}
+          aria-label={t('practice.toolbar.stop_aria')}
+          disabled={!isLoaded}
+        >
+          ■
+        </button>
+      )}
 
       {/* Staff selector — only shown when score has more than 1 staff */}
       {staffCount > 1 && (
@@ -346,8 +354,13 @@ export function PracticeToolbar({
         </button>
       </span>
 
-      {/* Practice progress x / total */}
-      {practiceRunning && totalPracticeNotes > 0 && (
+      {/* Practice progress x / total — or free note count for free practice */}
+      {isFreePractice && practiceRunning && (
+        <span className="practice-plugin__progress" aria-live="polite">
+          {t('practice.free.note_count', { n: freeNoteCount })}
+        </span>
+      )}
+      {!isFreePractice && practiceRunning && totalPracticeNotes > 0 && (
         <span className="practice-plugin__progress" aria-live="polite">
           {currentPracticeIndex + 1}&nbsp;/&nbsp;{totalPracticeNotes}
         </span>
