@@ -326,12 +326,39 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const freeMeasureStartMsRef = useRef(0);
   /** setInterval ID that fires once per measure to finalize and commit notes. */
   const freeMeasureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /**
+   * True once the first MIDI note of the session has arrived.
+   * All session timing (clock start, display origin) is deferred until then so
+   * the user can wait as long as they want before playing without creating empty
+   * leading measures or capped note durations.
+   */
+  const freeSessionStartedRef = useRef(false);
+  /**
+   * Stable ref to startMeasureClock so the MIDI subscription (defined earlier
+   * in the component) can call it without a stale closure.
+   */
+  const startMeasureClockRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     return context.midi.subscribe((event) => {
       if (!isFreePracticeRef.current || !freeSessionActiveRef.current) return;
       const now = Date.now();
 
       if (event.type === 'attack') {
+        // First note: initialize all session timing from this exact moment.
+        // This ensures measure 1 starts at the first note regardless of how
+        // long the user waited after pressing Start.
+        if (!freeSessionStartedRef.current) {
+          freeSessionStartedRef.current = true;
+          freeStartMsRef.current = now;
+          freeMeasureStartMsRef.current = now;
+          setFreeDisplayOriginMs(now);
+          startMeasureClockRef.current?.();
+          // Start the elapsed-time ticker from the first note.
+          if (freeIntervalRef.current !== null) clearInterval(freeIntervalRef.current);
+          freeIntervalRef.current = setInterval(() => {
+            setFreeElapsedMs(Date.now() - freeStartMsRef.current);
+          }, 1000);
+        }
         freeMeasureBufferRef.current.push({ midiNote: event.midiNote, attackMs: now, durationMs: null });
         setFreeNoteCount((c) => c + 1);
         // Real-time: add to display immediately (durationMs filled on release).
@@ -733,6 +760,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     }, msPerMeasure);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Keep the ref in sync so the MIDI subscription (defined earlier) can call it.
+  startMeasureClockRef.current = startMeasureClock;
 
   // Feature 092: Launch a free (score-less) practice session
   const handleFreePractice = useCallback(() => {
@@ -934,7 +963,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
             });
           }
         }
-        const elapsedMs = stopTime - freeStartMsRef.current;
+        const elapsedMs = freeSessionStartedRef.current
+          ? (stopTime - freeStartMsRef.current)
+          : 0;
         const events = [...freeMidiEventsRef.current];
         const record: FreeMidiRecord = {
           events,
@@ -946,9 +977,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         setResultsOverlayVisible(true);
       } else {
         // ── Start free session ────────────────────────────────────────────
+        // Timing (freeStartMsRef, measure clock, elapsed timer, display origin)
+        // is initialized on the first MIDI note — not here — so the user can
+        // wait before playing without creating empty leading measures.
         freeMidiEventsRef.current = [];
-        const now = Date.now();
-        freeStartMsRef.current = now;
         const activeBpm = metronomeStateRef.current.bpm > 0 ? metronomeStateRef.current.bpm : 120;
         setFreeStaffBpm(activeBpm);
         freeStaffBpmRef.current = activeBpm;
@@ -957,17 +989,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         setFreeMidiRecord(null);
         setResultsOverlayVisible(false);
         setFreeDisplayNotes([]);
-        setFreeDisplayOriginMs(now);
         freeMeasureBufferRef.current = [];
-        freeMeasureStartMsRef.current = now;
+        freeSessionStartedRef.current = false;
         freeSessionActiveRef.current = true;
         setFreeSessionActive(true);
-        // Start wall-clock elapsed timer and measure clock.
-        if (freeIntervalRef.current !== null) clearInterval(freeIntervalRef.current);
-        freeIntervalRef.current = setInterval(() => {
-          setFreeElapsedMs(Date.now() - freeStartMsRef.current);
-        }, 1000);
-        startMeasureClock();
       }
       return;
     }
@@ -1156,8 +1181,6 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     // Feature 092: Free practice repractice — start a fresh free session
     if (isFreePracticeRef.current) {
       freeMidiEventsRef.current = [];
-      const now = Date.now();
-      freeStartMsRef.current = now;
       const activeBpm = metronomeStateRef.current.bpm > 0 ? metronomeStateRef.current.bpm : 120;
       setFreeStaffBpm(activeBpm);
       freeStaffBpmRef.current = activeBpm;
@@ -1168,16 +1191,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       setIsSaved(false);
       setSaveError(null);
       setFreeDisplayNotes([]);
-      setFreeDisplayOriginMs(now);
       freeMeasureBufferRef.current = [];
-      freeMeasureStartMsRef.current = now;
+      // Timing starts on first note — same deferred pattern as handlePracticeToggle.
+      freeSessionStartedRef.current = false;
       freeSessionActiveRef.current = true;
       setFreeSessionActive(true);
-      if (freeIntervalRef.current !== null) clearInterval(freeIntervalRef.current);
-      freeIntervalRef.current = setInterval(() => {
-        setFreeElapsedMs(Date.now() - freeStartMsRef.current);
-      }, 1000);
-      startMeasureClock();
       return;
     }
     setResultsOverlayVisible(false);
@@ -1191,7 +1209,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     // Also restore loopCount since handlePracticeToggle sets it to 1.
     setLoopCount(loopCount);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handlePracticeToggle, loopCount, startMeasureClock]);
+  }, [handlePracticeToggle, loopCount]);
 
   // ─── Feature 056 + 092: Save practice handler ─────────────────────────────────
   const handleSave = useCallback(async () => {
