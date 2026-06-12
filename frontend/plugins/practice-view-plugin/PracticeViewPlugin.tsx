@@ -3,14 +3,12 @@
  * Feature 037: Practice View Plugin
  *
  * Thin orchestrator that wires together extracted hooks and components:
- *   - useHoldProgress         — rAF hold-timer loop (feature 042)
- *   - usePracticeLoop         — Loop pin state, loop region, multi-loop counters
- *   - usePhantomTempo         — Phantom tempo cursor advancing at configured BPM
- *   - usePracticeMidi         — Chord detection, MIDI subscription, held-key tracking
- *   - usePracticeHighlights   — Target/confirmed/pressed note-ID computation
- *   - ResultsOverlay          — Complete/partial results display, replay controls
- *   - useFreePractice         — Feature 092: free (score-less) practice domain (Feature 092)
- *   - useSavedPracticeManager — Feature 056/060/061: saved practice CRUD + task config
+ *   - useHoldProgress    — rAF hold-timer loop (feature 042)
+ *   - usePracticeLoop    — Loop pin state, loop region, multi-loop counters
+ *   - usePhantomTempo    — Phantom tempo cursor advancing at configured BPM
+ *   - usePracticeMidi    — Chord detection, MIDI subscription, held-key tracking
+ *   - usePracticeHighlights — Target/confirmed/pressed note-ID computation
+ *   - ResultsOverlay     — Complete/partial results display, replay controls
  *
  * Subscribes to scorePlayer state, renders ScoreSelector when idle,
  * and ScoreRenderer + PracticeToolbar when a score is loaded.
@@ -44,11 +42,34 @@ import { useAccompaniment } from './useAccompaniment';
 import { useMidiConnectivity } from './useMidiConnectivity';
 import { measureRangeToTicks } from './measureRangeToTicks';
 import { ResultsOverlay } from './ResultsOverlay';
-import { useFreePractice } from './useFreePractice';
-import { useSavedPracticeManager } from './useSavedPracticeManager';
+import type { ScoreRef, SavedPractice, SavedPerformanceData, SavedPracticeIndexEntry } from '../../src/plugin-api/index';
+import { savePracticeToIndexedDB, generatePracticeName, loadPracticeFromIndexedDB, deletePracticeFromIndexedDB } from '../../src/plugin-api/index';
+import { addSavedPracticeIndex, listSavedPractices, removeSavedPracticeIndex } from '../../src/plugin-api/index';
+import { broadcastPracticeSaved, computePracticeScore } from '../../src/plugin-api/index';
 import './PracticeViewPlugin.css';
 import { useTranslation } from '../../src/i18n';
 
+// Sessions plugin is optional — dynamically import so practice-view still
+// works when the sessions plugin is not installed.
+// The path is stored in a variable so Vite's import-analysis plugin cannot
+// statically resolve it — this prevents a build error when the symlink is
+// absent (e.g. in CI where plugins-external/ is not checked out).
+const _sessPath = '../sessions-plugin/sessionStorage';
+async function loadProtectedPracticeIds(): Promise<ReadonlySet<string>> {
+  try {
+    const mod = await import(/* @vite-ignore */ _sessPath);
+    return mod.computeProtectedPracticeIds();
+  } catch { return new Set<string>(); }
+}
+type ProtectedPracticeInfo = { sessionName: string; sessionId: string; taskId?: string };
+async function loadProtectedPracticeMap(): Promise<ReadonlyMap<string, ProtectedPracticeInfo>> {
+  try {
+    const mod = await import(/* @vite-ignore */ _sessPath);
+    return mod.computeProtectedPracticeMap();
+  } catch { return new Map<string, ProtectedPracticeInfo>(); }
+}
+
+// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -130,15 +151,25 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   }, [context.metronome]);
 
   // ─── MIDI connectivity tracking ────────────────────────────────────────────
+  // Extracted to useMidiConnectivity hook (feature 081) — fixes three bugs:
+  // 1. No timeout → requestMIDIAccess could wait forever on tablet
+  // 2. Silent catch → permission denial left state null
+  // 3. API absent → no setMidiConnected(false) call
   const { connected: midiConnected, supported: midiSupported } = useMidiConnectivity();
 
   // ─── Two-tap seek-then-play state machine (mirrors play-score) ──────────────
+  // First tap while not playing: seek + arm pendingPlay.
+  // Second tap while paused:     seek to new position + play().
   const [pendingPlay, setPendingPlay] = useState(false);
 
   // ─── Results overlay ─────────────────────────────────────────────────────────
+  // Shown when practice completes; dismissed only via the × button.
   const [resultsOverlayVisible, setResultsOverlayVisible] = useState(false);
 
   // ─── Auto-advance error flash ─────────────────────────────────────────────
+  // When the engine auto-advances after MAX_CONSECUTIVE_WRONG wrong presses,
+  // briefly highlight the failed beat in red so the player sees which note
+  // was skipped before the target jumps to the next beat.
   const [errorNoteIds, setErrorNoteIds] = useState<ReadonlySet<string>>(new Set());
   const errorFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -159,69 +190,67 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // ─── Partial results on Stop (US7, 053-fix-lacandeur-practice) ─────────────
   const [partialPerformanceRecord, setPartialPerformanceRecord] = useState<PartialPerformanceRecord | null>(null);
 
-  // ─── Feature 056: Save/error state (owned by orchestrator, shared with hooks) ─
+  // ─── Feature 056: Saved practice state ─────────────────────────────────────
   const [isSaved, setIsSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const loadedScoreRefRef = useRef<import('../../src/plugin-api/index').ScoreRef | null>(null);
-
-  // ─── Feature 092: Free Practice (extracted hook) ───────────────────────────
-  const freePractice = useFreePractice({
-    context,
-    metronomeStateRef,
-    loadedScoreRefRef,
-    isReplaying,
-    setIsReplaying,
-    setResultsOverlayVisible,
-    setIsSaved,
-    setSaveError,
-  });
-
-  // ─── Feature 056/060/061: Saved Practice Manager (extracted hook) ───────────
-  const savedPracticeManager = useSavedPracticeManager({
-    context,
-    freeMidiRecord: freePractice.freeMidiRecord,
-    isFreePracticeRef: freePractice.isFreePracticeRef,
-    loadedScoreRefRef,
-    loopRegion: null, // supplied after usePracticeLoop is called below; see note
-    selectedStaffIndex: 0, // supplied after state declarations below; see note
-    tempoMultiplier,
-    loopCount: 1, // supplied after usePracticeLoop; see note
-    performanceRecord,
-    partialPerformanceRecord,
-    scoreTitle: playerState.title,
-    t,
-    setIsSaved,
-    setSaveError,
-    setSelectedStaffIndex: (i) => setSelectedStaffIndex(i),
-    onFreePracticeLoad: (record, noteCount) => {
-      freePractice.loadSavedFreePractice(record, noteCount);
-      setIsSaved(true);
-      setSaveError(null);
-      setResultsOverlayVisible(!!record);
-    },
-  });
+  const loadedScoreRefRef = useRef<ScoreRef | null>(null);
+  // Feature 061: Track taskId and sessionId when launched from a session task
+  const taskIdRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  // Feature 061: Task tag info for toolbar display
+  const [taskTag, setTaskTag] = useState<{ taskNumber: number; sessionName: string; difficulty?: 1 | 2 | 3 } | null>(null);
+  // Feature 061: Pending task config to apply once score is loaded
+  const pendingTaskConfigRef = useRef<{
+    staffIndex: number;
+    loopCount: number;
+    tempoMultiplier: number;
+    regionType: string;
+    startMeasure: number | null;
+    endMeasure: number | null;
+  } | null>(null);
+  // Feature 061: Persists the task-driven staffIndex through subsequent loading
+  // cycles (e.g. setTempoMultiplier causing a reload) so the reset-to-0 effect
+  // cannot clobber it after it was applied.
+  const taskStaffIndexRef = useRef<number | null>(null);
+  // Feature 061: Auto-start practice after task config + loop region are applied
+  const autoStartPracticeRef = useRef(false);
+  const [savedPractices, setSavedPractices] = useState<SavedPracticeIndexEntry[]>(() => listSavedPractices());
+  // Feature 060: Protected practice IDs (linked to sessions, cannot be deleted)
+  const [protectedPracticeIds, setProtectedPracticeIds] = useState<ReadonlySet<string>>(new Set());
+  const [protectedPracticeMap, setProtectedPracticeMap] = useState<ReadonlyMap<string, ProtectedPracticeInfo>>(new Map());
+  useEffect(() => {
+    loadProtectedPracticeIds().then(setProtectedPracticeIds).catch(() => {});
+    loadProtectedPracticeMap().then(setProtectedPracticeMap).catch(() => {});
+  }, [savedPractices]);
+  // Pending saved practice to restore once the score finishes loading
+  const pendingSavedPracticeRef = useRef<SavedPractice | null>(null);
 
   // Feature 056: Apply pending saved practice once the score is ready.
+  // This runs in a useEffect so the state updates happen in the same React
+  // render cycle as the playerState transition to 'ready', avoiding the race
+  // where setResultsOverlayVisible(true) fires before the score view mounts.
   useEffect(() => {
-    const saved = savedPracticeManager.pendingSavedPracticeRef.current;
+    const saved = pendingSavedPracticeRef.current;
     if (!saved || playerState.status !== 'ready') return;
-    savedPracticeManager.pendingSavedPracticeRef.current = null;
+    pendingSavedPracticeRef.current = null;
 
     setSelectedStaffIndex(saved.staffIndex);
     setTempoMultiplier(saved.tempoMultiplier);
     context.scorePlayer.setTempoMultiplier(saved.tempoMultiplier);
     setLoopCount(saved.loopCount);
 
-    // Feature 061: Restore saved loop region so Repractice honours the task region.
+    // Feature 061: Restore saved loop region so Repractice honors the task region.
     if (saved.loopRegion) {
-      savedPracticeManager.setPendingTaskLoopRegion(saved.loopRegion);
+      setPendingTaskLoopRegion(saved.loopRegion);
     }
 
     // Re-extract fresh notes from the newly loaded score so that noteIds
-    // (opaque DOM IDs) are valid for the current rendering.
+    // (opaque DOM IDs) are valid for the current rendering. The saved notes
+    // have stale noteIds from the original session.
     let freshNotes: PluginPracticeNoteEntry[] = saved.performanceData.notes as PluginPracticeNoteEntry[];
     const staffIndex = saved.staffIndex;
     if (staffIndex === -1) {
+      // Both Clefs: merge from all staves
       const all: PluginPracticeNoteEntry[] = [];
       for (let s = 0; s < playerState.staffCount; s++) {
         const p = context.scorePlayer.extractPracticeNotes(s);
@@ -235,6 +264,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       }
     }
 
+    // Build the notes array with fresh noteIds, falling back to saved entries
+    // for any index beyond what was re-extracted (shouldn't happen for same score).
+    // NOTE: Do NOT filter freshNotes by loopRegion here — the saved notes array
+    // and noteResult indices are absolute (cover the full score). We need the
+    // full freshNotes so positional mapping preserves correct noteIds.
     const notesWithFreshIds = saved.performanceData.notes.map((savedNote, i) =>
       i < freshNotes.length ? freshNotes[i] : savedNote,
     );
@@ -265,19 +299,28 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerState.status]);
 
+  // Feature 061: State for loop region ticks computed from task config.
+  // Using state (not ref) so that updating it triggers a re-render,
+  // ensuring usePracticeLoop receives the values even when other setState
+  // calls in the same effect are no-ops (e.g. defaults match).
+  const [pendingTaskLoopRegion, setPendingTaskLoopRegion] = useState<{ startTick: number; endTick: number } | null>(null);
+
   // Feature 061: Apply pending task config once the score is ready.
   useEffect(() => {
-    const tc = savedPracticeManager.pendingTaskConfigRef.current;
+    const tc = pendingTaskConfigRef.current;
     if (!tc || playerState.status !== 'ready') return;
-    savedPracticeManager.pendingTaskConfigRef.current = null;
+    pendingTaskConfigRef.current = null;
 
-    savedPracticeManager.taskStaffIndexRef.current = tc.staffIndex;
+    taskStaffIndexRef.current = tc.staffIndex;
     setSelectedStaffIndex(tc.staffIndex);
     setTempoMultiplier(tc.tempoMultiplier);
     context.scorePlayer.setTempoMultiplier(tc.tempoMultiplier);
     setLoopCount(tc.loopCount);
 
+    // Compute loop region from measures if applicable
     if (tc.regionType === 'measures' && tc.startMeasure != null && tc.endMeasure != null) {
+      // Legacy migration: goalEngine pre-067 fix stored 0-based measures.
+      // 1-based measures never have startMeasure < 1, so this is safe.
       let startM = tc.startMeasure;
       let endM = tc.endMeasure;
       if (startM < 1) {
@@ -288,7 +331,18 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       if (measureEndTicks && measureEndTicks.length > 0) {
         const result = measureRangeToTicks(startM, endM, measureEndTicks);
         if (result) {
-          savedPracticeManager.setPendingTaskLoopRegion({
+          // measureRangeToTicks returns raw (layout) ticks, but the practice
+          // engine and playback engine operate in expanded (repeat-unrolled)
+          // tick space. Convert so loopPracticeRange, setPinnedStart, and
+          // setLoopEnd all receive the correct tick values.
+          //
+          // endTick is an exclusive upper bound (first tick of the NEXT measure).
+          // When it falls exactly on a repeat-section boundary (e.g. m10 end =
+          // m11 start in Arabesque), rawTickToExpandedTick's <= binary search
+          // picks up the next section's offset, producing a much larger tick
+          // that spans both repeat passes. Subtract 1 to stay in the current
+          // section, convert, then add 1 back to preserve exclusive semantics.
+          setPendingTaskLoopRegion({
             startTick: context.scorePlayer.rawTickToExpandedTick(result.startTick),
             endTick: context.scorePlayer.rawTickToExpandedTick(result.endTick - 1) + 1,
           });
@@ -296,15 +350,13 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       }
     }
 
-    savedPracticeManager.autoStartPracticeRef.current = true;
+    // Feature 061: Schedule auto-start of practice mode
+    autoStartPracticeRef.current = true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerState.status]);
 
   // Practice session start time (ms since epoch) for timing analysis
   const practiceStartTimeRef = useRef(0);
-
-  // ─── Staff selector ─────────────────────────────────────────────────────────
-  const [selectedStaffIndex, setSelectedStaffIndex] = useState(0);
 
   // ─── Loop logic (extracted hook) ───────────────────────────────────────────
   const {
@@ -320,9 +372,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     practiceStartTimeRef,
     context,
     tempoMultiplierRef,
-    initialStartTick: savedPracticeManager.pendingTaskLoopRegion?.startTick ?? null,
-    initialEndTick: savedPracticeManager.pendingTaskLoopRegion?.endTick ?? null,
-    taskLocked: !!savedPracticeManager.taskIdRef.current,
+    initialStartTick: pendingTaskLoopRegion?.startTick ?? null,
+    initialEndTick: pendingTaskLoopRegion?.endTick ?? null,
+    taskLocked: !!taskIdRef.current,
     onComplete: (record) => {
       setPerformanceRecord(record);
       setIsReplaying(false);
@@ -332,19 +384,23 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     },
   });
 
+  // Keep a ref to loopCount so callbacks can read the latest value without
+  // being listed in dependency arrays (avoids stale closure in handlePracticeToggle).
   const loopCountRef = useRef(loopCount);
   loopCountRef.current = loopCount;
 
-  // Flash the auto-advanced note IDs in red for 600 ms.
+  // Flash the auto-advanced note IDs in red for 600 ms when the engine skips a beat.
   useEffect(() => {
     const results = practiceState.noteResults;
     if (results.length === 0) return;
     const last = results[results.length - 1];
     if (last.outcome !== 'auto-advanced') return;
+    // Determine the note IDs of the skipped beat from the notes array.
     const skippedEntry = practiceState.notes[last.noteIndex];
     if (!skippedEntry) return;
     const ids = new Set<string>(skippedEntry.noteIds as string[]);
     setErrorNoteIds(ids);
+    // Clear any previous flash timer.
     if (errorFlashTimerRef.current !== null) clearTimeout(errorFlashTimerRef.current);
     errorFlashTimerRef.current = setTimeout(() => {
       setErrorNoteIds(new Set());
@@ -357,20 +413,28 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     if (playerState.status !== 'paused') setPendingPlay(false);
   }, [playerState.status]);
 
+  // ─── Staff selector ─────────────────────────────────────────────────────────
+  // The toolbar always shows the staff dropdown when staffCount > 1, so
+  // selectedStaffIndex is always a confirmed choice — no inline picker needed.
+  const [selectedStaffIndex, setSelectedStaffIndex] = useState(0);
+
   // Reset to staff 0 when a new score is loaded.
   useEffect(() => {
     if (['ready', 'playing', 'paused'].includes(playerState.status)) {
-      if (savedPracticeManager.taskStaffIndexRef.current !== null) {
-        setSelectedStaffIndex(savedPracticeManager.taskStaffIndexRef.current);
+      // Re-apply the task's locked staff if one is pending (survives loading cycles)
+      if (taskStaffIndexRef.current !== null) {
+        setSelectedStaffIndex(taskStaffIndexRef.current);
       }
     } else {
-      if (savedPracticeManager.taskStaffIndexRef.current === null) {
+      if (taskStaffIndexRef.current === null) {
         setSelectedStaffIndex(0);
       }
     }
   }, [playerState.status]);
 
   // Feature 084: Sync playback staff filter whenever the score becomes ready.
+  // This ensures the initial selectedStaffIndex (default 0 = Right hand) is
+  // applied immediately on first load, not only after the user changes the dropdown.
   useEffect(() => {
     if (['ready', 'playing', 'paused'].includes(playerState.status)) {
       const idx = selectedStaffIndex;
@@ -386,6 +450,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Keep a ref to practiceState so MIDI handler always sees latest state
+  // without needing to re-subscribe.
   const practiceStateRef = useRef(practiceState);
   practiceStateRef.current = practiceState;
 
@@ -400,8 +466,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     playerStateRef,
   });
 
-  // Feature 083 (US3): Fires once on the first MIDI note attack while the
-  // metronome is armed, starting the engine.
+  // Feature 083 (US3): Callback passed to usePracticeMidi — fires once on the
+  // first MIDI note attack while the metronome is armed, starting the engine.
+  // Defined before usePracticeMidi to avoid temporal dead zone.
   const onFirstNoteAttack = useCallback(() => {
     if (!metronomeArmedRef.current) return;
     metronomeArmedRef.current = false;
@@ -409,7 +476,6 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     context.metronome.toggle().catch((e) => {
       console.error('[PracticeViewPlugin] metronome deferred start failed:', e);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.metronome]);
 
   // ─── MIDI logic (extracted hook) ───────────────────────────────────────────
@@ -430,6 +496,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     selectedStaffIndex,
     onFirstNoteAttack,
     onCorrectNote: (tick) => {
+      // Feature 089: trigger accompaniment (violin etc.) notes aligned with
+      // this practice step. PPQ=960 matches the usePracticeMidi constant.
       playAccompanimentAtTick(tick, playerState.bpm, 960);
     },
   });
@@ -439,9 +507,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     return () => {
       context.scorePlayer.stop();
       context.stopPlayback();
+      // Error flash cleanup
       if (errorFlashTimerRef.current !== null) clearTimeout(errorFlashTimerRef.current);
-      // Feature 092: Free practice timer cleanup
-      freePractice.cleanupFreeTimers();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -472,7 +539,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // Load a file
   const handleLoadFile = useCallback(
     (file: File) => {
-      loadedScoreRefRef.current = null;
+      loadedScoreRefRef.current = null; // File loads can't be reliably reloaded
       context.scorePlayer.loadScore({ kind: 'file', file });
     },
     [context.scorePlayer],
@@ -485,6 +552,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // Playback controls
   const handlePlay = useCallback(() => {
+    // If a loop region is set and current position is outside the region,
+    // seek to the region start so playback honours the pinned region.
     const lr = loopRegionRef.current;
     if (lr) {
       const tick = playerStateRef.current.currentTick;
@@ -493,17 +562,17 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       }
     }
     context.scorePlayer.play();
-  }, [context.scorePlayer]);
+  }, [context.scorePlayer, loopRegionRef, playerStateRef]);
   const handlePause = useCallback(() => context.scorePlayer.pause(), [context.scorePlayer]);
   const handleStop = useCallback(() => {
+    // If a replay is in progress, stop audio and reset replay state
     if (isReplaying) {
       context.stopPlayback();
       setIsReplaying(false);
       setReplayHighlightedNoteIds(new Set());
       return;
     }
-    // Feature 092: Free practice stop is handled via handlePracticeToggle.
-    if (freePractice.isFreePracticeRef.current) return;
+    // US7: Snapshot partial results before STOP clears engine state
     const ps = practiceStateRef.current;
     if (ps.mode === 'active' || ps.mode === 'waiting' || ps.mode === 'holding') {
       setPartialPerformanceRecord({
@@ -537,17 +606,19 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     const practiceRunning = ps.mode === 'waiting' || ps.mode === 'active' || ps.mode === 'holding';
 
     if (practiceRunning && !metronomeStateRef.current.active && !metronomeArmedRef.current) {
+      // Practice is running but metronome is inactive — arm it (deferred start).
       metronomeArmedRef.current = true;
       setMetronomeArmed(true);
     } else if (metronomeArmedRef.current) {
+      // Disarm without starting.
       metronomeArmedRef.current = false;
       setMetronomeArmed(false);
     } else {
+      // Normal toggle: outside practice, or stopping an already-active metronome.
       context.metronome.toggle().catch((e) => {
         console.error('[PracticeViewPlugin] metronome.toggle failed:', e);
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.metronome]);
 
   const handleMetronomeSubdivisionChange = useCallback(
@@ -562,7 +633,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   const handleStaffChange = useCallback((index: number) => {
     setSelectedStaffIndex(index);
-    savedPracticeManager.taskStaffIndexRef.current = null;
+    taskStaffIndexRef.current = null; // user made an explicit choice — release the lock
+    // Feature 084: Sync playback audio filter with staff selection.
     if (index === -1) context.scorePlayer.setPlaybackStaffFilter(null);
     else context.scorePlayer.setPlaybackStaffFilter(index);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -570,18 +642,12 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // Practice toggle (T031, T033, T034)
   const handlePracticeToggle = useCallback(() => {
-    setIsSaved(false);
+    setIsSaved(false); // Reset save state for new practice session
     setSaveError(null);
-
-    // Feature 092: Free practice toggle — delegate to the domain hook
-    if (freePractice.isFreePracticeRef.current) {
-      freePractice.handleFreeToggle();
-      return;
-    }
-
     const ps = practiceStateRef.current;
 
     if (ps.mode === 'active' || ps.mode === 'waiting' || ps.mode === 'holding') {
+      // US7: Snapshot partial results before STOP clears engine state
       setPartialPerformanceRecord({
         notes: [...ps.notes],
         noteResults: [...ps.noteResults],
@@ -592,7 +658,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         totalNoteCount: ps.notes.length,
       });
       setResultsOverlayVisible(true);
+      // Stop practice — full reset so restarting begins from the beginning.
       dispatchPractice({ type: 'STOP' });
+      // Disarm metronome if it was armed (user stopped before first note).
       metronomeArmedRef.current = false;
       setMetronomeArmed(false);
       const lr = loopRegionRef.current;
@@ -600,28 +668,42 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       return;
     }
 
+    // When restarting from 'complete' mode, reset the engine first so any
+    // stale notes/index are cleared before computing the new practice set.
     if (ps.mode === 'complete') {
       dispatchPractice({ type: 'STOP' });
     }
 
+    // After natural practice completion the score player may be in 'playing'
+    // or 'paused' state. Reset it to 'stopped' (→ 'ready') so that
+    // extractPracticeNotes returns valid data instead of null.
     context.scorePlayer.stop();
 
-    if (!savedPracticeManager.taskIdRef.current) {
+    // Reset loop count to 1 for a fresh practice start (repractice preserves
+    // the slider value, but a brand-new practice always starts with 1 loop).
+    // Feature 061: When launched from a task, preserve the task's loopCount.
+    if (!taskIdRef.current) {
       setLoopCount(1);
     }
 
+    // Reset loop iteration tracking so the progress counter starts from 1/N.
     resetLoopTracking();
 
-    if (savedPracticeManager.taskIdRef.current) {
+    // Feature 061: When task-driven, restore remaining loops after reset.
+    if (taskIdRef.current) {
       remainingLoopsRef.current = loopCountRef.current - 1;
     }
 
+    // Start practice — staff is always already selected via the toolbar dropdown
     const ps2 = playerStateRef.current;
     const staffCount = ps2.staffCount;
     const staffIndex = staffCount <= 1 ? 0 : selectedStaffIndex;
 
+    // Collect notes: single staff or merged from all staves ("Both Clefs").
     let notes: PluginPracticeNoteEntry[];
     if (staffIndex === -1) {
+      // Both Clefs: extract from every staff, merge by tick so ChordDetector
+      // requires all simultaneous cross-staff pitches to be pressed together.
       const all: PluginPracticeNoteEntry[] = [];
       for (let s = 0; s < staffCount; s++) {
         const p = context.scorePlayer.extractPracticeNotes(s);
@@ -635,6 +717,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     }
     if (notes.length === 0) return;
 
+    // If a loop region is pinned, start from the first note inside it;
+    // otherwise always start from the beginning of the score.
     const lr = loopRegionRef.current;
     let startIndex = 0;
     if (lr) {
@@ -653,6 +737,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       startIndex,
     });
 
+    // Feature 083 (US3): If the metronome is already active when practice starts,
+    // stop it and arm it — it will restart on the first MIDI note attack.
     if (metronomeStateRef.current.active && !metronomeArmedRef.current) {
       context.metronome.toggle().catch((e) => {
         console.error('[PracticeViewPlugin] metronome stop-on-practice-start failed:', e);
@@ -660,29 +746,42 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       metronomeArmedRef.current = true;
       setMetronomeArmed(true);
     }
+
+    // practiceStartTimeRef is set later — when the first correct note is played
+    // (deferred start: the clock doesn't start until the user hits the first note).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     context.scorePlayer,
     selectedStaffIndex,
   ]);
 
+  // Ref to handlePracticeToggle so the auto-start effect can call it without
+  // depending on the callback identity (avoids cleanup-cancels-timeout race).
   const handlePracticeToggleRef = useRef(handlePracticeToggle);
   handlePracticeToggleRef.current = handlePracticeToggle;
 
   // Feature 061: Auto-start practice when entering task mode.
+  // Waits until the loop region is fully applied (for region tasks) or
+  // fires immediately (for whole-score tasks) once the flag is set.
   useEffect(() => {
-    if (!savedPracticeManager.autoStartPracticeRef.current) return;
-    if (savedPracticeManager.pendingTaskLoopRegion && !loopRegion) return;
-    savedPracticeManager.autoStartPracticeRef.current = false;
-    const timer = setTimeout(() => handlePracticeToggleRef.current(), 100);
-    return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loopRegion, savedPracticeManager.pendingTaskLoopRegion]);
+    if (!autoStartPracticeRef.current) return;
+    // For region tasks, wait until loopRegion is established
+    if (pendingTaskLoopRegion && !loopRegion) return;
+    autoStartPracticeRef.current = false;
+    // Delay slightly so the UI renders the score before practice begins
+    const t = setTimeout(() => handlePracticeToggleRef.current(), 100);
+    return () => clearTimeout(t);
+  }, [loopRegion, pendingTaskLoopRegion]);
 
   // Note short-tap handler (US3 / T037)
+  // Mirrors play-score two-tap seek-then-play state machine:
+  //   • Practice running → blocked entirely (Feature 053, Bug 6 — position lock)
+  //   • Not playing      → seekToTick; second tap while paused → also play()
+  //   • Playing          → seekToTick (mid-playback navigation)
   const handleNoteShortTap = useCallback(
     (tick: number, _noteId: string) => {
       const mode = practiceStateRef.current.mode;
+      // Feature 053 (Bug 6): Block all position navigation during active practice.
       if (mode === 'active' || mode === 'waiting' || mode === 'holding') {
         return;
       }
@@ -690,18 +789,23 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       if (playerState.status !== 'playing') {
         context.scorePlayer.seekToTick(tick);
         if (pendingPlay) {
+          // Second tap: resume from newly seeked position.
           context.scorePlayer.play();
+          // pendingPlay cleared by useEffect when status → 'playing'.
         } else {
+          // First tap: arm play trigger.
           setPendingPlay(true);
         }
         return;
       }
+      // Playing: seek without interrupting playback.
       context.scorePlayer.seekToTick(tick);
     },
     [context.scorePlayer, playerState.status, pendingPlay],
   );
 
   // Return to start — respects loop start pin when set
+  // Feature 053 (Bug 6): Blocked during active practice (position lock).
   const handleReturnToStart = useCallback(() => {
     const mode = practiceStateRef.current.mode;
     if (mode === 'active' || mode === 'waiting' || mode === 'holding') return;
@@ -717,22 +821,201 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     }
   }, [context.scorePlayer, playerState.status]);
 
-  // ─── Repractice handler ─────────────────────────────────────────────────────
+  // ─── Repractice handler (called from ResultsOverlay after replay cleanup) ──
   const handleRepractice = useCallback(() => {
-    // Feature 092: Free practice repractice — delegate to the domain hook
-    if (freePractice.isFreePracticeRef.current) {
-      freePractice.handleFreeRepractice();
-      return;
-    }
     setResultsOverlayVisible(false);
     setPartialPerformanceRecord(null);
     handlePracticeToggle();
+    // Override the loop refs AFTER handlePracticeToggle (which resets them to
+    // single-loop defaults). Repractice preserves the user's slider loopCount.
     remainingLoopsRef.current = loopCount - 1;
     loopIterationRef.current = 0;
     loopStartTimesRef.current = [0];
+    // Also restore loopCount since handlePracticeToggle sets it to 1.
     setLoopCount(loopCount);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handlePracticeToggle, loopCount]);
+
+  // ─── Feature 056: Save practice handler ──────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    const scoreRef = loadedScoreRefRef.current;
+    if (!scoreRef) return;
+
+    const isComplete = practiceState.mode === 'complete' && !!performanceRecord;
+    const isPartial = !!partialPerformanceRecord;
+    if (!isComplete && !isPartial) return;
+
+    const now = new Date();
+    const id = crypto.randomUUID();
+    const scoreTitle = playerState.title ?? t('practice.plugin.untitled');
+    const lr = loopRegion
+      ? { startTick: loopRegion.startTick, endTick: loopRegion.endTick }
+      : null;
+
+    const performanceData: SavedPerformanceData = isComplete
+      ? {
+          notes: [...performanceRecord!.notes],
+          noteResults: [...performanceRecord!.noteResults],
+          wrongNoteEvents: [...performanceRecord!.wrongNoteEvents],
+          bpmAtCompletion: performanceRecord!.bpmAtCompletion,
+          stoppedAtIndex: null,
+          totalNoteCount: null,
+        }
+      : {
+          notes: [...partialPerformanceRecord!.notes],
+          noteResults: [...partialPerformanceRecord!.noteResults],
+          wrongNoteEvents: [...partialPerformanceRecord!.wrongNoteEvents],
+          bpmAtCompletion: partialPerformanceRecord!.bpmAtCompletion,
+          stoppedAtIndex: partialPerformanceRecord!.stoppedAtIndex,
+          totalNoteCount: partialPerformanceRecord!.totalNoteCount,
+        };
+
+    const practice: SavedPractice = {
+      id,
+      name: generatePracticeName(scoreTitle, selectedStaffIndex, lr, now),
+      savedAt: now.toISOString(),
+      scoreRef,
+      scoreTitle,
+      staffIndex: selectedStaffIndex,
+      loopRegion: lr,
+      tempoMultiplier,
+      loopCount,
+      completionStatus: isComplete ? 'complete' : 'partial',
+      performanceData,
+    };
+
+    try {
+      await savePracticeToIndexedDB(practice);
+      const { evictedIds } = addSavedPracticeIndex({
+        id,
+        name: practice.name,
+        savedAt: practice.savedAt,
+        completionStatus: practice.completionStatus,
+        scoreTitle,
+      });
+      // Clean up evicted entries from IndexedDB
+      for (const evictedId of evictedIds) {
+        await deletePracticeFromIndexedDB(evictedId);
+      }
+      setIsSaved(true);
+      setSaveError(null);
+      setSavedPractices(listSavedPractices());
+      // Feature 060: Notify subscribers (e.g. sessions plugin) that a practice was saved
+      const breakdown = computePracticeScore(performanceData.noteResults, tempoMultiplier);
+      const lastNr = performanceData.noteResults[performanceData.noteResults.length - 1];
+      broadcastPracticeSaved({
+        savedPracticeId: id,
+        practiceName: practice.name,
+        scoreTitle,
+        completionStatus: practice.completionStatus,
+        savedAt: practice.savedAt,
+        practiceScore: breakdown?.score ?? 0,
+        correctCount: breakdown?.correctCount ?? 0,
+        totalNotes: breakdown?.totalNotes ?? 0,
+        practiceTimeMs: lastNr?.responseTimeMs ?? 0,
+        ...(taskIdRef.current ? { taskId: taskIdRef.current } : {}),
+        ...(sessionIdRef.current ? { sessionId: sessionIdRef.current } : {}),
+      });
+    } catch (e) {
+      console.error('[PracticeViewPlugin] Failed to save practice:', e);
+      const isQuota = e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22);
+      setSaveError(isQuota ? t('practice.plugin.storage_full') : t('practice.plugin.save_failed'));
+    }
+  }, [
+    practiceState.mode, performanceRecord, partialPerformanceRecord,
+    playerState.title, loopRegion, selectedStaffIndex,
+    tempoMultiplier, loopCount, t,
+  ]);
+
+  // ─── Feature 056: Delete saved practice handler ─────────────────────────────
+  const handleDeleteSavedPractice = useCallback(async (practiceId: string) => {
+    removeSavedPracticeIndex(practiceId);
+    await deletePracticeFromIndexedDB(practiceId);
+    setSavedPractices(listSavedPractices());
+  }, []);
+
+  // ─── Feature 056: Load saved practice handler ──────────────────────────────
+  // Feature 060: Auto-load saved practice when navigated from sessions plugin.
+  useEffect(() => {
+    const navData = context.getNavigationData();
+    if (navData && typeof navData.savedPracticeId === 'string') {
+      const id = navData.savedPracticeId;
+      // Feature 061: Set task tag if navigated from a task-linked activity
+      if (typeof navData.sessionId === 'string') {
+        sessionIdRef.current = navData.sessionId as string;
+      }
+      if (typeof navData.taskId === 'string' && typeof navData.taskNumber === 'number') {
+        taskIdRef.current = navData.taskId as string;
+        setTaskTag({ taskNumber: navData.taskNumber as number, sessionName: '' });
+      }
+      loadPracticeFromIndexedDB(id).then((saved) => {
+        if (!saved) return;
+        loadedScoreRefRef.current = saved.scoreRef;
+        pendingSavedPracticeRef.current = saved;
+        if (saved.scoreRef.type === 'preloaded') {
+          context.scorePlayer.loadScore({ kind: 'catalogue', catalogueId: saved.scoreRef.id });
+        } else {
+          context.scorePlayer.loadScore({ kind: 'userScore', scoreId: saved.scoreRef.id });
+        }
+      }).catch((err) => console.error('[PracticeViewPlugin] nav data load failed:', err));
+    } else if (navData && navData.taskConfig && typeof navData.taskConfig === 'object') {
+      // Feature 061: Launch from a session task — load score and stash config
+      const tc = navData.taskConfig as Record<string, unknown>;
+      const scoreRef = tc.scoreRef as { type: string; id: string } | undefined;
+      if (scoreRef && scoreRef.id) {
+        taskIdRef.current = (tc.taskId as string) ?? null;
+        sessionIdRef.current = (tc.sessionId as string) ?? null;
+        if (typeof tc.taskNumber === 'number' && typeof tc.sessionName === 'string') {
+          setTaskTag({ taskNumber: tc.taskNumber as number, sessionName: tc.sessionName as string, difficulty: tc.difficulty as (1 | 2 | 3 | undefined) });
+        }
+        loadedScoreRefRef.current = scoreRef as ScoreRef;
+        const staffIndex = (tc.staffIndex as number) ?? 0;
+        pendingTaskConfigRef.current = {
+          staffIndex,
+          loopCount: (tc.loopCount as number) ?? 1,
+          tempoMultiplier: (tc.tempoMultiplier as number) ?? 1.0,
+          regionType: (tc.regionType as string) ?? 'all',
+          startMeasure: (tc.startMeasure as number) ?? null,
+          endMeasure: (tc.endMeasure as number) ?? null,
+        };
+        // Apply staffIndex immediately: if the same score is already loaded,
+        // playerState.status stays 'ready' and the task-config effect never
+        // re-fires (its dependency doesn't change). Setting it here ensures
+        // the correct staff is selected even when no score reload happens.
+        taskStaffIndexRef.current = staffIndex;
+        setSelectedStaffIndex(staffIndex);
+        if (scoreRef.type === 'preloaded') {
+          context.scorePlayer.loadScore({ kind: 'catalogue', catalogueId: scoreRef.id });
+        } else {
+          context.scorePlayer.loadScore({ kind: 'userScore', scoreId: scoreRef.id });
+        }
+      }
+    }
+  // Run once on mount — navData is one-shot (cleared after read).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSelectSavedPractice = useCallback(async (entry: SavedPracticeIndexEntry) => {
+    const saved = await loadPracticeFromIndexedDB(entry.id);
+    if (!saved) {
+      console.warn('[PracticeViewPlugin] Saved practice not found in IndexedDB:', entry.id);
+      return;
+    }
+
+    // Track score ref for potential re-save
+    loadedScoreRefRef.current = saved.scoreRef;
+
+    // Store the saved practice for the useEffect to apply once the score is ready
+    pendingSavedPracticeRef.current = saved;
+
+    // Load the referenced score — the useEffect watching playerState.status
+    // will restore settings and show the results overlay when status becomes 'ready'.
+    if (saved.scoreRef.type === 'preloaded') {
+      context.scorePlayer.loadScore({ kind: 'catalogue', catalogueId: saved.scoreRef.id });
+    } else {
+      context.scorePlayer.loadScore({ kind: 'userScore', scoreId: saved.scoreRef.id });
+    }
+  }, [context.scorePlayer]);
 
   // ─── Highlight computation (extracted hook) ─────────────────────────────────
   const {
@@ -756,7 +1039,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   const { ScoreSelector, ScoreRenderer } = context.components;
 
-  if (!isLoaded && !freePractice.isFreePractice) {
+  if (!isLoaded) {
+    // Score selector screen
     return (
       <div className="practice-plugin practice-plugin--selection" data-testid="practice-plugin-root">
         <ScoreSelector
@@ -770,49 +1054,41 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
             loadedScoreRefRef.current = { type: 'user', id: scoreId };
             context.scorePlayer.loadScore({ kind: 'userScore', scoreId });
           }}
-          savedPractices={savedPracticeManager.savedPractices}
-          onSelectSavedPractice={savedPracticeManager.handleSelectSavedPractice}
-          onDeleteSavedPractice={savedPracticeManager.handleDeleteSavedPractice}
-          protectedPracticeIds={savedPracticeManager.protectedPracticeIds}
-          protectedPracticeMap={savedPracticeManager.protectedPracticeMap}
+          savedPractices={savedPractices}
+          onSelectSavedPractice={handleSelectSavedPractice}
+          onDeleteSavedPractice={handleDeleteSavedPractice}
+          protectedPracticeIds={protectedPracticeIds}
+          protectedPracticeMap={protectedPracticeMap}
           onViewSessions={(sessionId, taskId) => context.openPlugin('sessions-plugin', {
             expandSessionId: sessionId,
             expandTaskId: taskId,
           })}
-          onFreePractice={freePractice.handleFreePractice}
         />
       </div>
     );
   }
 
   return (
-    <div className={`practice-plugin${practiceActive ? ' practice-plugin--phantom' : ''}${freePractice.isFreePractice && resultsOverlayVisible ? ' practice-plugin--results' : ''}${!freePractice.isFreePractice && (((practiceState.mode === 'complete' || (practiceState.mode === 'inactive' && performanceRecord)) && resultsOverlayVisible) || (partialPerformanceRecord && resultsOverlayVisible)) ? ' practice-plugin--results' : ''}`} data-testid="practice-plugin-root">
+    <div className={`practice-plugin${practiceActive ? ' practice-plugin--phantom' : ''}${((practiceState.mode === 'complete' || (practiceState.mode === 'inactive' && performanceRecord)) && resultsOverlayVisible) || (partialPerformanceRecord && resultsOverlayVisible) ? ' practice-plugin--results' : ''}`} data-testid="practice-plugin-root">
       {/* Toolbar — top */}
       <PracticeToolbar
-        scoreTitle={freePractice.isFreePractice ? t('practice.free.title') : playerState.title}
-        status={freePractice.isFreePractice ? 'ready' as const : playerState.status}
-        currentTick={freePractice.isFreePractice ? Math.round((freePractice.freeElapsedMs / 1000) * (freePractice.freeStaffBpm / 60) * 960) : playerState.currentTick}
-        totalDurationTicks={freePractice.isFreePractice ? 0 : playerState.totalDurationTicks}
-        bpm={freePractice.isFreePractice ? freePractice.freeStaffBpm : playerState.bpm}
+        scoreTitle={playerState.title}
+        status={playerState.status}
+        // showStaffPicker removed — toolbar dropdown is always the selector
+        currentTick={playerState.currentTick}
+        totalDurationTicks={playerState.totalDurationTicks}
+        bpm={playerState.bpm}
         tempoMultiplier={tempoMultiplier}
-        onBack={() => {
-          // Feature 092: Exit free practice on back
-          if (freePractice.isFreePractice) {
-            freePractice.handleFreeBack();
-            return;
-          }
-          handleBack();
-        }}
+        onBack={handleBack}
         onPlay={handlePlay}
         onPause={handlePause}
         onStop={handleStop}
         onTempoChange={handleTempoChange}
-        staffCount={freePractice.isFreePractice ? 0 : playerState.staffCount}
+        staffCount={playerState.staffCount}
         selectedStaffIndex={selectedStaffIndex}
         onStaffChange={handleStaffChange}
-        practiceMode={freePractice.isFreePractice ? (freePractice.freeSessionActive ? 'active' : 'inactive') : practiceState.mode}
+        practiceMode={practiceState.mode}
         currentPracticeIndex={(() => {
-          if (freePractice.isFreePractice) return 0;
           const range = loopPracticeRange;
           const mode = practiceState.mode;
           if (range && (mode === 'active' || mode === 'holding' || mode === 'waiting')) {
@@ -823,7 +1099,6 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           return practiceState.currentIndex;
         })()}
         totalPracticeNotes={(() => {
-          if (freePractice.isFreePractice) return 0;
           const range = loopPracticeRange;
           const mode = practiceState.mode;
           if (range && (mode === 'active' || mode === 'holding' || mode === 'waiting')) {
@@ -843,14 +1118,12 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         metronomeSubdivision={metronomeSubdivision}
         onMetronomeSubdivisionChange={handleMetronomeSubdivisionChange}
         metronomeArmed={metronomeArmed}
-        taskTag={savedPracticeManager.taskTag}
+        taskTag={taskTag}
         isReplaying={isReplaying}
         onTaskTagClick={() => context.openPlugin('sessions-plugin', {
-          expandSessionId: savedPracticeManager.sessionIdRef.current,
-          expandTaskId: savedPracticeManager.taskIdRef.current,
+          expandSessionId: sessionIdRef.current,
+          expandTaskId: taskIdRef.current,
         })}
-        isFreePractice={freePractice.isFreePractice}
-        freeNoteCount={freePractice.freeNoteCount}
       />
 
       {/* Hold indicator — visible while player holds a note longer than a quarter note */}
@@ -871,7 +1144,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       )}
 
       {/* Real-time note display — pressed vs expected (only on wrong note) */}
-      {!freePractice.isFreePractice && (practiceActive || practiceWaiting) &&
+      {(practiceActive || practiceWaiting) &&
         practiceState.currentWrongAttempts > 0 && (
         <div className="practice-plugin__note-display" aria-live="polite">
           <span className="practice-plugin__note-display-label">{t('practice.plugin.expected')}</span>
@@ -886,40 +1159,26 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         </div>
       )}
 
-      {/* Score — not shown during free practice */}
-      {!freePractice.isFreePractice && (
-        <div className="practice-plugin__score-area">
-          <ScoreRenderer
-            currentTick={playerState.currentTick}
-            highlightedNoteIds={highlightedNoteIds}
-            errorNoteIds={errorNoteIds}
-            expectedNoteIds={practiceActive ? targetNoteIds : undefined}
-            pinnedNoteIds={
-              practiceActive
-                ? confirmedNoteIds
-                : (practiceState.mode === 'waiting' ? new Set<string>() : pinnedNoteIds)
-            }
-            scrollTargetNoteIds={practiceActive ? targetNoteIds : undefined}
-            loopRegion={loopRegion}
-            onNoteShortTap={handleNoteShortTap}
-            onNoteLongPress={handleNoteLongPress}
-            onCanvasTap={handleCanvasTap}
-            onReturnToStart={handleReturnToStart}
-          />
-        </div>
-      )}
-
-      {/* Feature 092: Free practice canvas — shows notes as the user plays or during replay */}
-      {freePractice.isFreePractice && !resultsOverlayVisible && (
-        <div className="practice-plugin__score-area practice-plugin__free-canvas" aria-label={t('practice.free.title')}>
-          <context.components.StaffViewer
-            notes={freePractice.freeDisplayNotes}
-            bpm={freePractice.freeStaffBpm}
-            timestampOffset={freePractice.freeDisplayOriginMs}
-            autoScroll
-          />
-        </div>
-      )}
+      {/* Score */}
+      <div className="practice-plugin__score-area">
+        <ScoreRenderer
+          currentTick={playerState.currentTick}
+          highlightedNoteIds={highlightedNoteIds}
+          errorNoteIds={errorNoteIds}
+          expectedNoteIds={practiceActive ? targetNoteIds : undefined}
+          pinnedNoteIds={
+            practiceActive
+              ? confirmedNoteIds  // full green = keys the user is pressing correctly
+              : (practiceState.mode === 'waiting' ? new Set<string>() : pinnedNoteIds)
+          }
+          scrollTargetNoteIds={practiceActive ? targetNoteIds : undefined}
+          loopRegion={loopRegion}
+          onNoteShortTap={handleNoteShortTap}
+          onNoteLongPress={handleNoteLongPress}
+          onCanvasTap={handleCanvasTap}
+          onReturnToStart={handleReturnToStart}
+        />
+      </div>
 
       {/* Results overlay — shown when practice finishes or on mid-session stop */}
       <ResultsOverlay
@@ -933,30 +1192,19 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         setLoopCount={setLoopCount}
         context={context}
         onRepractice={handleRepractice}
-        onDismiss={() => {
-          setResultsOverlayVisible(false);
-          setPartialPerformanceRecord(null);
-          // Feature 092: Dismissing free practice results returns to the score selector.
-          if (freePractice.isFreePracticeRef.current) {
-            freePractice.handleFreeDismiss();
-          }
-        }}
+        onDismiss={() => { setResultsOverlayVisible(false); setPartialPerformanceRecord(null); }}
         isReplaying={isReplaying}
         replayHighlightedNoteIds={replayHighlightedNoteIds}
         setIsReplaying={setIsReplaying}
         setReplayHighlightedNoteIds={setReplayHighlightedNoteIds}
-        onSave={loadedScoreRefRef.current ? savedPracticeManager.handleSave : undefined}
+        onSave={loadedScoreRefRef.current ? handleSave : undefined}
         isSaved={isSaved}
         saveError={saveError}
-        onReturnToSession={savedPracticeManager.sessionIdRef.current ? () => context.openPlugin('sessions-plugin', {
-          expandSessionId: savedPracticeManager.sessionIdRef.current,
-          expandTaskId: savedPracticeManager.taskIdRef.current,
+        onReturnToSession={sessionIdRef.current ? () => context.openPlugin('sessions-plugin', {
+          expandSessionId: sessionIdRef.current,
+          expandTaskId: taskIdRef.current,
         }) : undefined}
-        loopCountLocked={!!savedPracticeManager.taskIdRef.current}
-        isFreePractice={freePractice.isFreePractice}
-        freeMidiRecord={freePractice.freeMidiRecord}
-        onHideOverlay={() => setResultsOverlayVisible(false)}
-        onFreeReplay={freePractice.handleFreeReplay}
+        loopCountLocked={!!taskIdRef.current}
       />
     </div>
   );
