@@ -86,7 +86,7 @@ When a goal generates multiple sessions, those sessions are scheduled on consecu
 
 ### Functional Requirements
 
-- **FR-001**: When a score play goal is created for a multi-staff (piano) score, the system MUST generate 3 tasks per detected phrase: one for Right Hand (staffIndex 0), one for Left Hand (staffIndex 1), one for Both Hands (staffIndex -1), **except** where FR-017 applies.
+- **FR-001**: When a score play goal is created for a multi-staff (piano) score, the system MUST generate 3 tasks per detected phrase: one for Right Hand (staffIndex 0), one for Left Hand (staffIndex 1), one for Both Hands (staffIndex -1), **except** where FR-018 applies.
 - **FR-002**: When a score play goal is created for a single-staff score, the system MUST generate 1 task per detected phrase for Both Hands (staffIndex -1).
 - **FR-003**: Each auto-generated task MUST have a difficulty rating (easy, medium, hard) computed using the same algorithm as the global score difficulty, scoped to the task's measure range and assigned staff.
 - **FR-004**: Each auto-generated task MUST have an estimatedDurationSecs field representing the total practice time needed to reach the minResult threshold (not a single playback duration). The estimate is computed from: number of measures in the task, loopCount (repetitions), difficulty rating, and minResult (target score percentage). Base calibration: a medium-difficulty measure requires approximately 3-4 minutes of practice time; easy measures require less, hard measures require more.
@@ -102,7 +102,8 @@ When a goal generates multiple sessions, those sessions are scheduled on consecu
 - **FR-014**: The duration estimation formula MUST produce longer estimates for higher difficulty and lower minResult targets.
 - **FR-015**: Tasks MUST be ordered by phrase progression: all three hand variants (RH, LH, BH) of phrase 1 first, then phrase 2, etc. When distributing across sessions, same-phrase tasks MUST always be kept together in the same session (phrase triplet is the atomic distribution unit). A session may exceed its availableTime to keep a phrase group intact.
 - **FR-016**: If creating a goal would generate sessions that push the total session count above the 50-session storage cap, the system MUST warn the user with the number of sessions to be created and the number of oldest closed sessions that will be evicted, and proceed only upon user confirmation.
-- **FR-017**: A hand-specific task MUST NOT be created for a given (phrase, staffIndex) pair when `getRegionDifficulty()` returns `null` for that pair — meaning the staff has no playable notes within the phrase's measure range. A `null` return MUST be treated as a skip condition, not as a fallback to medium difficulty. As a result, a phrase group may contain fewer than 3 tasks when one or more hands are silent in that phrase.
+- **FR-017**: The `DistributedSession` intermediate type MUST include a `scoreTitles: string[]` field populated with the score titles of all goals whose phrase groups were assigned to that session. The session's human-readable `name` MUST be derived from `scoreTitles.sort().join(' · ')` at the point where the caller (e.g. `GoalsView.tsx`) persists the session. A `DistributedSession` with tasks from only one score MUST carry a single-element `scoreTitles` array.
+- **FR-018**: A hand-specific task MUST NOT be created for a given (phrase, staffIndex) pair when `getRegionDifficulty()` returns `null` for that pair — meaning the staff has no playable notes within the phrase's measure range. A `null` return MUST be treated as a skip condition, not as a fallback to medium difficulty. As a result, a phrase group may contain fewer than 3 tasks when one or more hands are silent in that phrase.
 
 ### Key Entities
 
@@ -110,12 +111,17 @@ When a goal generates multiple sessions, those sessions are scheduled on consecu
 - **SessionTask**: Extended with difficulty (easy | medium | hard) and estimatedDurationSecs (number, seconds). estimatedDurationSecs represents the total practice time needed to master the phrase (memorize notes, learn fingering, rhythm, accidentals) to reach minResult. Computed at creation time from the task's measure range, staff, loopCount, and minResult.
 - **Goal**: Extended from single sessionId to support multiple session references (sessionIds), since a goal may now span multiple sessions.
 - **PhraseRegion**: Existing entity used for phrase detection. Tasks are generated for each detected phrase.
+- **DistributedSession**: An intermediate (in-memory) result type returned by `distributeTasks()`. Carries `tasks: SessionTask[]`, `totalEstimatedDurationSecs: number`, `availableTime: number`, and `scoreTitles: string[]` (added — BUG-002). The caller derives the persisted session `name` from `scoreTitles.sort().join(' · ')`.
+
+## Known Issues & Regression Tests
+
+**Bugfix**: 2026-05-22 — BUG-002 Added FR-017 mandating `DistributedSession.scoreTitles` and composite session `name` derivation. T037 and T045 in tasks.md reopened. Root cause: `DistributedSession` had no `name`/`scoreTitles` field; `GoalsView.tsx` set session names ad-hoc without recomputing when tasks from a second goal were added.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: A score play goal for a piano score with N phrases generates at most 3×N tasks (RH, LH, BH per phrase); the actual count may be less when one or more hands are silent in a given phrase (FR-017).
+- **SC-001**: A score play goal for a piano score with N phrases generates at most 3×N tasks (RH, LH, BH per phrase); the actual count may be less when one or more hands are silent in a given phrase (FR-018).
 - **SC-002**: Every auto-generated task has a computed difficulty and a positive estimated duration before the user interacts with it.
 - **SC-003**: No session with a defined availableTime exceeds its time budget (exception: the first phrase group assigned to an empty session may exceed the budget to keep the triplet intact).
 - **SC-004**: All auto-generated sessions are scheduled on distinct days, with no day hosting more than one newly created session.
@@ -132,4 +138,4 @@ When a goal generates multiple sessions, those sessions are scheduled on consecu
 - Q: What should the base duration per measure be for the estimation formula? → A: Duration estimates total practice time to reach minResult (not playback time). Base ~3-4 min per measure at medium difficulty (covers memorizing notes, fingering, rhythm, accidentals).
 - Q: If a phrase triplet (RH+LH+BH) exceeds the session's availableTime, should it be split across sessions? → A: No. Keep phrase triplet together — session may exceed availableTime for that phrase group. Phrase triplet is the atomic distribution unit.
 
-**Bugfix**: 2026-06-07 — BUG-001 Added FR-017 (skip task creation for silent staves), updated FR-001 to reference FR-017, added silent-hand edge case, updated SC-001 to reflect variable phrase group size.
+**Bugfix**: 2026-06-07 — BUG-001 Added FR-018 (skip task creation for silent staves), updated FR-001 to reference FR-018, added silent-hand edge case, updated SC-001 to reflect variable phrase group size.

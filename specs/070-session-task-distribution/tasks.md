@@ -86,7 +86,7 @@
 ### Implementation for User Story 1
 
 - [X] T024 [US1] Replace `selectFirstPhrase()` with a function that iterates ALL phrases for instrument 0 in plugins-external/sessions-plugin/goalEngine.ts
-- [X] T025 [US1] ⚠️ Reopened — BUG-001 Modify task generation in `createGoal()` to generate 3 tasks per phrase (RH staffIndex 0, LH staffIndex 1, BH staffIndex -1) for multi-staff scores, and 1 task (BH staffIndex -1) for single-staff scores in plugins-external/sessions-plugin/goalEngine.ts — **must also implement the silent-region guard: change `taskDefs.map(...)` to `taskDefs.flatMap(...)` and return `[]` (skip) when `getRegionDifficulty()` returns `null` for a given (phrase, staffIndex) pair (FR-017)**
+- [X] T025 [US1] ⚠️ Reopened — BUG-001 Modify task generation in `createGoal()` to generate 3 tasks per phrase (RH staffIndex 0, LH staffIndex 1, BH staffIndex -1) for multi-staff scores, and 1 task (BH staffIndex -1) for single-staff scores in plugins-external/sessions-plugin/goalEngine.ts — **must also implement the silent-region guard: change `taskDefs.map(...)` to `taskDefs.flatMap(...)` and return `[]` (skip) when `getRegionDifficulty()` returns `null` for a given (phrase, staffIndex) pair (FR-018)**
 - [X] T026 [US1] For each generated task, call `getRegionDifficulty(startMeasure, endMeasure, staffIndex)` to compute difficulty and `estimateTaskDuration(numMeasures, loopCount, difficulty, minResult)` to compute estimatedDurationSecs in plugins-external/sessions-plugin/goalEngine.ts
 - [X] T027 [US1] Return phrase groups (array of `{ phraseIndex, tasks, totalDuration }`) from the goal engine for downstream session distribution in plugins-external/sessions-plugin/goalEngine.ts
 - [X] T028 [US1] Ensure tasks within each phrase are ordered: RH, LH, BH (or just BH for single-staff) in plugins-external/sessions-plugin/goalEngine.ts
@@ -95,7 +95,7 @@
 ### Bugfix Tasks for BUG-001 (Silent-Region Guard)
 
 - [X] T083 [P] [US1] Write regression test in plugins-external/sessions-plugin/goalEngine.test.ts: two-staff score where `getRegionDifficulty()` returns `null` for staffIndex 1 (LH) in phrase 2 → verify phrase 2 produces only 2 tasks (RH + BH, no LH task), and total task count for 4 phrases is 11 (not 12)
-- [X] T084 [US1] Fix `createGoal()` in plugins-external/sessions-plugin/goalEngine.ts: change `taskDefs.map(...)` to `taskDefs.flatMap(...)` in the phrase task loop; return `[]` (skip) when `getRegionDifficulty()` returns `null` for a given (phrase, staffIndex) pair — implements FR-017
+- [X] T084 [US1] Fix `createGoal()` in plugins-external/sessions-plugin/goalEngine.ts: change `taskDefs.map(...)` to `taskDefs.flatMap(...)` in the phrase task loop; return `[]` (skip) when `getRegionDifficulty()` returns `null` for a given (phrase, staffIndex) pair — implements FR-018
 - [X] T085 [US3] Update `PhraseGroup` handling in plugins-external/sessions-plugin/sessionDistribution.ts to support phrase groups with fewer than 3 tasks (e.g., 1 or 2 tasks when one or both individual-hand staves are silent); ensure `distributeTasks()` and the atomic-unit guarantee (FR-008/FR-015) still hold for variable-size groups
 - [X] T086 [US1] Verify T083 regression test fails before T084 fix, passes after fix: `npm test -- --filter goalEngine`
 
@@ -123,7 +123,7 @@
 
 - [X] T035 [US3] Create `PhraseGroup` type `{ phraseIndex: number, tasks: SessionTask[], totalDuration: number }` in plugins-external/sessions-plugin/sessionDistribution.ts
 - [X] T036 [US3] Implement `distributeTasks(phraseGroups: PhraseGroup[], availableTime: number): DistributedSession[]` using greedy first-fit algorithm per research.md Topic 3 in plugins-external/sessions-plugin/sessionDistribution.ts
-- [X] T037 [US3] Each `DistributedSession` has `tasks: SessionTask[]`, `totalEstimatedDurationSecs: number`, `availableTime: number` in plugins-external/sessions-plugin/sessionDistribution.ts
+- [X] T037 [US3] Each `DistributedSession` has `tasks: SessionTask[]`, `totalEstimatedDurationSecs: number`, `availableTime: number`, **and `scoreTitles: string[]` (sorted score titles of all contributing goals — used by caller to set session `name`)** in plugins-external/sessions-plugin/sessionDistribution.ts (reopened — BUG-002: `scoreTitles` field was missing; session naming left to ad-hoc caller logic)
 - [X] T038 [US3] Verify all distribution tests pass: `npm test -- --filter sessionDistribution`
 
 **Checkpoint**: Session distribution algorithm ready — tasks correctly binned into time-limited sessions.
@@ -156,7 +156,7 @@
 
 **Purpose**: Wire up all modules in the GoalsView orchestration flow and persist sessions
 
-- [X] T045 Update `processScoreSelection()` in plugins-external/sessions-plugin/GoalsView.tsx to: call `getRegionDifficulty()` for each phrase × staff, call `estimateTaskDuration()` for each task, call `distributeTasks()` to get session groups, call `findFreeDays()` for scheduling
+- [X] T045 Update `processScoreSelection()` in plugins-external/sessions-plugin/GoalsView.tsx to: call `getRegionDifficulty()` for each phrase × staff, call `estimateTaskDuration()` for each task, call `distributeTasks()` to get session groups, call `findFreeDays()` for scheduling, **and set each created session's `name` from `distributedSession.scoreTitles.sort().join(' · ')` — MUST NOT set name from creating goal's score title alone** (reopened — BUG-002: session-creation step after `distributeTasks()` set name ad-hoc without recomputing when a second goal's tasks are present)
 - [X] T046 Add eviction warning check in plugins-external/sessions-plugin/GoalsView.tsx: if `currentSessionCount + newSessionCount > MAX_SESSIONS`, show confirm dialog with eviction impact per research.md Topic 5 (FR-016)
 - [X] T047 Create and persist multiple sessions with assigned targetDates and `availableTime=3600` in plugins-external/sessions-plugin/GoalsView.tsx
 - [X] T048 Set `goal.sessionIds` to array of all created session IDs in plugins-external/sessions-plugin/GoalsView.tsx
@@ -295,3 +295,7 @@ Phase 1 (Setup) ─────────────► Phase 2 (Foundational
 2. Add US2 (Duration) + US1 (Multi-phrase) → MVP: all tasks generated with estimates
 3. Add US3 (Distribution) + US4 (Scheduling) → Full: tasks distributed into time-limited, scheduled sessions
 4. Integration + Polish → Production-ready with UI display and eviction warnings
+
+---
+
+**Bugfix**: 2026-05-22 — BUG-002 Updated from bugfix patch. T037 reopened (`DistributedSession` missing `scoreTitles: string[]` field per new FR-017). T045 reopened (`processScoreSelection()` session-creation step must derive `name` from `distributedSession.scoreTitles.sort().join(' · ')`). No new tasks added here — the regression test is tracked in specs/087-one-goal-40pct-cap/tasks.md as T028.

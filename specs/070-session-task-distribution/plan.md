@@ -68,13 +68,13 @@ backend/
     \u2514\u2500\u2500 difficulty_region_tests.rs  # NEW: tests for per-region difficulty
 
 plugins-external/sessions-plugin/
-\u251c\u2500\u2500 goalEngine.ts               # MODIFY: iterate all phrases, generate tasks per phrase; skip task when getRegionDifficulty() returns null (FR-017 silent-region guard)
+\u251c\u2500\u2500 goalEngine.ts               # MODIFY: iterate all phrases, generate tasks per phrase; skip task when getRegionDifficulty() returns null (FR-018 silent-region guard)
 \u251c\u2500\u2500 goalEngine.test.ts           # MODIFY: add tests for multi-phrase generation, add silent-hand regression test
 \u251c\u2500\u2500 goalTypes.ts                 # MODIFY: Goal.sessionIds (was sessionId)
 \u251c\u2500\u2500 sessionTypes.ts              # MODIFY: Session.availableTime, SessionTask.difficulty/estimatedDurationSecs
 \u251c\u2500\u2500 durationEstimation.ts        # NEW: practice time estimation module
 \u251c\u2500\u2500 durationEstimation.test.ts   # NEW: unit tests
-\u251c\u2500\u2500 sessionDistribution.ts       # NEW: task-to-session distribution algorithm; must handle phrase groups with fewer than 3 tasks (BUG-001 / FR-017)
+\u251c\u2500\u2500 sessionDistribution.ts       # NEW: task-to-session distribution algorithm; must handle phrase groups with fewer than 3 tasks (BUG-001 / FR-018)
 \u251c\u2500\u2500 sessionDistribution.test.ts  # NEW: unit tests
 \u251c\u2500\u2500 GoalsView.tsx                # MODIFY: create multiple sessions, eviction warning
 \u251c\u2500\u2500 GoalsView.test.tsx            # MODIFY: update for multi-session creation
