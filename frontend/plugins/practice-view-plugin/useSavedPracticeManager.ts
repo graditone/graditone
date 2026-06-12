@@ -68,7 +68,6 @@ type TaskConfig = {
 export type UseSavedPracticeManagerParams = {
   context: PluginContext;
   freeMidiRecord: FreeMidiRecord | null;
-  isFreePracticeRef: React.MutableRefObject<boolean>;
   loadedScoreRefRef: React.MutableRefObject<ScoreRef | null>;
   loopRegion: { startTick: number; endTick: number } | null;
   selectedStaffIndex: number;
@@ -116,7 +115,6 @@ export type UseSavedPracticeManagerReturn = {
 export function useSavedPracticeManager({
   context,
   freeMidiRecord,
-  isFreePracticeRef,
   loadedScoreRefRef,
   loopRegion,
   selectedStaffIndex,
@@ -373,6 +371,7 @@ export function useSavedPracticeManager({
     t,
     setIsSaved,
     setSaveError,
+    loadedScoreRefRef,
   ]);
 
   // ── handleDeleteSavedPractice ─────────────────────────────────────────────
@@ -407,7 +406,7 @@ export function useSavedPracticeManager({
     } else {
       context.scorePlayer.loadScore({ kind: 'userScore', scoreId: saved.scoreRef.id });
     }
-  }, [context.scorePlayer, onFreePracticeLoad, setIsSaved, setSaveError]);
+  }, [context.scorePlayer, onFreePracticeLoad, setIsSaved, setSaveError, loadedScoreRefRef, pendingSavedPracticeRef]);
 
   return {
     savedPractices,

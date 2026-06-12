@@ -16,7 +16,7 @@ import type {
   PerformanceRecord,
   PartialPerformanceRecord,
 } from './practiceEngine.types';
-import type { FreeMidiRecord } from '../../src/services/savedPractice.types';
+import type { FreeMidiRecord } from '../../src/plugin-api';
 
 // ---------------------------------------------------------------------------
 // Helpers (moved from PracticeViewPlugin.tsx)
@@ -71,8 +71,6 @@ export interface ResultsOverlayProps {
   isFreePractice?: boolean;
   /** Feature 092: MIDI event log for free practice — present only when isFreePractice is true. */
   freeMidiRecord?: FreeMidiRecord | null;
-  /** Feature 092: Hides the overlay without resetting free-practice state (used by Replay). */
-  onHideOverlay?: () => void;
   /** Feature 092: Triggered when the user presses Replay in free-practice mode. */
   onFreeReplay?: () => void;
 }
@@ -102,7 +100,6 @@ export function ResultsOverlay({
   loopCountLocked,
   isFreePractice = false,
   freeMidiRecord,
-  onHideOverlay,
   onFreeReplay,
 }: ResultsOverlayProps) {
   const { t } = useTranslation();
