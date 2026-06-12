@@ -161,9 +161,9 @@ File: `frontend/src/plugin-api/PluginStaffViewer.tsx`
 
 ## Build Constraints
 
-- `frontend/node_modules` does not exist in the worktree — must copy files to the main repo at `/Users/alvaro.delcastillo/devel/graditone` to build
-- Pre-commit hook fails in worktrees — always use `git commit --no-verify`
-- Files to copy for a build test: all new/modified `.tsx/.ts` files under `frontend/plugins/practice-view-plugin/` and `frontend/src/plugin-api/` + `frontend/src/services/savedPractice*.ts`
+- `frontend/node_modules` is not pre-installed in worktrees. The pre-commit hook auto-runs `npm install --prefer-offline` on first commit, so dependencies are installed automatically.
+- The backend (`cargo`) shares the main repo's `~/.cargo` registry and `backend/target/` — no extra setup needed.
+- Files changed in the worktree are committed directly; no manual copy to the main repo is required.
 
 ---
 
