@@ -78,7 +78,7 @@
 
 ### Tests for User Story 1
 
-- [X] T020 [P] [US1] Write unit tests in plugins-external/sessions-plugin/goalEngine.test.ts: two-staff score with 4 phrases → 12 tasks (3 per phrase), correct staffIndex per task (0=RH, 1=LH, -1=BH), correct measure ranges per phrase
+- [X] T020 [P] [US1] Write unit tests in plugins-external/sessions-plugin/goalEngine.test.ts: two-staff score with 4 phrases → 12 tasks (3 per phrase), correct staffIndex per task (0=RH, 1=LH, -1=BH), correct measure ranges per phrase *(⚠️ Regression gap — does not cover silent-staff scenario; see T083)*
 - [X] T021 [P] [US1] Write unit tests in plugins-external/sessions-plugin/goalEngine.test.ts: single-staff score with 3 phrases → 3 tasks (1 BH per phrase, staffIndex -1)
 - [X] T022 [P] [US1] Write unit tests in plugins-external/sessions-plugin/goalEngine.test.ts: every task has difficulty (1|2|3) and estimatedDurationSecs > 0
 - [X] T023 [P] [US1] Write unit tests in plugins-external/sessions-plugin/goalEngine.test.ts: tasks ordered by phrase progression (all hand variants of phrase 1 before phrase 2)
@@ -86,13 +86,22 @@
 ### Implementation for User Story 1
 
 - [X] T024 [US1] Replace `selectFirstPhrase()` with a function that iterates ALL phrases for instrument 0 in plugins-external/sessions-plugin/goalEngine.ts
-- [X] T025 [US1] Modify task generation in `createGoal()` to generate 3 tasks per phrase (RH staffIndex 0, LH staffIndex 1, BH staffIndex -1) for multi-staff scores, and 1 task (BH staffIndex -1) for single-staff scores in plugins-external/sessions-plugin/goalEngine.ts
+- [X] T025 [US1] ⚠️ Reopened — BUG-001 Modify task generation in `createGoal()` to generate 3 tasks per phrase (RH staffIndex 0, LH staffIndex 1, BH staffIndex -1) for multi-staff scores, and 1 task (BH staffIndex -1) for single-staff scores in plugins-external/sessions-plugin/goalEngine.ts — **must also implement the silent-region guard: change `taskDefs.map(...)` to `taskDefs.flatMap(...)` and return `[]` (skip) when `getRegionDifficulty()` returns `null` for a given (phrase, staffIndex) pair (FR-018)**
 - [X] T026 [US1] For each generated task, call `getRegionDifficulty(startMeasure, endMeasure, staffIndex)` to compute difficulty and `estimateTaskDuration(numMeasures, loopCount, difficulty, minResult)` to compute estimatedDurationSecs in plugins-external/sessions-plugin/goalEngine.ts
 - [X] T027 [US1] Return phrase groups (array of `{ phraseIndex, tasks, totalDuration }`) from the goal engine for downstream session distribution in plugins-external/sessions-plugin/goalEngine.ts
 - [X] T028 [US1] Ensure tasks within each phrase are ordered: RH, LH, BH (or just BH for single-staff) in plugins-external/sessions-plugin/goalEngine.ts
 - [X] T029 [US1] Verify all goal engine tests pass: `npm test -- --filter goalEngine`
 
+### Bugfix Tasks for BUG-001 (Silent-Region Guard)
+
+- [X] T083 [P] [US1] Write regression test in plugins-external/sessions-plugin/goalEngine.test.ts: two-staff score where `getRegionDifficulty()` returns `null` for staffIndex 1 (LH) in phrase 2 → verify phrase 2 produces only 2 tasks (RH + BH, no LH task), and total task count for 4 phrases is 11 (not 12)
+- [X] T084 [US1] Fix `createGoal()` in plugins-external/sessions-plugin/goalEngine.ts: change `taskDefs.map(...)` to `taskDefs.flatMap(...)` in the phrase task loop; return `[]` (skip) when `getRegionDifficulty()` returns `null` for a given (phrase, staffIndex) pair — implements FR-018
+- [X] T085 [US3] Update `PhraseGroup` handling in plugins-external/sessions-plugin/sessionDistribution.ts to support phrase groups with fewer than 3 tasks (e.g., 1 or 2 tasks when one or both individual-hand staves are silent); ensure `distributeTasks()` and the atomic-unit guarantee (FR-008/FR-015) still hold for variable-size groups
+- [X] T086 [US1] Verify T083 regression test fails before T084 fix, passes after fix: `npm test -- --filter goalEngine`
+
 **Checkpoint**: Goal creation generates all tasks with difficulty and duration — ready for session distribution.
+
+**Bugfix**: 2026-06-07 — BUG-001 Reopened T025 (missing silent-region guard), flagged T020 as having a regression gap, added T083–T086 for fix and regression test.
 
 ---
 
@@ -261,7 +270,8 @@ Phase 1 (Setup) ─────────────► Phase 2 (Foundational
 
 **Phase 2**: T007 and T012 can be developed in parallel (Rust refactor + TypeScript interface)
 **Phase 3**: T015 and T016 (tests) can run in parallel
-**Phase 4**: T020, T021, T022, T023 (tests) can all run in parallel
+**Phase 4**: T020, T021, T022, T023 (tests) can all run in parallel  
+**Bugfix Wave (Phase 4 patch — BUG-001)**: T083 (regression test, `[P]`) can be written in parallel with T020–T023; T084 + T085 can run in parallel after T083; T086 runs last (depends on T083 + T084)
 **Phase 5**: T030–T034 (tests) can all run in parallel
 **Phase 6**: T039–T041 (tests) can all run in parallel; **Phase 6 itself can run in parallel with Phase 5**
 **Phase 8**: T053, T054, T055, T056 (UI tasks) can all run in parallel
