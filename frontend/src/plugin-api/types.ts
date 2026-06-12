@@ -427,6 +427,12 @@ export interface PluginScoreSelectorProps {
    * practice. Opens the sessions plugin, optionally expanding the relevant session/task.
    */
   onViewSessions?: (sessionId: string, taskId?: string) => void;
+  /**
+   * Feature 092: Called when the user clicks the "Free Practice" button.
+   * When this prop is omitted, the button is not rendered.
+   * The Play plugin does NOT pass this prop — the button only appears in the Practice plugin context.
+   */
+  onFreePractice?: () => void;
 }
 
 // ---------------------------------------------------------------------------

@@ -240,7 +240,38 @@ vi.mock('tone', () => {
   };
 });
 
+// ─── Storage mocks ───────────────────────────────────────────────────────────
+// happy-dom 20.x does not expose working localStorage/sessionStorage on globalThis.
+// Assign a real implementation so all tests have functioning storage without
+// needing per-file vi.stubGlobal calls.
+
+class StorageMock implements Storage {
+  private store: Record<string, string> = {};
+  get length() { return Object.keys(this.store).length; }
+  clear() { this.store = {}; }
+  getItem(key: string) { return this.store[key] ?? null; }
+  setItem(key: string, value: string) { this.store[key] = String(value); }
+  removeItem(key: string) { delete this.store[key]; }
+  key(index: number) { return Object.keys(this.store)[index] ?? null; }
+}
+
+const _localStorageMock = new StorageMock();
+const _sessionStorageMock = new StorageMock();
+
+Object.defineProperty(globalThis, 'localStorage', {
+  value: _localStorageMock,
+  writable: true,
+  configurable: true,
+});
+Object.defineProperty(globalThis, 'sessionStorage', {
+  value: _sessionStorageMock,
+  writable: true,
+  configurable: true,
+});
+
 // Cleanup after each test case
 afterEach(() => {
   cleanup();
+  _localStorageMock.clear();
+  _sessionStorageMock.clear();
 });

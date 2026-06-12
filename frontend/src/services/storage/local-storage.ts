@@ -170,7 +170,6 @@ export async function loadScoreFromIndexedDB(scoreId: string, currentSchemaVersi
 
     console.log(`[IndexedDB] Score ${scoreId} loaded successfully`);
     // Strip internal metadata before returning
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { lastModified: _lm, rawMxlBlob: _blob, ...scoreOnly } = record;
     return { kind: 'loaded', score: scoreOnly as Score };
   } catch (error) {

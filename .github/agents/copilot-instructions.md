@@ -182,6 +182,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-06
 - IndexedDB (full `Session` objects) + localStorage (lightweight `SessionIndexEntry[]` index) (090-fix-rescheduling-bugs)
 - TypeScript 5 / React 18 + React 18, Vitest + React Testing Library, flat-key i18n catalog (custom) (091-guide-credits-preloaded-songs)
 - N/A — static data, no persistence (091-guide-credits-preloaded-songs)
+- TypeScript (React 18, strict mode), tested with Vitest + Testing Library + React, Vitest, `@testing-library/react`, existing plugin-api types (092-free-practice-option)
+- IndexedDB (`practices` store via `openDB()`), localStorage (saved practices index) (092-free-practice-option)
 
 - Rust (latest stable 1.75+) + serde 1.0+, serde_json 1.0+ (serialization), thiserror 1.0+ (errors); web framework TBD in contracts phase (axum or actix-web) (001-score-model)
 
@@ -202,9 +204,9 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 Rust (latest stable 1.75+): Follow standard conventions
 
 ## Recent Changes
+- 092-free-practice-option: Added TypeScript (React 18, strict mode), tested with Vitest + Testing Library + React, Vitest, `@testing-library/react`, existing plugin-api types
+- 092-free-practice-option: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 - 091-piano-learning-guide-page: Added TypeScript 5.x (React 18+); frontend-only, no Rust/WASM changes. New PianoLearningGuidePage component + i18n keys (guide.piano.*) + showGuide state in App.tsx
-- 091-guide-credits-preloaded-songs: Added Credits section (Section 7) to Guide plugin; new creditsCatalog.ts data file + 10 guide.credits.* i18n keys (en + es)
-- 090-fix-rescheduling-bugs: Added TypeScript 5.x, React 18 + React, Vitest, @testing-library/react (existing test stack)
 
 
 <!-- MANUAL ADDITIONS START -->

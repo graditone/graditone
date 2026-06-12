@@ -207,3 +207,32 @@
 .score-selector-file-btn:active {
   background: var(--dialog-surface-active);
 }
+
+/* Feature 092: Free Practice button row */
+.score-selector-free-row {
+  padding: 0 1.25rem 1rem;
+  flex-shrink: 0;
+}
+
+.score-selector-free-btn {
+  width: 100%;
+  padding: 0.6rem 1rem;
+  background: var(--accent-primary, #4a7fff);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.14s, opacity 0.14s;
+}
+
+.score-selector-free-btn:hover {
+  background: var(--accent-primary-hover, #3568e0);
+}
+
+.score-selector-free-btn:active {
+  opacity: 0.85;
+}

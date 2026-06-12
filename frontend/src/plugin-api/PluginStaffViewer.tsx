@@ -94,15 +94,107 @@ const SCROLL_THROTTLE = 200;
 // Quarter notes in 960 PPQ — matches Rust layout engine expectation.
 const WASM_QUARTER_TICKS = 960;
 
+// 4/4 measure = 4 quarter notes at 960 PPQ.
+const WASM_MEASURE_TICKS = 3840;
+
+/**
+ * Standard rest values in 960-PPQ ticks, largest first (greedy decomposition).
+ * Dotted values are included to avoid splitting a dotted-quarter into eighth+sixteenth.
+ */
+const REST_VALUES: Array<{ ticks: number; noteType: string }> = [
+  { ticks: 3840, noteType: 'whole' },
+  { ticks: 1920, noteType: 'half' },
+  { ticks: 1440, noteType: 'quarter' }, // dotted quarter (use quarter glyph; WASM adds dot)
+  { ticks: 960,  noteType: 'quarter' },
+  { ticks: 720,  noteType: 'eighth' },  // dotted eighth
+  { ticks: 480,  noteType: 'eighth' },
+  { ticks: 360,  noteType: '16th' },    // dotted 16th
+  { ticks: 240,  noteType: '16th' },
+  { ticks: 120,  noteType: '32nd' },
+];
+
+/**
+ * Decompose a gap [startTick, startTick+totalTicks) into rest events for the WASM engine.
+ * Uses greedy largest-first decomposition into standard note values.
+ */
+function decomposeGapRests(startTick: number, totalTicks: number, voice = 1) {
+  const rests: Array<{start_tick: number; duration_ticks: number; note_type: string; voice: number; is_measure_rest: boolean}> = [];
+  let tick = startTick;
+  let remaining = totalTicks;
+  for (const { ticks, noteType } of REST_VALUES) {
+    while (remaining >= ticks) {
+      rests.push({ start_tick: tick, duration_ticks: ticks, note_type: noteType, voice, is_measure_rest: false });
+      tick += ticks;
+      remaining -= ticks;
+    }
+  }
+  return rests;
+}
+
 /**
  * Convert PluginNoteEvent[] to the ConvertedScore shape expected by computeLayout.
  * Note timestamps are treated as ms-from-exercise-start; with the given BPM they
  * are converted to 960 PPQ tick positions for tick-accurate layout.
+ * Gaps between notes (and after the last note to the measure boundary) are filled
+ * with explicit rest_events so the WASM engine renders rest symbols.
  */
 function toConvertedScore(events: readonly PluginNoteEvent[], clef: string, bpm: number, timestampOffset = 0, keySignature = 0) {
   const msPerBeat = 60_000 / bpm;
   const attacks = events.filter(e => !e.type || e.type === 'attack');
   const spellingTable = buildSpellingTable(keySignature);
+
+  type WasmNote = { tick: number; duration: number; pitch: number; articulation: null; spelling: { step: string; alter: number } };
+  const notes: WasmNote[] = attacks.map((e) => {
+    const sp = spellingTable[e.midiNote % 12];
+    return {
+      tick: Math.max(0, Math.round(((e.timestamp - timestampOffset) / msPerBeat) * WASM_QUARTER_TICKS)),
+      duration: Math.max(1, Math.round(((e.durationMs ?? msPerBeat) / msPerBeat) * WASM_QUARTER_TICKS)),
+      pitch: e.midiNote,
+      articulation: null,
+      spelling: { step: sp.step, alter: sp.alter },
+    };
+  });
+
+  // Compute rest events to fill gaps between notes and to end of last measure.
+  const restEvents: ReturnType<typeof decomposeGapRests> = [];
+  if (notes.length > 0) {
+    const sorted = [...notes].sort((a, b) => a.tick - b.tick);
+
+    // Legato pass: extend each note's duration to fill to the next note's start
+    // when the gap is smaller than one quarter note.  This prevents tiny rest
+    // symbols from appearing between legato or staccato notes where the player
+    // intended no rest.  Deliberate rests (gap >= 1 quarter note) are kept.
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const noteEnd = sorted[i].tick + sorted[i].duration;
+      const nextStart = sorted[i + 1].tick;
+      if (nextStart > noteEnd && nextStart - noteEnd < WASM_QUARTER_TICKS) {
+        sorted[i] = { ...sorted[i], duration: nextStart - sorted[i].tick };
+      }
+    }
+
+    // Gap before first note (if first note doesn't start at tick 0).
+    if (sorted[0].tick > 0) {
+      restEvents.push(...decomposeGapRests(0, sorted[0].tick));
+    }
+
+    // Gaps between consecutive notes (only genuine gaps >= 1 quarter note remain).
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const gapStart = sorted[i].tick + sorted[i].duration;
+      const gapEnd = sorted[i + 1].tick;
+      if (gapEnd > gapStart) {
+        restEvents.push(...decomposeGapRests(gapStart, gapEnd - gapStart));
+      }
+    }
+
+    // Gap from last note end to next measure boundary.
+    const lastNote = sorted[sorted.length - 1];
+    const lastNoteEnd = lastNote.tick + lastNote.duration;
+    const nextMeasureEnd = Math.ceil(lastNoteEnd / WASM_MEASURE_TICKS) * WASM_MEASURE_TICKS;
+    if (nextMeasureEnd > lastNoteEnd) {
+      restEvents.push(...decomposeGapRests(lastNoteEnd, nextMeasureEnd - lastNoteEnd));
+    }
+  }
+
   return {
     instruments: [{
       id: 'practice',
@@ -112,16 +204,8 @@ function toConvertedScore(events: readonly PluginNoteEvent[], clef: string, bpm:
         time_signature: { numerator: 4, denominator: 4 },
         key_signature: { sharps: keySignature },
         voices: [{
-          notes: attacks.map((e) => {
-            const sp = spellingTable[e.midiNote % 12];
-            return {
-              tick: Math.max(0, Math.round(((e.timestamp - timestampOffset) / msPerBeat) * WASM_QUARTER_TICKS)),
-              duration: Math.max(1, Math.round(((e.durationMs ?? msPerBeat) / msPerBeat) * WASM_QUARTER_TICKS)),
-              pitch: e.midiNote,
-              articulation: null,
-              spelling: { step: sp.step, alter: sp.alter },
-            };
-          }),
+          notes,
+          rest_events: restEvents,
         }],
       }],
     }],

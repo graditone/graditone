@@ -48,7 +48,6 @@ export function usePhantomTempo({
       phantomBpmRef.current = playerBpm;
       phantomBaseTickRef.current = notes[startIdx]?.tick ?? notes[0].tick;
       phantomStartTimeRef.current = Date.now();
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous initial index before setInterval starts
       setPhantomIndex(startIdx);
 
       // Advance phantom every ~50 ms by comparing elapsed time

@@ -476,7 +476,6 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     context.metronome.toggle().catch((e) => {
       console.error('[PracticeViewPlugin] metronome deferred start failed:', e);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.metronome]);
 
   // ─── MIDI logic (extracted hook) ───────────────────────────────────────────
@@ -563,7 +562,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       }
     }
     context.scorePlayer.play();
-  }, [context.scorePlayer]);
+  }, [context.scorePlayer, loopRegionRef, playerStateRef]);
   const handlePause = useCallback(() => context.scorePlayer.pause(), [context.scorePlayer]);
   const handleStop = useCallback(() => {
     // If a replay is in progress, stop audio and reset replay state
@@ -620,7 +619,6 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         console.error('[PracticeViewPlugin] metronome.toggle failed:', e);
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.metronome]);
 
   const handleMetronomeSubdivisionChange = useCallback(
@@ -773,7 +771,6 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     // Delay slightly so the UI renders the score before practice begins
     const t = setTimeout(() => handlePracticeToggleRef.current(), 100);
     return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loopRegion, pendingTaskLoopRegion]);
 
   // Note short-tap handler (US3 / T037)
@@ -927,7 +924,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   }, [
     practiceState.mode, performanceRecord, partialPerformanceRecord,
     playerState.title, loopRegion, selectedStaffIndex,
-    tempoMultiplier, loopCount,
+    tempoMultiplier, loopCount, t,
   ]);
 
   // ─── Feature 056: Delete saved practice handler ─────────────────────────────

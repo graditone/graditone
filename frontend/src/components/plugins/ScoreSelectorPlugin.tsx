@@ -41,6 +41,7 @@ export function ScoreSelectorPlugin({
   protectedPracticeIds,
   protectedPracticeMap,
   onViewSessions,
+  onFreePractice,
 }: PluginScoreSelectorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { t } = useTranslation();
@@ -180,6 +181,19 @@ export function ScoreSelectorPlugin({
               aria-hidden="true"
               onChange={handleFileChange}
             />
+          </div>
+        )}
+
+        {/* Feature 092: Free Practice button — only rendered when host passes onFreePractice */}
+        {!isLoading && onFreePractice && (
+          <div className="score-selector-free-row">
+            <button
+              className="score-selector-free-btn"
+              type="button"
+              onClick={onFreePractice}
+            >
+              {t('score_selector.free_practice')}
+            </button>
           </div>
         )}
       </div>
