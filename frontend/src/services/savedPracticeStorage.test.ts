@@ -15,13 +15,13 @@ describe('generatePracticeName', () => {
   it('uses LH for staffIndex 1', () => {
     const date = new Date(2024, 5, 15, 14, 30, 0);
     const name = generatePracticeName('Moonlight Sonata', 1, null, date);
-    expect(name).toMatch(/^MoonlightSonata-LH-all-/);
+    expect(name).toMatch(/^Moonlight_Sonata-LH-all-/);
   });
 
   it('uses BH for staffIndex -1', () => {
     const date = new Date(2024, 5, 15, 14, 30, 0);
     const name = generatePracticeName('Moonlight Sonata', -1, null, date);
-    expect(name).toMatch(/^MoonlightSonata-BH-all-/);
+    expect(name).toMatch(/^Moonlight_Sonata-BH-all-/);
   });
 
   it('uses region when loopRegion is set', () => {
