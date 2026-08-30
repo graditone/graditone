@@ -57,7 +57,9 @@ practice-view-plugin/
 | `freeNoteCount` | Live note counter shown in toolbar |
 | `freeDisplayNotes` | PluginNoteEvents fed into StaffViewer for real-time display |
 | `freeDisplayOriginMs` | Timestamp origin for StaffViewer (session start or replay start) |
-| `freeStaffBpm` / `freeStaffBpmRef` | BPM captured from metronome at session start |
+| `freeStaffBpm` / `freeStaffBpmRef` | **Base** BPM captured from metronome at session start (Feature 093: no longer the displayed value) |
+| `freeEffectiveBpm` / `freeEffectiveBpmRef` | **Effective** BPM = `round(base × multiplier)` — single source of truth for the readout, StaffViewer, measure clock, and saved `FreeMidiRecord.bpm` (Feature 093) |
+| `freeTempoMultiplier` / `freeTempoMultiplierRef` | Tempo multiplier applied to the base (updated by the toolbar slider via `setFreeTempo`; reset to 1.0 on entry/replay) |
 | `freeMidiRecord` | Finalized FreeMidiRecord set on Stop; drives ResultsOverlay |
 | `freeMidiEventsRef` | Raw FreeMidiEvents accumulator for saving/replay |
 | `freeStartMsRef` | Wall-clock ms of first MIDI note (not Start button press) |
@@ -72,6 +74,7 @@ practice-view-plugin/
 2. **Two-track display vs. persistence** — MIDI attack immediately updates `freeDisplayNotes` (real-time). The measure clock (fires every `4*60000/BPM` ms) only writes to `freeMidiEventsRef` for saving/replaying — it never touches display notes.
 3. **Measure-by-measure quantization** — notes are quantized to a 16th-note grid per measure via `finalizeMeasureNotes()`. This prevents timing drift from accumulating across the full session.
 4. **Legato gap fill** — in `PluginStaffViewer.toConvertedScore()`, gaps < 1 quarter note between consecutive notes are filled by extending the preceding note's duration. Only deliberate rests (≥ 1 beat) produce rest symbols.
+5. **Effective tempo is the single source of truth (Feature 093)** — the toolbar slider calls `setFreeTempo(multiplier)`, which publishes `freeEffectiveBpm = round(base × multiplier)`. The readout, StaffViewer `bpm`, the measure-clock interval (unrounded effective, no drift) and the persisted `FreeMidiRecord.bpm` (rounded effective at stop) all derive from it. Base BPM is seeded at session boundaries and reset on replay so layout matches the recording.
 
 ### Handlers
 | Handler | Called from | Action |
