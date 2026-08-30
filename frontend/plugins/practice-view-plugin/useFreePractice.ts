@@ -1,9 +1,9 @@
 /**
  * useFreePractice.ts
- * Feature 092: Free Practice Option
+ * Features 092 + 094: Free Practice Option — onset-derived measure detection.
  *
  * Domain hook that owns all free (score-less) practice state, MIDI
- * subscription, measure-clock recording, and handlers:
+ * subscription, and handlers:
  *   handleFreePractice   — enter free-practice mode from selector
  *   handleFreeToggle     — start / stop the live recording session
  *   handleFreeReplay     — replay a completed free session
@@ -12,6 +12,11 @@
  *   handleFreeDismiss    — dismiss results overlay (returns to selector)
  *   loadSavedFreePractice — restore a previously saved free practice
  *   cleanupFreeTimers    — called on unmount to clear any live intervals
+ *
+ * Feature 094: The live staff, saved record and replay are ALL derived from the
+ * raw `FreeMidiEvent[]` onsets via `detectMeasures` — never from a wall-clock
+ * measure timer and never from the metronome (FR-001 / SC-007). The raw events
+ * remain the only stored data; measures are a derived view (D5).
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -19,12 +24,41 @@ import type React from 'react';
 import type { PluginContext, MetronomeState, PluginNoteEvent } from '../../src/plugin-api/index';
 import type { ScoreRef, FreeMidiEvent, FreeMidiRecord } from '../../src/plugin-api/index';
 import { ABSOLUTE_BPM_FLOOR } from '../../src/plugin-api/index';
-import { finalizeMeasureNotes } from './freePractice.helpers';
-import type { MeasureNoteEntry } from './freePractice.helpers';
+import { detectMeasures, freeModeToPluginNotes } from './freePractice.helpers';
+import type { FreeMidiEventLike } from './freePractice.helpers';
+
+/** Sync the display-origin state + ref (stable callbacks read the ref). */
+function setOrigin(
+  setter: (v: number) => void,
+  ref: React.MutableRefObject<number>,
+  value: number,
+) {
+  ref.current = value;
+  setter(value);
+}
 
 // ---------------------------------------------------------------------------
 // Effective-BPM helpers (Feature 093)
 // ---------------------------------------------------------------------------
+
+/**
+ * Nominal free-practice BPM. Free practice has no score, so the scorePlayer
+ * nominal tempo is its default (120). The metronome reports the EFFECTIVE BPM
+ * (scoreTempo × multiplier), so the free "base" MUST stay at this nominal and
+ * the metronome's tempo is realized through the multiplier — keeping the
+ * readout, slider, metronome and detection grid in agreement at every tempo.
+ */
+export const FREE_NOMINAL_BPM = 120;
+
+/**
+ * Convert a metronome-reported (effective) BPM into the free-practice
+ * multiplier given the free nominal base. e.g. metronome 30 → 0.25 (so the
+ * free effective = round(120 × 0.25) = 30, matching the audible metronome).
+ * When the metronome is inactive it reports bpm 0 → default multiplier 1.0.
+ */
+export function computeFreeBpmMultiplier(metronomeBpm: number): number {
+  return metronomeBpm > 0 ? metronomeBpm / FREE_NOMINAL_BPM : 1.0;
+}
 
 /**
  * Effective free-practice BPM = round(base × multiplier), never below the
@@ -112,8 +146,11 @@ export function useFreePractice({
   const [freeDisplayNotes, setFreeDisplayNotes] = useState<PluginNoteEvent[]>([]);
   const [freeDisplayOriginMs, setFreeDisplayOriginMs] = useState(0);
   const [freeStaffBpm, setFreeStaffBpm] = useState(120);
+  /** Ref mirror of `freeDisplayOriginMs` for stable-callbacks (handlers/effect). */
+  const freeDisplayOriginMsRef = useRef(0);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
+
   const isFreePracticeRef = useRef(false);
   isFreePracticeRef.current = isFreePractice;
 
@@ -130,26 +167,44 @@ export function useFreePractice({
   const freeTempoMultiplierRef = useRef(1.0);
   freeTempoMultiplierRef.current = freeTempoMultiplier;
 
+  /**
+   * Raw onsets (Feature 094): the ONLY recorded representation. `timestampMs`
+   * is relative to the first attack (measure-1 grid origin). All measure
+   * structure is derived from this array via `detectMeasures`.
+   */
   const freeMidiEventsRef = useRef<FreeMidiEvent[]>([]);
+  /** Absolute wall-clock ms of the first attack (used for the elapsed ticker). */
   const freeStartMsRef = useRef(0);
   const freeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const freeReplayTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Measure-clock refs
-  const freeMeasureBufferRef = useRef<MeasureNoteEntry[]>([]);
-  const freeMeasureStartMsRef = useRef(0);
-  const freeMeasureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   /**
    * True once the first MIDI note of the session has arrived.
    * All session timing is deferred until then so the user can wait
    * before playing without creating empty leading measures.
    */
   const freeSessionStartedRef = useRef(false);
+
+  // ── Detection-derived display (Feature 094) ───────────────────────────────
   /**
-   * Stable ref to startMeasureClock so the MIDI subscription (defined before
-   * the callback) can call it without a stale closure.
+   * Render the current onsets through the onset-derived detector into the
+   * plugin staff's `PluginNoteEvent[]`. Timestamps returned by the detector are
+   * relative to the first onset; we add `originMs` (an absolute wall-clock) so
+   * the existing StaffViewer (`timestampOffset = freeDisplayOriginMs`) yields
+   * correct quantized ticks.
    */
-  const startMeasureClockRef = useRef<(() => void) | null>(null);
+  const renderMeasureDisplay = (events: FreeMidiEventLike[], bpm: number, originMs: number) => {
+    const measures = detectMeasures(events, bpm);
+    const notes = freeModeToPluginNotes(measures, bpm, 0);
+    return notes.map((n) => ({ ...n, timestamp: n.timestamp + originMs }));
+  };
+
+  /** Effective BPM used for the recovered grid (Feature 093). */
+  const effectiveBpmNow = () =>
+    freeStaffBpmRef.current * freeTempoMultiplierRef.current;
+
+  /** Current display origin (absolute wall-clock at first onset). */
+  const originNow = () => freeDisplayOriginMsRef.current;
 
   // ── MIDI subscription: capture attacks and releases ───────────────────────
   useEffect(() => {
@@ -162,53 +217,41 @@ export function useFreePractice({
         if (!freeSessionStartedRef.current) {
           freeSessionStartedRef.current = true;
           freeStartMsRef.current = now;
-          freeMeasureStartMsRef.current = now;
-          setFreeDisplayOriginMs(now);
-          startMeasureClockRef.current?.();
+          setOrigin(setFreeDisplayOriginMs, freeDisplayOriginMsRef, now);
           // Start the elapsed-time ticker from the first note.
           if (freeIntervalRef.current !== null) clearInterval(freeIntervalRef.current);
           freeIntervalRef.current = setInterval(() => {
             setFreeElapsedMs(Date.now() - freeStartMsRef.current);
           }, 1000);
         }
-        freeMeasureBufferRef.current.push({ midiNote: event.midiNote, attackMs: now, durationMs: null });
+        freeMidiEventsRef.current.push({
+          midiNote: event.midiNote,
+          timestampMs: now - freeStartMsRef.current,
+          durationMs: undefined,
+        });
         setFreeNoteCount((c) => c + 1);
-        // Real-time: add to display immediately (durationMs filled on release).
-        setFreeDisplayNotes((prev) => [
-          ...prev,
-          { midiNote: event.midiNote, timestamp: now, type: 'attack' as const },
-        ]);
+        // Real-time: re-derive the staff from the recovered grid (onset-derived).
+        setFreeDisplayNotes(
+          renderMeasureDisplay(freeMidiEventsRef.current, Math.round(effectiveBpmNow()), originNow()),
+        );
         return;
       }
 
       if (event.type === 'release') {
-        // Update durationMs in measure buffer.
-        let attackedAt: number | null = null;
-        const buf = freeMeasureBufferRef.current;
-        for (let i = buf.length - 1; i >= 0; i--) {
-          if (buf[i].midiNote === event.midiNote && buf[i].durationMs === null) {
-            attackedAt = buf[i].attackMs;
-            buf[i] = { ...buf[i], durationMs: now - buf[i].attackMs };
+        // Fill the held duration of the matching open attack (latest first).
+        const events = freeMidiEventsRef.current;
+        for (let i = events.length - 1; i >= 0; i--) {
+          if (events[i].midiNote === event.midiNote && events[i].durationMs == null) {
+            const relAttack = events[i].timestampMs;
+            events[i] = { ...events[i], durationMs: now - (freeStartMsRef.current + relAttack) };
             break;
           }
         }
-        // Real-time: update durationMs on the matching display note.
-        if (attackedAt !== null) {
-          const durationMs = now - attackedAt;
-          setFreeDisplayNotes((prev) => {
-            const result = [...prev];
-            for (let i = result.length - 1; i >= 0; i--) {
-              if (result[i].midiNote === event.midiNote && result[i].durationMs == null) {
-                result[i] = { ...result[i], durationMs };
-                break;
-              }
-            }
-            return result;
-          });
-        }
+        setFreeDisplayNotes(
+          renderMeasureDisplay(freeMidiEventsRef.current, Math.round(effectiveBpmNow()), originNow()),
+        );
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.midi]);
 
   // ── Replay cleanup: clear timers when replay ends ─────────────────────────
@@ -219,49 +262,21 @@ export function useFreePractice({
     }
   }, [isReplaying]);
 
-  // ── startMeasureClock: fires every measure to quantize the buffer ─────────
-  const startMeasureClock = useCallback(() => {
-    if (freeMeasureIntervalRef.current !== null) clearInterval(freeMeasureIntervalRef.current);
-    // Feature 093: pace the quantization grid from the UNROUNDED effective BPM so
-    // accumulated drift never appears when the tempo slider has been moved.
-    const effectiveBpm = freeStaffBpmRef.current * freeTempoMultiplierRef.current;
-    const msPerMeasure = (4 * 60_000) / effectiveBpm;
-    freeMeasureIntervalRef.current = setInterval(() => {
-      const measureEnd = Date.now();
-      const measureStart = freeMeasureStartMsRef.current;
-      const buffer = freeMeasureBufferRef.current.slice();
-      freeMeasureBufferRef.current = [];
-      freeMeasureStartMsRef.current = measureEnd;
-
-      if (buffer.length === 0) return;
-
-      const quantized = finalizeMeasureNotes(buffer, measureStart, effectiveBpm, measureEnd);
-      const sessionStart = freeStartMsRef.current;
-      for (const note of quantized) {
-        freeMidiEventsRef.current.push({
-          midiNote: note.midiNote,
-          timestampMs: note.timestamp - sessionStart,
-          durationMs: note.durationMs,
-        });
-      }
-    }, msPerMeasure);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  // Keep the ref in sync so the MIDI subscription (defined earlier) can call it.
-  startMeasureClockRef.current = startMeasureClock;
-
   // ── Tempo seeding + slider transform (Feature 093) ───────────────────────
 
   /**
-   * Seed the free-practice tempo at a session boundary. `base` is the metronome
-   * BPM (or default). When `resetMultiplier` is true (full re-entry / replay)
-   * the multiplier returns to 1.0; when false (session start mid-view) the
-   * current multiplier is preserved so the slider and readout stay in agreement.
+   * Seed the free-practice tempo state from an explicit base + multiplier.
+   *
+   * To keep the readout, slider, metronome and detection grid in agreement,
+   * `base` MUST always be the free nominal (FREE_NOMINAL_BPM) and any
+   * metronome-derived tempo is expressed through `multiplier`
+   * (computeFreeBpmMultiplier). This prevents the desync bugs where the free
+   * base was seeded from the metronome's already-*effective* BPM (30) while the
+   * scorePlayer-driven metronome ran at 120 (issues #2/#3).
    */
-  const seedFreeTempo = useCallback((base: number, resetMultiplier = true) => {
+  const seedFreeTempo = useCallback((base: number, multiplier: number) => {
     freeStaffBpmRef.current = base;
     setFreeStaffBpm(base);
-    const multiplier = resetMultiplier ? 1.0 : freeTempoMultiplierRef.current;
     freeTempoMultiplierRef.current = multiplier;
     setFreeTempoMultiplier(multiplier);
     const effective = computeEffectiveBpm(base, multiplier);
@@ -287,10 +302,12 @@ export function useFreePractice({
   /** Enter free-practice mode from the score selector. */
   const handleFreePractice = useCallback(() => {
     freeMidiEventsRef.current = [];
-    const now = Date.now();
-    freeStartMsRef.current = now;
-    const activeBpm = metronomeStateRef.current.bpm > 0 ? metronomeStateRef.current.bpm : 120;
-    seedFreeTempo(activeBpm);
+    freeStartMsRef.current = Date.now();
+    // Adopt the live metronome tempo through the MULTIPLIER (base stays the
+    // free nominal 120). If the metronome is off (bpm 0) the default tempo
+    // applies (multiplier 1.0 → 120 BPM). This keeps the readout and the
+    // audible metronome in agreement on (re-)entry.
+    seedFreeTempo(FREE_NOMINAL_BPM, computeFreeBpmMultiplier(metronomeStateRef.current.bpm));
     setFreeNoteCount(0);
     setFreeMidiRecord(null);
     setResultsOverlayVisible(false);
@@ -298,9 +315,7 @@ export function useFreePractice({
     setSaveError(null);
     setFreeElapsedMs(0);
     setFreeDisplayNotes([]);
-    setFreeDisplayOriginMs(now);
-    freeMeasureBufferRef.current = [];
-    freeMeasureStartMsRef.current = now;
+    setOrigin(setFreeDisplayOriginMs, freeDisplayOriginMsRef, freeStartMsRef.current);
     loadedScoreRefRef.current = { type: 'free', id: '' };
     setIsFreePractice(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -316,55 +331,47 @@ export function useFreePractice({
         clearInterval(freeIntervalRef.current);
         freeIntervalRef.current = null;
       }
-      if (freeMeasureIntervalRef.current !== null) {
-        clearInterval(freeMeasureIntervalRef.current);
-        freeMeasureIntervalRef.current = null;
-      }
-      // Finalize any notes still in the current (partial) measure for saving.
+      // Close durations for notes still held at Stop.
       const stopTime = Date.now();
-      const partialBuffer = freeMeasureBufferRef.current.slice();
-      freeMeasureBufferRef.current = [];
-      if (partialBuffer.length > 0) {
-        // Feature 093: quantize against the unrounded EFFECTIVE BPM.
-        const effectiveBpm = freeStaffBpmRef.current * freeTempoMultiplierRef.current;
-        const quantized = finalizeMeasureNotes(partialBuffer, freeMeasureStartMsRef.current, effectiveBpm, stopTime);
-        const sessionStart = freeStartMsRef.current;
-        for (const note of quantized) {
-          freeMidiEventsRef.current.push({
-            midiNote: note.midiNote,
-            timestampMs: note.timestamp - sessionStart,
-            durationMs: note.durationMs,
-          });
-        }
-      }
+      const events = [...freeMidiEventsRef.current].map((ev) =>
+        ev.durationMs == null
+          ? { ...ev, durationMs: stopTime - (freeStartMsRef.current + ev.timestampMs) }
+          : ev,
+      );
+      freeMidiEventsRef.current = events;
       const elapsedMs = freeSessionStartedRef.current
         ? (stopTime - freeStartMsRef.current)
         : 0;
-      const events = [...freeMidiEventsRef.current];
       const record: FreeMidiRecord = {
         events,
         elapsedMs,
         noteCount: events.length,
         // Feature 093: persist the EFFECTIVE tempo (base × multiplier at stop),
         // not the stale session-boundary base.
-        bpm: freeEffectiveBpmRef.current,
+        bpm: Math.max(ABSOLUTE_BPM_FLOOR, Math.round(effectiveBpmNow())),
       };
       setFreeMidiRecord(record);
+      // Feature 094: staff reflects the onset-derived measures at Stop.
+      setFreeDisplayNotes(
+        renderMeasureDisplay(events, record.bpm, originNow()),
+      );
       setResultsOverlayVisible(true);
     } else {
       // ── Start free session ────────────────────────────────────────────
       // Timing is initialized on the first MIDI note (deferred start).
       freeMidiEventsRef.current = [];
-      const activeBpm = metronomeStateRef.current.bpm > 0 ? metronomeStateRef.current.bpm : 120;
-      // Feature 093: preserve the current multiplier so a slider change made
-      // before pressing Practice is not lost at session start.
-      seedFreeTempo(activeBpm, false);
+      // The metronome reports the EFFECTIVE BPM (120 × its multiplier). Adopt
+      // it through the multiplier with the base fixed at the free nominal so
+      // the readout, click and detection grid stay in agreement. When it is off
+      // (bpm 0) keep the current base × multiplier.
+      if (metronomeStateRef.current.bpm > 0) {
+        seedFreeTempo(FREE_NOMINAL_BPM, computeFreeBpmMultiplier(metronomeStateRef.current.bpm));
+      }
       setFreeNoteCount(0);
       setFreeElapsedMs(0);
       setFreeMidiRecord(null);
       setResultsOverlayVisible(false);
       setFreeDisplayNotes([]);
-      freeMeasureBufferRef.current = [];
       freeSessionStartedRef.current = false;
       freeSessionActiveRef.current = true;
       setFreeSessionActive(true);
@@ -381,19 +388,20 @@ export function useFreePractice({
     const firstTs = freeMidiRecord.events.length > 0 ? freeMidiRecord.events[0].timestampMs : 0;
     const replayStart = Date.now();
     // Restore the BPM from the original recording so replay layout matches.
-    seedFreeTempo(freeMidiRecord.bpm);
-    setFreeDisplayOriginMs(replayStart);
-    setFreeDisplayNotes([]);
+    // Keep the free nominal base: the recorded (effective) BPM is realized via
+    // the multiplier so the effective tempo stays exactly the record's tempo.
+    seedFreeTempo(FREE_NOMINAL_BPM, computeFreeBpmMultiplier(freeMidiRecord.bpm));
+    setOrigin(setFreeDisplayOriginMs, freeDisplayOriginMsRef, replayStart);
+    // Feature 094: staff shows the SAME onset-derived measures as live/saved.
+    setFreeDisplayNotes(
+      renderMeasureDisplay(freeMidiRecord.events, freeMidiRecord.bpm, replayStart),
+    );
     setResultsOverlayVisible(false);
     setIsReplaying(true);
     for (const event of freeMidiRecord.events) {
       const delay = event.timestampMs - firstTs;
       const timer = setTimeout(() => {
         context.playNote({ midiNote: event.midiNote, timestamp: Date.now(), type: 'attack', durationMs: event.durationMs ?? 200 });
-        setFreeDisplayNotes((prev) => [
-          ...prev,
-          { midiNote: event.midiNote, timestamp: replayStart + delay, type: 'attack' as const, durationMs: event.durationMs },
-        ]);
       }, delay);
       freeReplayTimersRef.current.push(timer);
     }
@@ -411,8 +419,10 @@ export function useFreePractice({
   /** Start a fresh free session after viewing results (Repractice). */
   const handleFreeRepractice = useCallback(() => {
     freeMidiEventsRef.current = [];
-    const activeBpm = metronomeStateRef.current.bpm > 0 ? metronomeStateRef.current.bpm : 120;
-    seedFreeTempo(activeBpm);
+    // Issue #3: do NOT re-seed tempo from the metronome and do NOT reset the
+    // multiplier here. Repractice continues at the tempo the user just
+    // practiced at (base × multiplier). Re-deriving from the metronome's
+    // effective/stale bpm previously desynced the readout from the metronome.
     setFreeNoteCount(0);
     setFreeElapsedMs(0);
     setFreeMidiRecord(null);
@@ -420,7 +430,6 @@ export function useFreePractice({
     setIsSaved(false);
     setSaveError(null);
     setFreeDisplayNotes([]);
-    freeMeasureBufferRef.current = [];
     freeSessionStartedRef.current = false;
     freeSessionActiveRef.current = true;
     setFreeSessionActive(true);
@@ -438,10 +447,6 @@ export function useFreePractice({
       clearInterval(freeIntervalRef.current);
       freeIntervalRef.current = null;
     }
-    if (freeMeasureIntervalRef.current !== null) {
-      clearInterval(freeMeasureIntervalRef.current);
-      freeMeasureIntervalRef.current = null;
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -451,21 +456,17 @@ export function useFreePractice({
       clearInterval(freeIntervalRef.current);
       freeIntervalRef.current = null;
     }
-    if (freeMeasureIntervalRef.current !== null) {
-      clearInterval(freeMeasureIntervalRef.current);
-      freeMeasureIntervalRef.current = null;
-    }
     freeSessionActiveRef.current = false;
     setFreeSessionActive(false);
     setIsFreePractice(false);
     setFreeMidiRecord(null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
    * Restore a previously saved free practice into hook state.
    * Called by the orchestrator's onFreePracticeLoad callback when the user
    * selects a saved free practice from the selector or navigation data.
+   * Feature 094: staff renders onset-derived measures from the saved events.
    */
   const loadSavedFreePractice = useCallback((record: FreeMidiRecord | null, noteCount: number) => {
     freeMidiEventsRef.current = [];
@@ -474,7 +475,16 @@ export function useFreePractice({
     setFreeNoteCount(noteCount);
     setFreeMidiRecord(record);
     setFreeElapsedMs(0);
-    setFreeDisplayNotes([]);
+    setOrigin(setFreeDisplayOriginMs, freeDisplayOriginMsRef, 0);
+    if (record) {
+      // Keep the free nominal base; the record's (effective) BPM is realized
+      // via the multiplier so the readout and staff render at the saved tempo.
+      seedFreeTempo(FREE_NOMINAL_BPM, computeFreeBpmMultiplier(record.bpm));
+      const sorted = [...record.events].sort((a, b) => a.timestampMs - b.timestampMs);
+      setFreeDisplayNotes(renderMeasureDisplay(sorted, record.bpm, 0));
+    } else {
+      setFreeDisplayNotes([]);
+    }
     loadedScoreRefRef.current = { type: 'free', id: '' };
     setIsFreePractice(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -483,7 +493,6 @@ export function useFreePractice({
   /** Clear live intervals — call on component unmount. */
   const cleanupFreeTimers = useCallback(() => {
     if (freeIntervalRef.current !== null) clearInterval(freeIntervalRef.current);
-    if (freeMeasureIntervalRef.current !== null) clearInterval(freeMeasureIntervalRef.current);
   }, []);
 
   return {

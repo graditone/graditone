@@ -33,6 +33,7 @@ import type {
   ScorePlayerState,
   PluginPlaybackStatus,
   PluginScoreRendererProps,
+  MetronomeState,
 } from '../../src/plugin-api/index';
 
 
@@ -72,6 +73,7 @@ interface MockContext {
   mockMidiSubscribe: ReturnType<typeof vi.fn>;
   simulateStateChange: (partial: Partial<ScorePlayerState>) => void;
   simulateMidiEvent: (event: { type: 'attack' | 'release'; midiNote: number }) => void;
+  simulateMetronomeState: (state: MetronomeState) => void;
   midiUnsubscribe: ReturnType<typeof vi.fn>;
 }
 
@@ -92,6 +94,11 @@ function createMockContext(
 
   const simulateMidiEvent = (event: { type: 'attack' | 'release'; midiNote: number }) => {
     midiSubscribers.forEach((h) => h(event));
+  };
+
+  const metronomeSubscribers = new Set<(state: MetronomeState) => void>();
+  const simulateMetronomeState = (state: MetronomeState) => {
+    metronomeSubscribers.forEach((h) => h(state));
   };
 
   const mockClose = vi.fn();
@@ -166,7 +173,9 @@ function createMockContext(
     },
     metronome: {
       toggle: vi.fn().mockResolvedValue(undefined),
+      setSubdivision: vi.fn().mockResolvedValue(undefined),
       subscribe: vi.fn((handler) => {
+        metronomeSubscribers.add(handler);
         handler({
           active: false,
           beatIndex: -1,
@@ -175,7 +184,7 @@ function createMockContext(
           subdivision: 1,
           subBeatIndex: 0,
         });
-        return () => {};
+        return () => metronomeSubscribers.delete(handler);
       }),
     },
     openPlugin: vi.fn(),
@@ -201,6 +210,7 @@ function createMockContext(
     mockMidiSubscribe: (context.midi.subscribe as ReturnType<typeof vi.fn>),
     simulateStateChange,
     simulateMidiEvent,
+    simulateMetronomeState,
     midiUnsubscribe,
   };
 }
@@ -1969,5 +1979,57 @@ describe('PracticeViewPlugin — free practice tempo readout (Feature 093)', () 
     // Back down to 1.0 → 120.
     fireEvent.change(slider, { target: { value: '1.0' } });
     expect(readoutBpm()).toBe('120');
+  });
+
+  it('T-NEW-5 (regression): free Repractice keeps the session tempo — readout stays 30 and scorePlayer multiplier is not reset to 1.0', () => {
+    const ctx = createMockContext();
+    const { context } = ctx;
+    render(<PracticeViewPlugin context={context} />, { wrapper: TestWrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /free practice/i }));
+    expect(readoutBpm()).toBe('120');
+
+    // Set tempo to 30 (multiplier 0.25 of nominal 120).
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
+    fireEvent.change(slider, { target: { value: '0.25' } });
+    expect(readoutBpm()).toBe('30');
+
+    // Start then stop a free session to reach the results overlay.
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /start practice mode/i })); });
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /stop practice mode/i })); });
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
+
+    // Clear the tempo mock so we can assert Repractice makes NO scorePlayer call.
+    (context.scorePlayer.setTempoMultiplier as ReturnType<typeof vi.fn>).mockClear();
+
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /repractice/i })); });
+    expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
+
+    // The readout must keep 30 (the tempo the user was practicing at).
+    expect(readoutBpm()).toBe('30');
+    // The scorePlayer (metronome) tempo must NOT be reset to 1.0 — that would
+    // jump the metronome to 120 while the label still read 30.
+    expect(context.scorePlayer.setTempoMultiplier).not.toHaveBeenCalled();
+  });
+
+  it('T-NEW-7 (regression): entering free practice with a live metronome at 30 syncs the scorePlayer multiplier (0.25) so the metronome stays at 30', () => {
+    const ctx = createMockContext();
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    // Simulate the metronome running at 30 BPM (effective — it follows
+    // scorePlayer 120 × 0.25).
+    act(() => {
+      ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 30, subdivision: 1, subBeatIndex: 0 });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /free practice/i }));
+
+    // The free readout adopts the live metronome tempo.
+    expect(readoutBpm()).toBe('30');
+    // The scorePlayer multiplier must be synced to 0.25 (30/120) — previously
+    // this was hard-coded to 1.0, which made the metronome play at 120 while
+    // the free label read 30 (exit/re-enter desync).
+    const calls = (ctx.context.scorePlayer.setTempoMultiplier as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[calls.length - 1][0]).toBeCloseTo(0.25, 2);
   });
 });

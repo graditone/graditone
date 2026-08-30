@@ -44,7 +44,7 @@ import { useAccompaniment } from './useAccompaniment';
 import { useMidiConnectivity } from './useMidiConnectivity';
 import { measureRangeToTicks } from './measureRangeToTicks';
 import { ResultsOverlay } from './ResultsOverlay';
-import { useFreePractice } from './useFreePractice';
+import { useFreePractice, computeFreeBpmMultiplier } from './useFreePractice';
 import { useSavedPracticeManager } from './useSavedPracticeManager';
 import './PracticeViewPlugin.css';
 import { useTranslation } from '../../src/i18n';
@@ -724,11 +724,12 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // ─── Repractice handler ─────────────────────────────────────────────────────
   const handleRepractice = useCallback(() => {
-    // Feature 092: Free practice repractice — delegate to the domain hook
+    // Feature 092: Free practice repractice — delegate to the domain hook.
+    // Issue #3: we must NOT reset the tempo multiplier here — free repractice
+    // continues at the tempo the user was just practicing at. Resetting the
+    // scorePlayer multiplier to 1.0 jumped the metronome to 120 (scoreTempo
+    // 120 × 1.0) while the free readout still said 30.
     if (freePractice.isFreePracticeRef.current) {
-      // Feature 093: reset the multiplier so slider + readout stay in agreement.
-      setTempoMultiplier(1.0);
-      context.scorePlayer.setTempoMultiplier(1.0);
       freePractice.handleFreeRepractice();
       return;
     }
@@ -788,10 +789,16 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
             expandTaskId: taskId,
           })}
           onFreePractice={() => {
-            // Feature 093: entering free practice resets the multiplier so the
-            // slider position and the effective-BPM readout start in agreement.
-            setTempoMultiplier(1.0);
-            context.scorePlayer.setTempoMultiplier(1.0);
+            // The free practice tempo adopts the LIVE metronome tempo. The
+            // metronome is driven by scorePlayer's effective BPM (120 ×
+            // multiplier), so sync the slider + scorePlayer multiplier to the
+            // same value the free hook derives — keeping readout, slider and
+            // audible metronome in agreement on entry and re-entry. Previously
+            // this force-reset the multiplier to 1.0 (metronome → 120) while
+            // the free label kept 30 — the exit/re-enter desync.
+            const mult = computeFreeBpmMultiplier(metronomeStateRef.current.bpm);
+            setTempoMultiplier(mult);
+            context.scorePlayer.setTempoMultiplier(mult);
             freePractice.handleFreePractice();
           }}
         />
