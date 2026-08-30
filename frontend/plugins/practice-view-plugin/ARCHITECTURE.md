@@ -1,6 +1,6 @@
 # Practice View Plugin — Architecture
 
-> Last updated: 2026-06-12 | Branch: `092-free-practice-option`
+> Last updated: 2026-08-30 | Branch: `free-mode-fixes` | Features: 092, 094
 
 ## Overview
 
@@ -20,8 +20,8 @@ practice-view-plugin/
 ├── PracticeViewPlugin.tsx          Thin orchestrator — wires hooks, owns shared state, renders UI
 ├── PracticeViewPlugin.css          Styles
 │
-├── freePractice.helpers.ts         Pure types + finalizeMeasureNotes() — no React
-├── useFreePractice.ts              Feature 092: free practice domain (see below)
+├── freePractice.helpers.ts         Pure onset-derived measure detection (no React)
+├── useFreePractice.ts              Feature 092/094: free practice domain (see below)
 ├── useSavedPracticeManager.ts      Features 056/060/061: saved practice domain (see below)
 │
 ├── practiceEngine.ts               Pure reducer: IDLE → WAITING → ACTIVE → COMPLETE
@@ -61,32 +61,36 @@ practice-view-plugin/
 | `freeEffectiveBpm` / `freeEffectiveBpmRef` | **Effective** BPM = `round(base × multiplier)` — single source of truth for the readout, StaffViewer, measure clock, and saved `FreeMidiRecord.bpm` (Feature 093) |
 | `freeTempoMultiplier` / `freeTempoMultiplierRef` | Tempo multiplier applied to the base (updated by the toolbar slider via `setFreeTempo`; reset to 1.0 on entry/replay) |
 | `freeMidiRecord` | Finalized FreeMidiRecord set on Stop; drives ResultsOverlay |
-| `freeMidiEventsRef` | Raw FreeMidiEvents accumulator for saving/replay |
+| `freeMidiEventsRef` | Raw FreeMidiEvents accumulator (Feature 094: the ONLY recorded representation; measures are derived from it) |
 | `freeStartMsRef` | Wall-clock ms of first MIDI note (not Start button press) |
 | `freeElapsedMs` | Elapsed seconds shown in toolbar |
-| `freeMeasureBufferRef` | Notes in the currently-recording measure |
-| `freeMeasureStartMsRef` | Wall-clock ms of current measure start |
-| `freeMeasureIntervalRef` | setInterval ID for measure-boundary quantization clock |
 | `freeReplayTimersRef` | setTimeout IDs for replay playback |
 
 ### Key design decisions
-1. **Timing deferred to first note** — pressing Start/▶ only arms the session (`freeSessionActiveRef = true`). All timing (session origin, measure clock, elapsed timer, display origin) initializes on the **first MIDI attack**. This prevents empty leading measures when the user waits before playing.
-2. **Two-track display vs. persistence** — MIDI attack immediately updates `freeDisplayNotes` (real-time). The measure clock (fires every `4*60000/BPM` ms) only writes to `freeMidiEventsRef` for saving/replaying — it never touches display notes.
-3. **Measure-by-measure quantization** — notes are quantized to a 16th-note grid per measure via `finalizeMeasureNotes()`. This prevents timing drift from accumulating across the full session.
-4. **Legato gap fill** — in `PluginStaffViewer.toConvertedScore()`, gaps < 1 quarter note between consecutive notes are filled by extending the preceding note's duration. Only deliberate rests (≥ 1 beat) produce rest symbols.
-5. **Effective tempo is the single source of truth (Feature 093)** — the toolbar slider calls `setFreeTempo(multiplier)`, which publishes `freeEffectiveBpm = round(base × multiplier)`. The readout, StaffViewer `bpm`, the measure-clock interval (unrounded effective, no drift) and the persisted `FreeMidiRecord.bpm` (rounded effective at stop) all derive from it. Base BPM is seeded at session boundaries and reset on replay so layout matches the recording.
+1. **Timing deferred to first note** — pressing Start/▶ only arms the session (`freeSessionActiveRef = true`). All session timing (origin, elapsed timer, display origin) initializes on the **first MIDI attack**. This prevents empty leading measures when the user waits before playing.
+2. **Onset-derived measure detection (Feature 094)** — the beat grid and measure boundaries are ALWAYS reconstructed from the recorded note onsets via `detectMeasures()` in `freePractice.helpers.ts`. The metronome and wall-clock timers are NEVER timing sources (metronome-agnostic). The live staff, the saved record, and replay all consume the SAME derived view (`freeModeToPluginNotes`), guaranteeing identical structure (SC-005).
+3. **No wall-clock measure clock** — the pre-094 per-measure `setInterval` quantization clock was removed. Measure segmentation is computed on demand:
+   - On each MIDI attack/release → re-derive `freeDisplayNotes` for the live staff (cheap O(n)).
+   - On Stop → derive the final staff + persist raw events + effective BPM.
+   - On Replay / saved-load → derive the same measures from the stored events + BPM.
+4. **Note values from held-duration + next-onset** — a note's musical value (quarter/eighth/16th) is inferred from `min(own held duration, time to next onset)` so deliberate silences become rests, not extra note length. Fragments under recording are never emitted (no spurious 1/16).
+5. **Rests only for genuine silence (≥ 1 beat)** — gaps of a full beat or more are decomposed into ordinary rest values; sub-beat legato gaps produce no rests.
+6. **Effective tempo is the single source of truth (Feature 093)** — the base is ALWAYS the free nominal `FREE_NOMINAL_BPM = 120` (the scorePlayer default with no score); every tempo change is expressed through the multiplier (`freeEffectiveBpm = round(120 × multiplier)`). The readout, StaffViewer `bpm`, the onset-grid beat length, and the persisted `FreeMidiRecord.bpm` (effective at stop) all derive from it.
+   - **Metronome BPM is effective (Issue #2/#4 unified model)** — the metronome reports `scoreTempo × multiplier`, an *effective* tempo. `computeFreeBpmMultiplier(metBpm)` converts it to a multiplier (`metBpm / 120`, or 1.0 when inactive) so the effective tempo always equals the audible metronome. `handleFreePractice`, the ▶-start re-seed, `handleFreeReplay`, and saved-load all seed with `seedFreeTempo(FREE_NOMINAL_BPM, multiplier)`.
+   - **Entry syncs slider + scorePlayer (Issue #4)** — `onFreePractice` sets `setTempoMultiplier` AND `scorePlayer.setTempoMultiplier` to the SAME derived multiplier (not hard-coded 1.0), keeping readout, slider, and metronome in agreement on entry and re-entry. This replaces the earlier force-reset that desynced the label (30) from the metronome (120).
+   - **Repractice keeps the session tempo (Issue #3)** — `handleRepractice` (orchestrator) and `handleFreeRepractice` (hook) do not reset the tempo multiplier or re-derive from the metronome. Repractice continues at `base × multiplier`, and the scorePlayer-driven metronome is left untouched.
 
 ### Handlers
 | Handler | Called from | Action |
 |---|---|---|
 | `handleFreePractice` | ScoreSelector "Free Practice" button | Enter free-practice mode, set up state |
 | `handleFreeToggle` | PracticeToggle button (▶/■) | Start or stop a recording session |
-| `handleFreeReplay` | ResultsOverlay Replay button | Schedule setTimeout playback of saved events |
-| `handleFreeRepractice` | ResultsOverlay Repractice button | Reset state, re-arm session for new recording |
+| `handleFreeReplay` | ResultsOverlay Replay button | Schedule setTimeout playback of saved events (staff re-derived from saved events) |
+| `handleFreeRepractice` | ResultsOverlay Repractice button | Reset state, re-arm session for new recording (**keeps the finished session's tempo** — never resets the multiplier; Issue #3) |
 | `handleFreeBack` | Toolbar back button | Exit free-practice mode, return to selector |
 | `handleFreeDismiss` | ResultsOverlay × button | Clear timers, return to selector |
 | `loadSavedFreePractice` | useSavedPracticeManager (via onFreePracticeLoad) | Restore a saved free practice from IndexedDB |
-| `cleanupFreeTimers` | PracticeViewPlugin unmount | Clear `freeIntervalRef` and `freeMeasureIntervalRef` |
+| `cleanupFreeTimers` | PracticeViewPlugin unmount | Clear `freeIntervalRef` |
 
 ---
 

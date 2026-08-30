@@ -1,17 +1,24 @@
+# ⚠️ TEMPORARILY DISABLED — Android app releases paused (no release planned in the
+# coming weeks). Automatic triggers (push.tags + workflow_run from deploy-pwa) have
+# been removed to stop wasting CI resources.
+#
+# To re-enable: restore the `on:` triggers below (push.tags v* and/or workflow_run
+# from "Deploy PWA to GitHub Pages") and push to main. Manual builds remain
+# available at any time via "Run workflow" (workflow_dispatch) below.
 name: Build Android AAB
 
 on:
-  push:
-    tags:
-      - 'v*'
-  # Also trigger when deploy-pwa.yml completes (it creates v* tags via GITHUB_TOKEN,
-  # which does not re-trigger push.tags events due to GitHub's loop-prevention policy).
-  workflow_run:
-    workflows: ["Deploy PWA to GitHub Pages"]
-    types:
-      - completed
-    branches:
-      - main
+  # Android builds are paused — automatic triggers removed.
+  # Re-enable by adding back:
+  #   push:
+  #     tags:
+  #       - 'v*'
+  #   workflow_run:
+  #     workflows: ["Deploy PWA to GitHub Pages"]
+  #     types:
+  #       - completed
+  #     branches:
+  #       - main
   workflow_dispatch:
     inputs:
       version_override:
