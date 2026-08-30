@@ -396,6 +396,35 @@ describe('PracticeToolbar — tempo slider dynamic minimum (Feature 083 FR-014)'
 });
 
 // ---------------------------------------------------------------------------
+// Feature 093 — Tempo readout is orchestrator-driven (guard test)
+// ---------------------------------------------------------------------------
+
+describe('PracticeToolbar — tempo readout (Feature 093)', () => {
+  function readoutBpm(): string | null {
+    const el = document.querySelector('.practice-plugin__toolbar-bpm');
+    return el ? el.textContent : null;
+  }
+
+  it('T004: renders the bpm prop verbatim as the numeric readout', () => {
+    render(
+      <PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 137 })} />,
+      { wrapper: TestWrapper },
+    );
+    expect(readoutBpm()).toBe('137');
+  });
+
+  it('T004b: free practice readout also mirrors the bpm prop (no hardcoded value)', () => {
+    render(
+      <PracticeToolbar
+        {...makeDefaultProps({ status: 'ready', bpm: 77, isFreePractice: true })}
+      />,
+      { wrapper: TestWrapper },
+    );
+    expect(readoutBpm()).toBe('77');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Feature 083 — Metronome armed state: deferred start (T013)
 // ---------------------------------------------------------------------------
 

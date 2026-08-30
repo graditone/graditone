@@ -527,7 +527,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     (m: number) => {
       setTempoMultiplier(m);
       context.scorePlayer.setTempoMultiplier(m);
+      // Feature 093: in free practice the readout is driven by the domain hook —
+      // feed the multiplier through so the effective BPM (and saved record) follow.
+      if (freePractice.isFreePracticeRef.current) {
+        freePractice.setFreeTempo(m);
+      }
     },
+    // freePractice is a stable hook-backed API; isFreePracticeRef is read at call time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [context.scorePlayer],
   );
 
@@ -719,6 +726,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const handleRepractice = useCallback(() => {
     // Feature 092: Free practice repractice — delegate to the domain hook
     if (freePractice.isFreePracticeRef.current) {
+      // Feature 093: reset the multiplier so slider + readout stay in agreement.
+      setTempoMultiplier(1.0);
+      context.scorePlayer.setTempoMultiplier(1.0);
       freePractice.handleFreeRepractice();
       return;
     }
@@ -777,7 +787,13 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
             expandSessionId: sessionId,
             expandTaskId: taskId,
           })}
-          onFreePractice={freePractice.handleFreePractice}
+          onFreePractice={() => {
+            // Feature 093: entering free practice resets the multiplier so the
+            // slider position and the effective-BPM readout start in agreement.
+            setTempoMultiplier(1.0);
+            context.scorePlayer.setTempoMultiplier(1.0);
+            freePractice.handleFreePractice();
+          }}
         />
       </div>
     );
@@ -789,9 +805,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       <PracticeToolbar
         scoreTitle={freePractice.isFreePractice ? t('practice.free.title') : playerState.title}
         status={freePractice.isFreePractice ? 'ready' as const : playerState.status}
-        currentTick={freePractice.isFreePractice ? Math.round((freePractice.freeElapsedMs / 1000) * (freePractice.freeStaffBpm / 60) * 960) : playerState.currentTick}
+        currentTick={freePractice.isFreePractice ? Math.round((freePractice.freeElapsedMs / 1000) * (freePractice.freeEffectiveBpm / 60) * 960) : playerState.currentTick}
         totalDurationTicks={freePractice.isFreePractice ? 0 : playerState.totalDurationTicks}
-        bpm={freePractice.isFreePractice ? freePractice.freeStaffBpm : playerState.bpm}
+        bpm={freePractice.isFreePractice ? freePractice.freeEffectiveBpm : playerState.bpm}
         tempoMultiplier={tempoMultiplier}
         onBack={() => {
           // Feature 092: Exit free practice on back
@@ -912,7 +928,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         <div className="practice-plugin__score-area practice-plugin__free-canvas" aria-label={t('practice.free.title')}>
           <context.components.StaffViewer
             notes={freePractice.freeDisplayNotes}
-            bpm={freePractice.freeStaffBpm}
+            bpm={freePractice.freeEffectiveBpm}
             timestampOffset={freePractice.freeDisplayOriginMs}
             autoScroll
           />

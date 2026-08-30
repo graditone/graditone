@@ -125,6 +125,7 @@ function createMockContext(
         )),
       ScoreSelector: ({
         onSelectScore,
+        onFreePractice,
         catalogue,
       }: Parameters<typeof context.components.ScoreSelector>[0]) => (
         <div data-testid="score-selector">
@@ -133,6 +134,9 @@ function createMockContext(
               {e.displayName}
             </button>
           ))}
+          {onFreePractice && (
+            <button onClick={() => onFreePractice()}>🎹 Free Practice</button>
+          )}
         </div>
       ),
     },
@@ -1921,5 +1925,49 @@ describe('PracticeViewPlugin — Hand mode via staff dropdown (Feature 084)', ()
     fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
     fireEvent.click(screen.getByRole('option', { name: /left hand/i }));
     expect(ctx.context.scorePlayer.setPlaybackStaffFilter).toHaveBeenCalledWith(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 093 — Free practice: tempo slider must update the numeric readout
+// ---------------------------------------------------------------------------
+
+describe('PracticeViewPlugin — free practice tempo readout (Feature 093)', () => {
+  function readoutBpm(): string | null {
+    const el = document.querySelector('.practice-plugin__toolbar-bpm');
+    return el ? el.textContent : null;
+  }
+
+  it('T003 (regression): dragging the tempo slider updates the displayed BPM in free practice', () => {
+    const ctx = createMockContext();
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    // Enter free practice. Metronome BPM in the mock is 0 → base defaults to 120.
+    fireEvent.click(screen.getByRole('button', { name: /free practice/i }));
+    expect(screen.queryByTestId('score-selector')).toBeNull();
+    expect(readoutBpm()).toBe('120');
+
+    // Drag the tempo slider to 1.25 (base 120 → expected readout round(120×1.25)=150).
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
+    fireEvent.change(slider, { target: { value: '1.25' } });
+
+    // BUG (Feature 093): the readout stayed frozen at 120 — it must now read 150.
+    expect(readoutBpm()).toBe('150');
+  });
+
+  it('T003b (regression): the readout tracks further slider movement after a first change', () => {
+    const ctx = createMockContext();
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /free practice/i }));
+    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
+
+    // 120 × 2.0 = 240 (max multiplier).
+    fireEvent.change(slider, { target: { value: '2.0' } });
+    expect(readoutBpm()).toBe('240');
+
+    // Back down to 1.0 → 120.
+    fireEvent.change(slider, { target: { value: '1.0' } });
+    expect(readoutBpm()).toBe('120');
   });
 });
