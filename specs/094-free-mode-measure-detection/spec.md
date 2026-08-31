@@ -110,7 +110,7 @@ Real performances are not metronomic: attacks land slightly early or late, notes
 - **SC-003**: Zero spurious rests: no rest (including fractional rests such as a 1/16 rest) is produced for continuous legato input where every gap is shorter than a full beat; rests appear only for genuine silence of a full beat or more.
 - **SC-004**: Detection correctness is maintained across the full supported tempo range (20–300 BPM); measure completion and note-value detection are invariant to tempo choice, with zero regressions at 60–180 BPM.
 - **SC-005**: The staff display, saved practice, and replay for the same performance always agree — same measure count, measure boundaries, note values, and rests — in 100% of tests.
-- **SC-006**: The eight-quarter-note scenario still produces two complete measures of four quarter notes under realistic human timing (attacks up to roughly ±25% of a beat off-grid and holds slightly short or long) in 100% of runs, quantifying the tolerance the system must absorb.
+- **SC-006**: The eight-quarter-note scenario still produces two complete measures of four quarter notes under realistic human timing (attacks up to roughly ±6% of a beat off-grid, normal holds) in 100% of runs. *Note (Issue #7): ±25%-of-beat drift is intentionally no longer claimed — at that spread the quarter-note gaps (0.6–1.4 beats) are indistinguishable from an eighth-note run (0.5 beat), so no positional detector can classify the values reliably.*
 - **SC-007**: Detection is metronome-agnostic: the same performance recorded with the metronome on and with it off yields identical measure structure, note values, and rests in 100% of runs — the metronome is never a source of timing.
 - **SC-008**: The detector reliably resolves note values down to 1/16 (sixteenth) without artifact: a run of sixteenth notes is detected as sixteenths, and no detected value is finer than 1/16 in 100% of tests.
 
@@ -221,4 +221,105 @@ Real performances are not metronomic: attacks land slightly early or late, notes
 - `frontend/plugins/practice-view-plugin/useFreePractice.test.ts` — `T-NEW-6`: re-entering free practice with a live metronome at 30 keeps the nominal base `freeStaffBpm === 120` (pre-fix captured base 30), effective 30, and `setFreeTempo(1.5)` → 180 (nominal scaling).
 - `frontend/plugins/practice-view-plugin/PracticeViewPlugin.test.tsx` — `T-NEW-7`: entering free practice while the metronome reports 30 calls `scorePlayer.setTempoMultiplier(0.25)` (pre-fix hard-coded 1.0 → metronome 120), with the readout at 30.
 
-**Lessons Learned**: When a subsystem (the metronome) exposes an *effective* tempo that embeds a multiplier, treating that value as a *nominal* base and re-applying the multiplier (or resetting the multiplier independently) breaks every derived output. The robust rule: keep ONE nominal base (the scorePlayer default), represent tempo changes only through the multiplier, and update the readout, slider, and metronome from the same multiplier on every transition.**
+**Lessons Learned**: When a subsystem (the metronome) exposes an *effective* tempo that embeds a multiplier, treating that value as a *nominal* base and re-applying the multiplier (or resetting the multiplier independently) breaks every derived output. The robust rule: keep ONE nominal base (the scorePlayer default), represent tempo changes only through the multiplier, and update the readout, slider, and metronome from the same multiplier on every transition.
+
+---
+
+### Issue #5: Free Mode Metronome Does Not Start on First Note and Does Not Stop with the Practice
+
+**Discovered**: 2026-08-30 during manual testing of free practice.
+
+**Symptom**:
+- In Free Mode, toggling the metronome on started it **immediately** (standalone), even before any note was played — unlike Score (Partiture) Practice Mode, where the metronome is deferred and starts only when the **first note is played**.
+- Once running, the metronome kept ticking when the free practice was **stopped** (and when exiting free mode), so it never stopped with the practice.
+
+**Root Cause**: The metronome lifecycle logic was score-practice-only:
+- `handleMetronomeToggle` decided "practice running?" from the score `practiceState.mode`. In free mode `practiceState` is never `waiting/active/holding`, so the toggle fell through to the immediate-start branch.
+- The deferred-start handler `onFirstNoteAttack` was wired only into `usePracticeMidi` (score practice), never into the free-practice MIDI path.
+- Nothing stopped the metronome when a free session stopped or the free view was exited.
+
+**Affected Components**:
+- Free-practice metronome lifecycle (`handleMetronomeToggle`, `stopFreeMetronome`, `onFirstNoteAttack` wiring in `PracticeViewPlugin.tsx`; `onFreeNoteAttackRef` in `useFreePractice.ts`).
+
+**Regression Test**:
+- `frontend/plugins/practice-view-plugin/PracticeViewPlugin.test.tsx` — `T-NEW-8`: in free mode, toggling the metronome arms it (no `toggle` call), the first MIDI onset starts it (1 call), and stopping the session stops it (2 calls) and clears the armed state.
+- `frontend/plugins/practice-view-plugin/PracticeViewPlugin.test.tsx` — `T-NEW-9`: exiting free practice via Back stops a running metronome (1 call).
+
+**Resolution** (Feature 083 parity):
+- `handleMetronomeToggle` is now free-aware: in free mode it **arms** the metronome (deferred) instead of starting it, and a press on an active metronome stops it.
+- `useFreePractice` accepts an `onFreeNoteAttackRef` invoked on every MIDI attack during an active session; the orchestrator points it at the existing `onFirstNoteAttack` deferred-start handler, so the metronome begins on the **first played note**.
+- New `stopFreeMetronome` un-arms and stops the metronome; it is invoked when the free session is stopped (Start/Stop toggle), when navigating Back, and when dismissing results — so the metronome always stops with the practice.
+- Starting a free session while a standalone metronome is already running stops it and re-arms it so it re-aligns to the first played note (mirrors score practice). Status: **RESOLVED** (2026-08-30).
+
+**Lessons Learned**: Any deferred/auto behavior that must mirror across modes (score vs. free) has to be driven from a mode-agnostic signal, not a mode-specific one. The metronome lifecycle is now keyed off the actual recording state each mode owns (score `practiceState.mode` vs. free `freeSessionActive`), reusing the same first-note trigger for both.
+---
+
+### Issue #6: Metronome Was Not Re-Used in the Next Free Practice After a Stop
+
+**Discovered**: 2026-08-30 during manual testing of free practice.
+
+**Symptom**:
+- The metronome was toggled ON during a free practice and the session was stopped.
+- Pressing Repractice started the new practice with the metronome **off**; it had to be toggled on again manually. It should start active (waiting until the first note) because it was on when the previous practice stopped.
+
+**Root Cause**: `stopFreeMetronome` stopped the metronome and cleared the armed flag but did not retain the user's metronome-on intent, and `handleRepractice` (free branch) never re-armed it. The "metronome enabled" state was not persisted across a stop → Repractice cycle.
+
+**Affected Components**:
+- Free-practice metronome lifecycle (`handleMetronomeToggle`, `handleRepractice`, `stopFreeMetronome` in `PracticeViewPlugin.tsx`).
+
+**Regression Test**:
+- `frontend/plugins/practice-view-plugin/PracticeViewPlugin.test.tsx` — `T-NEW-10`: arm the metronome in a free session, first note starts it, stop the session (metronome stops), click Repractice → the metronome is re-armed (armed button, no immediate toggle), and the first note of the new session starts it again.
+
+**Resolution**:
+- New `freeMetronomeEnabledRef` tracks whether the user wants the metronome ON in free practice: set when armed in a free session, cleared when toggled off, and cleared on exiting free practice (Back / results dismiss).
+- `stopFreeMetronome` stops the engine and clears the armed flag but **preserves** the enabled intent.
+- `handleRepractice` (free branch) re-arms the metronome (`metronomeArmedRef = true`) when `freeMetronomeEnabledRef` is true, so the next practice starts active in waiting mode until the first note. Status: **RESOLVED** (2026-08-30).
+
+**Lessons Learned**: Stopping a timed guide (metronome) must distinguish "turn the engine off because the session ended" from "the user no longer wants it". Persisting the user's intent separately from the live engine state lets a redo action restore the same practice context — matching how score practice keeps its metronome toggle through restarts.
+
+---
+
+### Issue #7: Accurate Eighth-Note Runs Detected as Quarters and "Chords"
+
+**Discovered**: 2026-08-30 during manual playing of the first two measures of La Candeur (Burgmüller) in free mode with the metronome at 60.
+
+**Symptom**:
+- Musical input: 4/4 free practice; the melody of La Candeur M1–M2 (eight eighth notes per measure, quarter-note beat); played accurately with the metronome.
+- Expected: two complete measures, each with **eight 1/8 notes**.
+- Actual: "mostly black notes (1/4), chords of two black notes (should be two consecutive 1/8), and some 1/8" — i.e. consecutive eighth attacks are collapsed onto the same beat position as a two-note chord, and most values come out as quarters.
+
+**Root Cause**: The note-value inference used **time-to-next ratios with a hard 0.5-beat boundary**. Any eighth whose gap (or held length capped by it) edged just above half a beat (`gap > 500ms` at 60 BPM) was classified as a quarter; quarter-valued notes then snapped to the beat grid (`round(rawStep/4)*4`), which collapsed two consecutive eighths onto the same beat position — producing the "chords of two black notes". Reproduced numerically: a realistic ±40ms human-jitter eighth run yielded 7 quarters and stacked same-step notes.
+
+**Affected Components**:
+- `detectSegment` note-value inference + position snapping in `frontend/plugins/practice-view-plugin/freePractice.helpers.ts`.
+
+**Regression Test**:
+- `frontend/plugins/practice-view-plugin/freePractice.helpers.test.ts` — `T-NEW-11` (two measures of jittered eighths → all 1/8, 8 per measure, no shared grid slots, complete), `T-NEW-12` (eighths held slightly longer than the gap → still all 1/8), `T-NEW-13` (mixed bar quarter+eighths+half → values `1/4,1/8,1/8,half`). SC-006 was re-scoped to realistic ±6% drift (see SC-006 note).
+
+**Resolution**: **Position-based detection** — note values are now derived from grid positions, not time ratios:
+- Every onset is snapped to the 16th-step grid (±half a cell ≈ half of a 1/8), and onsets sharing a slot merge into a chord.
+- A note's value = the grid-step distance to the next onset, **capped by its held duration** (`min(heldSteps, gapSteps)`). The cap distinguishes "long note" from "note + rest" (both position the next onset identically), so rests are still produced only for genuine ≥1-beat silence.
+- No per-note subdivision grid: the 16th grid is the single position graph, so accurate eighths (2 steps apart) and quarters (4 steps) both fall out correctly with no cross-boundary flipping. Status: **RESOLVED** (2026-08-30).
+
+**Lessons Learned**: Onset timing alone is ambiguous between adjacent subdivisions (a ±25%-beat-drifted quarter run is indistinguishable from eighths). The reliable decomposition is: (1) snap positions to the finest grid, (2) derive value from grid gaps, (3) use held duration only as a cap to split "long note" from "note + rest". Time-ratio thresholds are the wrong tool.
+
+---
+
+### Issue #8: Measure-Crossing Eighth Played Slightly Early Renders as Three Notes
+
+**Discovered**: 2026-08-30 during manual playing of La Candeur M1–M2 in free mode.
+
+**Symptom**:
+- While the rhythm detection is now largely accurate, occasionally **three notes appear where two eighths should be** — specifically at/or near a measure boundary. Reproduced: the first eighth of the second measure played ~60ms early (just before the barline) rendered as `1/8, 1/16, 1/16` at the end of measure 1 and shifted measure 2's first note.
+
+**Root Cause**: Measure attribution used `Math.floor(rel / measureMs)` — the raw time floor. An onset just before the exact boundary produced `relInM ≈ 15.76` cells, which `Math.round` snapped to 16 and was then **clamped to step 15 of the previous measure**. The final beat got an extra 16th at step 15, the real 8th at step 14 became a 1/16, and the next measure's first note was pushed off-grid.
+
+**Affected Components**:
+- `buildOnsetSpots` measure/step attribution in `frontend/plugins/practice-view-plugin/freePractice.helpers.ts`.
+
+**Regression Test**:
+- `frontend/plugins/practice-view-plugin/freePractice.helpers.test.ts` — `T-NEW-14`: 16 eighths with the first note of measure 2 played 60ms early → 2 complete measures, exactly 8 notes each, all `1/8`, one note per grid step, no 16th-split artifacts.
+
+**Resolution**: Measure and step are now derived from the **rounded grid cell** (`snappedCell = round(rel/cell); mIdx = floor(snappedCell/16); step = snappedCell − mIdx·16`) instead of the raw time floor. An onset within half a cell of the boundary snaps to the nearer measure's grid position, so an early first-of-next-measure note lands on step 0 of the next measure rather than splitting the previous measure's final beat. Status: **RESOLVED** (2026-08-30).
+
+**Lessons Learned**: Grid-snapping and measure attribution must be a single, consistent operation. Computing the measure from raw time and the step from rounded time produces an inconsistency right at the boundary; the boundary belongs to the nearest *grid*, not the nearest *time*.

@@ -60,11 +60,6 @@ export interface DetectedMeasure {
   rests: DetectedRest[];
 }
 
-/** Steps spanned by a single segment of a note value (16th grid). */
-function computeSteps(value: number): number {
-  return value * 4; // 1 beat = 4 sixteenth steps
-}
-
 /**
  * Conventional note value label for a step count on the 16th grid.
  */
@@ -132,30 +127,126 @@ function isDistinctOnset(
 }
 
 /**
- * Infer the intended note length (in 1/16 steps) from the time until the next
- * attack (or the note's own duration for the last note). Designed to absorb
- * realistic human timing (SC-006): values within +/- 50% of a beat count as
- * that beat subdivision; shorter onsets fall to eighth / 16th tiers.
+ * A coarse cluster of near-simultaneous onsets (a chord / repeated attack),
+ * snapped to a 16th-grid position within its measure.
  */
-function inferValueSteps(msToNext: number, msPerBeat: number): number {
-  const cell = msPerBeat / 4;
-  const ratio = msToNext / msPerBeat;
-  // Beat-tier: quarter (4 steps), half (8), whole (16). A real eighth sits at
-  // exactly 0.5 — use a strict > so it falls through to the sub-beat tier.
-  if (ratio > 0.5 && ratio < 1.5) return computeSteps(1);   // 4
-  if (ratio >= 1.5 && ratio < 3) return computeSteps(2);    // 8
-  if (ratio >= 3) return computeSteps(4);                   // 16
-  // Sub-beat tiers on the 16th cell.
-  const steps = Math.max(1, Math.round(msToNext / cell));
-  if (steps >= 2 && steps < 4) return 2;  // eighth-ish
-  return Math.max(1, Math.min(3, steps)); // 16th / 8th boundary
+interface OnsetSpot {
+  onsetMs: number;
+  mIdx: number;
+  /** 0..15 — snapped grid position within the measure. */
+  step: number;
+  events: FreeMidiEventLike[];
 }
 
-/** Map a note's implied value (steps) to the alignment grid multiple. */
-function gridMultiple(valueSteps: number): number {
-  if (valueSteps >= 4) return 4; // beat grid
-  if (valueSteps >= 2) return 2; // eighth grid
-  return 1;                      // 16th grid
+/**
+ * Build the onset spots for a segment: every onset gets a 16th-grid slot, and
+ * onsets that land in the same grid slot (or occur within half a grid cell) are
+ * merged into one chord spot (FR-010). The 16th grid is the position graph;
+ * note values are derived from the slot gaps, not from per-note time ratios.
+ *
+ * The measure (spot.mIdx) is derived from the ROUNDED grid cell, not from the
+ * raw time floor: an onset just before a measure boundary (e.g. the first note
+ * of the next measure played a few tens of ms early) must snap to step 0 of the
+ * NEXT measure — otherwise it is clamped to step 15 of the previous measure and
+ * splits the final beat into three notes (Issue #8).
+ */
+function buildOnsetSpots(
+  segment: FreeMidiEventLike[],
+  anchor: number,
+  cell: number,
+): OnsetSpot[] {
+  const spots: OnsetSpot[] = [];
+  for (const ev of segment) {
+    const rel = ev.timestampMs - anchor;
+    const snappedCell = Math.round(rel / cell);
+    const mIdx = Math.max(0, Math.floor(snappedCell / STEPS_PER_MEASURE));
+    const step = Math.max(0, Math.min(STEPS_PER_MEASURE - 1, snappedCell - mIdx * STEPS_PER_MEASURE));
+    const last = spots[spots.length - 1];
+    if (
+      last &&
+      ((last.mIdx === mIdx && last.step === step) ||
+        !isDistinctOnset(
+          { midiNote: 0, timestampMs: last.onsetMs } as FreeMidiEventLike,
+          ev,
+          cell,
+        ))
+    ) {
+      last.events.push(ev);
+    } else {
+      spots.push({ onsetMs: ev.timestampMs, mIdx, step, events: [ev] });
+    }
+  }
+  return spots;
+}
+
+/**
+ * Derived-detection grid (Feature 094b): note values are computed from GRID
+ * positions, not from time-to-next ratios. Every onset is snapped to the 16th
+ * grid (±half a cell ≈ half a 1/8 note), then a note's value is the distance in
+ * grid steps to the next onset, CAPPED by the note's own held duration.
+ *
+ * Why the held-duration cap: onset gaps alone cannot distinguish "held half
+ * note" from "quarter note + a beat of rest" (both put the next onset a whole
+ * note away). `min(heldSteps, gapSteps)` keeps each note honest — a short hold
+ * shortens it and the remainder becomes a rest — while the grid positions
+ * absorb the human timing jitter that previously flipped accurate eighth runs
+ * into quarters (Issue #7).
+ */
+function detectFromSpots(
+  spots: OnsetSpot[],
+  anchor: number,
+  cell: number,
+  measureMs: number,
+): Map<number, DetectedMeasure> {
+  const measuresMap = new Map<number, DetectedMeasure>();
+
+  for (let i = 0; i < spots.length; i++) {
+    const spot = spots[i];
+    const firstEv = spot.events[0];
+    const heldSteps = Math.max(1, Math.round((firstEv.durationMs ?? cell) / cell));
+
+    let valueSteps: number;
+    if (i + 1 < spots.length) {
+      const next = spots[i + 1];
+      const gapSteps = Math.max(
+        1,
+        next.mIdx * STEPS_PER_MEASURE + next.step - (spot.mIdx * STEPS_PER_MEASURE + spot.step),
+      );
+      valueSteps = Math.min(heldSteps, gapSteps);
+    } else {
+      // Last note of the segment: honor its held length (may carry across the
+      // bar line — FR-009) so a sustained final note is not truncated.
+      valueSteps = heldSteps;
+    }
+
+    const fullDurSteps = valueSteps;
+    const clampedSteps = Math.min(fullDurSteps, STEPS_PER_MEASURE - spot.step);
+    const acrossBarLine = spot.step + fullDurSteps > STEPS_PER_MEASURE;
+
+    let measure = measuresMap.get(spot.mIdx);
+    if (!measure) {
+      measure = {
+        index: spot.mIdx,
+        startMs: anchor + spot.mIdx * measureMs,
+        endMs: anchor + (spot.mIdx + 1) * measureMs,
+        complete: false,
+        notes: [],
+        rests: [],
+      };
+      measuresMap.set(spot.mIdx, measure);
+    }
+    for (const ev of spot.events) {
+      measure.notes.push({
+        midiNote: ev.midiNote,
+        startStep: spot.step,
+        durationSteps: Math.max(1, clampedSteps),
+        fullDurationSteps: Math.max(1, fullDurSteps),
+        acrossBarLine,
+      });
+    }
+  }
+
+  return measuresMap;
 }
 
 /**
@@ -170,82 +261,8 @@ function detectSegment(segment: FreeMidiEventLike[], bpm: number): DetectedMeasu
   const measureMs = msPerBeat * MEASURE_NUMERATOR;
   const anchor = segment[0].timestampMs;
 
-  // Cluster near-simultaneous onsets (chords / re-triggers) into clusters so
-  // every pitch is kept but a single grid position is shared (FR-010).
-  interface Cluster {
-    events: FreeMidiEventLike[];
-    onsetMs: number;
-  }
-  const clusters: Cluster[] = [];
-  for (const ev of segment) {
-    const last = clusters[clusters.length - 1];
-    if (last && !isDistinctOnset(
-      { midiNote: 0, timestampMs: last.onsetMs } as FreeMidiEventLike,
-      ev,
-      cell,
-    )) {
-      last.events.push(ev);
-    } else {
-      clusters.push({ events: [ev], onsetMs: ev.timestampMs });
-    }
-  }
-
-  /** Index of the measure each cluster attacks. */
-  const measuresMap = new Map<number, DetectedMeasure>();
-
-  for (let i = 0; i < clusters.length; i++) {
-    const cluster = clusters[i];
-    const rel = cluster.onsetMs - anchor;
-    const mIdx = Math.floor(rel / measureMs);
-    const relInM = rel - mIdx * measureMs;
-
-    const msToNext =
-      i + 1 < clusters.length
-        ? clusters[i + 1].onsetMs - cluster.onsetMs
-        : cluster.events[0].durationMs ?? cell;
-
-    // The note's own held duration is the upper bound for its musical value —
-    // a deliberate silence between notes becomes a rest, not extra note length.
-    const effectiveToNext =
-      cluster.events[0].durationMs != null
-        ? Math.min(cluster.events[0].durationMs, msToNext)
-        : msToNext;
-
-    const valueSteps = inferValueSteps(effectiveToNext, msPerBeat);
-    const grid = gridMultiple(valueSteps);
-    const rawStep = relInM / cell;
-    const alignedStep = Math.round(rawStep / grid) * grid;
-    const startStep = Math.max(0, Math.min(STEPS_PER_MEASURE - 1, alignedStep));
-
-    // The musical value (inferred from the held duration / next onset) governs
-    // the detected full length. The raw held-duration cell rounding is noisy
-    // under human timing and would create phantom bar-line carries.
-    const fullDurSteps = valueSteps;
-    const clampedSteps = Math.min(fullDurSteps, STEPS_PER_MEASURE - startStep);
-    const acrossBarLine = startStep + fullDurSteps > STEPS_PER_MEASURE;
-
-    let measure = measuresMap.get(mIdx);
-    if (!measure) {
-      measure = {
-        index: mIdx,
-        startMs: anchor + mIdx * measureMs,
-        endMs: anchor + (mIdx + 1) * measureMs,
-        complete: false,
-        notes: [],
-        rests: [],
-      };
-      measuresMap.set(mIdx, measure);
-    }
-    for (const ev of cluster.events) {
-      measure.notes.push({
-        midiNote: ev.midiNote,
-        startStep,
-        durationSteps: Math.max(1, clampedSteps),
-        fullDurationSteps: Math.max(1, fullDurSteps),
-        acrossBarLine,
-      });
-    }
-  }
+  const spots = buildOnsetSpots(segment, anchor, cell);
+  const measuresMap = detectFromSpots(spots, anchor, cell, measureMs);
 
   // Forward-carry accounting: a note that spans the bar line supplies its
   // overflow steps to the following measure's content.

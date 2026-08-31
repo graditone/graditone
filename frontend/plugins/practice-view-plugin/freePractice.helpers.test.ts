@@ -156,11 +156,16 @@ describe('detectMeasures — mixed beat-aligned input (SC-002)', () => {
 });
 
 describe('detectMeasures — robust / complex performances (US3)', () => {
-  it('SC-006: 8 quarters with human jitter (±25% beat) and short/long holds stay two complete measures', () => {
+  it('SC-006: 8 quarters with realistic human jitter (~±5% beat) and normal holds stay two complete measures', () => {
     const msPerBeat = 750;
-    // Deliberately imperfect: attacks drift up to ~187ms late/early, holds 600..900ms.
-    const drifts = [60, -140, 120, -90, 150, -40, 180, -130];
-    const holds = [620, 810, 700, 890, 660, 780, 690, 900];
+    // Realistic "accurate" playing: attacks drift by up to ~40ms (5.3% of the
+    // 750ms beat — well inside the ±half-cell capture radius of ~94ms), holds
+    // 700..800ms (a quarter's length). The previous ±25% fixture was dropped:
+    // at ±24% of a beat the inter-onset gaps (0.6..1.4 beat) are physically
+    // indistinguishable from an eighth-note run (0.5 beat), so no positional
+    // detector can classify them reliably (see Issue #7).
+    const drifts = [20, -40, 30, -20, 35, -25, 40, -30];
+    const holds = [720, 780, 700, 800, 740, 760, 710, 790];
     const events = drifts.map((drift, i) => {
       const onset = i * msPerBeat + drift;
       const base = i + 1 < holds.length ? (i + 1) * msPerBeat + drifts[i + 1] : (i + 1) * msPerBeat;
@@ -176,6 +181,96 @@ describe('detectMeasures — robust / complex performances (US3)', () => {
       expect(measureContent(measure)).toBe(STEPS_PER_MEASURE);
       for (const note of measure.notes) {
         expect(computeNoteValue(note.durationSteps)).toBe('1/4');
+      }
+    }
+  });
+
+  it('T-NEW-11 (Issue #7): an accurate eighth-note run over two measures (La Candeur M1-2) is all 1/8 — no quarters, no chords, no rests', () => {
+    // 60 BPM (beat 1000ms, 1/8 = 500ms). Realistic human timing: attacks drift
+    // by up to ±40ms, eighth notes held until the next attack (slightly short).
+    const beat = 1000;
+    const drifts = [0, -25, 18, -32, 26, -18, 35, -28, 22, -30, 15, -35, 30, -22, 16, -20];
+    const onsets = [];
+    let t = 0;
+    for (let i = 0; i < 16; i++) {
+      onsets.push(t + drifts[i]);
+      t += beat / 2;
+    }
+    const events = onsets.map((tt, i) =>
+      q(tt, i < 15 ? onsets[i + 1] - tt - 15 : beat / 2 - 20, 60 + i),
+    );
+
+    const measures = detectMeasures(events, 60);
+
+    expect(measures).toHaveLength(2);
+    for (const measure of measures) {
+      expect(measure.complete).toBe(true);
+      expect(measure.notes).toHaveLength(8);   // 8 eighth notes per measure
+      expect(measure.rests).toHaveLength(0);
+      expect(measureContent(measure)).toBe(STEPS_PER_MEASURE);
+      const steps = new Set(measure.notes.map((n) => n.startStep));
+      expect(steps.size).toBe(8);              // no two notes share a grid slot (no "chords")
+      for (const note of measure.notes) {
+        expect(computeNoteValue(note.durationSteps)).toBe('1/8');
+      }
+    }
+  });
+
+  it('T-NEW-12: an eighth run where the holds slightly exceed the gap (legato overlap) stays all 1/8', () => {
+    const beat = 1000;
+    // Each eighth held 30ms past its nominal length (overlap into the next note).
+    const events = Array.from({ length: 16 }, (_, i) => q(i * (beat / 2), beat / 2 + 30, 60 + i));
+    const measures = detectMeasures(events, 60);
+    expect(measures).toHaveLength(2);
+    for (const measure of measures) {
+      expect(measure.complete).toBe(true);
+      expect(measure.notes).toHaveLength(8);
+      expect(measure.rests).toHaveLength(0);
+      for (const note of measure.notes) {
+        expect(computeNoteValue(note.durationSteps)).toBe('1/8');
+      }
+    }
+  });
+
+  it('T-NEW-13: mixed rhythm bar — quarter + two eighths + half keeps correct values (held-duration cap)', () => {
+    const beat = 1000;
+    const events = [
+      q(0, beat, 60),
+      q(beat, beat / 2, 62),
+      q(beat * 1.5, beat / 2, 64),
+      q(beat * 2, beat * 2, 66),
+    ];
+    const measures = detectMeasures(events, 60);
+    expect(measures).toHaveLength(1);
+    expect(measures[0].complete).toBe(true); // 1 + 0.5 + 0.5 + 2 = 4 beats
+    const values = measures[0].notes.map((n) => computeNoteValue(n.durationSteps));
+    expect(values).toEqual(['1/4', '1/8', '1/8', 'half']);
+    expect(measures[0].notes.map((n) => n.startStep)).toEqual([0, 4, 6, 8]);
+    expect(measures[0].rests).toHaveLength(0);
+  });
+
+  it('T-NEW-14 (Issue #8): a measure-crossing eighth played slightly early snaps to the NEXT measure — no 3-notes-in-a-beat split', () => {
+    // First quarter of the second measure is played 60ms early (just before the
+    // boundary). The raw-time floor previously clamped it to step 15 of the
+    // first measure, splitting the final beat into 8th + 16th + 16th.
+    const beat = 1000;
+    const onsets = Array.from({ length: 16 }, (_, i) => i * (beat / 2));
+    onsets[8] = 8 * (beat / 2) - 60; // first note of measure 2, 60ms early
+
+    const events = onsets.map((tt, i) =>
+      q(tt, i < 15 ? Math.max(200, onsets[i + 1] - tt - 20) : beat / 2 - 20, 60 + i),
+    );
+    const measures = detectMeasures(events, 60);
+
+    expect(measures).toHaveLength(2);
+    for (const measure of measures) {
+      expect(measure.complete).toBe(true);
+      expect(measure.notes).toHaveLength(8);   // transcribed into the right measure
+      expect(measure.rests).toHaveLength(0);
+      const steps = new Set(measure.notes.map((n) => n.startStep));
+      expect(steps.size).toBe(8);              // exactly one note per eighth slot
+      for (const note of measure.notes) {
+        expect(computeNoteValue(note.durationSteps)).toBe('1/8');
       }
     }
   });
