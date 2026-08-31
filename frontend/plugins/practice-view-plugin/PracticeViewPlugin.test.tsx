@@ -1868,6 +1868,103 @@ describe('PracticeViewPlugin — metronome deferred start (Feature 083 US3)', ()
   });
 });
 
+// Feature 092/083 — Free practice metronome lifecycle: starts on the first
+// played note, stops when the free practice is stopped or exited.
+describe('PracticeViewPlugin — free practice metronome lifecycle (Feature 083 parity)', () => {
+  it('toggling the metronome in free mode arms it; the first note starts it; stopping the session stops it', () => {
+    const ctx = createMockContext();
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /free practice/i }));
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+
+    // Start a free session.
+    fireEvent.click(screen.getByRole('button', { name: /start practice mode/i }));
+
+    // Arm the metronome — must NOT start it yet.
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    expect(ctx.context.metronome.toggle).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
+
+    // First played note → deferred start.
+    act(() => {
+      ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 });
+    });
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+
+    // Metronome service becomes active.
+    act(() => {
+      ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 });
+    });
+
+    // Stopping the free session stops the metronome.
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: /stop practice mode/i }));
+    });
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(2);
+    // Armed state cleared.
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .not.toContain('practice-plugin__metro-btn--armed');
+  });
+
+  it('exiting free practice (Back) stops a running metronome', () => {
+    const ctx = createMockContext();
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /free practice/i }));
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: /start practice mode/i }));
+    act(() => {
+      ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 });
+    });
+
+    // Back exits free practice → the running metronome must stop.
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    });
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('T-NEW-10: if the metronome was on when the free practice stopped, Repractice re-arms it (starts on the first note)', () => {
+    const ctx = createMockContext();
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: /free practice/i }));
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+
+    // Start a session and arm the metronome; the first note starts it.
+    fireEvent.click(screen.getByRole('button', { name: /start practice mode/i }));
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    expect(ctx.context.metronome.toggle).not.toHaveBeenCalled();
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+    act(() => {
+      ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 });
+    });
+
+    // Stop the session → the metronome stops too. (The real engine emits an
+    // inactive state on stop; the mock toggle just clears the call, so we
+    // simulate the transition the real engine would fire.)
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /stop practice mode/i })); });
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(2);
+    act(() => {
+      ctx.simulateMetronomeState({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1, subBeatIndex: 0 });
+    });
+
+    // Repractice → the metronome must be re-armed (waiting), NOT started yet.
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /repractice/i })); });
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
+
+    // First note of the new session → the metronome starts again.
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(3);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // T016 — Feature 084: setPlaybackStaffFilter wiring via staff dropdown
 // T023 — Feature 084: staff filter applied on initial load

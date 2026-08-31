@@ -82,6 +82,12 @@ export type UseFreePracticeParams = {
   setResultsOverlayVisible: (v: boolean) => void;
   setIsSaved: (v: boolean) => void;
   setSaveError: (e: string | null) => void;
+  /**
+   * Called on every MIDI attack during an active free session. The host uses
+   * it to start an armed metronome on the first played note (Feature 083
+   * parity with score practice). Optional; safe when absent.
+   */
+  onFreeNoteAttackRef?: React.MutableRefObject<(() => void) | null> | null;
 };
 
 export type UseFreePracticeReturn = {
@@ -135,6 +141,7 @@ export function useFreePractice({
   setResultsOverlayVisible,
   setIsSaved,
   setSaveError,
+  onFreeNoteAttackRef,
 }: UseFreePracticeParams): UseFreePracticeReturn {
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -230,6 +237,9 @@ export function useFreePractice({
           durationMs: undefined,
         });
         setFreeNoteCount((c) => c + 1);
+        // Feature 083 parity: let the host start an armed metronome on the
+        // first played note (calling it every attack is a no-op once started).
+        onFreeNoteAttackRef?.current?.();
         // Real-time: re-derive the staff from the recovered grid (onset-derived).
         setFreeDisplayNotes(
           renderMeasureDisplay(freeMidiEventsRef.current, Math.round(effectiveBpmNow()), originNow()),
@@ -252,7 +262,9 @@ export function useFreePractice({
         );
       }
     });
-  }, [context.midi]);
+    // onFreeNoteAttackRef is a stable ref param — its `.current` may change but
+    // the ref identity never does, so it is safe in the deps array.
+  }, [context.midi, onFreeNoteAttackRef]);
 
   // ── Replay cleanup: clear timers when replay ends ─────────────────────────
   useEffect(() => {
