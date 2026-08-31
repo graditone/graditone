@@ -1014,6 +1014,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
             notes={freePractice.freeDisplayNotes}
             bpm={freePractice.freeEffectiveBpm}
             timestampOffset={freePractice.freeDisplayOriginMs}
+            highlightedNoteIndexes={freePractice.freeReplayNoteIndexes}
             autoScroll
           />
         </div>

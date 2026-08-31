@@ -176,6 +176,117 @@ describe('useFreePractice — Feature 094 onset-derived recording', () => {
   });
 });
 
+describe('useFreePractice — replay note highlighting (Feature 094c)', () => {
+  type MidiHandlerC = (event: { type: 'attack' | 'release'; midiNote: number }) => void;
+
+  function makeMidiCtx(metronomeBpm = 120) {
+    const midiSubscribers = new Set<MidiHandlerC>();
+    const metronomeStateRef = { current: {
+      active: false, beatIndex: -1, isDownbeat: false, bpm: metronomeBpm, subdivision: 1, subBeatIndex: 0,
+    } } as React.MutableRefObject<MetronomeState>;
+    const context = {
+      midi: {
+        subscribe: vi.fn((handler: MidiHandlerC) => {
+          midiSubscribers.add(handler);
+          return () => midiSubscribers.delete(handler);
+        }),
+      },
+      playNote: vi.fn(),
+      stopPlayback: vi.fn(),
+    } as unknown as PluginContext;
+    return {
+      params: {
+        context,
+        metronomeStateRef,
+        loadedScoreRefRef: { current: null } as React.MutableRefObject<null>,
+        isReplaying: false,
+        setIsReplaying: vi.fn(),
+        setResultsOverlayVisible: vi.fn(),
+        setIsSaved: vi.fn(),
+        setSaveError: vi.fn(),
+      },
+      emitAttack: (note = 60) => midiSubscribers.forEach((h) => h({ type: 'attack', midiNote: note })),
+      emitRelease: (note = 60) => midiSubscribers.forEach((h) => h({ type: 'release', midiNote: note })),
+    };
+  }
+
+  it('T-NEW-15: during replay, the staff highlights the note currently playing and clears when replay ends', () => {
+    vi.useFakeTimers();
+    try {
+      const { params, emitAttack, emitRelease } = makeMidiCtx(120);
+      const { result } = renderHook(() => useFreePractice(params));
+
+      act(() => result.current.handleFreePractice());
+      act(() => result.current.handleFreeToggle());
+
+      // Two quarter notes at 120 BPM (beat = 500 ms).
+      emitAttack(60);
+      act(() => vi.advanceTimersByTime(500));
+      emitRelease(60);
+      emitAttack(62);
+      act(() => vi.advanceTimersByTime(500));
+      emitRelease(62);
+
+      act(() => result.current.handleFreeToggle());
+      expect(result.current.freeMidiRecord?.noteCount).toBe(2);
+      expect(result.current.freeReplayNoteIndexes).toEqual([]);
+
+      // Start replay.
+      act(() => result.current.handleFreeReplay());
+      expect(result.current.freeReplayNoteIndexes).toEqual([]);
+
+      // First note plays → index 0 highlighted.
+      act(() => vi.advanceTimersByTime(1));
+      expect(result.current.freeReplayNoteIndexes).toEqual([0]);
+
+      // Second note plays → index 1 highlighted.
+      act(() => vi.advanceTimersByTime(500));
+      expect(result.current.freeReplayNoteIndexes).toEqual([1]);
+
+      // Replay finishes → highlight cleared.
+      act(() => vi.advanceTimersByTime(600));
+      expect(result.current.freeReplayNoteIndexes).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('T-NEW-16: a chord during replay highlights all its notes together (same onset)', () => {
+    vi.useFakeTimers();
+    try {
+      const { params, emitAttack, emitRelease } = makeMidiCtx(120);
+      const { result } = renderHook(() => useFreePractice(params));
+
+      act(() => result.current.handleFreePractice());
+      act(() => result.current.handleFreeToggle());
+
+      // A 3-note chord at t=0 then a single note at t=500 (two quarter slots).
+      emitAttack(60); emitAttack(64); emitAttack(67);
+      act(() => vi.advanceTimersByTime(500));
+      emitRelease(60); emitRelease(64); emitRelease(67);
+      emitAttack(62);
+      act(() => vi.advanceTimersByTime(500));
+      emitRelease(62);
+
+      act(() => result.current.handleFreeToggle());
+      expect(result.current.freeMidiRecord?.noteCount).toBe(4);
+
+      act(() => result.current.handleFreeReplay());
+      act(() => vi.advanceTimersByTime(1));
+      // Chord = staff indexes 0..2 highlighted together; next note at index 3.
+      expect(result.current.freeReplayNoteIndexes).toEqual([0, 1, 2]);
+
+      act(() => vi.advanceTimersByTime(500));
+      expect(result.current.freeReplayNoteIndexes).toEqual([3]);
+
+      act(() => vi.advanceTimersByTime(600));
+      expect(result.current.freeReplayNoteIndexes).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('useFreePractice — session-start tempo seeding (Issue #2: non-default BPM mismatch)', () => {
   /**
    * Reproduces the reported free-practice failure when the tempo slider is

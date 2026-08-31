@@ -173,8 +173,25 @@ export class MetronomeEngine {
     // When skipTransportStart=true the caller guarantees Transport is already running (or
     // is about to be started by startTransport()).  A second Transport.start() here would
     // reset Transport timing and produce a spurious double-click at the beat boundary.
-    if (!skipTransportStart && (Tone.Transport as unknown as { state: string }).state !== 'started') {
-      Tone.Transport.start('+0.01');
+    //
+    // When standalone (skipTransportStart=false), always RESET the Transport to position
+    // 0 — not only when it happens to be stopped. engine.stop() deliberately never stops
+    // the Transport (score playback may own it), so after a metronome stop in free
+    // practice the Transport stays 'started' and keeps advancing. Without a reset, a
+    // later start schedules the repeat at position 0 which is already in the past → the
+    // first click fires at the next boundary, up to a whole beat late relative to the
+    // first played note. Resetting guarantees the first tick (offset 0) fires with the note.
+    // Standalone (skipTransportStart=false): always RESET Transport to position 0 —
+    // not only when it happens to be stopped. engine.stop() never stops the
+    // Transport (score playback may own it), so after a metronome stop the
+    // Transport stays 'started' and keeps advancing. Without a reset, a later
+    // start schedules the repeat at position 0 which is already in the past → the
+    // first click fires at the next boundary, up to a whole beat late relative to
+    // the first played note (free-practice ~1/10 delay after restarting). Resetting
+    // guarantees the first tick (offset 0) fires with the note.
+    if (!skipTransportStart) {
+      (Tone.Transport as unknown as { state: string; stop: () => void; start: (t?: unknown, p?: unknown) => void }).stop();
+      Tone.Transport.start('+0.01', 0);
     }
 
     this._notifySubscribers();

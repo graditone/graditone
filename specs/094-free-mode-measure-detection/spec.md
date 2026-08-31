@@ -323,3 +323,108 @@ Real performances are not metronomic: attacks land slightly early or late, notes
 **Resolution**: Measure and step are now derived from the **rounded grid cell** (`snappedCell = round(rel/cell); mIdx = floor(snappedCell/16); step = snappedCell − mIdx·16`) instead of the raw time floor. An onset within half a cell of the boundary snaps to the nearer measure's grid position, so an early first-of-next-measure note lands on step 0 of the next measure rather than splitting the previous measure's final beat. Status: **RESOLVED** (2026-08-30).
 
 **Lessons Learned**: Grid-snapping and measure attribution must be a single, consistent operation. Computing the measure from raw time and the step from rounded time produces an inconsistency right at the boundary; the boundary belongs to the nearest *grid*, not the nearest *time*.
+
+---
+
+### Issue #9: Free-Practice Replay Does Not Highlight the Notes Being Played
+
+**Discovered**: 2026-08-31 during free-practice replay (feature request — parity with score replay).
+
+**Symptom**:
+- After stopping a free practice and pressing Replay, the staff shows all recorded notes at once but **no note lights up** as it plays, unlike score-practice replay (and score playback) which highlight the note(s) currently sounding.
+
+**Affected Components**:
+- `useFreePractice.ts` (`handleFreeReplay`), `PracticeViewPlugin.tsx` (free StaffViewer wiring), `PluginStaffViewer` / `PluginStaffViewerProps` (WASM highlight).
+
+**Resolution**: Replay now drives the staff highlight in lock-step with the audio:
+- `useFreePractice` tracks `freeReplayNoteIndexes` — the staff attack-note indexes currently playing. `handleFreeReplay` groups recorded events by onset (so every note of a chord is highlighted together) and schedules a `setTimeout` per group that updates the highlight when that group sounds; the highlight clears when replay ends or is stopped.
+- `PluginStaffViewer` accepts a new optional `highlightedNoteIndexes` prop (in addition to the existing single `highlightedNoteIndex`) that highlights several attack-note indexes at once — used to light whole chords on the WASM staff. Backward compatible.
+- `PracticeViewPlugin` passes `highlightedNoteIndexes={freePractice.freeReplayNoteIndexes}` to the free staff.
+
+**Regression Test**:
+- `frontend/plugins/practice-view-plugin/useFreePractice.test.ts` — `T-NEW-15` (two quarter notes: highlight advances `[0] → [1] → []` across replay with fake timers) and `T-NEW-16` (a three-note chord is highlighted together as `[0,1,2]`, then the next single note as `[3]`, then cleared).
+
+**Status**: **RESOLVED** (2026-08-31).
+
+---
+
+### Issue #10: Slightly-Early Released Notes Left the Measure Incomplete (e.g. 3×1/4 + 1×1/8)
+
+**Discovered**: 2026-08-31 during free practice.
+
+**Symptom**:
+- A measure detected as e.g. **3×1/4 + 1×1/8** — the note values do not sum to 4 beats, so the measure is left **incomplete** (missing an 1/8), even though all four quarter-note attacks were played on beat with each following note landing on time.
+
+**Root Cause**: The note-value derivation applied the held-duration cap unconditionally: `valueSteps = min(heldSteps, gapSteps)`. When a player releases a beat slightly early (e.g. ~250ms before the next attack) but the next note still starts on time, `round(held/cell)` rounds down to a smaller note ("dotted 1/8" for a 750ms/1000ms release), shrinking the note and leaving an unaccounted sub-beat — the measure reports incomplete.
+
+**Affected Components**:
+- `detectFromSpots` held-duration cap in `frontend/plugins/practice-view-plugin/freePractice.helpers.ts`.
+
+**Regression Test**:
+- `frontend/plugins/practice-view-plugin/freePractice.helpers.test.ts` — `T-NEW-17` (a quarter released 250ms early with the next attack on time still detects as 4×1/4, measure complete, no rests) and `T-NEW-18` (a genuinely short note followed by ≥1 beat of silence still stays short + rest, not over-extended).
+
+**Resolution**: The held-duration cap is now applied **only when the release leaves a genuine rest**: `valueSteps = (gapSteps - heldSteps) >= MIN_REST_STEPS ? heldSteps : gapSteps`. An early release with the next attack on time produces sub-beat silence (`< MIN_REST_STEPS`), so the note stays full length and the measure stays complete; a truly short hold followed by ≥1 beat of silence still yields a short note + a rest. Status: **RESOLVED** (2026-08-31).
+
+#### Follow-up (2026-08-31): last-note-of-segment still shrank
+
+**Symptom**: Measures still occasionally detected as **3×1/4 + 1×1/8** (missing an 1/8), even after the first fix.
+
+**Root cause**: The original fix only covered notes with a **next onset**. The **last note of a segment** (end of session, or a note before a ≥1-measure pause which splits segments) still used `valueSteps = heldSteps` (rounded raw hold) unconditionally — a final quarter released ~200–300ms early became a "dotted 1/8" (700ms → 3 cells) or "1/8" (500ms → 2 cells), leaving the measure incomplete.
+
+**Resolution**: The last-note branch now applies the same genuine-rest rule against the space to the measure end:
+- `heldSteps <= gapToEnd`: `valueSteps = (gapToEnd - heldSteps) >= MIN_REST_STEPS ? heldSteps : gapToEnd` — a slightly-early final release keeps the full slot (measure completes); only a genuinely short hold with ≥1-beat trailing silence stays short.
+- `heldSteps > gapToEnd`: keep `heldSteps` (FR-009 across-barline carry preserved).
+
+**Regression Test**: `T-NEW-19` (final quarter released 300ms early — session end) and `T-NEW-20` (same, before a full-measure pause) both yield a complete 4×1/4 measure.
+
+**Status**: **RESOLVED** (2026-08-31, follow-up).
+
+#### Follow-up 2 (2026-08-31): sub-beat remnants still left incomplete measures
+
+**Symptom**: With accurate-ish timing the pattern still appeared (less frequently): **1/8 + 3×1/4** with the measure incomplete (missing an 1/8).
+
+**Root cause**: Two sub-beat remnants were unaccounted:
+1. **Internal** sub-beat holes — a note landing a cell or two short of its beat slot (e.g. drift to step 10 of 12) created a gap between notes that is < 1 beat, so no rest was emitted (FR-005) and nothing bridged it.
+2. **Trailing** sub-beat remnants after the last note (also < 1 beat, no rest) were left empty; a ≥1-beat trailing silence in a **non-final** measure emitted no rest either.
+
+**Resolution** (`detectFromSpots` + measure finalize):
+- **Bridge internal sub-beat holes** by extending the preceding note (legato fill), so rests only ever represent genuine ≥ 1-beat silence.
+- **Fold a sub-beat trailing remnant into the last note** so the musician's final beat fills the measure.
+- **Emit a rest for ≥ 1-beat trailing silence in a NON-final measure** (only the segment's final measure stays an honest partial — FR-006).
+- The existing last-note genuine-rest rule (from follow-up 1) is retained.
+
+**Regression Test**: `T-NEW-21` (mid-measure drift to an off-beat slot + short hold) and `T-NEW-22` (non-final measure with a beat of genuine trailing silence emits a rest) both produce complete measures.
+
+**Status**: **RESOLVED** (2026-08-31, follow-up 2).
+
+#### Follow-up 3 (2026-08-31): cumulative tempo drift re-aligned to the beat grid
+
+**Symptom**: With an otherwise accurate quarter-note performance, measures still occasionally showed **2×1/4 + 1/8 + 1/4** (missing an 1/8).
+
+**Root cause**: The 16th-grid snap (`round(rel/cell)`) is only tolerant to ±half a cell. A player who is *slightly* fast or slow accumulates drift across the measure, so a later onset lands on an off-quarter 16th cell (e.g. step 10 instead of 12). The value to that onset's predecessor then collapses to a quarter-gap of 2 cells → an 1/8, and the measure can't be completed with the previous sub-beat bridge alone.
+
+**Resolution**: A per-segment snap-grid decision:
+- If every consecutive onset is ≥ 0.75 of a beat apart (beat-level content — quarters/halves, no eighths), **snap onsets to the BEAT grid** (`round(rel/beat)*4`), so cumulative drift re-aligns to `0,4,8,12` and the measure is four clean quarters.
+- Otherwise (any eighth/sixteenth content) keep the 16th grid, preserving fine subdivisions (e.g. La Candeur's eighth runs).
+
+**Regression Test**: `T-NEW-23` (cumulative -50ms/beat drift on four quarters → `[0,4,8,12]`, all 1/4, complete) and `T-NEW-24` (an eighth run still snaps to the 16th grid, all 1/8).
+
+**Status**: **RESOLVED** (2026-08-31, follow-up 3).
+
+---
+
+### Issue #11: Armed (Waiting) Metronome Starts Up to a Beat Late on the First Note
+
+**Discovered**: 2026-08-31 during free practice (≈1/10 occurrences, typically after restarting the practice).
+
+**Symptom**:
+- The waiting/armed metronome (Feature 083 parity, Issue #5) does not start at the same moment as the first played note; the first click arrives with a delay **similar to a beat duration**.
+
+**Root Cause**: `MetronomeEngine.start()` only started the Transport when `Transport.state !== 'started'`. `engine.stop()` deliberately never stops `Tone.Transport` (score playback may own it), so it stays `'started'` and keeps advancing after the metronome stops. On a later standalone start (free-practice first note), the guard found the Transport already `'started'` and **skipped the reset** — the freshly scheduled repeat is anchored at position 0, which is now in the past, so the first click fires at the next beat boundary (up to one beat late). Because the leftover Transport's phase is arbitrary after a stop, the delay is intermittent (~1/10), and it appears more often after stop→Repractice cycles.
+
+**Affected Components**:
+- `MetronomeEngine.start()` standalone branch in `frontend/src/services/metronome/MetronomeEngine.ts`.
+
+**Regression Test**: `frontend/src/services/metronome/MetronomeEngine.test.ts` — "restart always resets the standalone Transport to position 0": after `start()` + `stop()`, simulates the leftover `'started'` Transport and asserts the next standalone `start()` calls `Transport.stop()` and `Transport.start('+0.01', 0)`. Written RED (old code skipped the start) before the fix.
+
+**Resolution**: In the standalone branch (`skipTransportStart === false`) the engine now **always** calls `Tone.Transport.stop()` then `Tone.Transport.start('+0.01', 0)`, resetting the Transport to position 0 so the scheduled first tick (offset 0) fires immediately with the first note. The `skipTransportStart === true` path (playback-owned, phase-locked restarts) is unchanged. Status: **RESOLVED** (2026-08-31).
