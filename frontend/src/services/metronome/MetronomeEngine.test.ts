@@ -28,6 +28,7 @@ const toneState = vi.hoisted(() => {
   });
   const transportClear = vi.fn();
   const transportStart = vi.fn();
+  const transportStop = vi.fn();
   const toneStart = vi.fn().mockResolvedValue(undefined);
   const triggerDownbeat = vi.fn();
   const triggerUpbeat = vi.fn();
@@ -58,6 +59,8 @@ const toneState = vi.hoisted(() => {
     scheduleRepeat,
     transportClear,
     transportStart,
+    transportStop,
+    transportState: 'stopped',
     toneStart,
     triggerDownbeat,
     triggerUpbeat,
@@ -101,8 +104,9 @@ vi.mock('tone', () => ({
     scheduleRepeat: toneState.scheduleRepeat,
     clear: toneState.transportClear,
     start: toneState.transportStart,
-    stop: vi.fn(),
-    state: 'stopped',
+    stop: toneState.transportStop,
+    get state() { return toneState.transportState; },
+    set state(v) { toneState.transportState = v; },
     bpm: { value: 120 },
   },
   start: toneState.toneStart,
@@ -329,6 +333,27 @@ describe('MetronomeEngine — start/stop lifecycle (T002)', () => {
     expect(engine.getState().active).toBe(true);
     expect(engine.getState().bpm).toBe(80);
     expect(adapterState.scheduleRepeat).toHaveBeenCalledOnce();
+  });
+
+  it('restart always resets the standalone Transport to position 0 (Issue: first-beat delay)', async () => {
+    // engine.stop() never stops Tone.Transport (score playback may own it), so a
+    // standalone restart finds it 'started' and must explicitly stop + start at 0
+    // — otherwise the repeat scheduled at position 0 is in the past and the first
+    // click fires up to a beat late (matches the free-practice ~1/10 delay after
+    // restarting). Regression test: even with a leftover 'started' Transport, a
+    // standalone start() calls Transport.stop() and Transport.start('+0.01', 0).
+    await engine.start(120, 4, 4);
+    engine.stop();
+    // Simulate the leftover running Transport that stop() deliberately leaves.
+    toneState.transportState = 'started';
+    toneState.transportStop.mockClear();
+    toneState.transportStart.mockClear();
+
+    await engine.start(120, 4, 4);
+
+    expect(toneState.transportStop).toHaveBeenCalled();
+    const [, startArgs] = toneState.transportStart.mock.calls[0] as [string, number];
+    expect(startArgs).toBe(0); // position 0 → first tick fires immediately
   });
 
   it('subscriber receives inactive state on stop()', async () => {

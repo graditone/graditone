@@ -154,11 +154,19 @@ function buildOnsetSpots(
   segment: FreeMidiEventLike[],
   anchor: number,
   cell: number,
+  snapToBeat: boolean,
 ): OnsetSpot[] {
   const spots: OnsetSpot[] = [];
   for (const ev of segment) {
     const rel = ev.timestampMs - anchor;
-    const snappedCell = Math.round(rel / cell);
+    // Issue #10 follow-up (drift): when the whole segment is beat-level content
+    // (no eighths/sixteenths), snap to the BEAT grid so a slightly fast/slow
+    // performance whose onsets drift off the 16th grid (e.g. the last quarter
+    // landing on cell 10 instead of 12) still re-aligns to 0,4,8,12. Otherwise
+    // snap to the 16th grid to preserve eighth/sixteenth subdivisions.
+    const snappedCell = snapToBeat
+      ? Math.round(rel / (cell * 4)) * 4
+      : Math.round(rel / cell);
     const mIdx = Math.max(0, Math.floor(snappedCell / STEPS_PER_MEASURE));
     const step = Math.max(0, Math.min(STEPS_PER_MEASURE - 1, snappedCell - mIdx * STEPS_PER_MEASURE));
     const last = spots[spots.length - 1];
@@ -212,11 +220,32 @@ function detectFromSpots(
         1,
         next.mIdx * STEPS_PER_MEASURE + next.step - (spot.mIdx * STEPS_PER_MEASURE + spot.step),
       );
-      valueSteps = Math.min(heldSteps, gapSteps);
+      // Hold cap only applies when the release leaves a GENUINE rest (>= 1 beat
+      // of silence before the next attack). If the player releases the current
+      // beat slightly early but the next note still attacks on time (common
+      // human timing), the silence is sub-beat: keep the note at full length so
+      // every beat stays accounted for (Issue #10). A short hold followed by a
+      // long silence (>= MIN_REST_STEPS) is a real "note + rest", so cap it.
+      const silenceSteps = gapSteps - heldSteps;
+      valueSteps = silenceSteps >= MIN_REST_STEPS ? heldSteps : gapSteps;
     } else {
-      // Last note of the segment: honor its held length (may carry across the
-      // bar line — FR-009) so a sustained final note is not truncated.
-      valueSteps = heldSteps;
+      // Last note of the segment: there is no next onset, but the beat grid
+      // still tells us where the note's slot ends (its measure boundary). Apply
+      // the SAME genuine-rest rule against the space to the measure end instead
+      // of blindly honoring the raw held duration. A player who releases the
+      // final beat slightly early (700ms of a 1000ms beat) still meant a full
+      // note — keeping heldSteps here shrank it to a dotted 1/8 / 1/8, leaving
+      // an incomplete measure (Issue #10 follow-up). A genuinely short final
+      // hold followed by a long rest (>= MIN_REST_STEPS to the barline) stays a
+      // short note + rest. Holds that overrun the barline keep their full span
+      // (FR-009 carry).
+      const gapToEnd = STEPS_PER_MEASURE - spot.step;
+      if (heldSteps <= gapToEnd) {
+        const silenceToEnd = gapToEnd - heldSteps;
+        valueSteps = silenceToEnd >= MIN_REST_STEPS ? heldSteps : gapToEnd;
+      } else {
+        valueSteps = heldSteps;
+      }
     }
 
     const fullDurSteps = valueSteps;
@@ -261,7 +290,20 @@ function detectSegment(segment: FreeMidiEventLike[], bpm: number): DetectedMeasu
   const measureMs = msPerBeat * MEASURE_NUMERATOR;
   const anchor = segment[0].timestampMs;
 
-  const spots = buildOnsetSpots(segment, anchor, cell);
+  // Decide the snap grid for the segment. If every consecutive onset is at
+  // least ~0.75 of a beat apart, the content is beat-level (quarters/halves) —
+  // snap to the beat grid so cumulative drift re-aligns. Any eighth/sixteenth
+  // content snaps to the 16th grid to preserve fine subdivisions.
+  let snapToBeat = true;
+  for (let i = 1; i < segment.length; i++) {
+    const gap = segment[i].timestampMs - segment[i - 1].timestampMs;
+    if (gap < 0.75 * msPerBeat) {
+      snapToBeat = false;
+      break;
+    }
+  }
+
+  const spots = buildOnsetSpots(segment, anchor, cell, snapToBeat);
   const measuresMap = detectFromSpots(spots, anchor, cell, measureMs);
 
   // Forward-carry accounting: a note that spans the bar line supplies its
@@ -286,28 +328,69 @@ function detectSegment(segment: FreeMidiEventLike[], bpm: number): DetectedMeasu
 
     let accounted = 0;
     let prevEnd = 0;
+    let prevNote: DetectedNote | null = null;
     for (const note of notes) {
       if (note.startStep > prevEnd) {
         const gap = note.startStep - prevEnd;
         if (gap >= MIN_REST_STEPS) {
           rests.push(...decomposeRests(gap, prevEnd));
           accounted += gap;
+        } else if (prevNote) {
+          // Issue #10 follow-up: a sub-beat hole between notes (e.g. a note
+          // that landed a cell short of its beat) can never be a rest (FR-005 —
+          // rests only for >= 1 beat of genuine silence). Bridge it by
+          // extending the previous note (legato fill) so the measure does not
+          // end up incomplete with an unexplained gap.
+          prevNote.durationSteps += gap;
+          const maxDur = STEPS_PER_MEASURE - prevNote.startStep;
+          if (prevNote.durationSteps > maxDur) prevNote.durationSteps = maxDur;
+          accounted += gap;
+          prevEnd = note.startStep;
         }
       }
       const within = Math.min(note.durationSteps, STEPS_PER_MEASURE - note.startStep);
       accounted += within;
       prevEnd = note.startStep + within;
+      prevNote = note;
     }
 
     const carried = carriedInto.get(idx) ?? 0;
     const total = accounted + carried;
+
+    const isFinalMeasure = idx === measures[measures.length - 1][0];
+    // Sub-beat trailing remnant within a measure can never be a rest (FR-005 —
+    // rests only for >= 1 beat of genuine silence). Fold it into the LAST note
+    // so the musician's sustained final beat fills the measure.
+    let filledTotal = total;
+    let finalRests = rests;
+    if (carried === 0 && notes.length > 0 && total < STEPS_PER_MEASURE) {
+      const trailing = STEPS_PER_MEASURE - prevEnd;
+      if (trailing > 0 && trailing < MIN_REST_STEPS) {
+        const last = notes[notes.length - 1];
+        last.durationSteps += trailing;
+        if (last.startStep + last.durationSteps > STEPS_PER_MEASURE) {
+          last.acrossBarLine = false;
+          last.durationSteps = STEPS_PER_MEASURE - last.startStep;
+        }
+        filledTotal = STEPS_PER_MEASURE;
+      } else if (trailing >= MIN_REST_STEPS && !isFinalMeasure) {
+        // A genuine >= 1 beat of silence at the end of a NON-final measure is a
+        // rest (the player stopped sounding before the next measure): emit it so
+        // every measure except the final one reads complete. The final measure of
+        // a segment stays an honest trailing partial (FR-006).
+        const tailRests = decomposeRests(trailing, prevEnd);
+        finalRests = [...rests, ...tailRests];
+        filledTotal = STEPS_PER_MEASURE;
+      }
+    }
+
     result.push({
       index: idx,
       startMs: measure.startMs,
       endMs: measure.endMs,
-      complete: total >= STEPS_PER_MEASURE,
+      complete: filledTotal >= STEPS_PER_MEASURE,
       notes,
-      rests,
+      rests: finalRests,
     });
   }
 

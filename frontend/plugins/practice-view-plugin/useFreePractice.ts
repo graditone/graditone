@@ -113,6 +113,8 @@ export type UseFreePracticeReturn = {
   freeTempoMultiplier: number;
   /** Feature 093: ref mirror of the tempo multiplier. */
   freeTempoMultiplierRef: React.MutableRefObject<number>;
+  /** Feature 094c: staff attack indexes currently highlighted during replay. */
+  freeReplayNoteIndexes: number[];
   // Handlers
   handleFreePractice: () => void;
   handleFreeToggle: () => void;
@@ -155,6 +157,13 @@ export function useFreePractice({
   const [freeStaffBpm, setFreeStaffBpm] = useState(120);
   /** Ref mirror of `freeDisplayOriginMs` for stable-callbacks (handlers/effect). */
   const freeDisplayOriginMsRef = useRef(0);
+  /**
+   * During replay (Feature 094c): the zero-based indexes (into the staff's
+   * attack-note list = `freeDisplayNotes`) currently highlighted. Chords
+   * occupy consecutive indexes, so a chord is represented by its index range.
+   * Empty while not replaying.
+   */
+  const [freeReplayNoteIndexes, setFreeReplayNoteIndexes] = useState<number[]>([]);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
 
@@ -268,9 +277,12 @@ export function useFreePractice({
 
   // ── Replay cleanup: clear timers when replay ends ─────────────────────────
   useEffect(() => {
-    if (!isReplaying && freeReplayTimersRef.current.length > 0) {
-      freeReplayTimersRef.current.forEach(clearTimeout);
-      freeReplayTimersRef.current = [];
+    if (!isReplaying) {
+      if (freeReplayTimersRef.current.length > 0) {
+        freeReplayTimersRef.current.forEach(clearTimeout);
+        freeReplayTimersRef.current = [];
+      }
+      setFreeReplayNoteIndexes([]);
     }
   }, [isReplaying]);
 
@@ -410,18 +422,40 @@ export function useFreePractice({
     );
     setResultsOverlayVisible(false);
     setIsReplaying(true);
-    for (const event of freeMidiRecord.events) {
+    setFreeReplayNoteIndexes([]);
+
+    const events = freeMidiRecord.events;
+    // Group events by their (relative) onset so a chord's pitches are
+    // highlighted together, and light each note group as it plays — mirroring
+    // how score-practice replay highlights the note(s) currently sounding.
+    // The staff's attack-note list for replay is identical in order to
+    // `events`, so event index == staff index.
+    let groupStart = 0;
+    while (groupStart < events.length) {
+      const ts = events[groupStart].timestampMs;
+      let end = groupStart + 1;
+      while (end < events.length && events[end].timestampMs === ts) end++;
+      const indexes: number[] = [];
+      for (let k = groupStart; k < end; k++) indexes.push(k);
+      const delay = ts - firstTs;
+      const timer = setTimeout(() => {
+        setFreeReplayNoteIndexes(indexes);
+      }, delay);
+      freeReplayTimersRef.current.push(timer);
+      groupStart = end;
+    }
+
+    for (const event of events) {
       const delay = event.timestampMs - firstTs;
       const timer = setTimeout(() => {
         context.playNote({ midiNote: event.midiNote, timestamp: Date.now(), type: 'attack', durationMs: event.durationMs ?? 200 });
       }, delay);
       freeReplayTimersRef.current.push(timer);
     }
-    const lastDelay = freeMidiRecord.events.length > 0
-      ? freeMidiRecord.events[freeMidiRecord.events.length - 1].timestampMs - firstTs
-      : 0;
+    const lastDelay = events.length > 0 ? events[events.length - 1].timestampMs - firstTs : 0;
     const doneTimer = setTimeout(() => {
       context.stopPlayback();
+      setFreeReplayNoteIndexes([]);
       setIsReplaying(false);
     }, lastDelay + 500);
     freeReplayTimersRef.current.push(doneTimer);
@@ -525,6 +559,7 @@ export function useFreePractice({
     freeEffectiveBpmRef,
     freeTempoMultiplier,
     freeTempoMultiplierRef,
+    freeReplayNoteIndexes,
     handleFreePractice,
     handleFreeToggle,
     handleFreeRepractice,

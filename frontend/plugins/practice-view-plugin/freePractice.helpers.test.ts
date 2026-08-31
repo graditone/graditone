@@ -249,6 +249,170 @@ describe('detectMeasures — robust / complex performances (US3)', () => {
     expect(measures[0].rests).toHaveLength(0);
   });
 
+  it('T-NEW-17 (Issue #10): a note released slightly early is still a full note — the measure stays complete', () => {
+    // Four quarter notes at 60 BPM (beat 1000ms, cell 250ms). The second note is
+    // released 250ms early (held 750ms) but the next attack still lands on time.
+    // The old `min(heldSteps, gapSteps)` capped it to a "dotted 1/8" leaving the
+    // measure at 15/16 — incomplete, short an 1/8. Now the early release is only
+    // honoured when the resulting silence is a genuine rest (>= 1 beat).
+    const beat = 1000;
+    const events = [
+      q(0, beat, 60),
+      q(beat, beat * 0.75, 62),
+      q(2 * beat, beat, 64),
+      q(3 * beat, beat, 66),
+    ];
+    const measures = detectMeasures(events, 60);
+    expect(measures).toHaveLength(1);
+    expect(measures[0].complete).toBe(true);
+    expect(measureContent(measures[0])).toBe(STEPS_PER_MEASURE);
+    expect(measures[0].rests).toHaveLength(0);
+    const values = measures[0].notes.map((n) => computeNoteValue(n.durationSteps));
+    expect(values).toEqual(['1/4', '1/4', '1/4', '1/4']);
+  });
+
+  it('T-NEW-18 (Issue #10): a genuinely short note followed by >= 1 beat of silence remains short + rest (not over-extended)', () => {
+    // Quarter slot at beat 0 held for only half a beat (an eighth), then a beat
+    // and a half of deliberate silence before the next attack. Must stay an
+    // eighth with a resulting rest, NOT be stretched to a quarter.
+    const beat = 1000;
+    const events = [
+      q(0, beat / 2, 60),
+      q(2 * beat, beat, 62),
+      q(3 * beat, beat, 64),
+    ];
+    const measures = detectMeasures(events, 60);
+    expect(measures).toHaveLength(1);
+    expect(measures[0].complete).toBe(true);
+    const values = measures[0].notes.map((n) => computeNoteValue(n.durationSteps));
+    expect(values[0]).toBe('1/8');
+    expect(measures[0].rests.length).toBeGreaterThan(0);
+  });
+
+  it('T-NEW-19 (Issue #10 follow-up): the LAST note released slightly early stays a full note — measure completes (regression: 3x1/4 + 1x1/8)', () => {
+    // End of session: four quarters, the last released ~300ms early (held 700ms
+    // of a 1000ms beat). The pre-fix last-note branch used rounded held steps,
+    // producing "dotted 1/8" (700ms→3 cells) or "1/8" (500ms→2 cells) and an
+    // incomplete measure — exactly the reported "3x1/4 + 1x1/8, missing a 1/8".
+    const beat = 1000;
+    for (const hold of [700, 500]) {
+      const events = [
+        q(0, beat, 60),
+        q(beat, beat, 62),
+        q(2 * beat, beat, 64),
+        q(3 * beat, hold, 66),
+      ];
+      const measures = detectMeasures(events, 60);
+      expect(measures).toHaveLength(1);
+      expect(measures[0].complete).toBe(true);
+      expect(measureContent(measures[0])).toBe(STEPS_PER_MEASURE);
+      const values = measures[0].notes.map((n) => computeNoteValue(n.durationSteps));
+      expect(values).toEqual(['1/4', '1/4', '1/4', '1/4']);
+    }
+  });
+
+  it('T-NEW-21 (Issue #10 follow-up): a note drifting off its beat slot mid-measure no longer leaves the measure incomplete', () => {
+    // Two measures of quarters. In measure 1 the LAST attack arrives ~0.5 beat
+    // early (drifts to an off-quarter grid slot at step ~10) and is held short.
+    // The produced sub-beat remnants must never leave measure 1 incomplete:
+    // sub-beat holes are folded/extended and the measure must report complete.
+    const beat = 1000;
+    const events = [
+      q(0, 900, 60),
+      q(beat, 900, 62),
+      q(2 * beat, 900, 64),
+      q(2 * beat + 500, 700, 66), // drifts to ~step 10, held short
+      q(4 * beat, 900, 68),
+      q(5 * beat, 900, 70),
+      q(6 * beat, 900, 72),
+      q(7 * beat, 900, 74),
+    ];
+    const measures = detectMeasures(events, 60);
+    expect(measures).toHaveLength(2);
+    for (const measure of measures) {
+      expect(measure.complete).toBe(true);
+      expect(measureContent(measure)).toBe(STEPS_PER_MEASURE);
+    }
+  });
+
+  it('T-NEW-22 (Issue #10 follow-up): a non-final measure ending with >= 1 beat of genuine silence emits a trailing rest (not incomplete)', () => {
+    // Measure 1: 3 quarters then a beat of silence (player pauses before the
+    // next measure). That trailing silence is a genuine rest — measure 1 must
+    // read complete (3x1/4 + 1/4 rest), NOT be left incomplete.
+    const beat = 1000;
+    const events = [
+      q(0, beat, 60),
+      q(beat, beat, 62),
+      q(2 * beat, beat, 64),
+      q(4 * beat, beat, 68),
+      q(5 * beat, beat, 70),
+      q(6 * beat, beat, 72),
+      q(7 * beat, beat, 74),
+    ];
+    const measures = detectMeasures(events, 60);
+    expect(measures).toHaveLength(2);
+    expect(measures[0].complete).toBe(true);
+    expect(measures[0].rests.length).toBeGreaterThan(0); // the trailing 1/4 rest
+    expect(measures[1].complete).toBe(true);
+  });
+
+  it('T-NEW-23 (Issue #10 follow-up): cumulative tempo drift on quarter notes re-aligns to the beat grid (no off-quarter 1/8)', () => {
+    // A slightly fast/slow quarter performance: each onset drifts -50ms per beat
+    // (cumulative). The pre-fix 16th-grid snap landed the last note on an
+    // off-quarter cell (10 instead of 12), splitting the measure into
+    // "2x1/4 + 1/8 + 1/4" and leaving it incomplete. The beat-grid snap must
+    // re-align it to four clean quarters.
+    const beat = 1000;
+    const events = [
+      q(0, 900, 60),
+      q(beat - 50, 900, 62),
+      q(2 * beat - 100, 900, 64),
+      q(3 * beat - 150, 900, 66),
+    ];
+    const measures = detectMeasures(events, 60);
+    expect(measures).toHaveLength(1);
+    expect(measures[0].complete).toBe(true);
+    const steps = measures[0].notes.map((n) => n.startStep);
+    expect(steps).toEqual([0, 4, 8, 12]);
+    const values = measures[0].notes.map((n) => computeNoteValue(n.durationSteps));
+    expect(values).toEqual(['1/4', '1/4', '1/4', '1/4']);
+    expect(measures[0].rests).toHaveLength(0);
+  });
+
+  it('T-NEW-24 (Issue #10 follow-up): eighth-note content still snaps to the 16th grid (beat snap not applied)', () => {
+    // Eighths must NOT be re-aligned to quarters; the 16th grid preserves them.
+    const beat = 1000;
+    const events = Array.from({ length: 8 }, (_, i) => q(i * (beat / 2), beat / 2 - 20, 60 + i));
+    const measures = detectMeasures(events, 60);
+    expect(measures).toHaveLength(1);
+    expect(measures[0].complete).toBe(true);
+    const values = measures[0].notes.map((n) => computeNoteValue(n.durationSteps));
+    expect(values).toEqual(Array(8).fill('1/8'));
+  });
+
+  it('T-NEW-20 (Issue #10 follow-up): the same holds before a >= 1-measure pause also complete their measure', () => {
+    // Measure 1's last note released early, then a full-measure pause (segment
+    // split). Note 4 is the LAST of its segment — it must complete measure 1.
+    const beat = 1000;
+    const events = [
+      q(0, beat, 60),
+      q(beat, beat, 62),
+      q(2 * beat, beat, 64),
+      q(3 * beat, 700, 66),
+      q(8 * beat, beat, 68),
+      q(9 * beat, beat, 70),
+      q(10 * beat, beat, 72),
+      q(11 * beat, beat, 74),
+    ];
+    const measures = detectMeasures(events, 60);
+    expect(measures).toHaveLength(2);
+    for (const measure of measures) {
+      expect(measure.complete).toBe(true);
+      const values = measure.notes.map((n) => computeNoteValue(n.durationSteps));
+      expect(values).toEqual(['1/4', '1/4', '1/4', '1/4']);
+    }
+  });
+
   it('T-NEW-14 (Issue #8): a measure-crossing eighth played slightly early snaps to the NEXT measure — no 3-notes-in-a-beat split', () => {
     // First quarter of the second measure is played 60ms early (just before the
     // boundary). The raw-time floor previously clamped it to step 15 of the

@@ -280,6 +280,7 @@ export const PluginStaffViewer: React.FC<PluginStaffViewerProps> = ({
   bpm,
   timestampOffset = 0,
   highlightedNoteIndex,
+  highlightedNoteIndexes,
   keySignature = 0,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -338,12 +339,22 @@ export const PluginStaffViewer: React.FC<PluginStaffViewerProps> = ({
   }, [notes, wasmLayout, bpm, timestampOffset]);
 
   const highlightedNoteIdsForWasm = useMemo(() => {
-    if (bpm == null || highlightedNoteIndex == null) return undefined;
+    if (bpm == null) return undefined;
     const attacks = notes.filter(e => !e.type || e.type === 'attack');
+    // Multi-index mode (e.g. a whole chord): derive one WASM note id per index.
+    if (highlightedNoteIndexes && highlightedNoteIndexes.length > 0) {
+      const ids = new Set<string>();
+      for (const idx of highlightedNoteIndexes) {
+        const note = attacks[idx];
+        if (note) ids.add(`pnote-${idx}-${note.midiNote}`);
+      }
+      return ids.size > 0 ? ids : undefined;
+    }
+    if (highlightedNoteIndex == null) return undefined;
     const note = attacks[highlightedNoteIndex];
     if (!note) return undefined;
     return new Set([`pnote-${highlightedNoteIndex}-${note.midiNote}`]);
-  }, [notes, bpm, highlightedNoteIndex]);
+  }, [notes, bpm, highlightedNoteIndex, highlightedNoteIndexes]);
 
   // ── JS path hooks (always run — results unused when bpm is set) ───────────
   const [scrollX, setScrollX] = useState(0);

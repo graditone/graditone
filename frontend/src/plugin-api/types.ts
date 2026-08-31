@@ -90,6 +90,12 @@ export interface PluginStaffViewerProps {
    */
   readonly highlightedNoteIndex?: number;
   /**
+   * When provided, the attack-notes at these zero-based indexes are highlighted
+   * together on the WASM layout staff (e.g. every note of a chord). Supersedes
+   * `highlightedNoteIndex` when both are set.
+   */
+  readonly highlightedNoteIndexes?: readonly number[];
+  /**
    * Key signature expressed as the number of sharps (positive) or flats (negative)
    * in MusicXML `<fifths>` convention.  E.g. 2 = D Major / B minor, -3 = Eb Major.
    * Defaults to 0 (C Major / no accidentals).
