@@ -146,6 +146,25 @@ export class MetronomeEngine {
       }).toDestination();
     }
 
+    // When standalone (skipTransportStart=false), reset the Transport to position
+    // 0 BEFORE registering the scheduleRepeat. engine.stop() deliberately never
+    // stops the Transport (score playback may own it), so after a metronome stop
+    // the Transport keeps advancing. If the repeat were registered while the
+    // Transport sits at a leftover position (e.g. a previous session ran ~20 s),
+    // Tone anchors the repeat's events to that stale position → the first event
+    // fires immediately but the rest only fire once the Transport has advanced
+    // back to that point again (≈20 s of silence), then ticking resumes.
+    // Resetting first guarantees the repeat anchors at position 0 so the first
+    // tick fires at the '+0.01' Transport start and every interval after.
+    //
+    // A second Transport.start() here would reset timing and produce a spurious
+    // double-click at the beat boundary — which is exactly why skipTransportStart
+    // is true when the playback engine owns the Transport.
+    if (!skipTransportStart) {
+      (Tone.Transport as unknown as { state: string; stop: () => void; start: (t?: unknown, p?: unknown) => void }).stop();
+      Tone.Transport.start('+0.01', 0);
+    }
+
     // Schedule repeat beat on Transport.
     // scheduleOffsetSeconds > 0 phase-locks the first click to a beat boundary
     // when the Transport is already running (playback mid-measure).
@@ -168,31 +187,6 @@ export class MetronomeEngine {
     this._unsubTransportRestart = adapter.onTransportRestart(() => {
       this._clearEvent();
     });
-
-    // Start Transport in standalone mode — skipped when playback engine owns the Transport.
-    // When skipTransportStart=true the caller guarantees Transport is already running (or
-    // is about to be started by startTransport()).  A second Transport.start() here would
-    // reset Transport timing and produce a spurious double-click at the beat boundary.
-    //
-    // When standalone (skipTransportStart=false), always RESET the Transport to position
-    // 0 — not only when it happens to be stopped. engine.stop() deliberately never stops
-    // the Transport (score playback may own it), so after a metronome stop in free
-    // practice the Transport stays 'started' and keeps advancing. Without a reset, a
-    // later start schedules the repeat at position 0 which is already in the past → the
-    // first click fires at the next boundary, up to a whole beat late relative to the
-    // first played note. Resetting guarantees the first tick (offset 0) fires with the note.
-    // Standalone (skipTransportStart=false): always RESET Transport to position 0 —
-    // not only when it happens to be stopped. engine.stop() never stops the
-    // Transport (score playback may own it), so after a metronome stop the
-    // Transport stays 'started' and keeps advancing. Without a reset, a later
-    // start schedules the repeat at position 0 which is already in the past → the
-    // first click fires at the next boundary, up to a whole beat late relative to
-    // the first played note (free-practice ~1/10 delay after restarting). Resetting
-    // guarantees the first tick (offset 0) fires with the note.
-    if (!skipTransportStart) {
-      (Tone.Transport as unknown as { state: string; stop: () => void; start: (t?: unknown, p?: unknown) => void }).stop();
-      Tone.Transport.start('+0.01', 0);
-    }
 
     this._notifySubscribers();
   }

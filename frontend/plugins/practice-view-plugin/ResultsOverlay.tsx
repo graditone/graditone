@@ -17,6 +17,7 @@ import type {
   PartialPerformanceRecord,
 } from './practiceEngine.types';
 import type { FreeMidiRecord } from '../../src/plugin-api';
+import { formatStateLabel } from './stateLabel';
 
 // ---------------------------------------------------------------------------
 // Helpers (moved from PracticeViewPlugin.tsx)
@@ -383,8 +384,8 @@ export function ResultsOverlay({
                           : '❌'}
                       </span>{' '}
                       {r.outcome === 'correct' ? t('practice.results.correct')
-                        : r.outcome === 'correct-late' ? t('practice.results.off_beat')
-                        : r.outcome === 'early-release' ? 'Held too short'
+                        : r.outcome === 'correct-late' ? formatStateLabel(r.relativeDeltaMs)
+                        : r.outcome === 'early-release' ? formatStateLabel(r.relativeDeltaMs)
                         : t('practice.results.wrong')}
                     </td>
                     <td>{r.wrongAttempts > 0 ? r.wrongAttempts : '—'}</td>

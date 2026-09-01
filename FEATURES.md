@@ -73,6 +73,8 @@ A tablet-native app for interactive scores, designed for practice and performanc
   - **Tied note handling** (Feature 051) - Tied note groups are treated as a single practice event; continuation notes are skipped so the user only presses a key once per independently-attacked note
 - **Importable plugins** - Third-party plugins distributed as ZIP packages
 - **Practice View plugin** - Freeform score annotation and practice view; covered by e2e smoke tests
+  - **Timing deviation in State column** (Feature 095) - In the final report's per-note table, out-of-time notes show their signed timing deviation in the State column (e.g., `+120 ms`, `-80 ms`, `0 ms`) instead of a qualitative label; the ⏱️ icon is retained and Correct/Wrong labels are unchanged
+  - **Live timing feedback overlay** (Feature 096) - During practice, playing a note out of time flashes a large theme-styled `±ms` overlay (e.g., `+120 ms`) that fades in/out quickly (~1s);it updates in place on rapid misses, never stacks, and is non-blocking. In-time/wrong notes andreplay do not trigger it.
 - **External plugin e2e** - Documented approach for adding Playwright smoke tests to any plugin in `plugins-external/`; see `docs/e2e-external-plugins.md`
 
 ---

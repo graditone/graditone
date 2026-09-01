@@ -67,7 +67,7 @@ test.describe('Feature 045: Persist Uploaded Scores', () => {
 
     await openTrainScoreSelector(page);
 
-    await expect(page.getByText('My Scores')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: 'My Scores' })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('E2E Test Score')).toBeVisible();
   });
 
@@ -82,7 +82,7 @@ test.describe('Feature 045: Persist Uploaded Scores', () => {
 
     await openTrainScoreSelector(page);
 
-    await expect(page.getByText('My Scores')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: 'My Scores' })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Persistent Score')).toBeVisible();
   });
 
@@ -94,7 +94,7 @@ test.describe('Feature 045: Persist Uploaded Scores', () => {
 
     await openTrainScoreSelector(page);
 
-    await expect(page.getByText('My Scores')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: 'My Scores' })).toBeVisible({ timeout: 10_000 });
     // Both entries should be visible with correct names
     await expect(page.getByText('My Score (2)')).toBeVisible();
     // 'My Score' without the suffix — use exact match to avoid matching 'My Score (2)'
@@ -108,7 +108,7 @@ test.describe('Feature 045: Persist Uploaded Scores', () => {
 
     await openTrainScoreSelector(page);
 
-    await expect(page.getByText('My Scores')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: 'My Scores' })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Score To Delete')).toBeVisible();
 
     // Click the × delete button

@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { render, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { ResultsOverlay } from './ResultsOverlay';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
@@ -56,18 +56,34 @@ function makeCompleteOverlayProps(extra?: Record<string, unknown>) {
     wrongAttempts: 0,
   } as unknown as PracticeNoteResult;
 
+  const results = extra?.noteResults ? (extra.noteResults as PracticeNoteResult[]) : [noteResult];
+
   return {
     ...base,
     practiceState: {
       ...INITIAL_PRACTICE_STATE,
       mode: 'complete' as const,
-      noteResults: [noteResult],
+      noteResults: results,
     },
     resultsOverlayVisible: true,
     loopRegion: { startTick: 0, endTick: 100 },
     loopCount: 3,
     ...extra,
   };
+}
+
+/** Build a minimal PracticeNoteResult with the given outcome and deviation. */
+function makeNoteResult(outcome: string, relativeDeltaMs: number, index = 0): PracticeNoteResult {
+  return {
+    noteIndex: index,
+    outcome,
+    playedMidi: 60,
+    expectedMidi: [60],
+    responseTimeMs: 1000 + index * 500,
+    expectedTimeMs: 1000 + index * 500,
+    relativeDeltaMs,
+    wrongAttempts: 0,
+  } as unknown as PracticeNoteResult;
 }
 
 /** Provide LocaleProvider for tests */
@@ -109,5 +125,97 @@ describe('ResultsOverlay', () => {
     expect(slider).not.toBeNull();
     expect(slider!.title).toBeTruthy();
     expect(slider!.title).not.toBe('');
+  });
+
+// T011: the saved-record path renders the same State labels as the live path (US2)
+  it('T011: shows "+120 ms" for a correct-late note rendered from a saved record', () => {
+    const props = makeCompleteOverlayProps({
+      practiceState: {
+        ...INITIAL_PRACTICE_STATE,
+        mode: 'inactive' as const,
+        noteResults: [],
+      },
+      performanceRecord: {
+        notes: [],
+        noteResults: [makeNoteResult('correct-late', 120)],
+        wrongNoteEvents: [],
+        bpmAtCompletion: 120,
+        tempoMultiplier: 1.0,
+      },
+      partialPerformanceRecord: null,
+    });
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+    fireEvent.click(container.querySelector('.practice-results__details-summary')!);
+    const row = container.querySelector('.practice-results__row--correct-late');
+    expect(row).not.toBeNull();
+    const statusCell = row!.children[3];
+    expect(statusCell.textContent).toContain('+120 ms');
+    expect(statusCell.textContent).toContain('⏱️');
+  });
+
+// T006: out-of-time rows show the signed ms deviation in the State column
+  it('T006a: shows "+120 ms" for a correct-late note played late', () => {
+    const props = makeCompleteOverlayProps({
+      noteResults: [makeNoteResult('correct-late', 120)],
+    });
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+    fireEvent.click(container.querySelector('.practice-results__details-summary')!);
+    const row = container.querySelector('.practice-results__row--correct-late');
+    expect(row).not.toBeNull();
+    // Status cell is the 4th column (0:#, 1:expected, 2:played, 3:status)
+    const statusCell = row!.children[3];
+    expect(statusCell.textContent).toContain('+120 ms');
+    expect(statusCell.textContent).toContain('⏱️');
+  });
+
+  it('T006b: shows "-80 ms" for an early-release note', () => {
+    const props = makeCompleteOverlayProps({
+      noteResults: [makeNoteResult('early-release', -80)],
+    });
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+    fireEvent.click(container.querySelector('.practice-results__details-summary')!);
+    const row = container.querySelector('.practice-results__row--early-release');
+    expect(row).not.toBeNull();
+    const statusCell = row!.children[3];
+    expect(statusCell.textContent).toContain('-80 ms');
+    expect(statusCell.textContent).toContain('⏱️');
+  });
+
+  it('T006c: shows "0 ms" for an out-of-time note with zero deviation', () => {
+    const props = makeCompleteOverlayProps({
+      noteResults: [makeNoteResult('correct-late', 0)],
+    });
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+    fireEvent.click(container.querySelector('.practice-results__details-summary')!);
+    const row = container.querySelector('.practice-results__row--correct-late');
+    expect(row).not.toBeNull();
+    const statusCell = row!.children[3];
+    expect(statusCell.textContent).toContain('0 ms');
+  });
+
+  it('T006d: keeps the "Correct" label for in-tolerance notes', () => {
+    const props = makeCompleteOverlayProps({
+      noteResults: [makeNoteResult('correct', 40)],
+    });
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+    fireEvent.click(container.querySelector('.practice-results__details-summary')!);
+    const row = container.querySelector('.practice-results__row--correct');
+    expect(row).not.toBeNull();
+    const statusCell = row!.children[3];
+    expect(statusCell.textContent).toContain('Correct');
+    expect(statusCell.textContent).toContain('✅');
+  });
+
+  it('T006e: keeps the "Wrong" label for wrong-note rows', () => {
+    const props = makeCompleteOverlayProps({
+      noteResults: [makeNoteResult('wrong', -200)],
+    });
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+    fireEvent.click(container.querySelector('.practice-results__details-summary')!);
+    const row = container.querySelector('.practice-results__row--wrong');
+    expect(row).not.toBeNull();
+    const statusCell = row!.children[3];
+    expect(statusCell.textContent).toContain('Wrong');
+    expect(statusCell.textContent).toContain('❌');
   });
 });

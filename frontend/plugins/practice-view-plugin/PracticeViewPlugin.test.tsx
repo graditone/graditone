@@ -1171,32 +1171,15 @@ describe('Feature 042 — US2: hold indicator (T022-T024)', () => {
 // ---------------------------------------------------------------------------
 
 describe('Feature 042 — US3: early-release scoring (T028, T029, T030)', () => {
-  it('T030: results table renders "Held too short" label for early-release outcomes', () => {
+  it('T030: results table renders correct state labels for a completed session (regression guard)', () => {
     // Use fake rAF that never fires → session never advances via hold
     const origRAF = window.requestAnimationFrame;
     window.requestAnimationFrame = (_cb) => 0;
 
-    // Complete a session with early-release by:
-    // 1. Pressing hold note → entering holding
-    // 2. Releasing → EARLY_RELEASE recorded
-    // 3. Pressing again (no durationTicks this time via a non-hold note for the second press)
-    // Since we want to complete the session, use a single zero-duration note so the
-    // first CORRECT_MIDI advances immediately after the early-release retry path is cleared.
+    // Complete a session with a single zero-duration note. With no early-release
+    // this verifies the default labels ("Correct") still render and the results
+    // overlay wiring remains intact after the State label change (095).
     //
-    // Actually simpler: use a 0-duration note for a complete session, check that
-    // the results table does NOT show 'Held too short' (since there's no early-release).
-    // Then verify with a mock that produces an early-release result in the overlay.
-    //
-    // The results overlay renders results from practiceState.noteResults.
-    // We can verify the label by completing a session where an early-release occurs.
-    // Use: 1 hold note → press → release early → press again → no hold (durationTicks=0 second time)
-    // But the retry CORRECT_MIDI re-enters holding... this is complex without rAF.
-    //
-    // Simpler approach: test via an existing completed session by checking normal labels work,
-    // then update expectation once 'early-release' label is added.
-    // For now, test the result rendering by simulating a completed session where
-    // all notes are zero-duration (correct baseline) — then rely on engine tests for outcome specifics.
-
     // Minimal test: verify "Wrong" outcome shows expected label (regression guard)
     const notes = [
       { midiPitches: [60], noteIds: ['n1'], tick: 0, durationTicks: 0 },
@@ -1217,9 +1200,9 @@ describe('Feature 042 — US3: early-release scoring (T028, T029, T030)', () => 
     window.requestAnimationFrame = origRAF;
   });
 
-  it('T030b: "Held too short" label appears in results table for early-release outcome', () => {
-    // Directly inject an early-release result into the rendered table by completing
-    // a hold session via the rAF path using fake timers.
+  it('T030b: early-release rows show the signed ms deviation in the results table', () => {
+    // Create an early-release result through the rAF hold path using fake timers,
+    // then verify the results table State cell renders the new ms label (095).
     const origRAF = window.requestAnimationFrame;
     vi.useFakeTimers();
 
@@ -1259,9 +1242,20 @@ describe('Feature 042 — US3: early-release scoring (T028, T029, T030)', () => 
     // Results overlay should appear (session complete after HOLD_COMPLETE)
     const overlay = screen.queryByRole('region', { name: /practice results/i });
     if (overlay) {
-      // If the session completed via HOLD_COMPLETE, label should NOT be 'Held too short'
       // The early-release result was for the first attempt; HOLD_COMPLETE advances.
-      // This verifies the results table rendering includes early-release labels.
+      // An early-release row may or may not survive in noteResults depending on the
+      // retry path, but if present its State cell must carry the new ms label and
+      // must no longer use the superseded wording.
+      const overlayEl = overlay as HTMLElement;
+      fireEvent.click(overlayEl.querySelector('.practice-results__details-summary') as HTMLElement);
+      const rows = Array.from(overlayEl.querySelectorAll('.practice-results__row'));
+      for (const row of rows) {
+        if (row.className.includes('early-release')) {
+          const statusCell = row.children[3];
+          expect(statusCell.textContent).toContain('ms');
+          expect(statusCell.textContent).not.toContain('Held too short');
+        }
+      }
       expect(overlay).toBeTruthy();
     }
 
@@ -1866,6 +1860,166 @@ describe('PracticeViewPlugin — metronome deferred start (Feature 083 US3)', ()
     });
     expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
   });
+
+  it('toggling the metronome while practice is in ACTIVE mode starts it immediately (never silently arms)', async () => {
+    // Regression (096-fix): previously the arming flag was also set while the
+    // practice was in 'active'/'holding', but the deferred-start callback only
+    // fires from 'waiting', so the metronome could stay armed forever without
+    // ever starting.
+    // (Not applicable to free practice: its first-note callback fires on every attack.)
+
+    const ctx = createMockContext({ status: 'ready', staffCount: 1 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes,
+      totalAvailable: notes.length,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    // Start practice and play the first note — session is now in 'active' mode.
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+
+    // Toggle the metronome mid-session (active) — must start immediately,
+// not armsilently.
+
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .not.toContain('practice-plugin__metro-btn--armed');
+  });
+});
+
+// Feature 083 — Metronome stops when the score practice ends (completion or stop)
+describe('PracticeViewPlugin — metronome stops when score practice ends (Feature 083)', () => {
+  const finishNotes = [
+    { midiPitches: [60], noteIds: ['n1'], tick: 0, durationTicks: 0, sustainedPitches: [] },
+    { midiPitches: [62], noteIds: ['n2'], tick: 960, durationTicks: 0, sustainedPitches: [] },
+  ];
+
+  function setupFinishingPractice() {
+    const ctx = createMockContext({ status: 'ready', staffCount: 1 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: finishNotes,
+      totalAvailable: finishNotes.length,
+      clef: 'Treble',
+    });
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+    return ctx;
+  }
+
+  it('stops the metronome when the score practice completes', () => {
+    const ctx = setupFinishingPractice();
+    const base = Date.now();
+
+    // Arm the metronome while waiting.
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    expect(ctx.context.metronome.toggle).not.toHaveBeenCalled(); // armed, deferred
+
+    // First note → deferred start.
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+    // Real metronome engine becomes active.
+    act(() => { ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
+
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+
+    // Second note (in tolerance) → practice completes → results overlay.
+    vi.setSystemTime(base + 600);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
+    // The metronome engine must have been stopped on completion...
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+    // ...and the engine acks inactive (real app acks via the subscriber).
+    act(() => { ctx.simulateMetronomeState({ active: false, beatIndex: -1, isDownbeat: false, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
+    // ...and the metronome returns to the ARMED state (ready to start on the
+    // first note of the next practice), not fully off.
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
+  });
+
+  it('stops the metronome when the user stops the score practice manually', () => {
+    const ctx = setupFinishingPractice();
+    const base = Date.now();
+
+    // Enable the metronome realistically: arm in waiting, first note starts it.
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    act(() => { ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+
+    // User stops practice mid-session.
+    fireEvent.click(screen.getByRole('button', { name: /stop practice mode/i }));
+
+    // Engine stopped (toggle fired) ...
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+    // ...engine acks inactive (real app acks via the subscriber)...
+    act(() => { ctx.simulateMetronomeState({ active: false, beatIndex: -1, isDownbeat: false, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
+    // ...and returns to the armed state (ready for the next practice).
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
+  });
+
+  it('re-arms the metronome on Repractice when it was enabled in the finished session', () => {
+    const ctx = setupFinishingPractice();
+    const base = Date.now();
+
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    act(() => { ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
+    vi.setSystemTime(base + 600);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
+
+    // The engine acknowledges it was stopped on completion (real-app behaviour).
+    act(() => { ctx.simulateMetronomeState({ active: false, beatIndex: -1, isDownbeat: false, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
+
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+
+    // Repractice → new session starts, metronome must be re-armed (starts on the
+    // first note), NOT started immediately.
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /repractice/i })); });
+
+    expect(ctx.context.metronome.toggle).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
+  });
+
+  it('keeps the metronome armed across stop → start so the next practice starts it on the first note', () => {
+    const ctx = setupFinishingPractice();
+    const base = Date.now();
+
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    act(() => { ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
+
+    // Complete the practice → engine stopped, metronome re-armed.
+    vi.setSystemTime(base + 600);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    act(() => { ctx.simulateMetronomeState({ active: false, beatIndex: -1, isDownbeat: false, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
+
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+
+    // Fresh start (not Repractice) → armed is preserved → first note starts it.
+    fireEvent.click(screen.getByRole('button', { name: /start practice mode/i }));
+    expect(ctx.context.metronome.toggle).not.toHaveBeenCalled(); // still armed
+    vi.setSystemTime(base + 2000);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+  });
 });
 
 // Feature 092/083 — Free practice metronome lifecycle: starts on the first
@@ -2128,5 +2282,117 @@ describe('PracticeViewPlugin — free practice tempo readout (Feature 093)', () 
     // the free label read 30 (exit/re-enter desync).
     const calls = (ctx.context.scorePlayer.setTempoMultiplier as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls[calls.length - 1][0]).toBeCloseTo(0.25, 2);
+  });
+});
+
+// Feature 096 — Live Timing Feedback Overlay (timing-feedback-overlay)
+
+describe('Feature 096 — live timing feedback overlay', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** 4 zero-duration notes at 120 BPM (960 PPQ → quarter note = 500ms apart). */
+  const OVERLAY_NOTES = [
+    { midiPitches: [60], noteIds: ['n0'], tick: 0, durationTicks: 0 },
+    { midiPitches: [62], noteIds: ['n1'], tick: 960, durationTicks: 0 },
+    { midiPitches: [64], noteIds: ['n2'], tick: 1920, durationTicks: 0 },
+    { midiPitches: [60], noteIds: ['n3'], tick: 2880, durationTicks: 0 },
+  ];
+
+  function setupOverlayPractice() {
+    const ctx = createMockContext({ status: 'ready', staffCount: 1, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: OVERLAY_NOTES,
+      totalAvailable: OVERLAY_NOTES.length,
+      clef: 'Treble',
+    });
+    vi.useFakeTimers();
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+    return ctx;
+  }
+
+  it('T096-1: shows "+600 ms" when note1 is played 600ms late (session still active)', () => {
+    const ctx = setupOverlayPractice();
+    const base = Date.now();
+
+    // note0 correct at t=0 → waiting → active (target = note1)
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    // note1 pressed at t=1100; expected 500 → relativeDeltaMs = +600 (> 500 threshold)
+    vi.setSystemTime(base + 1100);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+
+    const el = document.querySelector('.practice-plugin__timing-overlay');
+    expect(el).not.toBeNull();
+    expect(el!.textContent).toBe('+600 ms');
+  });
+
+  it('T096-2: auto-dismisses the overlay after the brief display lifetime', () => {
+    const ctx = setupOverlayPractice();
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    vi.setSystemTime(base + 1100);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+
+    expect(document.querySelector('.practice-plugin__timing-overlay')).not.toBeNull();
+
+    // Advance past the hold (≈1s) + fade-out window.
+    act(() => { vi.advanceTimersByTime(1300); });
+    expect(document.querySelector('.practice-plugin__timing-overlay')).toBeNull();
+  });
+
+  it('T096-3: does NOT show the overlay for a correct (in-tolerance) note', () => {
+    const ctx = setupOverlayPractice();
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    // In-tolerance next note: pressed within 500ms of expected (t=700 vs expected 500).
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+
+    expect(document.querySelector('.practice-plugin__timing-overlay')).toBeNull();
+  });
+
+  it('T096-4: does NOT show the overlay for a wrong pitch', () => {
+    const ctx = setupOverlayPractice();
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    // Wrong pitch → WRONG_MIDI path, not an out-of-time result.
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 90 }); });
+
+    expect(document.querySelector('.practice-plugin__timing-overlay')).toBeNull();
+  });
+
+  it('T096-5: rapid out-of-time notes keep a single overlay showing the latest value', () => {
+    const ctx = setupOverlayPractice();
+    const base = Date.now();
+
+    // note0 correct
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    // note1 late (+600)
+    vi.setSystemTime(base + 1100);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+
+    // note2 played even later → larger (interval-based) deviation —
+    // within the overlay's lifetime, so it must refresh in place.
+    // relativeDeltaMs = (2400-1100) - (1000-500) = 800 → "+800 ms".
+    vi.setSystemTime(base + 2400);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+
+    const overlays = document.querySelectorAll('.practice-plugin__timing-overlay');
+    expect(overlays.length).toBe(1);
+    expect(overlays[0].textContent).toBe('+800 ms');
   });
 });
