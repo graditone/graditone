@@ -242,6 +242,7 @@ Extends tempo control precision for both Play Score and Practice View, and adds 
 - **Metronome armed state** (Practice View only): Toggling the metronome button while practice is in "waiting" mode arms it — the metronome does **not** start immediately; instead it waits for the first MIDI note attack and starts in sync with the player's first note
 - **Armed visual indicator**: The metronome button shows a pulsing amber glow while armed (`--armed` CSS modifier)
 - **Auto-disarm on stop**: If the user stops practice before playing any note, the armed state is cleared automatically
+- **Unified metronome lifecycle API** (Feature 097): The metronome's lifecycle (arm / deferred first-note start / stop / re-arm) now lives in a single shared engine + plugin API (`arm`/`disarm`/`startFromDeferred` on `context.metronome`, `MetronomeState.armed`), and the Practice plugin drives it through one `useMetronomeLifecycle` hook — score practice and free practice use identical logic, with no per-plugin armed-state duplication
 
 **Spec**: `specs/083-tempo-metronome-practice/`  
 **Updated**: July 2025

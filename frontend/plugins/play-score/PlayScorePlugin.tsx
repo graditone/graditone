@@ -49,6 +49,7 @@ const INITIAL_PLAYER_STATE: ScorePlayerState = {
 
 const INITIAL_METRONOME_STATE: MetronomeState = {
   active: false,
+  armed: false,
   beatIndex: -1,
   isDownbeat: false,
   bpm: 0,
