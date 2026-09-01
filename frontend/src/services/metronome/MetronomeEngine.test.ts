@@ -356,6 +356,31 @@ describe('MetronomeEngine — start/stop lifecycle (T002)', () => {
     expect(startArgs).toBe(0); // position 0 → first tick fires immediately
   });
 
+  it('standalone start() resets the Transport to 0 BEFORE registering the repeat (Issue: first-tick-then-silence with leftover Transport)', async () => {
+    // engine.stop() deliberately leaves Tone.Transport running (score playback may
+    // own it). If a later standalone start() registers its scheduleRepeat while the
+    // Transport sits at a leftover position (e.g. a previous session ran ~20 s),
+    // the repeat's events are anchored to that stale position and only fire after
+    // the Transport has advanced back there again — producing "first tick, then
+    // ~20 s of silence, then regular ticking". The Transport reset must happen
+    // BEFORE the repeat is registered, so the repeat anchors at position 0.
+    await engine.start(120, 4, 4);
+    engine.stop();
+    toneState.transportState = 'started'; // leftover running Transport
+    adapterState.scheduleRepeat.mockClear();
+    toneState.transportStop.mockClear();
+    toneState.transportStart.mockClear();
+
+    await engine.start(120, 4, 4);
+
+    // Clear mocks still recorded invocationCallOrder from the pre-clear call above.
+    const repeatOrder = adapterState.scheduleRepeat.mock.invocationCallOrder[0];
+    const stopOrder = toneState.transportStop.mock.invocationCallOrder[0];
+    const startOrder = toneState.transportStart.mock.invocationCallOrder[0];
+    expect(repeatOrder).toBeGreaterThan(stopOrder);
+    expect(repeatOrder).toBeGreaterThan(startOrder);
+  });
+
   it('subscriber receives inactive state on stop()', async () => {
     const states: MetronomeState[] = [];
     engine.subscribe(s => states.push(s));

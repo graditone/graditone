@@ -38,6 +38,8 @@ import { mergePracticeNotesByTick } from './mergePracticeNotesByTick';
 import { usePracticeLoop } from './usePracticeLoop';
 import { usePracticeMidi } from './usePracticeMidi';
 import { usePracticeHighlights } from './usePracticeHighlights';
+import { formatStateLabel } from './stateLabel';
+import { TimingFeedbackOverlay } from './TimingFeedbackOverlay';
 import { usePhantomTempo } from './usePhantomTempo';
 import { useHoldProgress } from './useHoldProgress';
 import { useAccompaniment } from './useAccompaniment';
@@ -55,6 +57,7 @@ import { useTranslation } from '../../src/i18n';
 
 const INITIAL_METRONOME_STATE: MetronomeState = {
   active: false,
+  armed: false,
   beatIndex: -1,
   isDownbeat: false,
   subdivision: 1,
@@ -127,6 +130,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
    * until the first note) when a new free session starts after a stop.
    */
   const freeMetronomeEnabledRef = useRef(false);
+  /**
+   * Issue #6 parity (score practice): whether the user wants the metronome ON in
+   * a score practice session. Set when the score metronome is armed/started,
+   * cleared when toggled off. Used to re-arm it (waiting until the first note)
+   * when a new score practice starts after completion/stop — while the engine
+   * itself is stopped when the session finishes.
+   */
+  const scoreMetronomeEnabledRef = useRef(false);
 
   useEffect(() => {
     return context.metronome.subscribe((state) => {
@@ -134,6 +145,23 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       setMetronomeState(state);
       if (state.subdivision !== undefined) setMetronomeSubdivision(state.subdivision);
     });
+  }, [context.metronome]);
+
+  /** Stop the metronome engine for score practice, then return to the armed state
+   * (ready to start on the first note) if it was enabled during the session. */
+  const stopScoreMetronome = useCallback(() => {
+    if (metronomeStateRef.current.active) {
+      context.metronome.toggle().catch((e) => {
+        console.error('[PracticeViewPlugin] metronome stop-on-score-stop failed:', e);
+      });
+    }
+    if (scoreMetronomeEnabledRef.current) {
+      metronomeArmedRef.current = true;
+      setMetronomeArmed(true);
+    } else {
+      metronomeArmedRef.current = false;
+      setMetronomeArmed(false);
+    }
   }, [context.metronome]);
 
   // ─── MIDI connectivity tracking ────────────────────────────────────────────
@@ -148,6 +176,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // ─── Auto-advance error flash ─────────────────────────────────────────────
   const [errorNoteIds, setErrorNoteIds] = useState<ReadonlySet<string>>(new Set());
   const errorFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ─── Timing feedback overlay (Feature 096) ─────────────────────────────────
+  const [timingFeedback, setTimingFeedback] = useState<{ value: string; id: number } | null>(null);
+  const timingFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timingFeedbackIdRef = useRef(0);
 
   // ─── Replay state (038-practice-replay) ────────────────────────────────────
   const [performanceRecord, setPerformanceRecord] = useState<PerformanceRecord | null>(null);
@@ -339,6 +372,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     onComplete: (record) => {
       setPerformanceRecord(record);
       setIsReplaying(false);
+      // Feature 083: stop + disarm the metronome when the score practice truly
+      // finishes (all loops done, results shown). Loop auto-restarts are handled
+      // inside usePracticeLoop and never reach this callback.
+      stopScoreMetronome();
     },
     onResultsShow: () => {
       setResultsOverlayVisible(true);
@@ -365,6 +402,44 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     }, 600);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [practiceState.noteResults]);
+
+  // Feature 096: show the ±ms timing overlay when an out-of-time note is
+  // recorded during live play; auto-dismiss after ~1s. Mirrors the flash
+  // pattern above (timer ref + latest-result observation).
+  useEffect(() => {
+    const results = practiceState.noteResults;
+    if (results.length === 0) return;
+    const last = results[results.length - 1];
+    if (last.outcome !== 'correct-late' && last.outcome !== 'early-release') return;
+    if (isReplaying || freePractice.isFreePractice || resultsOverlayVisible) return;
+
+    const id = ++timingFeedbackIdRef.current;
+    setTimingFeedback({ value: formatStateLabel(last.relativeDeltaMs), id });
+    if (timingFeedbackTimerRef.current !== null) clearTimeout(timingFeedbackTimerRef.current);
+    timingFeedbackTimerRef.current = setTimeout(() => {
+      timingFeedbackTimerRef.current = null;
+      setTimingFeedback((cur) => (cur && cur.id === id ? null : cur));
+    }, 1000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [practiceState.noteResults]);
+
+  // Hide the overlay immediately when replay/free-practice/results take over,
+  // and clear the dismiss timer on unmount.
+  useEffect(() => {
+    if (isReplaying || freePractice.isFreePractice || resultsOverlayVisible) {
+      setTimingFeedback(null);
+      if (timingFeedbackTimerRef.current !== null) {
+        clearTimeout(timingFeedbackTimerRef.current);
+        timingFeedbackTimerRef.current = null;
+      }
+    }
+  }, [isReplaying, freePractice.isFreePractice, resultsOverlayVisible]);
+
+  useEffect(() => {
+    return () => {
+      if (timingFeedbackTimerRef.current !== null) clearTimeout(timingFeedbackTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (playerState.status !== 'paused') setPendingPlay(false);
@@ -547,6 +622,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       setResultsOverlayVisible(true);
     }
     dispatchPractice({ type: 'STOP' });
+    // Feature 083: stop + disarm the metronome when the score practice stops.
+    stopScoreMetronome();
     context.scorePlayer.stop();
     const lr = loopRegionRef.current;
     context.scorePlayer.seekToTick(lr ? lr.startTick : 0);
@@ -591,18 +668,26 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     }
 
     const ps = practiceStateRef.current;
-    const practiceRunning = ps.mode === 'waiting' || ps.mode === 'active' || ps.mode === 'holding';
+    // Only arm the deferred (first-note) start while the practice is in 'waiting'
+    // mode. In 'active'/'holding' the first-note callback never fires (see
+    // usePracticeMidi.ts), so arming there would leave the metronome silently
+    // armed forever — toggling mid-session must start/stop it immediately.
+    const practiceWaiting = ps.mode === 'waiting';
 
-    if (practiceRunning && !metronomeStateRef.current.active && !metronomeArmedRef.current) {
+    if (practiceWaiting && !metronomeStateRef.current.active && !metronomeArmedRef.current) {
       metronomeArmedRef.current = true;
       setMetronomeArmed(true);
+      scoreMetronomeEnabledRef.current = true;
     } else if (metronomeArmedRef.current) {
       metronomeArmedRef.current = false;
       setMetronomeArmed(false);
+      scoreMetronomeEnabledRef.current = false;
     } else {
       context.metronome.toggle().catch((e) => {
         console.error('[PracticeViewPlugin] metronome.toggle failed:', e);
       });
+      // Immediate start/stop: remember the user's preference for the next session.
+      scoreMetronomeEnabledRef.current = !metronomeStateRef.current.active;
     }
     // freePractice.isFreePracticeRef is a stable ref; read at call time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -666,8 +751,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       });
       setResultsOverlayVisible(true);
       dispatchPractice({ type: 'STOP' });
-      metronomeArmedRef.current = false;
-      setMetronomeArmed(false);
+      // Feature 083: stop + disarm the metronome when the score practice stops.
+      stopScoreMetronome();
       const lr = loopRegionRef.current;
       context.scorePlayer.seekToTick(lr ? lr.startTick : 0);
       return;
@@ -811,6 +896,13 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     setResultsOverlayVisible(false);
     setPartialPerformanceRecord(null);
     handlePracticeToggle();
+    // Feature 083 parity (#6): if the metronome was enabled during the finished
+    // session, re-arm it (waiting until the first note) for the new session —
+    // its engine was stopped when the previous practice completed.
+    if (scoreMetronomeEnabledRef.current) {
+      metronomeArmedRef.current = true;
+      setMetronomeArmed(true);
+    }
     remainingLoopsRef.current = loopCount - 1;
     loopIterationRef.current = 0;
     loopStartTimesRef.current = [0];
@@ -982,6 +1074,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
             {pressedPitchLabels.join(', ')}
           </span>
         </div>
+      )}
+
+      {/* Timing feedback overlay (Feature 096) — over the score, non-blocking */}
+      {timingFeedback && !isReplaying && !freePractice.isFreePractice && !resultsOverlayVisible && (
+        <TimingFeedbackOverlay value={timingFeedback.value} visible />
       )}
 
       {/* Score — not shown during free practice */}
