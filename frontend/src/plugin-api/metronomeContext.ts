@@ -36,6 +36,7 @@ const DEFAULT_TIME_SIGNATURE = { numerator: 4, denominator: 4 };
 
 const INACTIVE_STATE: MetronomeState = {
   active: false,
+  armed: false,
   beatIndex: -1,
   isDownbeat: false,
   bpm: 0,
@@ -156,6 +157,10 @@ export function useMetronomeBridge(
 
   // Current engine active state — stable ref so toggle() closure always reads latest.
   const engineStateRef = useRef(state);
+  // Update the engine ref after each render; writing refs during render is
+  // allowed here (idempotent, mirrors previous behaviour) — silenced via the
+  // existing directive below.
+  // eslint-disable-next-line react-hooks/refs
   engineStateRef.current = state;
 
   /** Persists the chosen subdivision across engine restart cycles. */
@@ -290,8 +295,6 @@ export function useMetronomeBridge(
       unsubTransportRestart();
       unsubscribe();
     };
-    // scorePlayer is stable (proxy ref) — no dep array churn
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, scorePlayer]);
 
   // ─── setSubdivision() ─────────────────────────────────────────────────────
@@ -315,6 +318,9 @@ export function useMetronomeBridge(
 
     if (currentState.active) {
       engine.stop();
+    } else if (currentState.armed) {
+      // Feature 097: a second tap while armed cancels the deferred start.
+      engine.setArmed(false);
     } else {
       const { bpm, timeSignature, status, pickupTicks } = scoreStateRef.current;
       const effectiveBpm = bpm > 0 ? bpm : DEFAULT_BPM;
@@ -350,6 +356,34 @@ export function useMetronomeBridge(
     }
   }, [engine, scorePlayer]);
 
+  // ─── Feature 097: armed / deferred start ───────────────────────────────────
+
+  /** Enter the armed (deferred-start) state; no-op while the engine runs. */
+  const arm = useCallback((): void => {
+    if (!engineStateRef.current.active) engine.setArmed(true);
+  }, [engine]);
+
+  /** Cancel the armed (deferred-start) state. */
+  const disarm = useCallback((): void => {
+    engine.setArmed(false);
+  }, [engine]);
+
+  /**
+   * Consume the armed state and start the engine. Returns true if it started.
+   * Safe to call on every first-note event — only acts while armed.
+   * Uses the standalone (downbeat) start — deferred starts happen in practice
+   * waiting mode with the score stopped. The engine resets the Transport to
+   * position 0 before registering the repeat.
+   */
+  const startFromDeferred = useCallback(async (): Promise<boolean> => {
+    if (!engineStateRef.current.armed) return false;
+    engine.setArmed(false);
+    const { bpm, timeSignature } = scoreStateRef.current;
+    const effectiveBpm = bpm > 0 ? bpm : DEFAULT_BPM;
+    await engine.start(effectiveBpm, timeSignature.numerator, timeSignature.denominator, 0, 0, subdivisionRef.current);
+    return true;
+  }, [engine]);
+
   // ─── subscribe() ──────────────────────────────────────────────────────────
 
   const subscribe = useCallback(
@@ -363,9 +397,12 @@ export function useMetronomeBridge(
 
   return useMemo((): PluginMetronomeContext => ({
     toggle,
+    arm,
+    disarm,
+    startFromDeferred,
     setSubdivision,
     subscribe,
-  }), [toggle, setSubdivision, subscribe]);
+  }), [toggle, arm, disarm, startFromDeferred, setSubdivision, subscribe]);
 }
 
 // ─── createNoOpMetronome ──────────────────────────────────────────────────────
@@ -377,6 +414,9 @@ export function useMetronomeBridge(
 export function createNoOpMetronome(): PluginMetronomeContext {
   return {
     toggle: async () => {},
+    arm: () => {},
+    disarm: () => {},
+    startFromDeferred: async () => false,
     setSubdivision: async () => {},
     subscribe: (handler) => {
       handler(INACTIVE_STATE);
@@ -403,6 +443,9 @@ export function createMetronomeProxy(
 ): PluginMetronomeContext {
   return {
     toggle: (...args) => proxyRef.current.toggle(...args),
+    arm: () => proxyRef.current.arm(),
+    disarm: () => proxyRef.current.disarm(),
+    startFromDeferred: (...args) => proxyRef.current.startFromDeferred(...args),
     setSubdivision: (...args) => proxyRef.current.setSubdivision(...args),
     subscribe: (handler) => proxyRef.current.subscribe(handler),
   };

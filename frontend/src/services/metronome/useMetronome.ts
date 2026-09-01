@@ -26,6 +26,7 @@ import type { MetronomeState } from '../../plugin-api/types';
 
 const INACTIVE_STATE: MetronomeState = {
   active: false,
+  armed: false,
   beatIndex: -1,
   isDownbeat: false,
   bpm: 0,

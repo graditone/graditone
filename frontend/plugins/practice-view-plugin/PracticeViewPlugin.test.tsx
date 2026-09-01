@@ -97,8 +97,21 @@ function createMockContext(
   };
 
   const metronomeSubscribers = new Set<(state: MetronomeState) => void>();
-  const simulateMetronomeState = (state: MetronomeState) => {
-    metronomeSubscribers.forEach((h) => h(state));
+  // Behavioral metronome engine mock (Feature 097): mutates a real metronome
+  // state and notifies subscribers on every transition — mirrors the real
+  // MetronomeEngine so the lifecycle hook works through the mock. State is a
+  // merge of partials like the real engine's `_getState()` (which always
+  // reports `armed: this._armed`), so an `active:false` ack after stop
+  // preserves the armed value rather than clobbering it.
+  let metronomeState: MetronomeState = {
+    active: false, armed: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1, subBeatIndex: 0,
+  };
+  const emitMetronomeState = (s: MetronomeState) => {
+    metronomeState = s;
+    metronomeSubscribers.forEach((h) => h(s));
+  };
+  const simulateMetronomeState = (partial: Partial<MetronomeState>) => {
+    emitMetronomeState({ ...metronomeState, ...partial });
   };
 
   const mockClose = vi.fn();
@@ -172,18 +185,25 @@ function createMockContext(
       playAccompanimentAtTick: vi.fn(),
     },
     metronome: {
-      toggle: vi.fn().mockResolvedValue(undefined),
+      toggle: vi.fn(async () => {
+        if (metronomeState.active) emitMetronomeState({ ...metronomeState, active: false, armed: false });
+        else emitMetronomeState({ ...metronomeState, active: true, armed: false });
+      }),
+      arm: vi.fn(() => {
+        if (!metronomeState.active) emitMetronomeState({ ...metronomeState, armed: true });
+      }),
+      disarm: vi.fn(() => {
+        emitMetronomeState({ ...metronomeState, armed: false });
+      }),
+      startFromDeferred: vi.fn(async () => {
+        if (!metronomeState.armed) return false;
+        emitMetronomeState({ ...metronomeState, armed: false, active: true });
+        return true;
+      }),
       setSubdivision: vi.fn().mockResolvedValue(undefined),
       subscribe: vi.fn((handler) => {
         metronomeSubscribers.add(handler);
-        handler({
-          active: false,
-          beatIndex: -1,
-          isDownbeat: false,
-          bpm: 0,
-          subdivision: 1,
-          subBeatIndex: 0,
-        });
+        handler(metronomeState);
         return () => metronomeSubscribers.delete(handler);
       }),
     },
@@ -1790,7 +1810,7 @@ describe('PracticeViewPlugin — metronome deferred start (Feature 083 US3)', ()
       .toContain('practice-plugin__metro-btn--armed');
   });
 
-  it('first MIDI note while armed fires toggle to start metronome', async () => {
+  it('first MIDI note while armed triggers the deferred start (startFromDeferred)', async () => {
     const ctx = createMockContext({ status: 'ready', staffCount: 1 });
     ctx.mockExtractPracticeNotes.mockReturnValue({
       notes,
@@ -1802,28 +1822,23 @@ describe('PracticeViewPlugin — metronome deferred start (Feature 083 US3)', ()
 
     // Start practice + arm metronome
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
-    vi.mocked(ctx.context.metronome.toggle).mockClear();
+    vi.mocked(ctx.context.metronome.startFromDeferred).mockClear();
     fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
-    expect(ctx.context.metronome.toggle).not.toHaveBeenCalled(); // still armed
+    expect(ctx.context.metronome.startFromDeferred).not.toHaveBeenCalled(); // still armed
+    // Armed state surfaced to the toolbar.
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
 
-    // Simulate first MIDI note attack
+    // Simulate first MIDI note attack → consumes the arm via startFromDeferred.
     act(() => {
       ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 });
     });
 
-    // toggle should have been called once (deferred start)
-    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+    expect(ctx.context.metronome.startFromDeferred).toHaveBeenCalledTimes(1);
   });
 
   it('starting practice while metronome is active stops it and arms it', async () => {
-    // Capture the metronome subscriber so we can simulate state changes
-    let metronomeHandler: ((state: { active: boolean; beatIndex: number; isDownbeat: boolean; bpm: number; subdivision: number }) => void) | null = null;
     const ctx = createMockContext({ status: 'ready', staffCount: 1 });
-    (ctx.context.metronome.subscribe as ReturnType<typeof vi.fn>).mockImplementation((handler) => {
-      metronomeHandler = handler;
-      handler({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1, subBeatIndex: 0 });
-      return () => {};
-    });
     ctx.mockExtractPracticeNotes.mockReturnValue({
       notes,
       totalAvailable: notes.length,
@@ -1832,33 +1847,25 @@ describe('PracticeViewPlugin — metronome deferred start (Feature 083 US3)', ()
 
     render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
-    // Simulate metronome becoming active
+    // Metronome running standalone.
     act(() => {
-      metronomeHandler?.({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 });
+      ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 });
     });
     vi.mocked(ctx.context.metronome.toggle).mockClear();
 
-    // Start practice — metronome should be stopped + armed automatically
+    // Start practice — the running metronome is stopped and deferred.
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1); // stop the running engine
 
-    // Should have called toggle once to stop the running metronome
-    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
-
-    // Simulate the metronome service acknowledging it's now inactive (real app behaviour)
-    act(() => {
-      metronomeHandler?.({ active: false, beatIndex: -1, isDownbeat: false, bpm: 120, subdivision: 1, subBeatIndex: 0 });
-    });
-
-    // Metronome button should be in armed state
-    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
-      .toContain('practice-plugin__metro-btn--armed');
-
-    // Simulate first MIDI note — metronome should now start
-    vi.mocked(ctx.context.metronome.toggle).mockClear();
+    // First MIDI note → deferred start consumes the arm.
+    vi.mocked(ctx.context.metronome.startFromDeferred).mockClear();
     act(() => {
       ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 });
     });
-    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+    expect(ctx.context.metronome.startFromDeferred).toHaveBeenCalledTimes(1);
+    // Toolbar reflects the running (active) engine.
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--active');
   });
 
   it('toggling the metronome while practice is in ACTIVE mode starts it immediately (never silently arms)', async () => {
@@ -1921,10 +1928,10 @@ describe('PracticeViewPlugin — metronome stops when score practice ends (Featu
     fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
     expect(ctx.context.metronome.toggle).not.toHaveBeenCalled(); // armed, deferred
 
-    // First note → deferred start.
+    // First note → deferred start (consumes the arm).
     vi.setSystemTime(base);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
-    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+    expect(ctx.context.metronome.startFromDeferred).toHaveBeenCalledTimes(1);
     // Real metronome engine becomes active.
     act(() => { ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
 
@@ -2016,9 +2023,10 @@ describe('PracticeViewPlugin — metronome stops when score practice ends (Featu
     // Fresh start (not Repractice) → armed is preserved → first note starts it.
     fireEvent.click(screen.getByRole('button', { name: /start practice mode/i }));
     expect(ctx.context.metronome.toggle).not.toHaveBeenCalled(); // still armed
+    vi.mocked(ctx.context.metronome.startFromDeferred).mockClear();
     vi.setSystemTime(base + 2000);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
-    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+    expect(ctx.context.metronome.startFromDeferred).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -2045,21 +2053,21 @@ describe('PracticeViewPlugin — free practice metronome lifecycle (Feature 083 
     act(() => {
       ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 });
     });
-    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+    expect(ctx.context.metronome.startFromDeferred).toHaveBeenCalledTimes(1);
 
     // Metronome service becomes active.
     act(() => {
       ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 });
     });
 
-    // Stopping the free session stops the metronome.
+    // Stopping the free session stops the metronome engine...
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: /stop practice mode/i }));
     });
-    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(2);
-    // Armed state cleared.
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+    // ...and (because it was enabled) returns to the ARMED state for the next session.
     expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
-      .not.toContain('practice-plugin__metro-btn--armed');
+      .toContain('practice-plugin__metro-btn--armed');
   });
 
   it('exiting free practice (Back) stops a running metronome', () => {
@@ -2093,29 +2101,29 @@ describe('PracticeViewPlugin — free practice metronome lifecycle (Feature 083 
     fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
     expect(ctx.context.metronome.toggle).not.toHaveBeenCalled();
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
-    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+    expect(ctx.context.metronome.startFromDeferred).toHaveBeenCalledTimes(1);
     act(() => {
       ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 });
     });
 
-    // Stop the session → the metronome stops too. (The real engine emits an
-    // inactive state on stop; the mock toggle just clears the call, so we
-    // simulate the transition the real engine would fire.)
+    // Stop the session → the metronome engine stops. (The real engine emits an
+    // inactive state on stop; the mock toggle just flips, so we simulate the
+    // transition the real engine would fire.)
     act(() => { fireEvent.click(screen.getByRole('button', { name: /stop practice mode/i })); });
-    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(2);
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
     act(() => {
       ctx.simulateMetronomeState({ active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1, subBeatIndex: 0 });
     });
 
     // Repractice → the metronome must be re-armed (waiting), NOT started yet.
     act(() => { fireEvent.click(screen.getByRole('button', { name: /repractice/i })); });
-    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(2);
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
       .toContain('practice-plugin__metro-btn--armed');
 
     // First note of the new session → the metronome starts again.
-    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
-    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(3);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    expect(ctx.context.metronome.startFromDeferred).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -38,6 +38,7 @@ import { mergePracticeNotesByTick } from './mergePracticeNotesByTick';
 import { usePracticeLoop } from './usePracticeLoop';
 import { usePracticeMidi } from './usePracticeMidi';
 import { usePracticeHighlights } from './usePracticeHighlights';
+import { useMetronomeLifecycle } from './useMetronomeLifecycle';
 import { formatStateLabel } from './stateLabel';
 import { TimingFeedbackOverlay } from './TimingFeedbackOverlay';
 import { usePhantomTempo } from './usePhantomTempo';
@@ -115,54 +116,18 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const { playAccompanimentAtTick } =
     useAccompaniment(context.scorePlayer);
 
-  // ─── Metronome state ───────────────────────────────────────────────────────
-  const [metronomeState, setMetronomeState] = useState<MetronomeState>(INITIAL_METRONOME_STATE);
-  const metronomeStateRef = useRef<MetronomeState>(INITIAL_METRONOME_STATE);
+  // ─── Metronome lifecycle (097) ───────────────────────────────────────────────
+  // Single source of truth: engine/API owns active+armed state; this hook owns
+  // the practice "enabled during session" policy. Score and free practice both
+  // go through it.
+  const lifecycle = useMetronomeLifecycle({ context });
   const [metronomeSubdivision, setMetronomeSubdivision] = useState<MetronomeSubdivision>(1);
-  // Feature 083 (US3): armed = toggled while practice is in 'waiting' mode;
-  // the metronome will start on the first MIDI note attack instead of immediately.
-  const [metronomeArmed, setMetronomeArmed] = useState(false);
-  const metronomeArmedRef = useRef(false);
-  /**
-   * Issue #6: whether the user wants the metronome ON in free practice. Set when
-   * the metronome is armed/started in a free session and cleared when toggled
-   * off or when exiting free practice. Used to re-arm the metronome (waiting
-   * until the first note) when a new free session starts after a stop.
-   */
-  const freeMetronomeEnabledRef = useRef(false);
-  /**
-   * Issue #6 parity (score practice): whether the user wants the metronome ON in
-   * a score practice session. Set when the score metronome is armed/started,
-   * cleared when toggled off. Used to re-arm it (waiting until the first note)
-   * when a new score practice starts after completion/stop — while the engine
-   * itself is stopped when the session finishes.
-   */
-  const scoreMetronomeEnabledRef = useRef(false);
-
+  // Imperative BPM reader for free-tempo seeding (ref — no re-render).
+  const metronomeStateRef = useRef<MetronomeState>(INITIAL_METRONOME_STATE);
   useEffect(() => {
-    return context.metronome.subscribe((state) => {
-      metronomeStateRef.current = state;
-      setMetronomeState(state);
-      if (state.subdivision !== undefined) setMetronomeSubdivision(state.subdivision);
-    });
-  }, [context.metronome]);
-
-  /** Stop the metronome engine for score practice, then return to the armed state
-   * (ready to start on the first note) if it was enabled during the session. */
-  const stopScoreMetronome = useCallback(() => {
-    if (metronomeStateRef.current.active) {
-      context.metronome.toggle().catch((e) => {
-        console.error('[PracticeViewPlugin] metronome stop-on-score-stop failed:', e);
-      });
-    }
-    if (scoreMetronomeEnabledRef.current) {
-      metronomeArmedRef.current = true;
-      setMetronomeArmed(true);
-    } else {
-      metronomeArmedRef.current = false;
-      setMetronomeArmed(false);
-    }
-  }, [context.metronome]);
+    metronomeStateRef.current = lifecycle.state;
+    if (lifecycle.state.subdivision !== undefined) setMetronomeSubdivision(lifecycle.state.subdivision);
+  }, [lifecycle.state]);
 
   // ─── MIDI connectivity tracking ────────────────────────────────────────────
   const { connected: midiConnected, supported: midiSupported } = useMidiConnectivity();
@@ -206,7 +171,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // Feature 083 parity (free mode): the host (orchestrator) starts the metronome
   // on the first played note. useFreePractice invokes this ref on every attack;
-  // the assigned handler (onFirstNoteAttack) no-ops once the metronome runs.
+  // it is assigned to lifecycle.onFirstNote (see below) so deferred-start is
+  // idempotent (startFromDeferred only acts while armed).
   const freeNoteAttackRef = useRef<(() => void) | null>(null);
 
   // ─── Feature 092: Free Practice (extracted hook) ───────────────────────────
@@ -372,10 +338,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     onComplete: (record) => {
       setPerformanceRecord(record);
       setIsReplaying(false);
-      // Feature 083: stop + disarm the metronome when the score practice truly
-      // finishes (all loops done, results shown). Loop auto-restarts are handled
-      // inside usePracticeLoop and never reach this callback.
-      stopScoreMetronome();
+      // Feature 097: stop the metronome engine when the score practice truly
+      // finishes (all loops done, results shown), re-arming it if enabled.
+      // Loop auto-restarts are handled inside usePracticeLoop and never reach
+      // this callback.
+      lifecycle.onSessionEnd();
     },
     onResultsShow: () => {
       setResultsOverlayVisible(true);
@@ -488,33 +455,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     playerStateRef,
   });
 
-  // Feature 083 (US3): Fires once on the first MIDI note attack while the
-  // metronome is armed, starting the engine.
-  const onFirstNoteAttack = useCallback(() => {
-    if (!metronomeArmedRef.current) return;
-    metronomeArmedRef.current = false;
-    setMetronomeArmed(false);
-    context.metronome.toggle().catch((e) => {
-      console.error('[PracticeViewPlugin] metronome deferred start failed:', e);
-    });
-  }, [context.metronome]);
-  // Free mode wires this same deferred-start handler to its note attacks, so
-  // the metronome also begins on the first played note (Feature 083 parity).
-  freeNoteAttackRef.current = onFirstNoteAttack;
-
-  /**
-   * Stop + disarm the metronome for free practice (Feature 083 parity: the
-   * metronome stops once the free practice is stopped / exited).
-   */
-  const stopFreeMetronome = useCallback(() => {
-    metronomeArmedRef.current = false;
-    setMetronomeArmed(false);
-    if (metronomeStateRef.current.active) {
-      context.metronome.toggle().catch((e) => {
-        console.error('[PracticeViewPlugin] metronome stop-on-free-stop failed:', e);
-      });
-    }
-  }, [context.metronome]);
+  // Feature 083 (US3): deferred first-note start for BOTH score and free practice.
+  // The shared lifecycle hook consumes the arm via startFromDeferred().
+  freeNoteAttackRef.current = lifecycle.onFirstNote;
 
   // ─── MIDI logic (extracted hook) ───────────────────────────────────────────
   const {
@@ -532,7 +475,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     loopStartTimesRef,
     practiceStartTimeRef,
     selectedStaffIndex,
-    onFirstNoteAttack,
+    onFirstNoteAttack: lifecycle.onFirstNote,
     onCorrectNote: (tick) => {
       playAccompanimentAtTick(tick, playerState.bpm, 960);
     },
@@ -622,8 +565,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       setResultsOverlayVisible(true);
     }
     dispatchPractice({ type: 'STOP' });
-    // Feature 083: stop + disarm the metronome when the score practice stops.
-    stopScoreMetronome();
+    // Feature 097: stop the metronome engine when the score practice stops.
+    lifecycle.onSessionEnd();
     context.scorePlayer.stop();
     const lr = loopRegionRef.current;
     context.scorePlayer.seekToTick(lr ? lr.startTick : 0);
@@ -646,52 +589,15 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   );
 
   const handleMetronomeToggle = useCallback(() => {
-    // Feature 083 parity (free mode): toggling the metronome ARM it instead of
-    // starting it — it begins on the first played note and stops when the free
-    // practice is stopped (mirrors score practice's deferred start).
-    if (freePractice.isFreePracticeRef.current) {
-      if (metronomeStateRef.current.active) {
-        freeMetronomeEnabledRef.current = false;
-        context.metronome.toggle().catch((e) => {
-          console.error('[PracticeViewPlugin] metronome.toggle failed:', e);
-        });
-      } else if (metronomeArmedRef.current) {
-        freeMetronomeEnabledRef.current = false;
-        metronomeArmedRef.current = false;
-        setMetronomeArmed(false);
-      } else {
-        freeMetronomeEnabledRef.current = true;
-        metronomeArmedRef.current = true;
-        setMetronomeArmed(true);
-      }
-      return;
-    }
-
-    const ps = practiceStateRef.current;
-    // Only arm the deferred (first-note) start while the practice is in 'waiting'
-    // mode. In 'active'/'holding' the first-note callback never fires (see
-    // usePracticeMidi.ts), so arming there would leave the metronome silently
-    // armed forever — toggling mid-session must start/stop it immediately.
-    const practiceWaiting = ps.mode === 'waiting';
-
-    if (practiceWaiting && !metronomeStateRef.current.active && !metronomeArmedRef.current) {
-      metronomeArmedRef.current = true;
-      setMetronomeArmed(true);
-      scoreMetronomeEnabledRef.current = true;
-    } else if (metronomeArmedRef.current) {
-      metronomeArmedRef.current = false;
-      setMetronomeArmed(false);
-      scoreMetronomeEnabledRef.current = false;
-    } else {
-      context.metronome.toggle().catch((e) => {
-        console.error('[PracticeViewPlugin] metronome.toggle failed:', e);
-      });
-      // Immediate start/stop: remember the user's preference for the next session.
-      scoreMetronomeEnabledRef.current = !metronomeStateRef.current.active;
-    }
+    // Free practice always defers (arms); score practice arms only while
+    // waiting for the first note, otherwise toggles immediately.
+    const canArm = freePractice.isFreePracticeRef.current
+      ? true
+      : practiceStateRef.current.mode === 'waiting';
+    lifecycle.onToggle(canArm);
     // freePractice.isFreePracticeRef is a stable ref; read at call time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context.metronome]);
+  }, [lifecycle]);
 
   const handleMetronomeSubdivisionChange = useCallback(
     (s: MetronomeSubdivision) => {
@@ -721,18 +627,13 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       const wasSessionActive = freePractice.freeSessionActiveRef.current;
       freePractice.handleFreeToggle();
       if (wasSessionActive) {
-        // Free practice stopped → the metronome must stop too (Feature 083
-        // parity with score practice).
-        stopFreeMetronome();
+        // Free practice stopped → the metronome stops too (Feature 083 parity
+        // with score practice); re-arms if it was enabled.
+        lifecycle.onSessionEnd();
       } else if (metronomeStateRef.current.active) {
         // Starting a free session while the metronome is running standalone:
         // restart it deferred so it aligns to the first played note.
-        freeMetronomeEnabledRef.current = true;
-        context.metronome.toggle().catch((e) => {
-          console.error('[PracticeViewPlugin] metronome re-arm on free start failed:', e);
-        });
-        metronomeArmedRef.current = true;
-        setMetronomeArmed(true);
+        lifecycle.onSessionStart();
       }
       return;
     }
@@ -751,8 +652,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       });
       setResultsOverlayVisible(true);
       dispatchPractice({ type: 'STOP' });
-      // Feature 083: stop + disarm the metronome when the score practice stops.
-      stopScoreMetronome();
+      // Feature 097: stop the metronome engine when the score practice stops.
+      lifecycle.onSessionEnd();
       const lr = loopRegionRef.current;
       context.scorePlayer.seekToTick(lr ? lr.startTick : 0);
       return;
@@ -811,12 +712,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       startIndex,
     });
 
-    if (metronomeStateRef.current.active && !metronomeArmedRef.current) {
-      context.metronome.toggle().catch((e) => {
-        console.error('[PracticeViewPlugin] metronome stop-on-practice-start failed:', e);
-      });
-      metronomeArmedRef.current = true;
-      setMetronomeArmed(true);
+    // Feature 097: if a metronome is still running standalone, stop it and
+    // defer to the first note of the new session.
+    if (metronomeStateRef.current.active) {
+      lifecycle.onSessionStart();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -884,25 +783,17 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     // 120 × 1.0) while the free readout still said 30.
     if (freePractice.isFreePracticeRef.current) {
       freePractice.handleFreeRepractice();
-      // Issue #6: if the metronome was enabled when the practice stopped, the
-      // next practice re-arms it (waiting until the first note) so it starts
-      // active automatically with the new session.
-      if (freeMetronomeEnabledRef.current) {
-        metronomeArmedRef.current = true;
-        setMetronomeArmed(true);
-      }
+      // The shared lifecycle keeps the "enabled" preference across repractice,
+      // and onSessionEnd (from the previous session) already re-armed the
+      // metronome — the first note of the new session starts it.
       return;
     }
     setResultsOverlayVisible(false);
     setPartialPerformanceRecord(null);
     handlePracticeToggle();
-    // Feature 083 parity (#6): if the metronome was enabled during the finished
-    // session, re-arm it (waiting until the first note) for the new session —
-    // its engine was stopped when the previous practice completed.
-    if (scoreMetronomeEnabledRef.current) {
-      metronomeArmedRef.current = true;
-      setMetronomeArmed(true);
-    }
+    // Feature 097: the shared lifecycle re-arms the metronome (ready for the
+    // first note) for the new session — its engine was stopped when the
+    // previous practice completed.
     remainingLoopsRef.current = loopCount - 1;
     loopIterationRef.current = 0;
     loopStartTimesRef.current = [0];
@@ -986,8 +877,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         onBack={() => {
           // Feature 092: Exit free practice on back
           if (freePractice.isFreePractice) {
-            stopFreeMetronome();
-            freeMetronomeEnabledRef.current = false;
+            lifecycle.onExit();
             freePractice.handleFreeBack();
             return;
           }
@@ -1026,13 +916,13 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         showStaffPicker={false}
         midiConnected={midiConnected}
         midiSupported={midiSupported}
-        metronomeActive={metronomeState.active}
-        metronomeBeatIndex={metronomeState.beatIndex}
-        metronomeIsDownbeat={metronomeState.isDownbeat}
+        metronomeActive={lifecycle.state.active}
+        metronomeBeatIndex={lifecycle.state.beatIndex}
+        metronomeIsDownbeat={lifecycle.state.isDownbeat}
         onMetronomeToggle={handleMetronomeToggle}
         metronomeSubdivision={metronomeSubdivision}
         onMetronomeSubdivisionChange={handleMetronomeSubdivisionChange}
-        metronomeArmed={metronomeArmed}
+        metronomeArmed={lifecycle.armed}
         taskTag={savedPracticeManager.taskTag}
         isReplaying={isReplaying}
         onTaskTagClick={() => context.openPlugin('sessions-plugin', {
@@ -1134,8 +1024,7 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
           setPartialPerformanceRecord(null);
           // Feature 092: Dismissing free practice results returns to the score selector.
           if (freePractice.isFreePracticeRef.current) {
-            stopFreeMetronome();
-            freeMetronomeEnabledRef.current = false;
+            lifecycle.onExit();
             freePractice.handleFreeDismiss();
           }
         }}

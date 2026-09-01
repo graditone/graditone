@@ -18,8 +18,9 @@ import type { PluginMetronomeContext, MetronomeState, ScorePlayerState } from '.
 
 type StateHandler = (s: MetronomeState) => void;
 
-const INACTIVE: MetronomeState = { active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1, subBeatIndex: 0 };
-const ACTIVE: MetronomeState = { active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 };
+const INACTIVE: MetronomeState = { active: false, armed: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1, subBeatIndex: 0 };
+const ACTIVE: MetronomeState = { active: true, armed: false, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 };
+const ARMED: MetronomeState = { active: false, armed: true, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1, subBeatIndex: 0 };
 
 // ─── Mock ToneAdapter ────────────────────────────────────────────────────────
 // Captures the onTransportRestart listener so loop-restart tests can fire it.
@@ -130,6 +131,7 @@ beforeEach(() => {
     getState: vi.fn(() => currentHookState),
     start: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn(),
+    setArmed: vi.fn(),
     updateBpm: vi.fn(),
     subscribe: vi.fn((h: StateHandler) => {
       mockEngineStateHandlers.add(h);
@@ -264,6 +266,80 @@ describe('useMetronomeBridge (T008)', () => {
 
     expect(mockEngine.stop).toHaveBeenCalledOnce();
     expect(mockEngine.start).not.toHaveBeenCalled();
+  });
+
+  // ── Feature 097: armed / deferred start (US1) ──────────────────────────────
+  it('arm() calls engine.setArmed(true) only when not active', async () => {
+    currentHookState = INACTIVE;
+    const scorePlayer = makeMockScorePlayer(120);
+    const { result } = renderHook(() => useMetronomeBridge(scorePlayer));
+
+    result.current.arm();
+    expect(mockEngine.setArmed).toHaveBeenCalledWith(true);
+
+    currentHookState = ACTIVE;
+    expect(() => result.current.arm()).not.toThrow();
+    // engine.setArmed no-ops while active — do not start.
+    expect(mockEngine.start).not.toHaveBeenCalled();
+  });
+
+  it('disarm() calls engine.setArmed(false)', async () => {
+    currentHookState = ARMED;
+    const scorePlayer = makeMockScorePlayer(120);
+    const { result } = renderHook(() => useMetronomeBridge(scorePlayer));
+
+    result.current.disarm();
+    expect(mockEngine.setArmed).toHaveBeenCalledWith(false);
+  });
+
+  it('toggle() from armed disarms (does NOT start)', async () => {
+    currentHookState = ARMED;
+    const scorePlayer = makeMockScorePlayer(120);
+    const { result } = renderHook(() => useMetronomeBridge(scorePlayer));
+
+    await act(async () => {
+      await result.current.toggle();
+    });
+
+    expect(mockEngine.setArmed).toHaveBeenCalledWith(false);
+    expect(mockEngine.start).not.toHaveBeenCalled();
+  });
+
+  it('startFromDeferred() starts the engine when armed and returns true', async () => {
+    currentHookState = ARMED;
+    const scorePlayer = makeMockScorePlayer(90);
+    const { result } = renderHook(() => useMetronomeBridge(scorePlayer));
+
+    let started = false;
+    await act(async () => {
+      started = await result.current.startFromDeferred();
+    });
+
+    expect(started).toBe(true);
+    expect(mockEngine.setArmed).toHaveBeenCalledWith(false); // consume arm
+    expect(mockEngine.start).toHaveBeenCalledOnce();
+  });
+
+  it('startFromDeferred() is a no-op when not armed (returns false)', async () => {
+    currentHookState = INACTIVE;
+    const scorePlayer = makeMockScorePlayer(90);
+    const { result } = renderHook(() => useMetronomeBridge(scorePlayer));
+
+    let started = true;
+    await act(async () => {
+      started = await result.current.startFromDeferred();
+    });
+
+    expect(started).toBe(false);
+    expect(mockEngine.start).not.toHaveBeenCalled();
+  });
+
+  it('plugin API exposes arm/disarm/startFromDeferred', () => {
+    const scorePlayer = makeMockScorePlayer(120);
+    const { result } = renderHook(() => useMetronomeBridge(scorePlayer));
+    expect(typeof result.current.arm).toBe('function');
+    expect(typeof result.current.disarm).toBe('function');
+    expect(typeof result.current.startFromDeferred).toBe('function');
   });
 
   it('toggle() passes scorePlayer BPM to engine.start()', async () => {

@@ -315,6 +315,49 @@ describe('MetronomeEngine — start/stop lifecycle (T002)', () => {
     expect(state.bpm).toBe(0);
   });
 
+  // ── Feature 097: armed (deferred-start) state ──────────────────────────────
+  it('setArmed(true) enters the armed state (active stays false)', () => {
+    engine.setArmed(true);
+    const state = engine.getState();
+    expect(state.armed).toBe(true);
+    expect(state.active).toBe(false);
+  });
+
+  it('setArmed(true) is a no-op while the engine is active', async () => {
+    await engine.start(120, 4, 4);
+    engine.setArmed(true);
+    const state = engine.getState();
+    expect(state.active).toBe(true);
+    expect(state.armed).toBe(false);
+  });
+
+  it('setArmed(false) clears the armed state', () => {
+    engine.setArmed(true);
+    engine.setArmed(false);
+    const state = engine.getState();
+    expect(state.armed).toBe(false);
+  });
+
+  it('stop() clears the armed state (full stop)', async () => {
+    engine.setArmed(true);
+    engine.stop();
+    const state = engine.getState();
+    expect(state.armed).toBe(false);
+    expect(state.active).toBe(false);
+  });
+
+  it('engine state includes armed in every snapshot (invariant: not armed and active)', () => {
+    const states: Array<{ active: boolean; armed: boolean }> = [];
+    engine.subscribe((s) => states.push({ active: s.active, armed: s.armed }));
+    engine.setArmed(true);
+    engine.setArmed(false);
+    expect(states.length).toBeGreaterThan(0);
+    for (const s of states) {
+      expect(typeof s.armed).toBe('boolean');
+      expect(s.active && s.armed).toBe(false);
+    }
+  });
+
   it('clears the Transport event on stop()', async () => {
     await engine.start(120, 4, 4);
     engine.stop();

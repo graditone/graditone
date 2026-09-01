@@ -857,6 +857,12 @@ export interface MetronomeState {
   /** Whether the metronome is currently ticking. */
   readonly active: boolean;
   /**
+   * Whether the metronome is armed for a deferred start (Feature 097).
+   * `armed` means "waiting to start on the first `startFromDeferred()` call
+   * (first played note)". Mutually exclusive with `active`. Always present.
+   */
+  readonly armed: boolean;
+  /**
    * 0-based index of the most recently fired beat within the measure.
    * 0 = the downbeat (first beat of the bar).
    * -1 when the metronome is inactive or no beat has fired since activation.
@@ -913,12 +919,29 @@ export interface PluginMetronomeContext {
    *   clicks. Beat counter resets to beat 1 (downbeat).
    * - On → Off: stops the engine immediately. The Transport is NOT stopped
    *   (it may still be used by playback).
+   * - Armed → disarms (a second tap while armed cancels the deferred start).
    *
    * Promise resolves when audio is unlocked and the first beat is scheduled.
    * If browser audio is blocked, shows an inline unblock prompt and resolves
    * immediately (FR-012).
    */
   toggle(): Promise<void>;
+  /**
+   * Arm the metronome for a deferred start (Feature 097): it will start on the
+   * first `startFromDeferred()` call (typically the first played note) instead
+   * of immediately. Sets `state.armed = true`. No-op while the engine is active.
+   */
+  arm(): void;
+  /**
+   * Cancel a deferred start: clears `state.armed`. No-op when not armed.
+   */
+  disarm(): void;
+  /**
+   * Consume the armed state and start the engine. Returns `true` if it started
+   * (was armed), `false` if it was not armed (no-op). Safe to call on every
+   * first-note event — it only acts when armed.
+   */
+  startFromDeferred(): Promise<boolean>;
   /**
    * Change the beat subdivision while the engine is active or idle.
    * If the engine is currently running, it restarts immediately at the new

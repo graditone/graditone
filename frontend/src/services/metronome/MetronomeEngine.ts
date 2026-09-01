@@ -31,6 +31,9 @@ export class MetronomeEngine {
   // ─── Internal state ──────────────────────────────────────────────────────
 
   private _active = false;
+  /** Feature 097 — armed deferred start: waiting to start on the first played
+   * note. Mutually exclusive with `active` (a ticking metronome cannot be armed). */
+  private _armed = false;
   private _bpm = 0;
   private _beatIndex = 0;
   private _numerator = 4;
@@ -130,6 +133,7 @@ export class MetronomeEngine {
     this._subdivision = subdivision;
     this._subBeatIndex = 0;
     this._active = true;
+    this._armed = false; // starting supersedes any armed (deferred) state
 
     // Create synths once per engine instance
     if (!this._downbeatSynth) {
@@ -192,15 +196,31 @@ export class MetronomeEngine {
   }
 
   /**
+   * Arm or disarm the metronome for a deferred start (Feature 097).
+   * `armed` means "start on the first `startFromDeferred()` call (first played
+   * note)" instead of immediately. Arming is a no-op while the engine is
+   * running (a ticking metronome cannot be armed).
+   */
+  public setArmed(armed: boolean): void {
+    if (this._active && armed) return;
+    if (this._armed === armed) return;
+    this._armed = armed;
+    this._notifySubscribers();
+  }
+
+  /**
    * Stop the metronome immediately.
    * Cancels the scheduled Transport repeat event. Does NOT stop the Transport
    * itself — it may still be used by the playback engine.
+   * Also clears any armed (deferred) state: this is the full-stop primitive;
+   * callers wanting "stopped but re-armed" must call setArmed(true) after.
    */
   public stop(): void {
     this._clearEvent();
     this._unsubTransportRestart?.();
     this._unsubTransportRestart = null;
     this._active = false;
+    this._armed = false;
     this._beatIndex = 0;
     this._notifySubscribers();
   }
@@ -318,6 +338,7 @@ export class MetronomeEngine {
     // indicators blink on all subdivision ticks, not only beat boundaries.
     const state: MetronomeState = {
       active: this._active,
+      armed: false,
       beatIndex: currentBeatIndex,
       isDownbeat,
       bpm: this._bpm,
@@ -331,6 +352,7 @@ export class MetronomeEngine {
     if (!this._active) {
       return {
         active: false,
+        armed: this._armed,
         beatIndex: -1,
         isDownbeat: false,
         bpm: 0,
@@ -340,6 +362,7 @@ export class MetronomeEngine {
     }
     return {
       active: true,
+      armed: false,
       beatIndex: this._beatIndex,
       isDownbeat: this._beatIndex === 0,
       bpm: this._bpm,

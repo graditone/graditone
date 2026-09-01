@@ -131,7 +131,7 @@ export function TrainPlugin({ context }: TrainPluginProps) {
 
   // Feature 035: Metronome state
   const [metronomeState, setMetronomeState] = useState<MetronomeState>({
-    active: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1, subBeatIndex: 0,
+    active: false, armed: false, beatIndex: -1, isDownbeat: false, bpm: 0, subdivision: 1, subBeatIndex: 0,
   });
 
   // ── UI state ─────────────────────────────────────────────────────────────────
