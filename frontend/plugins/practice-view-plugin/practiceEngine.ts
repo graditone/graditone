@@ -13,6 +13,7 @@
 
 import type { PracticeNoteEntry, PracticeState, PracticeAction, PracticeNoteResult, WrongNoteEvent } from './practiceEngine.types';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
+import { isHoldAccepted } from './holdDuration';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -136,6 +137,14 @@ export function reduce(state: PracticeState, action: PracticeAction): PracticeSt
     case 'EARLY_RELEASE': {
       // No-op outside holding mode
       if (state.mode !== 'holding') return state;
+
+      // Feature 098: the accept/reject decision depends ONLY on how long the
+      // note was held versus the required duration. A release that has already
+      // reached the acceptance threshold is NOT an early release — treat it
+      // exactly like a HOLD_COMPLETE (records a correct result and advances).
+      if (isHoldAccepted(state.requiredHoldMs, action.holdDurationMs)) {
+        return reduce(state, { type: 'HOLD_COMPLETE', holdDurationMs: action.holdDurationMs });
+      }
 
       const entry = state.notes[state.currentIndex];
       const result: PracticeNoteResult = {

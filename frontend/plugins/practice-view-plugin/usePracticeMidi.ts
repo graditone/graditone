@@ -6,6 +6,14 @@ import type {
 } from '../../src/plugin-api/index';
 import { ChordDetector } from '../../src/plugin-api/index';
 import type { PracticeState, PracticeAction } from './practiceEngine.types';
+import {
+  HOLD_FLOOR_MS,
+  computeRequiredHoldMs,
+  isHoldAccepted,
+} from './holdDuration';
+
+// Re-export the shared helpers for backwards-compatible imports (feature 098).
+export { HOLD_FLOOR_MS, computeRequiredHoldMs };
 
 // ---------------------------------------------------------------------------
 // Hook contract
@@ -44,31 +52,12 @@ export interface UsePracticeMidiReturn {
   chordDetectorRef: React.RefObject<ChordDetector>;
 }
 
-// PPQ constant for tick→ms conversion
-const PPQ = 960;
-
-// ---------------------------------------------------------------------------
-// Exported helpers (unit-testable hold-duration formula)
-// ---------------------------------------------------------------------------
-
-/**
- * Minimum wall-clock hold duration (ms) required before the hold gate is
- * engaged. Notes whose computed duration is ≤ this value need no hold.
- * Used by T008 to replace the tick-based gate condition.
- */
-export const HOLD_FLOOR_MS = 500;
-
-/**
- * Compute the required hold duration in milliseconds for a note.
- * Returns 0 when `bpm ≤ 0` (guards against division-by-zero).
- */
-export function computeRequiredHoldMs(durationTicks: number, bpm: number): number {
-  return bpm > 0 ? (durationTicks / ((bpm / 60) * PPQ)) * 1000 : 0;
-}
-
 // ---------------------------------------------------------------------------
 // Hook implementation
 // ---------------------------------------------------------------------------
+
+// PPQ constant for tick→ms conversion (960 pulses per quarter note).
+const PPQ = 960;
 
 export function usePracticeMidi({
   context,
@@ -198,7 +187,15 @@ export function usePracticeMidi({
             ((holdEntry.sustainedPitches ?? []) as number[]).includes(event.midiNote)
           )) {
             const holdDurationMs = Date.now() - holdPs.holdStartTimeMs;
-            dispatchPractice({ type: 'EARLY_RELEASE', holdDurationMs });
+            // Feature 098: a release after the hold has reached the acceptance
+            // threshold is a successful hold (HOLD_COMPLETE), never an early
+            // release — the decision depends on measured duration, not on which
+            // event is processed first.
+            if (isHoldAccepted(holdPs.requiredHoldMs, holdDurationMs)) {
+              dispatchPractice({ type: 'HOLD_COMPLETE', holdDurationMs });
+            } else {
+              dispatchPractice({ type: 'EARLY_RELEASE', holdDurationMs });
+            }
           }
         }
         return;
@@ -270,8 +267,25 @@ export function usePracticeMidi({
       }
       if (ps.mode === 'holding') {
         if (!isInChord && !isSustained) {
-          const wrongResponseTimeMs = Date.now() - practiceStartTimeRef.current;
-          dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs: wrongResponseTimeMs });
+          // Feature 098: pressing a pitch that belongs to the NEXT entry at the
+          // measure boundary while the current hold has already reached the
+          // acceptance threshold should complete the current hold and let this
+          // press start accumulating toward the next entry — never a WRONG_MIDI.
+          // The decision is based on measured elapsed hold time only.
+          const holdDurationMs = Date.now() - ps.holdStartTimeMs;
+          if (isHoldAccepted(ps.requiredHoldMs, holdDurationMs)) {
+            dispatchPractice({ type: 'HOLD_COMPLETE', holdDurationMs });
+            const nextEntry = ps.notes[ps.currentIndex + 1];
+            chordDetectorRef.current.reset(
+              nextEntry
+                ? [...((nextEntry.midiPitches as number[]) ?? []), ...((nextEntry.sustainedPitches ?? []) as number[])]
+                : [],
+            );
+            chordDetectorRef.current.press(event.midiNote, event.timestamp);
+          } else {
+            const wrongResponseTimeMs = Date.now() - practiceStartTimeRef.current;
+            dispatchPractice({ type: 'WRONG_MIDI', midiNote: event.midiNote, responseTimeMs: wrongResponseTimeMs });
+          }
         }
         return;
       }
@@ -299,6 +313,10 @@ export function usePracticeMidi({
         const responseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
 
         const range = loopPracticeRangeRef.current;
+        // Feature 098: the effective hold duration is the entry's notated duration
+        // capped to the gap before the next entry — it can NEVER exceed the entry's
+        // notated durationTicks, so the required hold time is provably ≤ the notated
+        // duration at the current BPM.
         let effectiveDurTicks = currentEntry.durationTicks;
         const nextEntry = ps.notes[ps.currentIndex + 1];
         if (nextEntry) {
@@ -307,6 +325,7 @@ export function usePracticeMidi({
             effectiveDurTicks = gapTicks;
           }
         }
+        effectiveDurTicks = Math.max(0, Math.min(effectiveDurTicks, currentEntry.durationTicks));
         const entryRequiredHoldMs = computeRequiredHoldMs(effectiveDurTicks, bpm) > HOLD_FLOOR_MS
           ? computeRequiredHoldMs(effectiveDurTicks, bpm)
           : 0;

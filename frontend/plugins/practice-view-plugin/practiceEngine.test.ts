@@ -869,6 +869,44 @@ describe('reduce() — EARLY_RELEASE action (T010)', () => {
     const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 800 });
     expect(next).toBe(state); // same reference
   });
+
+  it('T008-red: release at/above the acceptance threshold behaves like HOLD_COMPLETE (feature 098)', () => {
+    // requiredHoldMs = 2000 → acceptanceMs = 2000 - min(200, 500) = 1800.
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    const state = holdingState(notes, 0, 50000, 2000);
+    const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 1900 });
+    expect(next.noteResults).toHaveLength(1);
+    expect(next.noteResults[0].outcome).toBe('correct'); // NOT 'early-release'
+    expect(next.currentIndex).toBe(1); // advanced, identical to HOLD_COMPLETE(1900)
+    expect(next.mode).toBe('active');
+  });
+
+  it('T015-US2: at-threshold release advances exactly once, no double-advance on replay', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    const state = holdingState(notes, 0, 50000, 4000);
+    // Acceptance = 4000 - min(400, 500) = 3600. 3800 is a valid full hold.
+    const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 3800 });
+    expect(next.currentIndex).toBe(1);
+    expect(next.mode).toBe('active');
+    // A second EARLY_RELEASE arriving after mode left 'holding' is a no-op.
+    const noop = reduce(next, { type: 'EARLY_RELEASE', holdDurationMs: 3800 });
+    expect(noop).toBe(next);
+    expect(noop.currentIndex).toBe(1);
+    expect(noop.noteResults).toHaveLength(1);
+  });
+
+  it('T019-US3: sub-threshold release still records early-release, stays on same index (feature 098)', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    const state = holdingState(notes, 0, 50000, 4000);
+    // Acceptance = 3600; 2000 is a genuine early release.
+    const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 2000 });
+    expect(next.noteResults).toHaveLength(1);
+    expect(next.noteResults[0].outcome).toBe('early-release');
+    expect(next.mode).toBe('active');
+    expect(next.currentIndex).toBe(0); // unchanged — retry allowed
+    expect(next.holdStartTimeMs).toBe(0);
+    expect(next.requiredHoldMs).toBe(0);
+  });
 });
 
 describe('reduce() — CORRECT_MIDI retry after EARLY_RELEASE (T011)', () => {
