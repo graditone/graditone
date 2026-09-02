@@ -1151,6 +1151,47 @@ describe('Feature 042 — US2: hold indicator (T022-T024)', () => {
     expect(screen.queryByTestId('hold-indicator')).toBeNull();
   });
 
+  it('T025: hold indicator flips to validated (green) once the hold meets the acceptance margin', () => {
+    // Make rAF call the callback immediately with a time that gives >0% progress
+    originalRAF = window.requestAnimationFrame;
+    let rafCallback: FrameRequestCallback | null = null;
+    window.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      rafCallback = cb;
+      return 1;
+    };
+
+    // Whole note at 120 BPM → requiredHoldMs 2000; acceptance = 2000 − 500 (25%) = 1500.
+    const holdNote = { midiPitches: [60], noteIds: ['n1'], tick: 0, durationTicks: 3840 };
+    const nextNote = { midiPitches: [62], noteIds: ['n2'], tick: 3840, durationTicks: 0 };
+    const ctx = createMockContext({ status: 'ready', staffCount: 1, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [holdNote, nextNote],
+      totalAvailable: 2,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    // Before acceptance: bar visible but NOT yet validated (theme mid color).
+    vi.setSystemTime(Date.now() + 1000);
+    act(() => {
+      if (rafCallback) rafCallback(performance.now());
+    });
+    expect(screen.getByTestId('hold-indicator')).toHaveAttribute('data-validated', 'false');
+
+    // Advance past the acceptance margin (≥1500 ms) and fire rAF → HOLD_COMPLETE.
+    vi.setSystemTime(Date.now() + 1000);
+    act(() => {
+      if (rafCallback) rafCallback(performance.now());
+    });
+
+    // The validated flash keeps the indicator visible and marked as validated.
+    expect(screen.getByTestId('hold-indicator')).toHaveAttribute('data-validated', 'true');
+  });
+
   it('T024: hold indicator NOT rendered when durationTicks <= 960 (≤ quarter note)', () => {
     originalRAF = window.requestAnimationFrame;
     let rafCallback: FrameRequestCallback | null = null;
