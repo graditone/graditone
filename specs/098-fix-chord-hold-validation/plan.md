@@ -19,10 +19,11 @@ path flags wrong the next-chord press that arrives while the previous chord is
 still held.
 
 Fix: introduce one pure hold-acceptance rule — `isHoldAccepted(required, elapsed)`
-(≥90%, capped at 500 ms early — unchanged Feature 042 tolerance) — and apply it at
-every decision point (release handler, press-during-hold, reducer guard, rAF loop)
-so the outcome depends only on how long the chord was held, never on which event is
-processed first. Genuine early releases remain detected and penalised.
+(≥75%; a release margin of up to 25% capped at 1500 ms — feature 098 follow-up) —
+and apply it at every decision point (release handler, press-during-hold, reducer
+guard, rAF loop) so the outcome depends only on how long the chord was held, never
+on which event is processed first. Genuine early releases (below the margin) remain
+detected and penalised.
 
 **Status**: Implemented (2026-09-02). All tasks complete — see [tasks.md](tasks.md).
 

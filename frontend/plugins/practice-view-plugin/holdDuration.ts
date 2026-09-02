@@ -14,6 +14,20 @@
 export const HOLD_FLOOR_MS = 500;
 
 /**
+ * Early-acceptance tuning (feature 098, follow-up): a hold is accepted once the
+ * player has held for (1 − EARLY_ACCEPTANCE_RATIO) of the required duration,
+ * with the early margin capped at EARLY_ACCEPTANCE_CAP_MS. This grants the
+ * player a comfort margin before the note's notated end so they can release a
+ * sustained chord early to reposition their fingers for the next chord — while
+ * still requiring the large majority of the duration to actually be held.
+ *
+ * For a whole-note chord filling a 4/4 measure this yields roughly a one-beat
+ * margin at typical practice tempos (78 BPM whole note → 25% ≈ 760 ms ≈ 1 beat).
+ */
+export const EARLY_ACCEPTANCE_RATIO = 0.25;
+export const EARLY_ACCEPTANCE_CAP_MS = 1500;
+
+/**
  * Compute the required hold duration in milliseconds for a note.
  * Returns 0 when `bpm <= 0` (guards against division-by-zero).
  *
@@ -24,14 +38,18 @@ export function computeRequiredHoldMs(durationTicks: number, bpm: number): numbe
 }
 
 /**
- * The wall-clock duration at which a hold is accepted: 90% of the required
- * duration, with the early-acceptance window capped at 500 ms so very long notes
- * at ultra-low tempos are never accepted more than 500 ms early.
+ * The wall-clock duration at which a hold is accepted: the required duration
+ * minus the early-acceptance margin (ratio × required, capped at
+ * EARLY_ACCEPTANCE_CAP_MS) so very long notes at ultra-low tempos are never
+ * accepted absurdly early, while short-to-moderate notes get a comfortable
+ * release margin.
  *
  * Returns 0 when `requiredHoldMs <= 0` (no hold requested).
  */
 export function computeHoldAcceptanceMs(requiredHoldMs: number): number {
-  return requiredHoldMs > 0 ? requiredHoldMs - Math.min(requiredHoldMs * 0.1, 500) : 0;
+  return requiredHoldMs > 0
+    ? requiredHoldMs - Math.min(requiredHoldMs * EARLY_ACCEPTANCE_RATIO, EARLY_ACCEPTANCE_CAP_MS)
+    : 0;
 }
 
 /**

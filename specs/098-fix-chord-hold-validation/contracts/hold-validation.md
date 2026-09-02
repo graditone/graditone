@@ -14,11 +14,15 @@ and re-exported there for backwards-compatible imports.
 ```
 HOLD_FLOOR_MS = 500
 
+EARLY_ACCEPTANCE_RATIO = 0.25     // must hold ≥ 75% of the required duration
+EARLY_ACCEPTANCE_CAP_MS = 1500    // early margin never exceeds this (ms)
+
 function computeRequiredHoldMs(durationTicks: number, bpm: number): number
   // (durationTicks / ((bpm/60) * 960)) * 1000, or 0 when bpm <= 0
 
 function computeHoldAcceptanceMs(requiredHoldMs: number): number
-  // requiredHoldMs - Math.min(requiredHoldMs * 0.1, 500); 0 when requiredHoldMs <= 0
+  // requiredHoldMs - Math.min(requiredHoldMs * EARLY_ACCEPTANCE_RATIO, EARLY_ACCEPTANCE_CAP_MS)
+  // 0 when requiredHoldMs <= 0
 
 function isHoldAccepted(requiredHoldMs: number, elapsedMs: number): boolean
   // requiredHoldMs > 0 && elapsedMs >= computeHoldAcceptanceMs(requiredHoldMs)
@@ -26,12 +30,15 @@ function isHoldAccepted(requiredHoldMs: number, elapsedMs: number): boolean
 
 ## Semantics
 
-- `isHoldAccepted(r, e)` is `true` once the player has held for at least 90% of the
-  required duration, with the early-acceptance window capped at 500 ms
-  (Feature 042 rule, unchanged). Examples:
-  - `required 2000 → acceptance 1800` (10% window)
-  - `required 24000 → acceptance 23500` (capped 500 ms window)
-  - `required 1000 → acceptance 900`
+- `isHoldAccepted(r, e)` is `true` once the player has held for at least 75% of the
+  required duration, with the early-acceptance margin capped at 1500 ms
+  (feature 098 follow-up). Grants a comfortable release margin (~1 beat for a
+  whole-measure chord) so the player can begin repositioning their fingers for the
+  next chord, while still requiring the large majority of the duration to be held.
+  - `required 2000 → acceptance 1500` (25% margin)
+  - `required 24000 → acceptance 22500` (1500 ms cap applies)
+  - `required 1000 → acceptance 750`
+  - Whole-note chord at 60 BPM → `required 4000`, `acceptance 3000` (3 of 4 beats).
 - A note does not enter `holding` when `requiredHoldMs ≤ HOLD_FLOOR_MS` (quarters and
   shorter at normal tempos); the helpers are only consulted for notes that
   requested a hold.
@@ -44,16 +51,16 @@ function isHoldAccepted(requiredHoldMs: number, elapsedMs: number): boolean
 | `computeRequiredHoldMs(3840, 10)` | 24000 |
 | `computeRequiredHoldMs(960, 120)` | 500 |
 | `computeRequiredHoldMs(3840, 0)` | 0 |
-| `computeHoldAcceptanceMs(2000)` | 1800 |
-| `computeHoldAcceptanceMs(24000)` | 23500 |
-| `computeHoldAcceptanceMs(1000)` | 900 |
-| `isHoldAccepted(2000, 1799)` | false |
-| `isHoldAccepted(2000, 1800)` | true |
+| `computeHoldAcceptanceMs(2000)` | 1500 |
+| `computeHoldAcceptanceMs(24000)` | 22500 |
+| `computeHoldAcceptanceMs(1000)` | 750 |
+| `isHoldAccepted(2000, 1499)` | false |
+| `isHoldAccepted(2000, 1500)` | true |
 | `isHoldAccepted(2000, 4000)` | true |
 | `isHoldAccepted(0, anything)` | false |
 
 ## Consumers
 
 - `practiceEngine.ts` (reducer guard, contract: `contracts/practice-engine.md`)
-- `useHoldProgress.ts` (rAF loop — behaviour unchanged, shares the helpers)
+- `useHoldProgress.ts` (rAF loop — drives the same acceptance threshold via the helpers)
 - `usePracticeMidi.ts` (release + press-during-hold handlers)

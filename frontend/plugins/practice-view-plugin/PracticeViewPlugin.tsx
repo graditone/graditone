@@ -947,6 +947,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
             className="practice-plugin__hold-indicator-bar"
             style={{ width: `${Math.min(holdProgress * 100, 100)}%` }}
           />
+          <span className="practice-plugin__hold-indicator-debug">
+            bpm={playerState.bpm} reqMs={Math.round(practiceState.requiredHoldMs)} elMs={Math.round(holdProgress * practiceState.requiredHoldMs)} idx={practiceState.currentIndex} mode={practiceState.mode}
+          </span>
         </div>
       )}
 

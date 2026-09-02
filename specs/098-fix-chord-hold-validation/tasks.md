@@ -148,6 +148,20 @@ description: "Task list template for feature implementation"
 > are each covered by the corresponding automated regression tests (T007-red /
 > T020 → scenarios A/D, T019 → B, T016 → C).
 
+## Phase 8: Follow-up — Release Margin (device-tested adjustment)
+
+**Purpose**: Tablet validation showed that holding a whole-measure chord to (nearly) its full
+duration is uncomfortable when the player must reposition fingers for the next chord. Widened
+the acceptance threshold so a chord is validated with a release margin.
+
+- [X] T031 Widen the hold-acceptance margin in `frontend/plugins/practice-view-plugin/holdDuration.ts`:
+      accept once the player has held ≥75% of `requiredHoldMs` (early margin = 25% of required,
+      capped at 1500 ms), via exported `EARLY_ACCEPTANCE_RATIO = 0.25` / `EARLY_ACCEPTANCE_CAP_MS = 1500`.
+      Whole-note chord at 60 BPM → accepted at 3000 ms of 4000 (3 of 4 beats, ~1 beat of margin).
+      Update `holdDuration.test.ts`, `useHoldProgress.test.ts` (T002/T006/T014/T015), and the
+      boundary test `usePracticeMidi.test.ts` T016 (1500 ms) accordingly. Genuine early releases
+      (below the margin) still record `early-release` — T019/T020 unchanged and green.
+
 ---
 
 ## Dependencies (user story completion order)

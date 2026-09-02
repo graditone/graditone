@@ -495,7 +495,8 @@ describe('usePracticeMidi', () => {
     const earlyCalls = calls.filter(([a]: [{ type: string }]) => a.type === 'EARLY_RELEASE');
     expect(completeCalls).toHaveLength(1);
     expect(earlyCalls).toHaveLength(0);
-    expect(completeCalls[0][0].holdDurationMs).toBeGreaterThanOrEqual(3_600);
+    // Required 4000, acceptance 3000 (25%); a full-measure 4000 ms hold is accepted.
+    expect(completeCalls[0][0].holdDurationMs).toBeGreaterThanOrEqual(3_000);
   });
 
   // ─── T009-red: pressing the next chord while the current hold has already
@@ -557,7 +558,7 @@ const midiCallback = captureMidiCallback(params);
       sustainedPitches: [] as readonly number[],
       noteIds: ['n1'] as readonly string[],
     };
-    // At 120 BPM a whole note requires 2000 ms; acceptance = 2000 - 200 = 1800.
+    // At 120 BPM a whole note requires 2000 ms; acceptance = 2000 − 500 (25%) = 1500.
     const practiceState = {
       ...INITIAL_PRACTICE_STATE,
       mode: 'holding' as const,
@@ -571,14 +572,12 @@ const midiCallback = captureMidiCallback(params);
 
     // Freeze Date.now so the measured hold is deterministic.
     const NOW = 100_000;
-    const realNow = Date.now;
     vi.spyOn(Date, 'now').mockImplementation(() => NOW);
 
     try {
       const midiCallback = captureMidiCallback(params);
-      // holdStartTimeMs = 0 → a release at NOW (100_000) means elapsed = 100_000 ms,
-      // far above acceptance. Instead re-anchor holdStartTime to test the boundary:
-      practiceState.holdStartTimeMs = NOW - 1_800;
+      // Hold started 1500 ms before NOW → release lands exactly on acceptance.
+      practiceState.holdStartTimeMs = NOW - 1_500;
       midiCallback({ type: 'release', midiNote: 60, timestamp: NOW });
 
       const calls = (params.dispatchPractice as ReturnType<typeof vi.fn>).mock.calls;
@@ -586,7 +585,7 @@ const midiCallback = captureMidiCallback(params);
       const earlyCalls = calls.filter(([a]: [{ type: string }]) => a.type === 'EARLY_RELEASE');
       expect(completeCalls).toHaveLength(1);
       expect(earlyCalls).toHaveLength(0);
-      expect(completeCalls[0][0].holdDurationMs).toBe(1_800);
+      expect(completeCalls[0][0].holdDurationMs).toBe(1_500);
     } finally {
       (Date.now as ReturnType<typeof vi.spyOn>).mockRestore?.();
       vi.restoreAllMocks();
@@ -605,7 +604,7 @@ const midiCallback = captureMidiCallback(params);
       sustainedPitches: [] as readonly number[],
       noteIds: ['n1'] as readonly string[],
     };
-    // At 60 BPM a whole note requires 4000 ms; acceptance = 3600.
+    // At 60 BPM a whole note requires 4000 ms; acceptance = 3000 (25%).
     const practiceState = {
       ...INITIAL_PRACTICE_STATE,
       mode: 'holding' as const,
