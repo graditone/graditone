@@ -107,6 +107,49 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   // ─── Hold-progress indicator (extracted hook, feature 042) ─────────────────
   const { holdProgress } = useHoldProgress({ practiceState, dispatchPractice });
 
+  // ─── Hold-validated flash (feature 098 follow-up) ──────────────────────────
+  // While a long chord is held, the progress bar renders in the theme's mid
+  // (accent) color. The moment a hold is validated (HOLD_COMPLETE recorded a
+  // correct result), the bar flips to the theme's green for a short flash so the
+  // player gets clear positive feedback even though the hold indicator clears.
+  const [holdValidatedInfo, setHoldValidatedInfo] = useState<{ requiredHoldMs: number } | null>(null);
+  const holdValidatedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevPracticeModeRef = useRef(practiceState.mode);
+  useEffect(() => {
+    const prev = prevPracticeModeRef.current;
+    prevPracticeModeRef.current = practiceState.mode;
+
+    if (practiceState.mode === 'holding') {
+      // A new hold begins — nothing validated yet; cancel any pending flash.
+      if (holdValidatedTimerRef.current !== null) {
+        clearTimeout(holdValidatedTimerRef.current);
+        holdValidatedTimerRef.current = null;
+      }
+      setHoldValidatedInfo(null);
+      return;
+    }
+    if (prev === 'holding' && practiceState.mode !== 'holding') {
+      const last = practiceState.noteResults[practiceState.noteResults.length - 1];
+      if (last && (last.outcome === 'correct' || last.outcome === 'correct-late')) {
+        if (holdValidatedTimerRef.current === null) {
+          setHoldValidatedInfo({ requiredHoldMs: last.requiredHoldMs });
+          holdValidatedTimerRef.current = setTimeout(() => {
+            setHoldValidatedInfo(null);
+            holdValidatedTimerRef.current = null;
+          }, 450);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [practiceState.mode, practiceState.noteResults]);
+
+  // Cancel the flash timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (holdValidatedTimerRef.current !== null) clearTimeout(holdValidatedTimerRef.current);
+    };
+  }, []);
+
   // ─── Tempo multiplier ──────────────────────────────────────────────────────
   const [tempoMultiplier, setTempoMultiplier] = useState(1.0);
   const tempoMultiplierRef = useRef(tempoMultiplier);
@@ -933,20 +976,25 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         freeNoteCount={freePractice.freeNoteCount}
       />
 
-      {/* Hold indicator — visible while player holds a note longer than a quarter note */}
-      {holdProgress > 0 && practiceState.requiredHoldMs > (60_000 / (playerState.bpm || 120)) && (
+      {/* Hold indicator — theme mid color while progressing, theme green once validated */}
+      {(holdProgress > 0 || holdValidatedInfo !== null) &&
+        (holdValidatedInfo?.requiredHoldMs ?? practiceState.requiredHoldMs) > (60_000 / (playerState.bpm || 120)) && (
         <div
           data-testid="hold-indicator"
-          className="practice-plugin__hold-indicator"
+          data-validated={holdValidatedInfo !== null ? 'true' : 'false'}
+          className={`practice-plugin__hold-indicator${holdValidatedInfo !== null ? ' practice-plugin__hold-indicator--validated' : ''}`}
           role="progressbar"
-          aria-valuenow={Math.round(holdProgress * 100)}
+          aria-valuenow={Math.round((holdValidatedInfo !== null ? 1 : holdProgress) * 100)}
           aria-valuemin={0}
           aria-valuemax={100}
         >
           <div
             className="practice-plugin__hold-indicator-bar"
-            style={{ width: `${Math.min(holdProgress * 100, 100)}%` }}
+            style={{ width: `${Math.min((holdValidatedInfo !== null ? 1 : holdProgress) * 100, 100)}%` }}
           />
+          <span className="practice-plugin__hold-indicator-debug">
+            bpm={playerState.bpm} reqMs={Math.round(holdValidatedInfo?.requiredHoldMs ?? practiceState.requiredHoldMs)} elMs={Math.round(holdProgress * practiceState.requiredHoldMs)} idx={practiceState.currentIndex} mode={practiceState.mode}
+          </span>
         </div>
       )}
 

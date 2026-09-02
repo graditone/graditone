@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { PracticeState, PracticeAction } from './practiceEngine.types';
+import { computeHoldAcceptanceMs } from './holdDuration';
 
 export interface UseHoldProgressParams {
   practiceState: PracticeState;
@@ -37,10 +38,11 @@ export function useHoldProgress({
         const progress = required > 0 ? Math.min(elapsed / required, 1) : 0;
         setHoldProgress(progress);
 
-        // Accept the hold at 90% of the required duration, but cap the
-        // early-acceptance window at 500 ms so long notes (≥ 5 000 ms) at
-        // ultra-low tempos are not accepted more than 500 ms early.
-        const acceptanceMs = required - Math.min(required * 0.1, 500);
+        // Accept the hold at the shared acceptance threshold (90% of the required
+        // duration, capped at 500 ms early so long notes ≥ 5 000 ms at ultra-low
+        // tempos are not accepted more than 500 ms early). Same rule as the
+        // release/early-release handlers (feature 098).
+        const acceptanceMs = computeHoldAcceptanceMs(required);
         if (elapsed >= acceptanceMs) {
           dispatchPractice({ type: 'HOLD_COMPLETE', holdDurationMs: elapsed });
           setHoldProgress(0);

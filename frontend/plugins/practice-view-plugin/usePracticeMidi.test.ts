@@ -460,4 +460,173 @@ describe('usePracticeMidi', () => {
     // effectiveDurTicks = 1920; 1920 / ((10/60)*960) * 1000 = 12 000 ms
     expect(correctCalls[0][0].requiredHoldMs).toBe(12_000);
   });
+
+  // ─── T007-red: full-measure chord released at/above the acceptance threshold
+  // ─── dispatches HOLD_COMPLETE, NOT EARLY_RELEASE (feature 098) ─────────────
+  it('T007-red: release of a full-measure chord after a full hold dispatches HOLD_COMPLETE, not EARLY_RELEASE', () => {
+    const params = makeMockParams();
+
+    const wholeChord = {
+      tick: 0,
+      durationTicks: 3_840,
+      midiPitches: [60, 64, 67] as readonly number[],
+      sustainedPitches: [] as readonly number[],
+      noteIds: ['n1', 'n2', 'n3'] as readonly string[],
+    };
+    const practiceState = {
+      ...INITIAL_PRACTICE_STATE,
+      mode: 'holding' as const,
+      currentIndex: 0,
+      notes: [wholeChord],
+      holdStartTimeMs: Date.now() - 4_000,
+      requiredHoldMs: 4_000,
+    };
+    params.practiceState = practiceState;
+    params.practiceStateRef = { current: practiceState };
+    params.playerStateRef = {
+      current: { ...params.playerState, bpm: 60, status: 'ready' as const, staffCount: 1 },
+    };
+
+    const midiCallback = captureMidiCallback(params);
+    midiCallback({ type: 'release', midiNote: 60, timestamp: Date.now() });
+
+    const calls = (params.dispatchPractice as ReturnType<typeof vi.fn>).mock.calls;
+    const completeCalls = calls.filter(([a]: [{ type: string }]) => a.type === 'HOLD_COMPLETE');
+    const earlyCalls = calls.filter(([a]: [{ type: string }]) => a.type === 'EARLY_RELEASE');
+    expect(completeCalls).toHaveLength(1);
+    expect(earlyCalls).toHaveLength(0);
+    // Required 4000, acceptance 3000 (25%); a full-measure 4000 ms hold is accepted.
+    expect(completeCalls[0][0].holdDurationMs).toBeGreaterThanOrEqual(3_000);
+  });
+
+  // ─── T009-red: pressing the next chord while the current hold has already
+  // ─── reached the acceptance threshold must NOT dispatch WRONG_MIDI — it
+  // ─── completes the current hold and starts the next entry (feature 098) ────
+  it('T009-red: press of next chord at the downbeat while a full hold is reached does not dispatch WRONG_MIDI', () => {
+    const params = makeMockParams();
+
+    const chord1 = {
+      tick: 0,
+      durationTicks: 3_840,
+      midiPitches: [60, 64, 67] as readonly number[],
+      sustainedPitches: [] as readonly number[],
+      noteIds: ['n1', 'n2', 'n3'] as readonly string[],
+    };
+    const chord2 = {
+      tick: 3_840,
+      durationTicks: 3_840,
+      midiPitches: [53, 57, 60] as readonly number[],
+      sustainedPitches: [] as readonly number[],
+      noteIds: ['n4', 'n5', 'n6'] as readonly string[],
+    };
+    const practiceState = {
+      ...INITIAL_PRACTICE_STATE,
+      mode: 'holding' as const,
+      currentIndex: 0,
+      notes: [chord1, chord2],
+      holdStartTimeMs: Date.now() - 4_000,
+      requiredHoldMs: 4_000,
+    };
+    params.practiceState = practiceState;
+    params.practiceStateRef = { current: practiceState };
+    params.playerStateRef = {
+      current: { ...params.playerState, bpm: 60, status: 'ready' as const, staffCount: 1 },
+    };
+
+const midiCallback = captureMidiCallback(params);
+    // First release one pitch of chord1 (hold already accepted).
+    midiCallback({ type: 'release', midiNote: 60, timestamp: Date.now() });
+    // Press a pitch that belongs ONLY to chord2 (53 = F3).
+    midiCallback({ type: 'attack', midiNote: 53, timestamp: Date.now() });
+
+    const calls = (params.dispatchPractice as ReturnType<typeof vi.fn>).mock.calls;
+    const wrongCalls = calls.filter(([a]: [{ type: string }]) => a.type === 'WRONG_MIDI');
+    const completeCalls = calls.filter(([a]: [{ type: string }]) => a.type === 'HOLD_COMPLETE');
+    expect(wrongCalls).toHaveLength(0);
+    expect(completeCalls.length).toBeGreaterThan(0);
+  });
+
+  // ─── T016-US2: a release at exactly the acceptance boundary is accepted
+  // ─── regardless of rAF frame timing (order-independence, feature 098) ──────
+  it('T016-US2: release at exactly the acceptance boundary dispatches HOLD_COMPLETE, not EARLY_RELEASE', () => {
+    const params = makeMockParams();
+
+    const wholeNote = {
+      tick: 0,
+      durationTicks: 3_840,
+      midiPitches: [60] as readonly number[],
+      sustainedPitches: [] as readonly number[],
+      noteIds: ['n1'] as readonly string[],
+    };
+    // At 120 BPM a whole note requires 2000 ms; acceptance = 2000 − 500 (25%) = 1500.
+    const practiceState = {
+      ...INITIAL_PRACTICE_STATE,
+      mode: 'holding' as const,
+      currentIndex: 0,
+      notes: [wholeNote],
+      holdStartTimeMs: 0,
+      requiredHoldMs: 2_000,
+    };
+    params.practiceState = practiceState;
+    params.practiceStateRef = { current: practiceState };
+
+    // Freeze Date.now so the measured hold is deterministic.
+    const NOW = 100_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => NOW);
+
+    try {
+      const midiCallback = captureMidiCallback(params);
+      // Hold started 1500 ms before NOW → release lands exactly on acceptance.
+      practiceState.holdStartTimeMs = NOW - 1_500;
+      midiCallback({ type: 'release', midiNote: 60, timestamp: NOW });
+
+      const calls = (params.dispatchPractice as ReturnType<typeof vi.fn>).mock.calls;
+      const completeCalls = calls.filter(([a]: [{ type: string }]) => a.type === 'HOLD_COMPLETE');
+      const earlyCalls = calls.filter(([a]: [{ type: string }]) => a.type === 'EARLY_RELEASE');
+      expect(completeCalls).toHaveLength(1);
+      expect(earlyCalls).toHaveLength(0);
+      expect(completeCalls[0][0].holdDurationMs).toBe(1_500);
+    } finally {
+      (Date.now as ReturnType<typeof vi.spyOn>).mockRestore?.();
+      vi.restoreAllMocks();
+    }
+  });
+
+  // ─── T020-US3: a true early release (half the required hold) STILL dispatches
+  // ─── EARLY_RELEASE, and a subsequent full retry re-enters holding (feature 098)
+  it('T020-US3: sub-threshold release dispatches EARLY_RELEASE, not HOLD_COMPLETE', () => {
+    const params = makeMockParams();
+
+    const wholeNote = {
+      tick: 0,
+      durationTicks: 3_840,
+      midiPitches: [60] as readonly number[],
+      sustainedPitches: [] as readonly number[],
+      noteIds: ['n1'] as readonly string[],
+    };
+    // At 60 BPM a whole note requires 4000 ms; acceptance = 3000 (25%).
+    const practiceState = {
+      ...INITIAL_PRACTICE_STATE,
+      mode: 'holding' as const,
+      currentIndex: 0,
+      notes: [wholeNote],
+      holdStartTimeMs: Date.now() - 2_000,
+      requiredHoldMs: 4_000,
+    };
+    params.practiceState = practiceState;
+    params.practiceStateRef = { current: practiceState };
+    params.playerStateRef = {
+      current: { ...params.playerState, bpm: 60, status: 'ready' as const, staffCount: 1 },
+    };
+
+    const midiCallback = captureMidiCallback(params);
+    midiCallback({ type: 'release', midiNote: 60, timestamp: Date.now() });
+
+    const calls = (params.dispatchPractice as ReturnType<typeof vi.fn>).mock.calls;
+    const earlyCalls = calls.filter(([a]: [{ type: string }]) => a.type === 'EARLY_RELEASE');
+    const completeCalls = calls.filter(([a]: [{ type: string }]) => a.type === 'HOLD_COMPLETE');
+    expect(earlyCalls).toHaveLength(1);
+    expect(completeCalls).toHaveLength(0);
+    expect(earlyCalls[0][0].holdDurationMs).toBeGreaterThanOrEqual(2_000);
+  });
 });

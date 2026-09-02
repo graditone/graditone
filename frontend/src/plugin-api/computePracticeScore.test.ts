@@ -112,3 +112,31 @@ describe('computePracticeScore — edge cases', () => {
     expect(at1x).toBe(atHalf);
   });
 });
+
+// ─── T021-US3: genuine early releases carry the 0.5× score penalty ────────────
+
+describe('computePracticeScore — early-release penalty (feature 098)', () => {
+  it('counts early-release outcomes separately and applies 0.5× credit', () => {
+    const notes = [
+      { outcome: 'correct', wrongAttempts: 0 },
+      { outcome: 'early-release', wrongAttempts: 0 },
+    ];
+    const result = computePracticeScore(notes, 1.0);
+    expect(result?.earlyReleaseCount).toBe(1);
+    expect(result?.correctCount).toBe(1);
+    // rawScore = ((1 + 1*0.5) / 2) * 100 = 75
+    expect(result?.score).toBe(75);
+  });
+
+  it('scores lower than the equivalent fully-correct session', () => {
+    const earlyReleaseSession = computePracticeScore([
+      { outcome: 'correct', wrongAttempts: 0 },
+      { outcome: 'early-release', wrongAttempts: 0 },
+    ], 1.0)!.score;
+    const fullyCorrect = computePracticeScore([
+      { outcome: 'correct', wrongAttempts: 0 },
+      { outcome: 'correct', wrongAttempts: 0 },
+    ], 1.0)!.score;
+    expect(earlyReleaseSession).toBeLessThan(fullyCorrect);
+  });
+});
