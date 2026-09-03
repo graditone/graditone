@@ -139,6 +139,72 @@ export function ResultsOverlay({
     const msPerBeat = 60_000 / performanceRecord.bpmAtCompletion;
     const msPerNote = msPerBeat * 0.85;
 
+    const notes = performanceRecord.notes;
+
+    // Group the notes that sound at each response time, keyed by their noteIds.
+    // Practiced entries merge sustained (held) notes into every later onset's
+    // midiPitches, so the SAME noteId recurs across consecutive steps while a
+    // chord is held. We must NOT re-attack it on every step (that makes a held
+    // chord sound like a plucked, re-articulated note each tick).
+    type TimeGroup = { midiNotes: number[]; noteIds: string[] };
+    const timeGroups = new Map<number, TimeGroup>();
+    for (const result of performanceRecord.noteResults) {
+      const entry = notes[result.noteIndex];
+      if (!entry) continue;
+      const group = timeGroups.get(result.responseTimeMs) ?? { midiNotes: [], noteIds: [] };
+      const ids = entry.noteIds ?? [];
+      const pitches = entry.midiPitches ?? [];
+      for (let i = 0; i < pitches.length; i++) {
+        group.midiNotes.push(pitches[i]);
+        group.noteIds.push(ids[i] ?? `p${pitches[i]}@${result.noteIndex}`);
+      }
+      timeGroups.set(result.responseTimeMs, group);
+    }
+    const times = [...timeGroups.keys()].sort((a, b) => a - b);
+
+    // Split each noteId into CONTIGUOUS runs of appearance. A note held across
+    // several steps is one run (sustain it, attack only once); a note re-played
+    // after a gap (e.g. a new loop iteration) is a fresh run (new attack).
+    type Run = { midi: number; attack: number; lastAppear: number; count: number };
+    const runs = new Map<string, Run[]>();
+    const lastGroupIdx = new Map<string, number>();
+    for (let groupIdx = 0; groupIdx < times.length; groupIdx++) {
+      const t = times[groupIdx];
+      const group = timeGroups.get(t)!;
+      for (let i = 0; i < group.noteIds.length; i++) {
+        const id = group.noteIds[i];
+        const arr = runs.get(id);
+        const prevIdx = lastGroupIdx.get(id) ?? -1;
+        if (arr && prevIdx === groupIdx - 1) {
+          const lastRun = arr[arr.length - 1];
+          lastRun.lastAppear = t;
+          lastRun.count += 1;
+        } else {
+          const nextArr = arr ?? [];
+          nextArr.push({ midi: group.midiNotes[i], attack: t, lastAppear: t, count: 1 });
+          runs.set(id, nextArr);
+        }
+        lastGroupIdx.set(id, groupIdx);
+      }
+    }
+
+    // Schedule one attack per note RUN:
+    //  - a sustained run (the note recurs across steps, e.g. a held left-hand
+    //    chord) sustains until its last appearance — continuous chord sound.
+    //  - a one-shot note keeps the previous fixed duration (unchanged).
+    // Wrong-note events are appended too; everything is scheduled in one
+    // time-sorted pass so the audio order matches the recorded timing.
+    const audioSchedule: Array<{ offsetMs: number; midiNote: number; durationMs: number }> = [];
+    for (const [, arr] of runs) {
+      for (const run of arr) {
+        const durationMs = run.count >= 2
+          ? Math.max(run.lastAppear + 80, run.attack + msPerNote) - run.attack
+          : msPerNote;
+        audioSchedule.push({ offsetMs: run.attack, midiNote: run.midi, durationMs });
+      }
+    }
+
+    // Build the highlight + finish timeline from the recorded results.
     type ReplayEvent = { responseTimeMs: number; midiNotes: number[]; isCorrect: boolean; noteIndex: number };
     const timeline: ReplayEvent[] = [];
 
@@ -157,19 +223,20 @@ export function ResultsOverlay({
         isCorrect: false,
         noteIndex: wrong.noteIndex,
       });
+      audioSchedule.push({ offsetMs: wrong.responseTimeMs, midiNote: wrong.midiNote, durationMs: msPerNote });
     }
     timeline.sort((a, b) => a.responseTimeMs - b.responseTimeMs);
 
-    for (const event of timeline) {
-      for (const midiNote of event.midiNotes) {
-        context.playNote({
-          midiNote,
-          timestamp: Date.now(),
-          type: 'attack',
-          offsetMs: event.responseTimeMs,
-          durationMs: msPerNote,
-        });
-      }
+    // Play every scheduled note in ascending time order.
+    audioSchedule.sort((a, b) => a.offsetMs - b.offsetMs);
+    for (const ev of audioSchedule) {
+      context.playNote({
+        midiNote: ev.midiNote,
+        timestamp: Date.now(),
+        type: 'attack',
+        offsetMs: ev.offsetMs,
+        durationMs: ev.durationMs,
+      });
     }
 
     const timers: ReturnType<typeof setTimeout>[] = [];
