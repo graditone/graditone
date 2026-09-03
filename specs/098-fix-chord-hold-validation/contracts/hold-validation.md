@@ -14,8 +14,8 @@ and re-exported there for backwards-compatible imports.
 ```
 HOLD_FLOOR_MS = 500
 
-EARLY_ACCEPTANCE_RATIO = 0.25     // must hold ≥ 75% of the required duration
-EARLY_ACCEPTANCE_CAP_MS = 1500    // early margin never exceeds this (ms)
+EARLY_ACCEPTANCE_RATIO = 0.20     // must hold ≥ 80% of the required duration
+EARLY_ACCEPTANCE_CAP_MS = 1500   // early margin never exceeds this (ms)
 
 function computeRequiredHoldMs(durationTicks: number, bpm: number): number
   // (durationTicks / ((bpm/60) * 960)) * 1000, or 0 when bpm <= 0
@@ -30,15 +30,15 @@ function isHoldAccepted(requiredHoldMs: number, elapsedMs: number): boolean
 
 ## Semantics
 
-- `isHoldAccepted(r, e)` is `true` once the player has held for at least 75% of the
+- `isHoldAccepted(r, e)` is `true` once the player has held for at least 80% of the
   required duration, with the early-acceptance margin capped at 1500 ms
-  (feature 098 follow-up). Grants a comfortable release margin (~1 beat for a
-  whole-measure chord) so the player can begin repositioning their fingers for the
-  next chord, while still requiring the large majority of the duration to be held.
-  - `required 2000 → acceptance 1500` (25% margin)
+  (feature 099: balanced — more accurate than the original 25%, forgiving enough
+  to be comfortable). Grants a release margin while requiring the bulk of the
+  duration to be held.
+  - `required 2000 → acceptance 1600` (20% margin)
   - `required 24000 → acceptance 22500` (1500 ms cap applies)
-  - `required 1000 → acceptance 750`
-  - Whole-note chord at 60 BPM → `required 4000`, `acceptance 3000` (3 of 4 beats).
+  - `required 1000 → acceptance 800`
+  - Whole-note chord at 60 BPM → `required 4000`, `acceptance 3200` (80% of 4 beats).
 - A note does not enter `holding` when `requiredHoldMs ≤ HOLD_FLOOR_MS` (quarters and
   shorter at normal tempos); the helpers are only consulted for notes that
   requested a hold.
@@ -51,11 +51,11 @@ function isHoldAccepted(requiredHoldMs: number, elapsedMs: number): boolean
 | `computeRequiredHoldMs(3840, 10)` | 24000 |
 | `computeRequiredHoldMs(960, 120)` | 500 |
 | `computeRequiredHoldMs(3840, 0)` | 0 |
-| `computeHoldAcceptanceMs(2000)` | 1500 |
+| `computeHoldAcceptanceMs(2000)` | 1600 |
 | `computeHoldAcceptanceMs(24000)` | 22500 |
-| `computeHoldAcceptanceMs(1000)` | 750 |
-| `isHoldAccepted(2000, 1499)` | false |
-| `isHoldAccepted(2000, 1500)` | true |
+| `computeHoldAcceptanceMs(1000)` | 800 |
+| `isHoldAccepted(2000, 1599)` | false |
+| `isHoldAccepted(2000, 1600)` | true |
 | `isHoldAccepted(2000, 4000)` | true |
 | `isHoldAccepted(0, anything)` | false |
 

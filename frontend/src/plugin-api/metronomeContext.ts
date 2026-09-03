@@ -358,9 +358,18 @@ export function useMetronomeBridge(
 
   // ─── Feature 097: armed / deferred start ───────────────────────────────────
 
-  /** Enter the armed (deferred-start) state; no-op while the engine runs. */
+  /**
+   * Enter the armed (deferred-start) state; no-op while the engine runs.
+   *
+   * Reads the engine's LIVE active state (engine.getState().active) rather than
+   * the render-synced engineStateRef. This avoids a race when the metronome is
+   * stopped and re-armed in the same tick (e.g. practice start calls toggle()
+   * → engine.stop() then arm() synchronously): engineStateRef.current would
+   * still report `active: true` from the previous render, incorrectly skipping
+   * the arm and leaving the metronome stopped-but-not-armed (regression 099).
+   */
   const arm = useCallback((): void => {
-    if (!engineStateRef.current.active) engine.setArmed(true);
+    if (!engine.getState().active) engine.setArmed(true);
   }, [engine]);
 
   /** Cancel the armed (deferred-start) state. */

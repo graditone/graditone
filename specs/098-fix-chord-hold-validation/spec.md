@@ -80,7 +80,7 @@ Quarter notes, eighth notes and shorter must continue to advance immediately (no
 - What happens when the device delays the periodic duration check (e.g., power saving or a temporary rendering stall) and the release is processed before the check runs? The hold must still be judged on actual held duration: a release that happens after the required hold was reached must validate as correct.
 - What happens when the tempo changes mid-session? The required hold for each subsequent chord is computed from its own notated duration and the tempo in force when it is played.
 - What happens when a chord overlaps another voice (sustained pitches)? Sustained-note handling is unchanged; only the hold-requirement boundary logic is reviewed.
-- What happens if the learner changes the chord slightly before the downbeat? A release margin of up to 25% of the required duration (capped at 1500 ms) is granted — a hold reaching that fraction is accepted; only holds that genuinely fall short of the threshold are early-release.
+- What happens if the learner changes the chord slightly before the downbeat? A release margin of up to 20% of the required duration (capped at 1500 ms) is granted — a hold reaching that fraction is accepted; only holds that genuinely fall short of the threshold are early-release.
 
 ## Requirements *(mandatory)*
 
@@ -131,7 +131,7 @@ Quarter notes, eighth notes and shorter must continue to advance immediately (no
 
 **Resolution**: Implemented (feature 098). A single pure hold-acceptance rule
 (`isHoldAccepted(requiredHoldMs, elapsedMs)` — ≥75% of the required duration,
-i.e. a release margin of up to 25% capped at 1500 ms) is applied at every decision
+i.e. a release margin of up to 20% capped at 1500 ms) is applied at every decision
 point: the MIDI release
 handler, the press-during-hold handler, and the reducer's `EARLY_RELEASE` case.
 A release that has already reached the acceptance threshold is treated as a
@@ -150,6 +150,6 @@ only on measured hold duration. Regression tests added:
 
 - The chord's notated duration for a whole note filling a 4/4 measure equals the measure at the current tempo; the required hold must equal that duration (subject to the release margin).
 - The supported tempo range is 10–300 BPM, consistent with specs 085/086.
-- The release margin is 25% of the required duration, capped at 1500 ms (feature 098 follow-up): a chord held for at least that fraction is accepted, granting the player time to reposition fingers for the next chord while genuine early releases (below the margin) remain penalised.
+- The release margin is 20% of the required duration, capped at 1500 ms (feature 099): a chord held for at least that fraction is accepted, requiring ~80% accuracy while leaving a modest margin for finger changes; genuine early releases (below the margin) remain penalised.
 - "Validated as correct" means the chord is accepted at (or slightly before) the moment its notated duration completes at the current tempo, and is recorded as `correct` (or `correct-late` per the existing timing rules), never as `early-release`.
 - The defect is in the duration-hold validation of the practice view, not in audio/MIDI capture or in the initial chord-group detection (ChordDetector window).

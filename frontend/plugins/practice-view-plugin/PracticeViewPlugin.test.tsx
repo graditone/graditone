@@ -1192,6 +1192,45 @@ describe('Feature 042 — US2: hold indicator (T022-T024)', () => {
     expect(screen.getByTestId('hold-indicator')).toHaveAttribute('data-validated', 'true');
   });
 
+  it('T026: hold indicator bar advances across multiple rAF frames while holding (regression 099)', () => {
+    originalRAF = window.requestAnimationFrame;
+    let rafCallback: FrameRequestCallback | null = null;
+    window.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      rafCallback = cb;
+      return 1;
+    };
+
+    const holdNote = { midiPitches: [60], noteIds: ['n1'], tick: 0, durationTicks: 3840 };
+    const nextNote = { midiPitches: [62], noteIds: ['n2'], tick: 3840, durationTicks: 0 };
+    const ctx = createMockContext({ status: 'ready', staffCount: 1, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [holdNote, nextNote],
+      totalAvailable: 2,
+      clef: 'Treble',
+    });
+
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+
+    const baseTime = Date.now();
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    // Fire rAF at ~500 ms elapsed → bar should be ~25% wide (not full).
+    vi.setSystemTime(baseTime + 500);
+    act(() => { if (rafCallback) rafCallback(performance.now()); });
+    const barAt500 = screen.getByTestId('hold-indicator').querySelector('.practice-plugin__hold-indicator-bar') as HTMLElement;
+    const widthAt500 = parseFloat(barAt500.style.width);
+    expect(barAt500).not.toBeNull();
+    expect(widthAt500).toBeGreaterThan(0);
+    expect(widthAt500).toBeLessThan(60);
+
+    // Fire another rAF at ~1000 ms elapsed → width must have INCREASED.
+    vi.setSystemTime(baseTime + 1000);
+    act(() => { if (rafCallback) rafCallback(performance.now()); });
+    const barAt1000 = screen.getByTestId('hold-indicator').querySelector('.practice-plugin__hold-indicator-bar') as HTMLElement;
+    expect(parseFloat(barAt1000.style.width)).toBeGreaterThan(widthAt500);
+  });
+
   it('T024: hold indicator NOT rendered when durationTicks <= 960 (≤ quarter note)', () => {
     originalRAF = window.requestAnimationFrame;
     let rafCallback: FrameRequestCallback | null = null;
@@ -1897,6 +1936,11 @@ describe('PracticeViewPlugin — metronome deferred start (Feature 083 US3)', ()
     // Start practice — the running metronome is stopped and deferred.
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
     expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1); // stop the running engine
+
+    // Immediately after pressing Practice the metronome must be ARMED (deferred),
+    // so it pauses and waits for the first note rather than continuing to tick.
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
 
     // First MIDI note → deferred start consumes the arm.
     vi.mocked(ctx.context.metronome.startFromDeferred).mockClear();

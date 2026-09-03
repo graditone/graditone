@@ -17,14 +17,15 @@ export const HOLD_FLOOR_MS = 500;
  * Early-acceptance tuning (feature 098, follow-up): a hold is accepted once the
  * player has held for (1 − EARLY_ACCEPTANCE_RATIO) of the required duration,
  * with the early margin capped at EARLY_ACCEPTANCE_CAP_MS. This grants the
- * player a comfort margin before the note's notated end so they can release a
- * sustained chord early to reposition their fingers for the next chord — while
- * still requiring the large majority of the duration to actually be held.
+ * player a release margin before the note's notated end so they can begin
+ * repositioning their fingers for the next chord — while still requiring 80%
+ * of the duration to actually be held (feature 099: 20% margin, balanced —
+ * more accurate than the original 25%, forgiving enough to be comfortable).
  *
- * For a whole-note chord filling a 4/4 measure this yields roughly a one-beat
- * margin at typical practice tempos (78 BPM whole note → 25% ≈ 760 ms ≈ 1 beat).
+ * For a whole-note chord filling a 4/4 measure this yields a 20% release
+ * margin at any tempo (60 BPM whole note → 800 ms ≈ 0.8 of a beat).
  */
-export const EARLY_ACCEPTANCE_RATIO = 0.25;
+export const EARLY_ACCEPTANCE_RATIO = 0.20;
 export const EARLY_ACCEPTANCE_CAP_MS = 1500;
 
 /**
