@@ -17,8 +17,8 @@ describe('useHoldProgress', () => {
     expect(typeof result.current.holdProgress).toBe('number');
   });
 
-  // ─── T002: 15% early-acceptance (750 ms cap) — fires at 23 250 ms ─────────
-  it('T002: HOLD_COMPLETE dispatches after ≥ 23 250 ms for requiredHoldMs = 24 000 (cap applies)', async () => {
+  // ─── T002: 20% early-acceptance (1 500 ms cap) — fires at 22 500 ms ───────
+  it('T002: HOLD_COMPLETE dispatches after ≥ 22 500 ms for requiredHoldMs = 24 000 (cap applies)', async () => {
     vi.useFakeTimers();
     const dispatch = vi.fn();
     const startMs = Date.now();
@@ -32,13 +32,13 @@ describe('useHoldProgress', () => {
 
     renderHook(() => useHoldProgress({ practiceState, dispatchPractice: dispatch }));
 
-    // 23 250 is the acceptance boundary (24 000 − 750 cap). Must NOT have fired yet.
-    await act(() => vi.advanceTimersByTimeAsync(23_150));
+    // 22 500 is the acceptance boundary (24 000 − 1 500 cap). Must NOT have fired yet.
+    await act(() => vi.advanceTimersByTimeAsync(22_400));
     expect(dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'HOLD_COMPLETE' }),
     );
 
-    // A further 200 ms (total 23 350) crosses the 23 250 boundary → fires.
+    // A further 200 ms (total 22 600) crosses the 22 500 boundary → fires.
     await act(() => vi.advanceTimersByTimeAsync(200));
     expect(dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'HOLD_COMPLETE' }),
@@ -48,7 +48,7 @@ describe('useHoldProgress', () => {
   });
 
   // ─── T006: no early fire below the boundary, fires just after ──────────────
-  it('T006: for requiredHoldMs = 24 000, HOLD_COMPLETE has NOT fired at 23 150 ms but HAS fired by 23 350 ms', async () => {
+  it('T006: for requiredHoldMs = 24 000, HOLD_COMPLETE has NOT fired at 22 400 ms but HAS fired by 22 600 ms', async () => {
     vi.useFakeTimers();
     const dispatch = vi.fn();
     const startMs = Date.now();
@@ -62,12 +62,12 @@ describe('useHoldProgress', () => {
 
     renderHook(() => useHoldProgress({ practiceState, dispatchPractice: dispatch }));
 
-    await act(() => vi.advanceTimersByTimeAsync(23_150));
+    await act(() => vi.advanceTimersByTimeAsync(22_400));
     expect(dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'HOLD_COMPLETE' }),
     );
 
-    await act(() => vi.advanceTimersByTimeAsync(200)); // total 23 350 ms
+    await act(() => vi.advanceTimersByTimeAsync(200)); // total 22 600 ms
     expect(dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'HOLD_COMPLETE' }),
     );
@@ -75,8 +75,8 @@ describe('useHoldProgress', () => {
     vi.useRealTimers();
   });
 
-  // ─── T014: 15% rule for short notes (acceptance = 2000 − 300 = 1700) ───────
-  it('T014: for requiredHoldMs = 2 000, HOLD_COMPLETE fires between 1 700 ms and 1 760 ms', async () => {
+  // ─── T014: 20% rule for short notes (acceptance = 2000 − 400 = 1600) ───────
+  it('T014: for requiredHoldMs = 2 000, HOLD_COMPLETE fires between 1 600 ms and 1 660 ms', async () => {
     vi.useFakeTimers();
     const dispatch = vi.fn();
     const startMs = Date.now();
@@ -90,13 +90,13 @@ describe('useHoldProgress', () => {
 
     renderHook(() => useHoldProgress({ practiceState, dispatchPractice: dispatch }));
 
-    // acceptance = 2000 − 300 (15%) = 1 700. Must NOT fire before.
-    await act(() => vi.advanceTimersByTimeAsync(1_690));
+    // acceptance = 2000 − 400 (20%) = 1 600. Must NOT fire before.
+    await act(() => vi.advanceTimersByTimeAsync(1_590));
     expect(dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'HOLD_COMPLETE' }),
     );
 
-    // Must fire within one rAF frame past 1 700 ms.
+    // Must fire within one rAF frame past 1 600 ms.
     await act(() => vi.advanceTimersByTimeAsync(70));
     expect(dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'HOLD_COMPLETE' }),
@@ -105,8 +105,8 @@ describe('useHoldProgress', () => {
     vi.useRealTimers();
   });
 
-  // ─── T015: 15% rule for the 1 000 ms half note (acceptance 850) ────────────
-  it('T015: for requiredHoldMs = 1 000, HOLD_COMPLETE fires between 850 ms and 900 ms', async () => {
+  // ─── T015: 20% rule for the 1 000 ms half note (acceptance 800) ────────────
+  it('T015: for requiredHoldMs = 1 000, HOLD_COMPLETE fires between 800 ms and 850 ms', async () => {
     vi.useFakeTimers();
     const dispatch = vi.fn();
     const startMs = Date.now();
@@ -120,13 +120,13 @@ describe('useHoldProgress', () => {
 
     renderHook(() => useHoldProgress({ practiceState, dispatchPractice: dispatch }));
 
-    // acceptance = 1000 − 150 (15%) = 850 ms; must NOT fire before.
-    await act(() => vi.advanceTimersByTimeAsync(840));
+    // acceptance = 1000 − 200 (20%) = 800 ms; must NOT fire before.
+    await act(() => vi.advanceTimersByTimeAsync(790));
     expect(dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'HOLD_COMPLETE' }),
     );
 
-    // Must fire by 900 ms.
+    // Must fire by 850 ms.
     await act(() => vi.advanceTimersByTimeAsync(60));
     expect(dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'HOLD_COMPLETE' }),

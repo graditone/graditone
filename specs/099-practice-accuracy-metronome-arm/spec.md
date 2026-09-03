@@ -9,7 +9,7 @@
 
 Two small practice-view fixes on the branch created from `main`:
 
-1. **Accuracy**: reduce the chord hold-acceptance margin from 25% / 1500 ms to 15% / 750 ms, requiring ~85% of the notated duration to be held instead of ~75%.
+1. **Accuracy**: set the chord hold-acceptance margin to 20% / 1500 ms, requiring 80% of the notated duration to be held (more accurate than the original 25%, forgiving enough to be comfortable).
 2. **Metronome arming**: fix a race so that starting Score Practice with the metronome already running reliably arms (defers) the metronome to the first note.
 
 ## User Scenarios & Testing
@@ -20,9 +20,9 @@ A practitioner holding a long chord should be required to sustain it for the lar
 
 **Acceptance Scenarios**:
 
-1. **Given** a whole-note chord at 60 BPM (required 4000 ms), **When** the player holds it for 3400 ms (85%), **Then** the chord is validated as correct.
-2. **Given** the same chord, **When** the player releases at 3300 ms (< 85%), **Then** it is recorded as `early-release` and does not advance.
-3. **Given** any chord whose required hold is large, **When** the player holds it to ≥ (required − 750 ms), **Then** it is validated; the margin never exceeds 750 ms.
+1. **Given** a whole-note chord at 60 BPM (required 4000 ms), **When** the player holds it for 3200 ms (80%), **Then** the chord is validated as correct.
+2. **Given** the same chord, **When** the player releases at 3100 ms (< 80%), **Then** it is recorded as `early-release` and does not advance.
+3. **Given** any chord whose required hold is large, **When** the player holds it to ≥ (required − 1500 ms), **Then** it is validated; the margin never exceeds 1500 ms.
 
 ### User Story 2 - Metronome Arms When Score Practice Starts (Priority: P1)
 
@@ -37,14 +37,14 @@ Starting Score Practice while the metronome is already ticking must stop and def
 
 ### Functional Requirements
 
-- **FR-001**: The hold-acceptance margin MUST be 15% of the required duration, capped at 750 ms (feature 099). A hold reaching `required − min(0.15 × required, 750)` MUST be accepted.
+- **FR-001**: The hold-acceptance margin MUST be 20% of the required duration, capped at 1500 ms (feature 099). A hold reaching `required − min(0.20 × required, 1500)` MUST be accepted.
 - **FR-002**: Genuine early releases (below the margin) MUST still record `early-release` and block advancement.
 - **FR-003**: The metronome `arm()` MUST evaluate the engine's live active state, not a stale render-synced snapshot, so a just-stopped engine can be armed in the same tick.
 - **FR-004**: Starting Score Practice with an active metronome MUST result in an armed (deferred) metronome that starts on the first played note.
 
 ## Success Criteria
 
-- **SC-001**: All hold-acceptance contract tests reflect the 15% / 750 ms rule and pass.
+- **SC-001**: All hold-acceptance contract tests reflect the 20% / 1500 ms rule and pass.
 - **SC-002**: A regression test proves `arm()` arms a just-stopped engine (live-state read).
 - **SC-003**: Score Practice with an active metronome shows the armed state immediately after pressing Practice, and the first note starts it.
 
@@ -56,7 +56,7 @@ Starting Score Practice while the metronome is already ticking must stop and def
 
 **Root Cause**: `EARLY_ACCEPTANCE_RATIO = 0.25` / `EARLY_ACCEPTANCE_CAP_MS = 1500` in `holdDuration.ts` gave an oversized release window.
 
-**Resolution**: Reduced to `0.15` / `750` ms (~85% accuracy). Tests updated in `holdDuration.test.ts`, `useHoldProgress.test.ts`, `usePracticeMidi.test.ts`, `practiceEngine.test.ts`.
+**Resolution**: Set to `0.20` / `1500` ms (80% hold requirement). Tests updated in `holdDuration.test.ts`, `useHoldProgress.test.ts`, `usePracticeMidi.test.ts`, `practiceEngine.test.ts`.
 
 ### Issue #2: Metronome not armed when starting Score Practice while active
 
@@ -70,5 +70,5 @@ Starting Score Practice while the metronome is already ticking must stop and def
 
 ## Assumptions
 
-- The 15% / 750 ms margin is a single tunable pair of constants (`EARLY_ACCEPTANCE_RATIO`, `EARLY_ACCEPTANCE_CAP_MS`) for easy adjustment.
+- The 20% / 1500 ms margin is a single tunable pair of constants (`EARLY_ACCEPTANCE_RATIO`, `EARLY_ACCEPTANCE_CAP_MS`) for easy adjustment.
 - Only Score Practice is affected by the metronome-arming fix; Free Practice already arms correctly.

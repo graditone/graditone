@@ -871,7 +871,7 @@ describe('reduce() — EARLY_RELEASE action (T010)', () => {
   });
 
   it('T008-red: release at/above the acceptance threshold behaves like HOLD_COMPLETE (feature 098)', () => {
-    // requiredHoldMs = 2000 → acceptanceMs = 2000 − 300 (15%) = 1700.
+    // requiredHoldMs = 2000 → acceptanceMs = 2000 − 400 (20%) = 1600.
     const notes = [WHOLE_NOTE_C4, NOTE_D4];
     const state = holdingState(notes, 0, 50000, 2000);
     const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 1900 });
@@ -884,7 +884,7 @@ describe('reduce() — EARLY_RELEASE action (T010)', () => {
   it('T015-US2: at-threshold release advances exactly once, no double-advance on replay', () => {
     const notes = [WHOLE_NOTE_C4, NOTE_D4];
     const state = holdingState(notes, 0, 50000, 4000);
-    // Acceptance = 4000 − 600 (15%) = 3400. 3800 is a valid full hold.
+    // Acceptance = 4000 − 800 (20%) = 3200. 3800 is a valid full hold.
     const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 3800 });
     expect(next.currentIndex).toBe(1);
     expect(next.mode).toBe('active');
@@ -898,7 +898,7 @@ describe('reduce() — EARLY_RELEASE action (T010)', () => {
   it('T019-US3: sub-threshold release still records early-release, stays on same index (feature 098)', () => {
     const notes = [WHOLE_NOTE_C4, NOTE_D4];
     const state = holdingState(notes, 0, 50000, 4000);
-    // Acceptance = 3400; 2000 is a genuine early release.
+    // Acceptance = 3200; 2000 is a genuine early release.
     const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 2000 });
     expect(next.noteResults).toHaveLength(1);
     expect(next.noteResults[0].outcome).toBe('early-release');
