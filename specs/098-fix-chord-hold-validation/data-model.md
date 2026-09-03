@@ -43,7 +43,7 @@ accept/reject decision.
 
 ```
 computeHoldAcceptanceMs(required)        = required − Math.min(required × EARLY_ACCEPTANCE_RATIO, EARLY_ACCEPTANCE_CAP_MS)
-                                         = required − Math.min(required × 0.25, 1500)
+                                         = required − Math.min(required × 0.15, 750)
 isHoldAccepted(required, elapsed)        = required > 0 && elapsed >= computeHoldAcceptanceMs(required)
 computeRequiredHoldMs(durationTicks, bpm) = bpm > 0 ? (durationTicks / ((bpm/60) * 960)) * 1000 : 0
 ```

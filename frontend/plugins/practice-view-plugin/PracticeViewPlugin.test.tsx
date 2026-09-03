@@ -1898,6 +1898,11 @@ describe('PracticeViewPlugin — metronome deferred start (Feature 083 US3)', ()
     fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
     expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1); // stop the running engine
 
+    // Immediately after pressing Practice the metronome must be ARMED (deferred),
+    // so it pauses and waits for the first note rather than continuing to tick.
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
+
     // First MIDI note → deferred start consumes the arm.
     vi.mocked(ctx.context.metronome.startFromDeferred).mockClear();
     act(() => {

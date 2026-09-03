@@ -283,6 +283,21 @@ describe('useMetronomeBridge (T008)', () => {
     expect(mockEngine.start).not.toHaveBeenCalled();
   });
 
+  it('arm() reads the LIVE engine state so a just-stopped engine can be armed (regression 099)', async () => {
+    // Metronome is running → engineStateRef.current.active is true from the last render.
+    currentHookState = ACTIVE;
+    const scorePlayer = makeMockScorePlayer(120);
+    const { result } = renderHook(() => useMetronomeBridge(scorePlayer));
+
+    // Simulate the engine being stopped (e.g. toggle→stop during practice start)
+    // BEFORE React re-renders — engineStateRef.current is now stale (still active).
+    currentHookState = INACTIVE;
+
+    result.current.arm();
+    // Must arm because the LIVE engine state is inactive, not the stale render ref.
+    expect(mockEngine.setArmed).toHaveBeenCalledWith(true);
+  });
+
   it('disarm() calls engine.setArmed(false)', async () => {
     currentHookState = ARMED;
     const scorePlayer = makeMockScorePlayer(120);

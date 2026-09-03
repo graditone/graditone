@@ -37,13 +37,13 @@ describe('computeRequiredHoldMs', () => {
 });
 
 describe('computeHoldAcceptanceMs', () => {
-  it('uses the 25% early-acceptance window when the margin is below the cap', () => {
-    expect(computeHoldAcceptanceMs(2_000)).toBe(1_500); // 2000 - 500 (25%)
-    expect(computeHoldAcceptanceMs(1_000)).toBe(750); // 1000 - 250 (25%)
+  it('uses the 15% early-acceptance window when the margin is below the cap', () => {
+    expect(computeHoldAcceptanceMs(2_000)).toBe(1_700); // 2000 - 300 (15%)
+    expect(computeHoldAcceptanceMs(1_000)).toBe(850); // 1000 - 150 (15%)
   });
 
-  it('caps the early-acceptance window at 1500 ms for long holds', () => {
-    expect(computeHoldAcceptanceMs(24_000)).toBe(22_500); // 24 000 - min(6 000, 1 500)
+  it('caps the early-acceptance window at 750 ms for long holds', () => {
+    expect(computeHoldAcceptanceMs(24_000)).toBe(23_250); // 24 000 - min(3 600, 750)
   });
 
   it('returns 0 when requiredHoldMs <= 0', () => {
@@ -54,11 +54,11 @@ describe('computeHoldAcceptanceMs', () => {
 
 describe('isHoldAccepted', () => {
   it('rejects a hold below the acceptance threshold', () => {
-    expect(isHoldAccepted(2_000, 1_499)).toBe(false);
+    expect(isHoldAccepted(2_000, 1_699)).toBe(false);
   });
 
   it('accepts a hold at exactly the acceptance threshold (boundary)', () => {
-    expect(isHoldAccepted(2_000, 1_500)).toBe(true);
+    expect(isHoldAccepted(2_000, 1_700)).toBe(true);
   });
 
   it('accepts full and over-held durations', () => {
@@ -70,25 +70,22 @@ describe('isHoldAccepted', () => {
     expect(isHoldAccepted(0, 100_000)).toBe(false);
   });
 
-  it('whole-measure chord accepted with a ~1-beat release margin (feature 098 follow-up)', () => {
-    // Clean case: 4/4 whole note at 60 BPM → required 4000 ms, margin exactly
-    // 25% = 1000 ms → accepted after 3000 ms (3 of 4 beats).
+  it('whole-measure chord accepted with a ~half-beat release margin (feature 099)', () => {
+    // Clean case: 4/4 whole note at 60 BPM → required 4000 ms, margin 15% = 600 ms
+    // → accepted after 3400 ms (~3.4 of 4 beats).
     const required60 = computeRequiredHoldMs(3_840, 60);
     expect(required60).toBe(4_000);
-    expect(computeHoldAcceptanceMs(required60)).toBe(3_000);
-    expect(isHoldAccepted(required60, 3_000)).toBe(true);
-    expect(isHoldAccepted(required60, 2_900)).toBe(false);
+    expect(computeHoldAcceptanceMs(required60)).toBe(3_400);
+    expect(isHoldAccepted(required60, 3_400)).toBe(true);
+    expect(isHoldAccepted(required60, 3_300)).toBe(false);
 
-    // Realistic case at the reported 78 BPM family: required ≈ 3 077 ms
-    // (a 4/4 measure), acceptance = required − 25% ≈ its 3rd beat — a
-    // comfortable release margin for finger changes.
+    // Realistic case at 78 BPM: required ≈ 3 077 ms, acceptance ≈ 2 615 ms.
     const required78 = computeRequiredHoldMs(3_840, 78);
     const acceptance78 = computeHoldAcceptanceMs(required78);
     expect(required78).toBeCloseTo(3_077, 0);
-    expect(acceptance78).toBeCloseTo(2_308, 0);
-    // Holding through ~3 of 4 beats is accepted; releasing ~2.2 s is still early.
+    expect(acceptance78).toBeCloseTo(2_615, 0);
     expect(isHoldAccepted(required78, acceptance78)).toBe(true);
-    expect(isHoldAccepted(required78, 2_200)).toBe(false);
+    expect(isHoldAccepted(required78, 2_500)).toBe(false);
   });
 });
 
@@ -98,9 +95,9 @@ describe('HOLD_FLOOR_MS', () => {
   });
 });
 
-describe('early-acceptance tuning constants (feature 098 follow-up)', () => {
-  it('exposes the 25% / 1500 ms margin for tunability', () => {
-    expect(EARLY_ACCEPTANCE_RATIO).toBe(0.25);
-    expect(EARLY_ACCEPTANCE_CAP_MS).toBe(1500);
+describe('early-acceptance tuning constants (feature 099)', () => {
+  it('exposes the 15% / 750 ms margin for tunability', () => {
+    expect(EARLY_ACCEPTANCE_RATIO).toBe(0.15);
+    expect(EARLY_ACCEPTANCE_CAP_MS).toBe(750);
   });
 });
