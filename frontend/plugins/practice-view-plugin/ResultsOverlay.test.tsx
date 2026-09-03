@@ -218,4 +218,45 @@ describe('ResultsOverlay', () => {
     expect(statusCell.textContent).toContain('Wrong');
     expect(statusCell.textContent).toContain('❌');
   });
+
+  it('replays a sustained chord as ONE continuous attack per note (regression: no re-attack per tick)', () => {
+    const props = makeMockProps();
+
+    // Left-hand whole-note chord at tick 0; right-hand note at tick 960 where
+    // the left-hand pitches are carried as sustained (merged into midiPitches).
+    // This mirrors the scorePlayerContext multi-voice merge: the pitched recur
+    // across consecutive practice steps while held.
+    const notes = [
+      { midiPitches: [36, 43], noteIds: ['lh1', 'lh2'], tick: 0, durationTicks: 3840 },
+      { midiPitches: [36, 43, 67], noteIds: ['lh1', 'lh2', 'rh1'], tick: 960, durationTicks: 3840 },
+    ] as unknown as PerformanceRecord['notes'];
+
+    const noteResults = [
+      { noteIndex: 0, outcome: 'correct', playedMidi: 36, expectedMidi: [36, 43], responseTimeMs: 0, expectedTimeMs: 0, relativeDeltaMs: 0, wrongAttempts: 0, holdDurationMs: 0, requiredHoldMs: 0 },
+      { noteIndex: 1, outcome: 'correct', playedMidi: 67, expectedMidi: [36, 43, 67], responseTimeMs: 500, expectedTimeMs: 500, relativeDeltaMs: 0, wrongAttempts: 0, holdDurationMs: 0, requiredHoldMs: 0 },
+    ] as unknown as PracticeNoteResult[];
+
+    Object.assign(props, {
+      practiceState: { ...INITIAL_PRACTICE_STATE, mode: 'complete' as const, noteResults },
+      performanceRecord: { notes, noteResults, wrongNoteEvents: [], bpmAtCompletion: 120, tempoMultiplier: 1 },
+      resultsOverlayVisible: true,
+    });
+
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+    fireEvent.click(container.querySelector('.practice-results__replay-btn')!);
+
+    const calls = (props.context.playNote as ReturnType<typeof vi.fn>).mock.calls;
+    const byMidi = (m: number) => calls.filter((c) => c[0].midiNote === m);
+
+    // The left-hand chord pitches are attacked ONCE at their onset (t=0) and
+    // sustained across the right-hand step — never re-attacked at t=500.
+    expect(byMidi(36)).toHaveLength(1);
+    expect(byMidi(43)).toHaveLength(1);
+    expect(byMidi(36)[0][0].offsetMs).toBe(0);
+    expect(byMidi(36)[0][0].durationMs).toBeGreaterThan(500); // sustains past the r.h. step
+
+    // The right-hand onset is attacked at its own time.
+    expect(byMidi(67)).toHaveLength(1);
+    expect(byMidi(67)[0][0].offsetMs).toBe(500);
+  });
 });

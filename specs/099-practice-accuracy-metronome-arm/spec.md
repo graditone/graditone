@@ -68,6 +68,16 @@ Starting Score Practice while the metronome is already ticking must stop and def
 
 **Resolution**: `arm()` now reads the engine's live state via `engine.getState().active`. Regression test in `metronomeContext.test.ts`.
 
+### Issue #3: Practice replay re-articulates held chords on every step
+
+**Discovered**: 2026-09-03 during tablet listening tests.
+
+**Symptom**: Reproducing a completed Score Practice (Replay) makes a held left-hand chord sound like separated notes per tick, cut short, and audibly different from the right-hand notes. Direct score playback (Play) is unaffected; Free Practice replay is unaffected.
+
+**Root Cause**: The practice engine's entries merge sustained (held) notes into every later onset's `midiPitches`/`noteIds` (`scorePlayerContext.ts` multi-voice pass). The practice replay (`ResultsOverlay.handleReplay`) played each result's `expectedMidi` (onset + sustained) at every recorded time with a fixed 0.85-beat duration — so a chord held across several steps was re-attacked on each step and truncated.
+
+**Resolution**: Replay now splits each noteId into contiguous runs and attacks each note only at its run onset, sustaining it through its later appearances, and replays wrong notes in one time-sorted pass. Regression test in `ResultsOverlay.test.tsx`.
+
 ## Assumptions
 
 - The 20% / 1500 ms margin is a single tunable pair of constants (`EARLY_ACCEPTANCE_RATIO`, `EARLY_ACCEPTANCE_CAP_MS`) for easy adjustment.
