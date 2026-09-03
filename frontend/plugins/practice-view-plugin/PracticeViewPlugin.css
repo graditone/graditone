@@ -32,8 +32,7 @@
   height: 6px;
   background: rgba(0, 0, 0, 0.12);
   border-radius: 3px;
-  overflow: visible;
-  margin: 16px 12px 4px;
+  margin: 0 12px 4px;
 }
 
 .practice-plugin__hold-indicator-bar {
@@ -45,18 +44,6 @@
 
 .practice-plugin__hold-indicator--validated .practice-plugin__hold-indicator-bar {
   background: var(--color-success, var(--ls-success, #4caf50));
-}
-
-.practice-plugin__hold-indicator-debug {
-  position: absolute;
-  top: -14px;
-  left: 0;
-  font-size: 11px;
-  line-height: 12px;
-  color: #333;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  pointer-events: none;
 }
 
 /* ─── Real-time note display ──────────────────────────────────────────────── */
