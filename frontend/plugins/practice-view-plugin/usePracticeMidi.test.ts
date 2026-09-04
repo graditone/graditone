@@ -629,4 +629,59 @@ const midiCallback = captureMidiCallback(params);
     expect(completeCalls).toHaveLength(0);
     expect(earlyCalls[0][0].holdDurationMs).toBeGreaterThanOrEqual(2_000);
   });
+
+  it('T005-F100: first chord of loop iteration 2 is anchored at the musical loop period, not the completion timestamp', () => {
+    // Regression (feature 100): on a repeated phrase, the first chord of each
+    // iteration >= 2 must have expectedTimeMs anchored at the musical loop
+    // period (one full loop after iteration 1's start) — NOT at the previous
+    // iteration's wall-clock completion (release) timestamp. The old formula
+    // used `loopStartTimesRef[loopK]` (a completion timestamp), which made an
+    // accurate downbeat read spuriously late by the hold tail + pickup (>600ms).
+    const params = makeMockParams();
+
+    const chord = {
+      tick: 0,
+      durationTicks: 960,
+      midiPitches: [57, 60, 64, 69] as readonly number[],
+      sustainedPitches: [] as readonly number[],
+      noteIds: ['n1', 'n2', 'n3', 'n4'] as readonly string[],
+    };
+
+    const practiceState = {
+      ...INITIAL_PRACTICE_STATE,
+      mode: 'active' as const,
+      currentIndex: 0,
+      notes: [chord],
+    };
+    params.practiceState = practiceState;
+    params.practiceStateRef = { current: practiceState };
+    params.playerStateRef = {
+      current: { ...params.playerState, bpm: 120, status: 'ready' as const, staffCount: 1, currentTick: 0 },
+    };
+    // Loop region of one half note (1920 ticks @120bpm = 1000ms period).
+    params.loopRegionRef = { current: { startTick: 0, endTick: 1920 } };
+    params.loopIterationRef = { current: 1 };
+    // Old code read this completion timestamp as the anchor (bug source).
+    params.loopStartTimesRef = { current: [0, 1250] };
+    // Session started 1000ms ago = exactly one loop period — an accurate downbeat.
+    params.practiceStartTimeRef = { current: Date.now() - 1000 };
+
+    const midiCallback = captureMidiCallback(params);
+    const ts = Date.now();
+    midiCallback({ type: 'attack', midiNote: 57, timestamp: ts });
+    midiCallback({ type: 'attack', midiNote: 60, timestamp: ts + 5 });
+    midiCallback({ type: 'attack', midiNote: 64, timestamp: ts + 10 });
+    midiCallback({ type: 'attack', midiNote: 69, timestamp: ts + 15 });
+
+    const calls = (params.dispatchPractice as ReturnType<typeof vi.fn>).mock.calls;
+    const correctCalls = calls.filter(([a]: [{ type: string }]) => a.type === 'CORRECT_MIDI');
+    expect(correctCalls).toHaveLength(1);
+
+    const expectedTimeMs = correctCalls[0][0].expectedTimeMs;
+    // Anchored at the one-loop-period mark (1000ms), NOT the completion timestamp (1250ms).
+    expect(expectedTimeMs).toBe(1000);
+    // And consistent with the measured response (1000ms) so an accurate player
+    // is not measured as late.
+    expect(Math.abs(expectedTimeMs - correctCalls[0][0].responseTimeMs)).toBeLessThan(50);
+  });
 });

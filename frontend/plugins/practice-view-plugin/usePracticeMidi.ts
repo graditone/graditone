@@ -16,6 +16,52 @@ import {
 export { HOLD_FLOOR_MS, computeRequiredHoldMs };
 
 // ---------------------------------------------------------------------------
+// Expected-onset-time computation (feature 100)
+// ---------------------------------------------------------------------------
+
+/**
+ * Loop region delimiting a practiced phrase that repeats across iterations.
+ * `startTick`/`endTick` are integer ticks in the practice entry's tick space.
+ */
+export interface PracticeLoopRegion {
+  startTick: number;
+  endTick: number;
+}
+
+/**
+ * Compute the expected onset time (ms, on a session clock anchored at the first
+ * chord of the first iteration) for a practice note in Score Practice.
+ *
+ * Non-loop notes and first-iteration notes fall back to the pure musical
+ * position `tick → ms`. For later loop iterations the expected time is anchored
+ * at the **musical loop period** — i.e. `k` full loop durations after the first
+ * iteration — keeping `expectedTimeMs` monotonic and on the same clock as the
+ * measured `responseTimeMs`. This avoids a spurious "late" reading on the first
+ * chord of each repeated phrase that arose from anchoring at the previous
+ * iteration's wall-clock completion (release) timestamp.
+ *
+ * Pure function of its inputs; no wall-clock state. (feature 100)
+ */
+export function computeExpectedTimeMs(params: {
+  tick: number;
+  bpm: number;
+  loopRegion: PracticeLoopRegion | null;
+  loopIteration: number;
+}): number {
+  const { tick, bpm, loopRegion, loopIteration } = params;
+  if (bpm <= 0) return 0;
+  // Mirror the existing tick→ms conversion expression exactly so iteration-1
+  // values are byte-for-byte identical to the pre-fix formula (no float drift).
+  const msPerTick = ((bpm / 60) * PPQ);
+  const baseExpectedTimeMs = (tick / msPerTick) * 1000;
+  if (!loopRegion || loopIteration <= 0) {
+    return baseExpectedTimeMs;
+  }
+  const loopPeriodMs = ((loopRegion.endTick - loopRegion.startTick) / msPerTick) * 1000;
+  return baseExpectedTimeMs + loopIteration * loopPeriodMs;
+}
+
+// ---------------------------------------------------------------------------
 // Hook contract
 // ---------------------------------------------------------------------------
 
@@ -69,7 +115,7 @@ export function usePracticeMidi({
   loopRegionRef,
   loopPracticeRangeRef,
   loopIterationRef,
-  loopStartTimesRef,
+  loopStartTimesRef: _loopStartTimesRef, // F100: loop start times no longer anchor expected onset (kept for API compat)
   practiceStartTimeRef,
   selectedStaffIndex: _selectedStaffIndex,
   onFirstNoteAttack,
@@ -296,20 +342,12 @@ export function usePracticeMidi({
           practiceStartTimeRef.current = Date.now();
         }
         const bpm = playerStateRef.current.bpm;
-        const baseExpectedTimeMs = bpm > 0
-          ? (currentEntry.tick / ((bpm / 60) * PPQ)) * 1000
-          : 0;
-        const lr = loopRegionRef.current;
-        const loopK = loopIterationRef.current;
-        let expectedTimeMs: number;
-        if (lr && loopK > 0 && bpm > 0) {
-          const loopStartBaseMs = (lr.startTick / ((bpm / 60) * PPQ)) * 1000;
-          const timeWithinLoop = baseExpectedTimeMs - loopStartBaseMs;
-          const loopStartMs = loopStartTimesRef.current[loopK] ?? 0;
-          expectedTimeMs = loopStartMs + timeWithinLoop;
-        } else {
-          expectedTimeMs = baseExpectedTimeMs;
-        }
+        const expectedTimeMs = computeExpectedTimeMs({
+          tick: currentEntry.tick,
+          bpm,
+          loopRegion: loopRegionRef.current,
+          loopIteration: loopIterationRef.current,
+        });
         const responseTimeMs = ps.mode === 'waiting' ? 0 : Date.now() - practiceStartTimeRef.current;
 
         const range = loopPracticeRangeRef.current;
