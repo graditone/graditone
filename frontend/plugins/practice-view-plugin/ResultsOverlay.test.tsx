@@ -387,6 +387,37 @@ describe('ResultsOverlay — tempo-stop partial (feature 101, T015)', () => {
     expect(complete.queryByTestId('strict-fail-count')).toBeNull();
   });
 
+  it('strict sessions show ONE timing metric — the tempo stats replace the legacy off-beat stat', () => {
+    // Tempo partial: the strict "Tempo fails" stat represents the off-beat
+    // notes (a strict failure IS the off-beat note), so the legacy stat must
+    // not appear — two stats for the same count broke the stat-row layout.
+    const tempoProps = makeTempoPartialProps();
+    const tempo = render(<ResultsOverlay {...tempoProps} />, { wrapper: TestWrapper });
+    expect(tempo.getByTestId('strict-fail-count')).toBeTruthy();
+    expect(tempo.queryByText('Off-beat')).toBeNull();
+    tempo.unmount();
+
+    // A legacy session (no strict fields) keeps the legacy off-beat stat.
+    const base = makeTempoPartialProps();
+    const legacyRecord = { ...base.partialPerformanceRecord } as Record<string, unknown>;
+    delete legacyRecord.stopReason;
+    const legacyPartial = {
+      ...base,
+      partialPerformanceRecord: {
+        ...legacyRecord,
+        noteResults: legacyRecord.noteResults.map((r: PracticeNoteResult) => {
+          const clean = { ...r };
+          delete (clean as Record<string, unknown>).strictFailure;
+          delete (clean as Record<string, unknown>).beatDeltaMs;
+          return clean;
+        }),
+      } as unknown as typeof base.partialPerformanceRecord,
+    };
+    const legacy = render(<ResultsOverlay {...legacyPartial} />, { wrapper: TestWrapper });
+    expect(legacy.queryByTestId('strict-fail-count')).toBeNull();
+    expect(legacy.getAllByText('Off-beat').length).toBeGreaterThan(0);
+  });
+
   it('renders the timing table and chart in the tempo partial and marks all three failing notes', () => {
     const props = makeTempoPartialProps();
     const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });

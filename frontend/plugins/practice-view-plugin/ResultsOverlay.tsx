@@ -387,12 +387,18 @@ export function ResultsOverlay({
             <span className="practice-results__stat-value">{practiceReport.correctCount}</span>
             <span className="practice-results__stat-label">{t('practice.results.correct')}</span>
           </div>
-          <div className="practice-results__stat">
-            <span className="practice-results__stat-value practice-results__stat-value--warn">
-              {practiceReport.lateCount}
-            </span>
-            <span className="practice-results__stat-label">{t('practice.results.off_beat')}</span>
-          </div>
+          {/* Feature 101: strict sessions report one timing metric — the strict
+              failure count (a strict failure IS the off-beat note); showing the
+              legacy off-beat stat too would double-count the same notes and
+              break the stat row layout. */}
+          {practiceReport.strictFailureCount === 0 && (
+            <div className="practice-results__stat">
+              <span className="practice-results__stat-value practice-results__stat-value--warn">
+                {practiceReport.lateCount}
+              </span>
+              <span className="practice-results__stat-label">{t('practice.results.off_beat')}</span>
+            </div>
+          )}
           <div className="practice-results__stat">
             <span className="practice-results__stat-value practice-results__stat-value--error">
               {practiceReport.totalWrongAttempts}
@@ -600,12 +606,17 @@ export function ResultsOverlay({
                 <span className="practice-results__stat-value">{partialReport.correctCount}</span>
                 <span className="practice-results__stat-label">{t('practice.results.correct')}</span>
               </div>
-              <div className="practice-results__stat">
-                <span className="practice-results__stat-value practice-results__stat-value--warn">
-                  {partialReport.lateCount}
-                </span>
-                <span className="practice-results__stat-label">{t('practice.results.off_beat')}</span>
-              </div>
+              {/* Feature 101: one timing metric in strict sessions — see the
+                  complete branch; the strict failure count represents the
+                  off-beat notes, so the legacy stat is hidden while it shows. */}
+              {partialReport.strictFailureCount === 0 && (
+                <div className="practice-results__stat">
+                  <span className="practice-results__stat-value practice-results__stat-value--warn">
+                    {partialReport.lateCount}
+                  </span>
+                  <span className="practice-results__stat-label">{t('practice.results.off_beat')}</span>
+                </div>
+              )}
               <div className="practice-results__stat">
                 <span className="practice-results__stat-value practice-results__stat-value--error">
                   {partialReport.totalWrongAttempts}
