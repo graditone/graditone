@@ -298,7 +298,7 @@
   "practice.toolbar.tempo_aria": "Multiplicador de tempo",
   "practice.toolbar.metronome_aria": "Activar/desactivar metrónomo",
   "practice.toolbar.metronome_sub_aria": "Subdivisión del metrónomo",
-  "practice.toolbar.strict_tempo": "Estricto {n}/3",
+  "practice.toolbar.strict_tempo": "Tempo estricto",
   "practice.toolbar.strict_tempo_title": "Tempo estricto del metrónomo — {n} de 3 fallos de ritmo consecutivos. Tres fallos detienen la sesión.",
   "practice.toolbar.midi_not_supported": "MIDI no está disponible en este navegador",
   "practice.toolbar.midi_connected_title": "Teclado MIDI detectado",

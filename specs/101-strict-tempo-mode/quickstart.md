@@ -76,8 +76,8 @@ Open the printed local URL, load a score that contains both short notes and at l
 2. Start Score Practice.
 
 **Expected**
-- The toolbar shows `Strict 0/3` as soon as practice starts.
-- The first accepted note is a grace note: it is not judged and the count stays `0/3`.
+- The toolbar shows the `Strict tempo` badge as soon as practice starts.
+- The first accepted note is a grace note: it is not judged and the failure count stays at zero.
 - The metronome starts from the deferred state as it does today (feature 097).
 
 ### 3. Three consecutive off-beat notes (120 BPM)
@@ -88,34 +88,34 @@ At 120 BPM a quarter-note gap is 500 ms, so the window is 200 ms.
 2. Play the next three notes roughly 250–300 ms late, keeping a steady interval.
 
 **Expected**
-- Badge goes `1/3`, `2/3`, then the third failure stops the session.
+- The badge escalates (neutral → caution → danger) as misses accumulate; the third failure stops the session.
 - The score player stops; the metronome stops and is re-armed if it was enabled.
 - The Practice Results window opens with the **Tempo not followed** banner, a hint that practice stopped after 3 consecutive misses, and exactly three failure items with note numbers and signed delays (for example `Note 12: +280 ms`).
 - The partial results include the timing table and delay chart, with the three failures marked.
 - A `Tempo fails` stat shows `3`; the score gives those notes zero credit.
-- **Repractice** starts a new strict session at `0/3`; **Save** persists the partial; **Session** returns to the originating session when applicable.
+- **Repractice** starts a new strict session with the count reset to zero; **Save** persists the partial; **Session** returns to the originating session when applicable.
 
 ### 4. In-time note resets the streak
 
 1. Start strict practice.
-2. Play two off-beat notes (`2/3`).
+2. Play two off-beat notes (two accumulated failures).
 3. Play one note in time.
 4. Play two off-beat notes.
 
 **Expected**
-- The badge returns to `0/3` after the in-time note.
+- The failure count returns to zero (neutral badge) after the in-time note.
 - No stop occurs after the later two failures (the streak is only two).
 
 ### 5. Wrong pitches do not count or reset
 
-1. Accumulate two timing failures (`2/3`).
+1. Accumulate two timing failures.
 2. Play a wrong pitch.
 3. Play an in-time note.
 4. Play two more off-beat notes.
 
 **Expected**
-- The wrong pitch does not change the count (still `2/3`).
-- The in-time note resets it to `0/3`.
+- The wrong pitch does not change the count (still two failures).
+- The in-time note resets it to zero.
 - The later two off-beat notes do not stop the session.
 
 ### 6. Early release counts, retry is grace
@@ -146,7 +146,7 @@ This is the key regression against the reported behavior: slow-tempo short notes
 1. Start Score Practice with the metronome off.
 2. Play a few notes, then turn the metronome on.
 
-**Expected**: the badge appears at `0/3`; the next accepted note is a grace note; strict counting starts after it.
+**Expected**: the badge appears with the count at zero; the next accepted note is a grace note; strict counting starts after it.
 
 3. Accumulate two failures, then turn the metronome off.
 

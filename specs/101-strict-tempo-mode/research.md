@@ -158,7 +158,7 @@ An accepted final note with the third failure produces complete results (FR-020)
 ## D8. UI surfaces
 
 **Decision**:
-- **Toolbar**: a compact strict badge (`♩ Strict 0/3`, `1/3`, `2/3`) next to the practice progress, only when strict mode is active and not Free Practice. `aria-live="polite"`; warning/danger styling at 1 and 2.
+- **Toolbar**: a compact `♩ Strict tempo` badge next to the practice progress, only when strict mode is active and not Free Practice. The visible label is static; the failure count (0/1/2) is conveyed by the none/warn/danger level classes, `data-failures`, and the `aria-label`/`title`. `aria-live="polite"`.
 - **Live feedback**: reuse `TimingFeedbackOverlay`. In strict mode, show `beatDeltaMs` for onset failures (even below 500 ms) and the early-release shortfall (`-(requiredHoldMs - holdDurationMs)`) for early releases.
 - **Results overlay**: extract the timing table and delay chart into `PracticeTimingDetails`, reused by complete and partial overlays. A tempo-stop partial shows a banner (“Tempo not followed — stopped after 3 consecutive misses”) with the three failing notes and their signed errors, plus the table/chart and Repractice/Save/Session actions. A conditional “Tempo fails” stat appears in both complete and partial overlays. Strict failure rows and chart dots are visually marked.
 - **Overlay precedence**: an active partial record wins over a stale complete record, so a tempo stop always presents the partial/tempo reason. The tempo-stop effect also clears the stale complete record.

@@ -48,7 +48,7 @@ After a tempo stop, the results window clearly states that the practice stopped 
 
 ### User Story 3 - Know the rules before the stop, and stay in control (Priority: P3)
 
-While strict mode is active, the practice view shows that the metronome is enforcing the tempo and how many consecutive misses have accumulated (0/3, 1/3, 2/3). Every off-beat note shows its signed timing error immediately. Turning the metronome off leaves strict mode and returns to today’s practice; turning it on mid-session activates strict mode from the next note. Repractice keeps the metronome setting and resets the count. Free practice is unaffected.
+While strict mode is active, the practice view shows that the metronome is enforcing the tempo: a `Strict tempo` badge whose warning/danger level escalates with each consecutive miss.  Every off-beat note shows its signed timing error immediately. Turning the metronome off leaves strict mode and returns to today’s practice; turning it on mid-session activates strict mode from the next note. Repractice keeps the metronome setting and resets the count. Free practice is unaffected.
 
 **Why this priority**: The stricter rule must be predictable and reversible; otherwise the stop feels arbitrary.
 

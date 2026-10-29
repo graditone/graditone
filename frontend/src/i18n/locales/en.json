@@ -299,7 +299,7 @@
   "practice.toolbar.tempo_aria": "Tempo multiplier",
   "practice.toolbar.metronome_aria": "Toggle metronome",
   "practice.toolbar.metronome_sub_aria": "Metronome subdivision",
-  "practice.toolbar.strict_tempo": "Strict {n}/3",
+  "practice.toolbar.strict_tempo": "Strict tempo",
   "practice.toolbar.strict_tempo_title": "Metronome strict tempo — {n} of 3 consecutive timing misses. Three misses stop the session.",
   "practice.toolbar.midi_not_supported": "MIDI is not supported in this browser",
   "practice.toolbar.midi_connected_title": "MIDI keyboard detected",

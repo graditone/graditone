@@ -2877,7 +2877,7 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
     vi.setSystemTime(base + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
-    expect(screen.getByTestId('strict-tempo-indicator').textContent).toBe('Strict 1/3');
+    expect(screen.getByTestId('strict-tempo-indicator').getAttribute('data-failures')).toBe('1');
 
     // Change tempo → REANCHOR (count preserved, next note grace)
     fireEvent.change(screen.getByLabelText(/tempo multiplier/i), { target: { value: '1.5' } });
@@ -2886,12 +2886,12 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     // (response 2300 vs expected 1000 → +1300) it would already be failure 2.
     vi.setSystemTime(base + 2300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
-    expect(screen.getByTestId('strict-tempo-indicator').textContent).toBe('Strict 1/3');
+    expect(screen.getByTestId('strict-tempo-indicator').getAttribute('data-failures')).toBe('1');
 
     // Off-beat note → failure 2 (count preserved from 1 + 1, not reset to 1)
     vi.setSystemTime(base + 3200);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
-    expect(screen.getByTestId('strict-tempo-indicator').textContent).toBe('Strict 2/3');
+    expect(screen.getByTestId('strict-tempo-indicator').getAttribute('data-failures')).toBe('2');
     expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
 
     // One more off-beat → failure 3, mid-session stop
@@ -2961,7 +2961,8 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
     expect(screen.queryByRole('button', { name: /stop practice/i })).toBeTruthy();
     const badge = screen.getByTestId('strict-tempo-indicator');
-    expect(badge.textContent).toBe('Strict 0/3');
+    expect(badge.textContent).toBe('Strict tempo');
+    expect(badge.getAttribute('data-failures')).toBe('0');
 
     // The new session is strict: one off-beat note raises the badge to 1/3
     const base2 = Date.now();
@@ -2969,7 +2970,7 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
     vi.setSystemTime(base2 + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
-    expect(screen.getByTestId('strict-tempo-indicator').textContent).toBe('Strict 1/3');
+    expect(screen.getByTestId('strict-tempo-indicator').getAttribute('data-failures')).toBe('1');
   });
 
   it('free practice with the metronome never shows the strict badge and never tempo-stops', () => {
@@ -3002,24 +3003,26 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     vi.setSystemTime(base);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
     let badge = screen.getByTestId('strict-tempo-indicator');
-    expect(badge.textContent).toBe('Strict 0/3');
+    expect(badge.textContent).toBe('Strict tempo');
+    expect(badge.getAttribute('data-failures')).toBe('0');
 
     vi.setSystemTime(base + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
     badge = screen.getByTestId('strict-tempo-indicator');
-    expect(badge.textContent).toBe('Strict 1/3');
+    expect(badge.getAttribute('data-failures')).toBe('1');
     expect(badge.getAttribute('data-failures')).toBe('1');
 
     vi.setSystemTime(base + 1300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
     badge = screen.getByTestId('strict-tempo-indicator');
-    expect(badge.textContent).toBe('Strict 2/3');
+    expect(badge.getAttribute('data-failures')).toBe('2');
 
     // In-time note → the count resets to zero on the very same note
     vi.setSystemTime(base + 1550);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
     badge = screen.getByTestId('strict-tempo-indicator');
-    expect(badge.textContent).toBe('Strict 0/3');
+    expect(badge.textContent).toBe('Strict tempo');
+    expect(badge.getAttribute('data-failures')).toBe('0');
     expect(badge.getAttribute('data-failures')).toBe('0');
   });
 

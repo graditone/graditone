@@ -26,16 +26,20 @@ interface PracticeToolbarProps {
 
 - Shown only when `strictTempoActive === true` **and** `isFreePractice !== true`.
 - Hidden when the metronome is off, during Free Practice, and when `strictTempoActive` is false.
-- Visible from the moment Score Practice starts with the metronome armed/active, before the first note (count `0/3`).
+- Visible from the moment Score Practice starts with the metronome armed/active, before the first note (failure count still at zero).
 
 **Content**
 
+The badge label is the static `Strict tempo` — the failure count is NOT part of
+the visible label. The current count is carried by `data-failures`, the warning/
+danger level classes, and the `aria-label`/`title` (which interpolate `{n}`).
+
 | State | Text (en) | Visual |
 |-------|-----------|--------|
-| 0 failures | `Strict 0/3` | Accent/neutral badge |
-| 1 failure | `Strict 1/3` | Warning badge |
-| 2 failures | `Strict 2/3` | Danger badge |
-| 3 failures | Transient only (`Strict 3/3`) | Results overlay opens immediately; the badge is not expected to remain interactive |
+| 0 failures | `Strict tempo` | Accent/neutral badge (level `none`) |
+| 1 failure | `Strict tempo` | Warning badge (level `warn`) |
+| 2 failures | `Strict tempo` | Danger badge (level `danger`) |
+| 3 failures | Transient only | Results overlay opens immediately; the badge is not expected to remain interactive |
 
 **Markup / test hooks**
 
@@ -46,8 +50,9 @@ interface PracticeToolbarProps {
   data-failures={count}
   aria-live="polite"
   title={t('practice.toolbar.strict_tempo_title', { n: count })}
+  aria-label={t('practice.toolbar.strict_tempo_title', { n: count })}
 >
-  {t('practice.toolbar.strict_tempo', { n: count })}
+  {t('practice.toolbar.strict_tempo')}
 </span>
 ```
 
@@ -55,7 +60,8 @@ Where `level` is `none` (0), `warn` (1), or `danger` (2+).
 
 **Accessibility**
 
-- `aria-live="polite"` so the count is announced when it changes.
+- `aria-live="polite"` so the (accessible) label — which interpolates the count —
+  is announced when it changes.
 - The badge is informational; it is not a button and must not take focus.
 - The title includes the full explanation (“Metronome strict tempo — N of 3 consecutive timing misses”).
 
@@ -223,7 +229,7 @@ For `stopReason === 'tempo'`, add an action row after the details:
 </div>
 ```
 
-- Repractice starts a new session; because the metronome is re-armed by `onSessionEnd`, `START` resets the strict count and the badge returns to `0/3`.
+- Repractice starts a new session; because the metronome is re-armed by `onSessionEnd`, `START` resets the strict count and the badge returns to the `none` level (`data-failures` 0).
 - Save persists the partial record with `stopReason: 'tempo'`; the button reflects `isSaved`/`isSaving` and shows the existing save error if it fails.
 - Session returns to the originating session when the practice was launched from one.
 - The existing close (`onDismiss`) remains available. Dismissing keeps the metronome enabled/armed so pressing Practice starts another strict session.
@@ -241,7 +247,7 @@ Add to both `frontend/src/i18n/locales/en.json` and `es.json`:
 
 | Key | English | Spanish |
 |-----|---------|---------|
-| `practice.toolbar.strict_tempo` | `Strict {n}/3` | `Estricto {n}/3` |
+| `practice.toolbar.strict_tempo` | `Strict tempo` | `Tempo estricto` |
 | `practice.toolbar.strict_tempo_title` | `Metronome strict tempo — {n} of 3 consecutive timing misses` | `Tempo estricto del metrónomo — {n} de 3 fallos de tempo consecutivos` |
 | `practice.results.tempo_stopped` | `Tempo not followed` | `No seguiste el tempo` |
 | `practice.results.tempo_stopped_hint` | `Practice stopped after 3 consecutive timing misses.` | `La práctica se detuvo tras 3 fallos de tempo consecutivos.` |
@@ -289,7 +295,7 @@ The styles must respect the existing theme variables and remain legible in light
 
 UI tests must cover at least:
 
-1. Badge hidden when metronome off / Free Practice; shown at `0/3`; updates to `1/3` and `2/3`; classes/levels.
+1. Badge hidden when metronome off / Free Practice; shown with the static `Strict tempo` label; level classes none→warn→danger follow the count (`data-failures`), which resets to `0` on an in-time note.
 2. Live flash for a strict onset failure below the legacy 500 ms threshold; early-release shortfall.
 3. Tempo-stop partial: banner text, exactly three failure items with note numbers and signed values, table/chart present, Repractice/Save/Session actions.
 4. Tempo-stop partial Save calls `onSave`; Repractice calls `onRepractice`; Session calls `onReturnToSession`.

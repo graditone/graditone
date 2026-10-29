@@ -555,34 +555,37 @@ describe('PracticeToolbar — strict tempo badge (feature 101, T023)', () => {
     expect(screen.queryByTestId('strict-tempo-indicator')).toBeNull();
   });
 
-  it('shows 0/3 at the none level when practice starts', () => {
+  it('shows the strict-tempo label at the none level when practice starts', () => {
     render(<PracticeToolbar {...makeDefaultProps({ metronomeActive: true, strictTempoActive: true })} />, { wrapper: TestWrapper });
     const badge = screen.getByTestId('strict-tempo-indicator');
-    expect(badge.textContent).toBe('Strict 0/3');
+    expect(badge.textContent).toBe('Strict tempo');
     expect(badge.className).toContain('practice-plugin__strict-badge--none');
     expect(badge.getAttribute('data-failures')).toBe('0');
   });
 
-  it('shows 1/3 at the warn level and 2/3 at the danger level', () => {
+  it('keeps the static label while the warn/danger levels follow the count', () => {
     const one = render(<PracticeToolbar {...makeDefaultProps({ metronomeActive: true, strictTempoActive: true, strictFailureCount: 1 })} />, { wrapper: TestWrapper });
     let badge = screen.getByTestId('strict-tempo-indicator');
-    expect(badge.textContent).toBe('Strict 1/3');
+    expect(badge.textContent).toBe('Strict tempo');
     expect(badge.className).toContain('practice-plugin__strict-badge--warn');
     expect(badge.getAttribute('data-failures')).toBe('1');
     one.unmount();
 
     render(<PracticeToolbar {...makeDefaultProps({ metronomeActive: true, strictTempoActive: true, strictFailureCount: 2 })} />, { wrapper: TestWrapper });
     badge = screen.getByTestId('strict-tempo-indicator');
-    expect(badge.textContent).toBe('Strict 2/3');
+    expect(badge.textContent).toBe('Strict tempo');
     expect(badge.className).toContain('practice-plugin__strict-badge--danger');
     expect(badge.getAttribute('data-failures')).toBe('2');
   });
 
-  it('is informational: aria-live polite, localized title, and not a focusable button', () => {
+  it('is informational: aria-live polite, localized title + aria-label with the count, and not a focusable button', () => {
     render(<PracticeToolbar {...makeDefaultProps({ metronomeActive: true, strictTempoActive: true, strictFailureCount: 1 })} />, { wrapper: TestWrapper });
     const badge = screen.getByTestId('strict-tempo-indicator');
     expect(badge.getAttribute('aria-live')).toBe('polite');
     expect(badge.getAttribute('title')).toContain('Metronome strict tempo — 1 of 3 consecutive timing misses');
+    // The live label carries the count for screen readers even though the
+    // visible text is the static "Strict tempo".
+    expect(badge.getAttribute('aria-label')).toContain('Metronome strict tempo — 1 of 3 consecutive timing misses');
     expect(badge.tagName).toBe('SPAN');
   });
 });

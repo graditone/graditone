@@ -472,8 +472,9 @@ export function PracticeToolbar({
             data-failures={strictFailureCount}
             aria-live="polite"
             title={t('practice.toolbar.strict_tempo_title', { n: String(strictFailureCount) })}
+            aria-label={t('practice.toolbar.strict_tempo_title', { n: String(strictFailureCount) })}
           >
-            {t('practice.toolbar.strict_tempo', { n: String(strictFailureCount) })}
+            {t('practice.toolbar.strict_tempo')}
           </span>
         )}
         {metroMenuOpen && (
