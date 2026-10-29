@@ -204,11 +204,21 @@ export function PracticeToolbar({
     { value: -1, label: t('practice.toolbar.both_hands') },
   ];
 
-  // ─── Tempo stepper (digital BPM display + short/long step buttons) ─────────
-  // A slider has far too little precision on touch/tablet; the stepper edits
-  // the effective BPM in whole beats: short press (±1), hold ≥1 s (±5).
+  // ─── Tempo stepper (digital BPM display + short/auto-repeat buttons) ───────
+  // A slider has far too little precision on touch/tablet. The stepper edits
+  // the effective BPM: a short press (< 1 s) steps ±1; holding ≥ 1 s starts
+  // continuous ±5 steps (every 300 ms) until release. The display itself is
+  // inert — tapping/selecting it never changes the tempo.
   const [tempoPressed, setTempoPressed] = useState<'plus' | 'minus' | null>(null);
   const tempoPressStartRef = useRef<number | null>(null);
+  const tempoBpmRef = useRef<number>(bpm);
+  // eslint-disable-next-line react-hooks/refs -- writer-owns-ref pattern: keep ref in sync for consumers
+  tempoBpmRef.current = bpm;
+  const tempoTargetRef = useRef<number>(0);
+  const tempoLastEmittedRef = useRef<number>(0);
+  const tempoRepeatStartedRef = useRef<boolean>(false);
+  const tempoHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tempoRepeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const tempoDisabled = status === 'loading' || !!taskTag;
   // bpm prop is the effective BPM; baseTempo is the 1× original (stable:
@@ -222,47 +232,87 @@ export function PracticeToolbar({
       ? `Min. speed limited to ${ABSOLUTE_BPM_FLOOR} BPM`
       : undefined;
 
-  const applyTempoStep = useCallback(
-    (dir: 1 | -1, long: boolean) => {
-      if (bpm <= 0) return;
-      const step = long ? 5 : 1;
-      if (originalBpm <= 0) return;
-      const minBpm = Math.max(1, Math.round(originalBpm * effectiveMin));
-      const maxBpm = Math.min(998, Math.round(originalBpm * MAX_TEMPO_MULTIPLIER));
-      const next = Math.min(maxBpm, Math.max(minBpm, Math.round(bpm) + dir * step));
-      const multiplier = Math.round((next / originalBpm) * 1000) / 1000;
-      onTempoChange(multiplier);
+  const clearTempoAutoRepeat = useCallback(() => {
+    if (tempoHoldTimerRef.current !== null) {
+      clearTimeout(tempoHoldTimerRef.current);
+      tempoHoldTimerRef.current = null;
+    }
+    if (tempoRepeatTimerRef.current !== null) {
+      clearInterval(tempoRepeatTimerRef.current);
+      tempoRepeatTimerRef.current = null;
+    }
+    tempoRepeatStartedRef.current = false;
+  }, []);
+
+  // Emit the (clamped) target BPM as a multiplier; skip no-ops at the clamps.
+  const emitTempoTarget = useCallback(
+    (dir: 1 | -1, step: number) => {
+      if (tempoBpmRef.current <= 0) return;
+      const orig = originalBpm;
+      if (orig <= 0) return;
+      const minBpm = Math.max(1, Math.round(orig * effectiveMin));
+      const maxBpm = Math.min(998, Math.round(orig * MAX_TEMPO_MULTIPLIER));
+      const target = Math.min(maxBpm, Math.max(minBpm, tempoTargetRef.current + dir * step));
+      if (target === tempoLastEmittedRef.current) return;
+      tempoTargetRef.current = target;
+      tempoLastEmittedRef.current = target;
+      onTempoChange(Math.round((target / orig) * 1000) / 1000);
     },
-    [bpm, originalBpm, effectiveMin, onTempoChange],
+    [onTempoChange, originalBpm, effectiveMin],
   );
 
   const handleTempoPressStart = useCallback(
     (e: React.PointerEvent<HTMLButtonElement>, side: 'plus' | 'minus') => {
       if (tempoDisabled) return;
       tempoPressStartRef.current = Date.now();
+      tempoTargetRef.current = Math.round(tempoBpmRef.current);
+      tempoLastEmittedRef.current = tempoTargetRef.current;
       setTempoPressed(side);
       // Keep receiving the pointer-up even when the finger drifts off the button.
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* jsdom/tests */ }
+      // Hold ≥ 1 s starts continuous ±5 stepping (every 300 ms).
+      tempoHoldTimerRef.current = setTimeout(() => {
+        const step = 5;
+        tempoRepeatStartedRef.current = true;
+        emitTempoTarget(side === 'plus' ? 1 : -1, step);
+        tempoRepeatTimerRef.current = setInterval(() => {
+          emitTempoTarget(side === 'plus' ? 1 : -1, step);
+        }, 300);
+      }, 1000);
     },
-    [tempoDisabled],
+    [tempoDisabled, emitTempoTarget],
   );
 
   const handleTempoPressEnd = useCallback(
     (side: 'plus' | 'minus') => {
+      const dir = side === 'plus' ? 1 : -1;
       const start = tempoPressStartRef.current;
       tempoPressStartRef.current = null;
       setTempoPressed(null);
-      if (start === null) return;
-      const heldMs = Date.now() - start;
-      applyTempoStep(side === 'plus' ? 1 : -1, heldMs >= 1000);
+      if (start !== null) {
+        const heldMs = Date.now() - start;
+        if (heldMs < 1000) {
+          // Short press: ±1.
+          emitTempoTarget(dir, 1);
+        } else if (!tempoRepeatStartedRef.current) {
+          // Long press whose hold-timer never fired (e.g. test timers): ±5 once.
+          emitTempoTarget(dir, 5);
+        }
+        // If the repeat already ran, the interval emitted the steps — just stop it.
+      }
+      clearTempoAutoRepeat();
     },
-    [applyTempoStep],
+    [clearTempoAutoRepeat, emitTempoTarget],
   );
 
   const clearTempoPress = useCallback(() => {
     tempoPressStartRef.current = null;
     setTempoPressed(null);
-  }, []);
+    clearTempoAutoRepeat();
+  }, [clearTempoAutoRepeat]);
+
+  // Stop any in-flight auto-repeat if the toolbar unmounts mid-hold.
+  useEffect(() => () => clearTempoAutoRepeat(), [clearTempoAutoRepeat]);
 
   // Practice button label and CSS class
   // 'holding' is a sub-state of active (note duration being measured) — show Stop button during both

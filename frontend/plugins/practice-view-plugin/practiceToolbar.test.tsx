@@ -14,7 +14,7 @@
  *   - Staff selector calls onStaffChange with numeric index
  */
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PracticeToolbar, type PracticeToolbarProps } from './practiceToolbar';
@@ -369,27 +369,57 @@ describe('PracticeToolbar — tempo stepper (Feature 101)', () => {
     expect(onTempoChange).toHaveBeenLastCalledWith(mult(115));
   });
 
-  it('clamps at the 2× ceiling (120 → 240 BPM)', () => {
+  it('holding ≥ 1 s auto-repeats +5 every 300 ms until release', () => {
+    const onTempoChange = vi.fn();
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120, onTempoChange })} />, { wrapper: TestWrapper });
+    const plus = screen.getByTestId('tempo-plus');
+
+    fireEvent.pointerDown(plus);
+    // 1 s → the first +5 lands (120 → 125), then +5 every 300 ms.
+    act(() => { vi.advanceTimersByTime(1000); });
+    act(() => { vi.advanceTimersByTime(300); });  // 130
+    act(() => { vi.advanceTimersByTime(300); });  // 135
+
+    fireEvent.pointerUp(plus);
+    const callsAfterRelease = onTempoChange.mock.calls.length;
+
+    // Nothing after the release: the interval is gone.
+    act(() => { vi.advanceTimersByTime(1200); });
+    expect(onTempoChange.mock.calls.length).toBe(callsAfterRelease);
+
+    expect(onTempoChange).toHaveBeenCalledWith(mult(125));
+    expect(onTempoChange).toHaveBeenCalledWith(mult(130));
+    expect(onTempoChange).toHaveBeenCalledWith(mult(135));
+  });
+
+  it('tapping or pressing the display itself never changes the tempo', () => {
+    const onTempoChange = vi.fn();
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120, onTempoChange })} />, { wrapper: TestWrapper });
+    const display = screen.getByTestId('tempo-display');
+    fireEvent.pointerDown(display);
+    fireEvent.pointerUp(display);
+    expect(onTempoChange).not.toHaveBeenCalled();
+  });
+
+  it('clamps at the 2× ceiling: pressing + at 240 BPM emits nothing', () => {
     const onTempoChange = vi.fn();
     render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 240, tempoMultiplier: 2.0, onTempoChange })} />, { wrapper: TestWrapper });
     stepTempoBtn(screen.getByTestId('tempo-plus'), 0);
-    expect(onTempoChange).toHaveBeenCalledWith(2.0);
+    expect(onTempoChange).not.toHaveBeenCalled();
   });
 
-  it('clamps at the absolute BPM floor (40 → 10 BPM)', () => {
+  it('clamps at the absolute BPM floor: pressing − at 10 BPM emits nothing', () => {
     const onTempoChange = vi.fn();
     render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 10, tempoMultiplier: 0.25, onTempoChange })} />, { wrapper: TestWrapper });
     stepTempoBtn(screen.getByTestId('tempo-minus'), 0);
-    expect(onTempoChange).toHaveBeenCalledWith(0.25);
+    expect(onTempoChange).not.toHaveBeenCalled();
   });
 
-  it('caps the displayed BPM just below 999 (fast base 600 → 998)', () => {
+  it('caps the displayed BPM just below 999: pressing + at 998 emits nothing', () => {
     const onTempoChange = vi.fn();
-    // bpm 998 with multiplier 998/600 ≈ 1.663 → base 600 → maxBpm = min(998, 1200).
     render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 998, tempoMultiplier: 1.663, onTempoChange })} />, { wrapper: TestWrapper });
     stepTempoBtn(screen.getByTestId('tempo-plus'), 0);
-    // +1 would be 999 → clamped to 998 → multiplier stays 998/600.
-    expect(onTempoChange).toHaveBeenCalledWith(Math.round((998 / 600) * 1000) / 1000);
+    expect(onTempoChange).not.toHaveBeenCalled();
   });
 
   it('shows the BPM-floor tooltip when the floor is raised (bpm=40), none at bpm=120', () => {
