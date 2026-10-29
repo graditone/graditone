@@ -34,5 +34,5 @@
 - All items pass. The three product decisions were resolved with the user before writing:
   - only timing errors (including early release) count toward the three-note limit;
   - the limit is three consecutive failures;
-  - the window is tempo-relative: 20% of the expected gap, clamped to 60–150 ms.
+  - the window is tempo-relative: 40% of the expected gap, clamped to 120–300 ms.
 - The spec deliberately avoids naming source files, data structures, or React/WASM APIs. The accompanying plan will map the behavior onto the practice engine, the metronome lifecycle, and the results overlay.

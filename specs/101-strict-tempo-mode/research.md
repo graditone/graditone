@@ -47,10 +47,10 @@ and compare `|beatDeltaMs|` with the tolerance. Do **not** update the anchor on 
 
 ## D3. Tolerance formula
 
-**Decision**: `windowMs = round(clamp(0.20 × expectedGapMs, 60 ms, 150 ms))`, where `expectedGapMs` is the expected time between the current note and the previous practice note. A note is on the beat when `|beatDeltaMs| <= windowMs`.
+**Decision**: `windowMs = round(clamp(0.40 × expectedGapMs, 120 ms, 300 ms))`, where `expectedGapMs` is the expected time between the current note and the previous practice note. A note is on the beat when `|beatDeltaMs| <= windowMs`. *(Revised after user testing: the ratio and clamps were doubled from 0.20 / 60–150 ms — the original window made an average performance nearly impossible to play correctly.)*
 
 **Rationale**:
-- 20% scales naturally from slow to fast tempos: at 60 BPM a quarter-note gap is 1000 ms → 150 ms (ceiling); at 120 BPM 500 ms → 100 ms; at 240 BPM 250 ms → 60 ms (floor).
+- 40% scales naturally from slow to fast tempos: at 60 BPM a quarter-note gap is 1000 ms → 300 ms (ceiling); at 120 BPM 500 ms → 200 ms; at 240 BPM 250 ms → 120 ms (floor).
 - The 60 ms floor is wider than the metronome’s documented ≤50 ms timing error (feature 085), avoiding false stops from the click itself.
 - The 150 ms ceiling avoids an unrealistically loose window at very slow tempos.
 - Inclusive comparison matches the legacy `> 500 ms` late rule (boundary is on time).

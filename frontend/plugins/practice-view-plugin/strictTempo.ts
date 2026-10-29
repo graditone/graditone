@@ -10,7 +10,7 @@
  * Exports:
  *   STRICT_WINDOW_RATIO / STRICT_WINDOW_MIN_MS / STRICT_WINDOW_MAX_MS /
  *     STRICT_FAILURE_LIMIT — contract constants
- *   computeStrictWindowMs(expectedGapMs) — tempo-relative window, 60–150 ms
+ *   computeStrictWindowMs(expectedGapMs) — tempo-relative window, 120–300 ms
  *   evaluateStrictOnset(params)          — grace anchoring + grid judgement
  */
 
@@ -18,14 +18,18 @@
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Window is 20% of the expected gap to the previous practice note. */
-export const STRICT_WINDOW_RATIO = 0.20;
+/**
+ * Window is 40% of the expected gap to the previous practice note.
+ * (Raised from 20% in the original spec so an average human performance
+ * at moderate tempo is not near-impossible to play correctly.)
+ */
+export const STRICT_WINDOW_RATIO = 0.40;
 
 /** Smallest allowed window in ms (fast tempos would otherwise be unplayable). */
-export const STRICT_WINDOW_MIN_MS = 60;
+export const STRICT_WINDOW_MIN_MS = 120;
 
 /** Largest allowed window in ms (slow tempos become trivial otherwise). */
-export const STRICT_WINDOW_MAX_MS = 150;
+export const STRICT_WINDOW_MAX_MS = 300;
 
 /** Consecutive strict failures that stop the session. */
 export const STRICT_FAILURE_LIMIT = 3;
@@ -48,7 +52,7 @@ export interface StrictEvaluation {
   readonly anchor: StrictAnchor;
   /** Signed deviation from the anchor grid. 0 for a grace note. */
   readonly deltaMs: number;
-  /** Window applied to this note, 60–150 ms. */
+  /** Window applied to this note, 120–300 ms. */
   readonly windowMs: number;
   /** True when this note established/re-established the grid. */
   readonly isGrace: boolean;
@@ -61,9 +65,9 @@ export interface StrictEvaluation {
 // ---------------------------------------------------------------------------
 
 /**
- * Tempo-relative window: 20% of the expected gap to the previous note,
- * clamped to 60–150 ms and rounded to an integer.
- * Non-finite or negative gaps use the floor (60 ms).
+ * Tempo-relative window: 40% of the expected gap to the previous note,
+ * clamped to 120–300 ms and rounded to an integer.
+ * Non-finite or negative gaps use the floor (120 ms).
  */
 export function computeStrictWindowMs(expectedGapMs: number): number {
   if (!Number.isFinite(expectedGapMs) || expectedGapMs <= 0) {

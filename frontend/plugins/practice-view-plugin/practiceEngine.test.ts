@@ -1275,7 +1275,7 @@ describe('reduce() — strict tempo evaluation (feature 101)', () => {
   it('an off-beat judged note records correct-late + strictFailure and increments the count', () => {
     const state = strictActiveState(THREE_NOTES, 0, 0, ANCHOR_AT_ZERO);
     const next = reduce(state, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 650, expectedTimeMs: 500 });
-    // delta = (650−0) − (500−0) = 150, window 60 (no previous result) → off-beat
+    // delta = (650−0) − (500−0) = 150, window 120 (no previous result) → off-beat
     expect(next.noteResults[0].outcome).toBe('correct-late');
     expect(next.noteResults[0].strictFailure).toBe(true);
     expect(next.noteResults[0].beatDeltaMs).toBe(150);
@@ -1288,16 +1288,16 @@ describe('reduce() — strict tempo evaluation (feature 101)', () => {
 
   it('the third consecutive failure enters tempo-stopped and records the result', () => {
     let s = strictActiveState(THREE_NOTES, 0, 0, ANCHOR_AT_ZERO);
-    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 650, expectedTimeMs: 500 });
-    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 62, responseTimeMs: 1_150, expectedTimeMs: 1_000 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 800, expectedTimeMs: 500 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 62, responseTimeMs: 1_300, expectedTimeMs: 1_000 });
     expect(s.strictFailureCount).toBe(2);
     expect(s.mode).toBe('active');
-    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 1_650, expectedTimeMs: 1_500 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 1_800, expectedTimeMs: 1_500 });
     expect(s.strictFailureCount).toBe(3);
     expect(s.mode).toBe('tempo-stopped');
     expect(s.noteResults).toHaveLength(3);
     expect(s.noteResults[2].strictFailure).toBe(true);
-    expect(s.noteResults[2].beatDeltaMs).toBe(150);
+    expect(s.noteResults[2].beatDeltaMs).toBe(300);
     // The reducer does not advance or complete on the stop
     expect(s.currentIndex).toBe(2);
     expect(s.mode).not.toBe('complete');
@@ -1306,7 +1306,7 @@ describe('reduce() — strict tempo evaluation (feature 101)', () => {
   it('an in-time judged note resets the count to 0', () => {
     const state = strictActiveState(THREE_NOTES, 0, 2, ANCHOR_AT_ZERO);
     const next = reduce(state, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 550, expectedTimeMs: 500 });
-    // delta = 50, window 60 (no previous result) → on the beat
+    // delta = 50, window 120 (no previous result) → on the beat
     expect(next.strictFailureCount).toBe(0);
     expect(next.noteResults[0].outcome).toBe('correct');
     expect(next.noteResults[0].strictFailure).toBe(false);
@@ -1333,9 +1333,9 @@ describe('reduce() — strict tempo evaluation (feature 101)', () => {
 
   it('tempo-stopped is terminal for CORRECT_MIDI and WRONG_MIDI', () => {
     let s = strictActiveState(THREE_NOTES, 0, 0, ANCHOR_AT_ZERO);
-    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 650, expectedTimeMs: 500 });
-    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 62, responseTimeMs: 1_150, expectedTimeMs: 1_000 });
-    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 1_650, expectedTimeMs: 1_500 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 800, expectedTimeMs: 500 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 62, responseTimeMs: 1_300, expectedTimeMs: 1_000 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 1_800, expectedTimeMs: 1_500 });
     expect(s.mode).toBe('tempo-stopped');
     expect(reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 2_000, expectedTimeMs: 2_000 })).toBe(s);
     expect(reduce(s, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 2_000 })).toBe(s);

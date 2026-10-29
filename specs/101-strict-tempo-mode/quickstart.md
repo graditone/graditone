@@ -82,15 +82,15 @@ Open the printed local URL, load a score that contains both short notes and at l
 
 ### 3. Three consecutive off-beat notes (120 BPM)
 
-At 120 BPM a quarter-note gap is 500 ms, so the window is 100 ms.
+At 120 BPM a quarter-note gap is 500 ms, so the window is 200 ms.
 
 1. Play the first note in time (grace).
-2. Play the next three notes roughly 150 ms late, keeping a steady interval.
+2. Play the next three notes roughly 250–300 ms late, keeping a steady interval.
 
 **Expected**
 - Badge goes `1/3`, `2/3`, then the third failure stops the session.
 - The score player stops; the metronome stops and is re-armed if it was enabled.
-- The Practice Results window opens with the **Tempo not followed** banner, a hint that practice stopped after 3 consecutive misses, and exactly three failure items with note numbers and signed delays (for example `Note 12: +150 ms`).
+- The Practice Results window opens with the **Tempo not followed** banner, a hint that practice stopped after 3 consecutive misses, and exactly three failure items with note numbers and signed delays (for example `Note 12: +280 ms`).
 - The partial results include the timing table and delay chart, with the three failures marked.
 - A `Tempo fails` stat shows `3`; the score gives those notes zero credit.
 - **Repractice** starts a new strict session at `0/3`; **Save** persists the partial; **Session** returns to the originating session when applicable.
@@ -120,7 +120,7 @@ At 120 BPM a quarter-note gap is 500 ms, so the window is 100 ms.
 
 ### 6. Early release counts, retry is grace
 
-At a slow tempo (for example 40 BPM) the window is 150 ms and held notes are longer.
+At a slow tempo (for example 40 BPM) the window is 300 ms and held notes are longer.
 
 1. Start strict practice and reach a sustained note.
 2. Release it clearly before the required hold completes.
@@ -135,9 +135,9 @@ At a slow tempo (for example 40 BPM) the window is 150 ms and held notes are lon
 
 ### 7. Slow and fast tempo windows
 
-- **Slow (about 40 BPM)**: the expected gap is 1500 ms, so the window is capped at 150 ms. Play 10–20 notes within ±100 ms of the grid; no false stop. A note 200 ms off should fail.
-- **Fast (about 120 BPM)**: the window is 100 ms. A consistent 150 ms lag must fail by the third consecutive note; an on-time sequence must not.
-- **Very fast (about 240 BPM)**: the gap is 250 ms and the window is the 60 ms floor. Verify the metronome's own click error does not cause false stops.
+- **Slow (about 40 BPM)**: the expected gap is 1500 ms, so the window is capped at 300 ms. Play 10–20 notes within ±200 ms of the grid; no false stop. A note 350 ms off should fail.
+- **Fast (about 120 BPM)**: the window is 200 ms. A consistent 300 ms lag must fail by the third consecutive note; an on-time sequence must not.
+- **Very fast (about 240 BPM)**: the gap is 250 ms and the window is the 120 ms floor. Verify the metronome's own click error does not cause false stops.
 
 This is the key regression against the reported behavior: slow-tempo short notes and fast-tempo late notes must be caught by the absolute grid.
 

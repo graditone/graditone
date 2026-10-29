@@ -92,7 +92,7 @@ While strict mode is active, the practice view shows that the metronome is enfor
 - **FR-001**: When a Score Practice session starts with the metronome enabled (armed for the first note or already ticking), the system MUST apply strict tempo evaluation for the session. When the metronome is off, strict evaluation MUST NOT be applied.
 - **FR-002**: Strict evaluation MUST compare each note’s onset with its expected position on a tempo grid that advances at the current session tempo from the first accepted note. It MUST NOT rely solely on the interval since the previous note.
 - **FR-003**: The first accepted note of a session MUST establish the grid and MUST NOT be judged. The first accepted note after a tempo change, a loop-iteration restart, or mid-session metronome activation MUST also be a grace note. A retry after an early release and the first accepted note after a seek MUST also be grace notes.
-- **FR-004**: A note is on the beat when its onset is within 20% of the expected time between it and the previous practice note, with a floor of 60 ms and a ceiling of 150 ms. Otherwise it is off-beat and counts as one tempo failure.
+- **FR-004**: A note is on the beat when its onset is within 40% of the expected time between it and the previous practice note, with a floor of 120 ms and a ceiling of 300 ms. Otherwise it is off-beat and counts as one tempo failure.
 - **FR-005**: Releasing a note before its required hold time MUST count as one tempo failure even when its onset was on the beat. An off-beat onset followed by an early release MUST count as one failure for that note, not two.
 - **FR-006**: A wrong pitch MUST NOT count as a tempo failure and MUST NOT reset the consecutive-failure count. Wrong pitches continue to behave as they do today.
 - **FR-007**: The system MUST count consecutive tempo failures. A note completed within the window MUST reset the count to zero. A grace note MUST NOT change the count.
@@ -144,7 +144,7 @@ While strict mode is active, the practice view shows that the metronome is enfor
 - The metronome starts on the first note input, as it does today (feature 083), so the first accepted note defines the timing origin. The first accepted note is always a grace note.
 - “Consecutive” means consecutive evaluated note attempts. Wrong-pitch attempts neither increment nor reset the count.
 - Each note attempt can contribute at most one failure, even when it is both off-beat and released early.
-- The tolerance is 20% of the expected gap between practice notes, clamped to 60–150 ms. This is the initial tuning and may be adjusted after user testing.
+- The tolerance is 40% of the expected gap between practice notes, clamped to 120–300 ms. This is the initial tuning and was adjusted after user testing (doubled from 20% / 60–150 ms).
 - The metronome’s own timing accuracy is at most 50 ms (feature 085), so the 60 ms floor keeps the window wider than the metronome’s own error.
 - Input latency is assumed to be constant, so anchoring the grid at the first accepted note cancels it. No input calibration is in scope.
 - Tempo changes and loop restarts re-anchor with a grace note because the user cannot be expected to hit a grid that was interrupted.

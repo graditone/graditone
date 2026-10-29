@@ -4,7 +4,7 @@
  * ⚠️  PRINCIPLE V GATE: Written BEFORE strictTempo.ts exists.
  *     All tests MUST be RED (failing) until the helper is implemented.
  *
- * Covers the 20% tempo-relative window (clamped 60–150 ms), the signed
+ * Covers the 40% tempo-relative window (clamped 120–300 ms), the signed
  * absolute-grid delta, grace-note anchoring, and the inclusive boundary.
  * No React, no timers, no storage — pure unit tests.
  */
@@ -26,9 +26,9 @@ import type { StrictAnchor } from './strictTempo';
 
 describe('strict tempo constants', () => {
   it('exposes the contract constants', () => {
-    expect(STRICT_WINDOW_RATIO).toBe(0.20);
-    expect(STRICT_WINDOW_MIN_MS).toBe(60);
-    expect(STRICT_WINDOW_MAX_MS).toBe(150);
+    expect(STRICT_WINDOW_RATIO).toBe(0.40);
+    expect(STRICT_WINDOW_MIN_MS).toBe(120);
+    expect(STRICT_WINDOW_MAX_MS).toBe(300);
     expect(STRICT_FAILURE_LIMIT).toBe(3);
   });
 });
@@ -39,13 +39,13 @@ describe('strict tempo constants', () => {
 
 describe('computeStrictWindowMs', () => {
   const cases: Array<[number, number]> = [
-    [0, 60],      // zero gap → floor
-    [100, 60],    // 0.2×100=20 → floor
-    [300, 60],    // 0.2×300=60 → exactly floor
-    [500, 100],   // 0.2×500=100 (120 BPM quarter note)
-    [750, 150],   // 0.2×750=150 → exactly ceiling
-    [1000, 150],  // 0.2×1000=200 → ceiling
-    [2000, 150],  // 0.2×2000=400 → ceiling (slow tempo)
+    [0, 120],      // zero gap → floor
+    [100, 120],    // 0.4×100=40 → floor
+    [300, 120],    // 0.4×300=120 → exactly floor
+    [500, 200],    // 0.4×500=200 (120 BPM quarter note)
+    [750, 300],    // 0.4×750=300 → exactly ceiling
+    [1000, 300],   // 0.4×1000=400 → ceiling
+    [2000, 300],   // 0.4×2000=800 → ceiling (slow tempo)
   ];
 
   it.each(cases)('gap %i ms → window %i ms', (gap, expected) => {
@@ -63,10 +63,10 @@ describe('computeStrictWindowMs', () => {
   });
 
   it('rounds to an integer', () => {
-    // 0.2 × 503.5 = 100.7 → 101
-    expect(computeStrictWindowMs(503.5)).toBe(101);
-    // 0.2 × 445 = 89 → exactly 89
-    expect(computeStrictWindowMs(445)).toBe(89);
+    // 0.4 × 503.5 = 201.4 → 201
+    expect(computeStrictWindowMs(503.5)).toBe(201);
+    // 0.4 × 445 = 178 → exactly 178
+    expect(computeStrictWindowMs(445)).toBe(178);
   });
 });
 
@@ -95,7 +95,7 @@ describe('evaluateStrictOnset — grace note (anchor null)', () => {
       expectedTimeMs: 1000,
       expectedGapMs: 500,
     });
-    expect(eval1.windowMs).toBe(100);
+    expect(eval1.windowMs).toBe(200);
   });
 });
 
@@ -149,28 +149,28 @@ describe('evaluateStrictOnset — judged note', () => {
   });
 
   it('is inclusive at the window boundary on both sides', () => {
-    // gap 500 → window 100
+    // gap 500 → window 200
     const atLateBoundary = evaluateStrictOnset({
       anchor,
-      responseTimeMs: 3100,
+      responseTimeMs: 3200,
       expectedTimeMs: 3000,
       expectedGapMs: 500,
     });
-    expect(atLateBoundary.deltaMs).toBe(100);
+    expect(atLateBoundary.deltaMs).toBe(200);
     expect(atLateBoundary.onBeat).toBe(true);
 
     const pastLateBoundary = evaluateStrictOnset({
       anchor,
-      responseTimeMs: 3101,
+      responseTimeMs: 3201,
       expectedTimeMs: 3000,
       expectedGapMs: 500,
     });
-    expect(pastLateBoundary.deltaMs).toBe(101);
+    expect(pastLateBoundary.deltaMs).toBe(201);
     expect(pastLateBoundary.onBeat).toBe(false);
 
     const atEarlyBoundary = evaluateStrictOnset({
       anchor,
-      responseTimeMs: 2900,
+      responseTimeMs: 2800,
       expectedTimeMs: 3000,
       expectedGapMs: 500,
     });
@@ -178,7 +178,7 @@ describe('evaluateStrictOnset — judged note', () => {
 
     const pastEarlyBoundary = evaluateStrictOnset({
       anchor,
-      responseTimeMs: 2899,
+      responseTimeMs: 2799,
       expectedTimeMs: 3000,
       expectedGapMs: 500,
     });
@@ -186,25 +186,26 @@ describe('evaluateStrictOnset — judged note', () => {
   });
 
   it('applies the window from the gap to the previous note, not a fixed value', () => {
-    // gap 250 → window 60; delta 80 fails even though it would pass at gap 500
+    // gap 250 → window 120 (0.4×250=100 → floor); delta 150 fails even though
+    // it would pass at gap 500 (window 200)
     const eval1 = evaluateStrictOnset({
       anchor,
-      responseTimeMs: 3080,
+      responseTimeMs: 3150,
       expectedTimeMs: 3000,
       expectedGapMs: 250,
     });
-    expect(eval1.windowMs).toBe(60);
+    expect(eval1.windowMs).toBe(120);
     expect(eval1.onBeat).toBe(false);
   });
 
   it('a constant interval deviation growing in absolute terms is caught by later notes', () => {
     // Player starts 250 ms after the anchor and repeats intervals 250 ms too long.
     // relativeDeltaMs stays +250 (legacy threshold 500 passes); the absolute
-    // grid delta stays +250 → caught immediately.
+    // grid delta stays +250 → caught immediately (window is 200).
     const g0: StrictAnchor = { expectedTimeMs: 0, responseTimeMs: 0 };
     const eval1 = evaluateStrictOnset({ anchor: g0, responseTimeMs: 750, expectedTimeMs: 500, expectedGapMs: 500 });
     expect(eval1.deltaMs).toBe(250);
-    expect(eval1.onBeat).toBe(false); // window is 100
+    expect(eval1.onBeat).toBe(false); // window is 200
   });
 
   it('a catch-up note can be on the grid even when its interval delta is large', () => {

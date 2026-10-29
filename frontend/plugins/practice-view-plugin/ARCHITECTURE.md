@@ -163,7 +163,7 @@ State machine:
 When the session starts with the metronome armed or active (`START.strictTempo`),
 `practiceState.strictMode` turns on and every onset is additionally judged
 against the metronome grid. All timing math lives in the pure helper
-`strictTempo.ts` (window = 20% of the note gap, clamped to 60–150 ms; failure
+`strictTempo.ts` (window = 40% of the note gap, clamped to 120–300 ms; failure
 limit = 3):
 
 - **Grace notes** — when `strictAnchor` is null, the note is not judged: it

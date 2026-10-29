@@ -65,9 +65,9 @@ This is a frontend-only, brownfield feature. All paths are relative to the repos
   - Add/update any existing test fixtures so the new required `PracticeState` fields are present; do not weaken existing assertions.
 
 - [X] T004 Implement `frontend/plugins/practice-view-plugin/strictTempo.ts` (new file) to pass T002. Export:
-  - Constants `STRICT_WINDOW_RATIO = 0.20`, `STRICT_WINDOW_MIN_MS = 60`, `STRICT_WINDOW_MAX_MS = 150`, `STRICT_FAILURE_LIMIT = 3`.
+  - Constants `STRICT_WINDOW_RATIO = 0.40`, `STRICT_WINDOW_MIN_MS = 120`, `STRICT_WINDOW_MAX_MS = 300`, `STRICT_FAILURE_LIMIT = 3`.
   - `StrictAnchor` (`expectedTimeMs`, `responseTimeMs`) and `StrictEvaluation` (`anchor`, `deltaMs`, `windowMs`, `isGrace`, `onBeat`).
-  - `computeStrictWindowMs(expectedGapMs: number): number` using `round(clamp(0.20 * gap, 60, 150))`, with the floor for non-finite/negative gaps.
+  - `computeStrictWindowMs(expectedGapMs: number): number` using `round(clamp(0.40 * gap, 120, 300))`, with the floor for non-finite/negative gaps.
   - `evaluateStrictOnset({ anchor, responseTimeMs, expectedTimeMs, expectedGapMs })` per `contracts/strict-tempo-engine-contract.md`.
   - Keep this module self-contained and pure; no runtime cycle with `practiceEngine.types.ts`.
 

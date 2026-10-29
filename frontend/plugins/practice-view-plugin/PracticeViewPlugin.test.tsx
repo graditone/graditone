@@ -2552,17 +2552,17 @@ describe('PracticeViewPlugin — strict tempo mode (feature 101 US1)', () => {
     expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
     expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
 
-    // Note 1 — 200 ms late (window 100 ms): strict failure 1
-    vi.setSystemTime(base + 700);
+    // Note 1 — 300 ms late (window 200 ms): strict failure 1
+    vi.setSystemTime(base + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
 
-    // Note 2 — another 200 ms late: strict failure 2 (no stop yet)
-    vi.setSystemTime(base + 1200);
+    // Note 2 — another 300 ms late: strict failure 2 (no stop yet)
+    vi.setSystemTime(base + 1300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
     expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
     expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
 
-    // Note 3 — in time (delta 150 ms? no: 1700 grid is 1500 → delta 50): count resets
+    // Note 3 — in time (1550 grid is 1500 → delta 50): count resets
     vi.setSystemTime(base + 1550);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
 
@@ -2580,17 +2580,17 @@ describe('PracticeViewPlugin — strict tempo mode (feature 101 US1)', () => {
     vi.setSystemTime(base);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
 
-    // Three consecutive 200 ms-late onsets → failures 1, 2, 3
-    vi.setSystemTime(base + 700);
+    // Three consecutive 300 ms-late onsets → failures 1, 2, 3
+    vi.setSystemTime(base + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
-    vi.setSystemTime(base + 1200);
+    vi.setSystemTime(base + 1300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
 
     // Stop must not have happened after failure 2
     expect(ctx.mockStop).not.toHaveBeenCalled();
     expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
 
-    vi.setSystemTime(base + 1700);
+    vi.setSystemTime(base + 1800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
 
     // Third failure on a non-final note → results open with the tempo banner
@@ -2604,11 +2604,11 @@ describe('PracticeViewPlugin — strict tempo mode (feature 101 US1)', () => {
 
     vi.setSystemTime(base);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
-    vi.setSystemTime(base + 700);
+    vi.setSystemTime(base + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
-    vi.setSystemTime(base + 1200);
+    vi.setSystemTime(base + 1300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
-    vi.setSystemTime(base + 1700);
+    vi.setSystemTime(base + 1800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
 
     expect(screen.getByTestId('tempo-stop-banner')).toBeTruthy();
@@ -2635,16 +2635,16 @@ describe('PracticeViewPlugin — strict tempo mode (feature 101 US1)', () => {
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
 
     // Failure 1
-    vi.setSystemTime(base + 700);
+    vi.setSystemTime(base + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
 
     // Wrong pitch — must NOT increment the strict failure count
-    vi.setSystemTime(base + 800);
+    vi.setSystemTime(base + 950);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 90 }); });
     expect(ctx.mockStop).not.toHaveBeenCalled();
 
     // Failure 2
-    vi.setSystemTime(base + 1200);
+    vi.setSystemTime(base + 1300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
     expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
 
@@ -2687,14 +2687,14 @@ describe('PracticeViewPlugin — strict tempo mode (feature 101 US1)', () => {
 
     vi.setSystemTime(base);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
-    vi.setSystemTime(base + 700);
+    vi.setSystemTime(base + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
-    vi.setSystemTime(base + 1200);
+    vi.setSystemTime(base + 1300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
 
     // Final note accepted (correct-late) but it is the third failure —
     // the session must show COMPLETE results, not a tempo partial.
-    vi.setSystemTime(base + 1700);
+    vi.setSystemTime(base + 1800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
 
     expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
@@ -2727,12 +2727,12 @@ describe('PracticeViewPlugin — strict tempo mode (feature 101 US1)', () => {
     vi.setSystemTime(base);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
 
-    // The same off-beat pattern (200 ms intervals) that stops a strict session…
-    vi.setSystemTime(base + 700);
+    // The same off-beat pattern (300 ms intervals) that stops a strict session…
+    vi.setSystemTime(base + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
-    vi.setSystemTime(base + 1200);
+    vi.setSystemTime(base + 1300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
-    vi.setSystemTime(base + 1700);
+    vi.setSystemTime(base + 1800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
 
     // …completes normally when the metronome (and strict mode) is off.
@@ -2747,11 +2747,11 @@ describe('PracticeViewPlugin — strict tempo mode (feature 101 US1)', () => {
 // Feature 101 — Strict tempo wiring (US3, T024)
 //
 // The metronome toggle / tempo slider / loop-restart / live-feedback wiring.
-// Timing model (bpm 120): expected gap 500 ms, strict window 100 ms.
+// Timing model (bpm 120): expected gap 500 ms, strict window 200 ms.
 // A mid-session enable makes the next accepted note grace — it re-anchors the
 // grid at that note's onset, and all later offsets are anchor-relative, e.g.
-// for a grace at response 1200 (expected 1000): a 200 ms-late onset of the
-// next note (expected 1500) is at response 1900.
+// for a grace at response 1200 (expected 1000): a 300 ms-late onset of the
+// next note (expected 1500) is at response 2000.
 // ---------------------------------------------------------------------------
 
 describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
@@ -2807,19 +2807,19 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     vi.setSystemTime(base + 1200);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
 
-    // Three anchor-relative onsets of +200 ms → failures 1, 2, 3.
+    // Three anchor-relative onsets of +300 ms → failures 1, 2, 3.
     // If note 2 had been evaluated BEFORE activation, failure 3 arrives here.
-    vi.setSystemTime(base + 1900);
+    vi.setSystemTime(base + 2000);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
     expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
     expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
 
-    vi.setSystemTime(base + 2400);
+    vi.setSystemTime(base + 2500);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 68 }); });
     expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
 
     // Third failure (mid-session, non-final note) → tempo partial
-    vi.setSystemTime(base + 2900);
+    vi.setSystemTime(base + 3000);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 70 }); });
     expect(screen.getByTestId('tempo-stop-banner')).toBeTruthy();
 
@@ -2830,7 +2830,7 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     const graceRow = rows[2];
     expect(graceRow.className).toContain('practice-results__row--correct');
     expect(graceRow.children[3].textContent).toContain('✅');
-    expect(graceRow.textContent).not.toContain('+200 ms');
+    expect(graceRow.textContent).not.toContain('+300 ms');
     // The three failures are marked
     expect(document.querySelectorAll('.practice-results__row--strict-failure').length).toBe(3);
   });
@@ -2842,9 +2842,9 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     vi.setSystemTime(base);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
     // Two strict failures
-    vi.setSystemTime(base + 700);
+    vi.setSystemTime(base + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
-    vi.setSystemTime(base + 1200);
+    vi.setSystemTime(base + 1300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
     expect(screen.queryByTestId('strict-tempo-indicator')).not.toBeNull();
 
@@ -2852,15 +2852,15 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
     expect(screen.queryByTestId('strict-tempo-indicator')).toBeNull();
 
-    // Legacy off-beat patterns (200 ms past the grid) would have failed strictly:
+    // Legacy off-beat patterns (300 ms past the grid) would have failed strictly:
     // with the strict mode OFF they are acceptable correct-late results only.
-    vi.setSystemTime(base + 1700);
+    vi.setSystemTime(base + 1800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
-    vi.setSystemTime(base + 2200);
+    vi.setSystemTime(base + 2300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 68 }); });
-    vi.setSystemTime(base + 2700);
+    vi.setSystemTime(base + 2800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 70 }); });
-    vi.setSystemTime(base + 3200);
+    vi.setSystemTime(base + 3300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 72 }); });
 
     // No tempo stop; the session completes normally
@@ -2875,7 +2875,7 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
 
     vi.setSystemTime(base);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
-    vi.setSystemTime(base + 700);
+    vi.setSystemTime(base + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
     expect(screen.getByTestId('strict-tempo-indicator').textContent).toBe('Strict 1/3');
 
@@ -2946,11 +2946,11 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
 
     // Three consecutive off-beat onsets → mid-session stop
-    vi.setSystemTime(base + 700);
+    vi.setSystemTime(base + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
-    vi.setSystemTime(base + 1200);
+    vi.setSystemTime(base + 1300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
-    vi.setSystemTime(base + 1700);
+    vi.setSystemTime(base + 1800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
     expect(screen.getByTestId('tempo-stop-banner')).toBeTruthy();
 
@@ -2967,7 +2967,7 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     const base2 = Date.now();
     vi.setSystemTime(base2);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
-    vi.setSystemTime(base2 + 700);
+    vi.setSystemTime(base2 + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
     expect(screen.getByTestId('strict-tempo-indicator').textContent).toBe('Strict 1/3');
   });
@@ -3004,13 +3004,13 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     let badge = screen.getByTestId('strict-tempo-indicator');
     expect(badge.textContent).toBe('Strict 0/3');
 
-    vi.setSystemTime(base + 700);
+    vi.setSystemTime(base + 800);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
     badge = screen.getByTestId('strict-tempo-indicator');
     expect(badge.textContent).toBe('Strict 1/3');
     expect(badge.getAttribute('data-failures')).toBe('1');
 
-    vi.setSystemTime(base + 1200);
+    vi.setSystemTime(base + 1300);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
     badge = screen.getByTestId('strict-tempo-indicator');
     expect(badge.textContent).toBe('Strict 2/3');
@@ -3037,12 +3037,12 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     vi.setSystemTime(base + 1200);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
 
-    // Strict onset failure: legacy absolute deviation is +400 ms, but the
-    // strict beat delta is +200 ms — the overlay shows the strict value.
-    vi.setSystemTime(base + 1900);
+    // Strict onset failure: legacy absolute deviation is +500 ms, but the
+    // strict beat delta is +300 ms — the overlay shows the strict value.
+    vi.setSystemTime(base + 2000);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
     expect(document.querySelector('.practice-plugin__timing-overlay')).not.toBeNull();
-    expect(document.querySelector('.practice-plugin__timing-overlay')!.textContent).toBe('+200 ms');
+    expect(document.querySelector('.practice-plugin__timing-overlay')!.textContent).toBe('+300 ms');
 
     // Auto-dismiss after ~1 s
     act(() => { vi.advanceTimersByTime(1100); });

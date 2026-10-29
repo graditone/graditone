@@ -10,9 +10,9 @@ This is an internal, pure-engine contract. It has no network, storage, audio, or
 ## 1. Pure helper
 
 ```ts
-export const STRICT_WINDOW_RATIO = 0.20;
-export const STRICT_WINDOW_MIN_MS = 60;
-export const STRICT_WINDOW_MAX_MS = 150;
+export const STRICT_WINDOW_RATIO = 0.40;
+export const STRICT_WINDOW_MIN_MS = 120;
+export const STRICT_WINDOW_MAX_MS = 300;
 export const STRICT_FAILURE_LIMIT = 3;
 
 export interface StrictAnchor {
@@ -25,7 +25,7 @@ export interface StrictEvaluation {
   readonly anchor: StrictAnchor;
   /** Signed deviation from the anchor grid. 0 for a grace note. */
   readonly deltaMs: number;
-  /** Window applied to this note, 60–150 ms. */
+  /** Window applied to this note, 120–300 ms. */
   readonly windowMs: number;
   /** True when this note established/re-established the grid. */
   readonly isGrace: boolean;
@@ -45,7 +45,7 @@ export function evaluateStrictOnset(params: {
 
 ### Behavior
 
-- `computeStrictWindowMs(gap)` returns `round(clamp(0.20 × gap, 60, 150))`. For non-finite or negative `gap`, use the floor (60 ms).
+- `computeStrictWindowMs(gap)` returns `round(clamp(0.40 × gap, 120, 300))`. For non-finite or negative `gap`, use the floor (120 ms).
 - `evaluateStrictOnset`:
   - If `anchor === null`: `isGrace = true`, `onBeat = true`, `deltaMs = 0`, `anchor = { expectedTimeMs, responseTimeMs }`.
   - Otherwise: `deltaMs = round((responseTimeMs - anchor.responseTimeMs) - (expectedTimeMs - anchor.expectedTimeMs))`; `windowMs = computeStrictWindowMs(expectedGapMs)`; `onBeat = |deltaMs| <= windowMs`; the returned `anchor` is the input anchor unchanged.
@@ -54,7 +54,7 @@ export function evaluateStrictOnset(params: {
 
 ### Test obligations
 
-- Gaps 0, 100, 300, 500, 750, 1000, 2000 ms → windows 60, 60, 60, 100, 150, 150, 150.
+- Gaps 0, 100, 300, 500, 750, 1000, 2000 ms → windows 120, 120, 120, 200, 300, 300, 300.
 - Positive and negative deltas.
 - Grace sets the anchor and returns `deltaMs = 0`.
 - Judge uses the anchor without updating it.
