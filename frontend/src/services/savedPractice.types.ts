@@ -8,7 +8,7 @@
  * Full data is stored in IndexedDB; lightweight index entries in localStorage.
  */
 import type { PluginPracticeNoteEntry } from '../plugin-api/types';
-import type { PracticeNoteResult, WrongNoteEvent } from '../../plugins/practice-view-plugin/practiceEngine.types';
+import type { PracticeNoteResult, WrongNoteEvent, PracticeStopReason } from '../../plugins/practice-view-plugin/practiceEngine.types';
 
 // ---------------------------------------------------------------------------
 // Score Reference
@@ -70,6 +70,12 @@ export interface SavedPerformanceData {
   stoppedAtIndex: number | null;
   /** Non-null for partial practices. */
   totalNoteCount: number | null;
+  /**
+   * Feature 101: why a partial practice stopped — 'tempo' when strict tempo
+   * mode stopped the session, 'manual' when the user pressed Stop.
+   * Saved partials from before this feature have no value (treated as manual).
+   */
+  stopReason?: PracticeStopReason;
 }
 
 // ---------------------------------------------------------------------------

@@ -140,3 +140,79 @@ describe('computePracticeScore — early-release penalty (feature 098)', () => {
     expect(earlyReleaseSession).toBeLessThan(fullyCorrect);
   });
 });
+
+// ─── Feature 101: strict tempo failures earn zero credit (T013) ───────────────
+
+describe('computePracticeScore — strict tempo failures (feature 101)', () => {
+  it('zero-credits a strict correct-late result and counts it in strictFailureCount', () => {
+    const notes = [
+      { outcome: 'correct', wrongAttempts: 0 },
+      { outcome: 'correct-late', wrongAttempts: 0, strictFailure: true },
+    ];
+    const result = computePracticeScore(notes, 1.0);
+    expect(result?.strictFailureCount).toBe(1);
+    // lateCount still counts every correct-late row, strict or not
+    expect(result?.lateCount).toBe(1);
+    // rawScore = ((1 + 0) / 2) * 100 = 50 — a strict failure earns nothing
+    expect(result?.score).toBe(50);
+  });
+
+  it('zero-credits a strict early-release result and counts it in strictFailureCount', () => {
+    const notes = [
+      { outcome: 'correct', wrongAttempts: 0 },
+      { outcome: 'early-release', wrongAttempts: 0, strictFailure: true },
+    ];
+    const result = computePracticeScore(notes, 1.0);
+    expect(result?.strictFailureCount).toBe(1);
+    expect(result?.earlyReleaseCount).toBe(1);
+    expect(result?.score).toBe(50);
+  });
+
+  it('legacy correct-late / early-release keep 0.5 credit and never count as strict failures', () => {
+    const notes = [
+      { outcome: 'correct-late', wrongAttempts: 0 },
+      { outcome: 'early-release', wrongAttempts: 0 },
+    ];
+    const result = computePracticeScore(notes, 1.0);
+    expect(result?.strictFailureCount).toBe(0);
+    // rawScore = ((0.5 + 0.5) / 2) * 100 = 50
+    expect(result?.score).toBe(50);
+  });
+
+  it('mixed strict / legacy / correct / wrong results produce the expected score', () => {
+    const notes = [
+      { outcome: 'correct', wrongAttempts: 0 },                          // 1.0 credit
+      { outcome: 'correct-late', wrongAttempts: 0, strictFailure: true },// 0 credit
+      { outcome: 'correct-late', wrongAttempts: 0 },                     // 0.5 credit
+      { outcome: 'wrong', wrongAttempts: 3 },                            // 0 credit, −6 penalty
+    ];
+    const result = computePracticeScore(notes, 1.0);
+    // rawScore = ((1 + 0 + 0.5 + 0) / 4) * 100 − 6 = 37.5 − 6 = 31.5 → 32
+    expect(result?.score).toBe(32);
+    expect(result?.strictFailureCount).toBe(1);
+    expect(result?.lateCount).toBe(2);
+    expect(result?.earlyReleaseCount).toBe(0);
+    expect(result?.totalWrongAttempts).toBe(3);
+  });
+
+  it('a session with only in-time notes still scores 100 and reports 0 strict failures', () => {
+    const result = computePracticeScore(allCorrect(4), 1.0);
+    expect(result?.score).toBe(100);
+    expect(result?.strictFailureCount).toBe(0);
+  });
+
+  it('empty input still returns null', () => {
+    expect(computePracticeScore([])).toBeNull();
+  });
+
+  it('clamps at 0 when all notes are strict failures with heavy wrong-attempt penalties', () => {
+    const notes = [
+      { outcome: 'correct-late', wrongAttempts: 5, strictFailure: true },
+      { outcome: 'early-release', wrongAttempts: 5, strictFailure: true },
+    ];
+    // raw = 0 − min(10*2, 30) = −30 → clamped to 0
+    const result = computePracticeScore(notes, 1.0);
+    expect(result?.score).toBe(0);
+    expect(result?.strictFailureCount).toBe(2);
+  });
+});

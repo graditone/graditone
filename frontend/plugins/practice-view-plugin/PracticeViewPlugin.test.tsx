@@ -2446,6 +2446,7 @@ describe('Feature 096 — live timing feedback overlay', () => {
     vi.setSystemTime(base);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
 
+
     // In-tolerance next note: pressed within 500ms of expected (t=700 vs expected 500).
     vi.setSystemTime(base + 700);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
@@ -2487,5 +2488,590 @@ describe('Feature 096 — live timing feedback overlay', () => {
     const overlays = document.querySelectorAll('.practice-plugin__timing-overlay');
     expect(overlays.length).toBe(1);
     expect(overlays[0].textContent).toBe('+800 ms');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 101 — Strict tempo mode (US1): stop detection, overlay and side effects (T007)
+//
+// Timing model (bpm 120): expectedTimeMs = tick / 960 * 500.
+// First note of a waiting-mode session: responseTimeMs = 0 (grace, sets anchor).
+// Off-beat = played 200 ms past the expected grid point (window is 100 ms at
+// a 500 ms gap); on-beat = within ±100 ms of the anchor grid.
+// ---------------------------------------------------------------------------
+
+describe('PracticeViewPlugin — strict tempo mode (feature 101 US1)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function makeNotes(ticks: number[], durationTicks?: number[]) {
+    return ticks.map((tick, i) => ({
+      midiPitches: [60 + i * 2],
+      noteIds: [`n${i}`],
+      tick,
+      durationTicks: durationTicks?.[i] ?? 0,
+    }));
+  }
+
+  /** 4 short notes at grid points 0 / 500 / 1000 / 1500 ms (bpm 120). */
+  function setupStrictPractice(notes: ReturnType<typeof makeNotes>, armed = true) {
+    const ctx = createMockContext({ status: 'ready', staffCount: 1, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes,
+      totalAvailable: notes.length,
+      clef: 'Treble',
+    });
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    if (armed) {
+      act(() => { ctx.simulateMetronomeState({ armed: true }); });
+    }
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+    // Baseline noise: starting practice stops the score player once (pre-existing
+    // behavior) and the unmount cleanup stops it again at test end. Clear the
+    // side-effect mocks so strict-tempo assertions are exact-once.
+    ctx.mockStop.mockClear();
+    vi.mocked(ctx.context.scorePlayer.seekToTick).mockClear();
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+    vi.mocked(ctx.context.metronome.disarm).mockClear();
+    vi.mocked(ctx.context.metronome.startFromDeferred).mockClear();
+    return ctx;
+  }
+
+  it('two off-beat notes then an in-time note do not stop the session', () => {
+    const ctx = setupStrictPractice(makeNotes([0, 960, 1920, 2880]));
+    const base = Date.now();
+
+    // Note 0 — waiting mode, grace note (establishes the anchor, never judged)
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
+
+    // Note 1 — 200 ms late (window 100 ms): strict failure 1
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+
+    // Note 2 — another 200 ms late: strict failure 2 (no stop yet)
+    vi.setSystemTime(base + 1200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
+
+    // Note 3 — in time (delta 150 ms? no: 1700 grid is 1500 → delta 50): count resets
+    vi.setSystemTime(base + 1550);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+
+    // Session completes normally — complete results, no tempo banner
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
+  });
+
+  it('a third failure that is not the accepted final note stops the session with the tempo banner', () => {
+    // 5 notes: the third failure lands on note 3 — mid-session, before the
+    // accepted final note — so the stop is a strict-tempo partial.
+    const ctx = setupStrictPractice(makeNotes([0, 960, 1920, 2880, 3840]));
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    // Three consecutive 200 ms-late onsets → failures 1, 2, 3
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    vi.setSystemTime(base + 1200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+
+    // Stop must not have happened after failure 2
+    expect(ctx.mockStop).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+
+    vi.setSystemTime(base + 1700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+
+    // Third failure on a non-final note → results open with the tempo banner
+    expect(screen.getByTestId('tempo-stop-banner')).toBeTruthy();
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
+  });
+
+  it('the tempo stop performs its side effects exactly once and seeks to the score start', () => {
+    const ctx = setupStrictPractice(makeNotes([0, 960, 1920, 2880, 3840]));
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    vi.setSystemTime(base + 1200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+    vi.setSystemTime(base + 1700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+
+    expect(screen.getByTestId('tempo-stop-banner')).toBeTruthy();
+
+    // Exact-once: the orchestrator stopped the score player + metronome once
+    expect(ctx.mockStop).toHaveBeenCalledTimes(1);
+    expect(ctx.context.scorePlayer.seekToTick).toHaveBeenCalledWith(0);
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1); // stop the running engine
+    // Re-arm/disarm policy ran exactly once
+    const disarmCalls = vi.mocked(ctx.context.metronome.disarm).mock.calls.length;
+    expect(disarmCalls).toBeGreaterThanOrEqual(1);
+
+    // A re-render / later state change must not repeat the side effects
+    act(() => { ctx.simulateStateChange({ currentTick: 0 }); });
+    expect(ctx.mockStop).toHaveBeenCalledTimes(1);
+    expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('a wrong pitch between two failures does not count toward the three', () => {
+    const ctx = setupStrictPractice(makeNotes([0, 960, 1920, 2880]));
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    // Failure 1
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+
+    // Wrong pitch — must NOT increment the strict failure count
+    vi.setSystemTime(base + 800);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 90 }); });
+    expect(ctx.mockStop).not.toHaveBeenCalled();
+
+    // Failure 2
+    vi.setSystemTime(base + 1200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+
+    // In time → count resets, session completes
+    vi.setSystemTime(base + 1550);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
+  });
+
+  it('three consecutive early releases stop the session', () => {
+    // A whole-note hold at 960-tick spacing: 3840 ticks → 2000 ms required hold
+    const ctx = setupStrictPractice(makeNotes([0], [3840]));
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    // Press → holding; release immediately → early release 1
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 60 }); });
+    expect(ctx.mockStop).not.toHaveBeenCalled();
+
+    // Retry press → holding again; release → early release 2
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 60 }); });
+    expect(ctx.mockStop).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+
+    // Third early release → stop
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 60 }); });
+
+    expect(screen.getByTestId('tempo-stop-banner')).toBeTruthy();
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
+    expect(ctx.mockStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('an accepted final note with the third failure yields complete results (no tempo banner)', () => {
+    const ctx = setupStrictPractice(makeNotes([0, 960, 1920, 2880]));
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    vi.setSystemTime(base + 1200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+
+    // Final note accepted (correct-late) but it is the third failure —
+    // the session must show COMPLETE results, not a tempo partial.
+    vi.setSystemTime(base + 1700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
+    // Complete overlay offers replay; a tempo partial does not.
+    expect(screen.getByRole('button', { name: /replay your performance/i })).toBeTruthy();
+  });
+
+  it('an early-release final note with the third failure yields the tempo partial', () => {
+    const ctx = setupStrictPractice(makeNotes([0], [3840]));
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 60 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 60 }); });
+    // Third early release on the final note → tempo partial, never complete
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 60 }); });
+
+    expect(screen.getByTestId('tempo-stop-banner')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /replay your performance/i })).toBeNull();
+  });
+
+  it('metronome off keeps the legacy classification and never tempo-stops', () => {
+    const ctx = setupStrictPractice(makeNotes([0, 960, 1920, 2880]), false);
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    // The same off-beat pattern (200 ms intervals) that stops a strict session…
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    vi.setSystemTime(base + 1200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+    vi.setSystemTime(base + 1700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+
+    // …completes normally when the metronome (and strict mode) is off.
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
+    expect(ctx.context.scorePlayer.seekToTick).not.toHaveBeenCalled();
+    expect(ctx.context.metronome.toggle).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 101 — Strict tempo wiring (US3, T024)
+//
+// The metronome toggle / tempo slider / loop-restart / live-feedback wiring.
+// Timing model (bpm 120): expected gap 500 ms, strict window 100 ms.
+// A mid-session enable makes the next accepted note grace — it re-anchors the
+// grid at that note's onset, and all later offsets are anchor-relative, e.g.
+// for a grace at response 1200 (expected 1000): a 200 ms-late onset of the
+// next note (expected 1500) is at response 1900.
+// ---------------------------------------------------------------------------
+
+describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  function makeNotes(ticks: number[], durationTicks?: number[]) {
+    return ticks.map((tick, i) => ({
+      midiPitches: [60 + i * 2],
+      noteIds: [`n${i}`],
+      tick,
+      durationTicks: durationTicks?.[i] ?? 0,
+    }));
+  }
+
+  function setupT024(notes: ReturnType<typeof makeNotes>, armed = false) {
+    const ctx = createMockContext({ status: 'ready', staffCount: 1, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes,
+      totalAvailable: notes.length,
+      clef: 'Treble',
+    });
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    if (armed) {
+      act(() => { ctx.simulateMetronomeState({ armed: true }); });
+    }
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+    ctx.mockStop.mockClear();
+    vi.mocked(ctx.context.scorePlayer.seekToTick).mockClear();
+    vi.mocked(ctx.context.metronome.toggle).mockClear();
+    vi.mocked(ctx.context.metronome.disarm).mockClear();
+    vi.mocked(ctx.context.metronome.startFromDeferred).mockClear();
+    return ctx;
+  }
+
+  const NOTES7 = [0, 960, 1920, 2880, 3840, 4800, 5760];
+
+  it('mid-session metronome enable makes the next accepted note grace, counts from zero, and stops mid-session on the third miss', () => {
+    const ctx = setupT024(makeNotes(NOTES7), false);
+    const base = Date.now();
+
+    // Notes before activation: never evaluated (legacy classification)
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+
+    // Enable mid-session (engine running + STRICT_ENABLE)
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+
+    // The next accepted note is grace: re-anchors at response 1200/expected 1000
+    vi.setSystemTime(base + 1200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+
+    // Three anchor-relative onsets of +200 ms → failures 1, 2, 3.
+    // If note 2 had been evaluated BEFORE activation, failure 3 arrives here.
+    vi.setSystemTime(base + 1900);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
+
+    vi.setSystemTime(base + 2400);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 68 }); });
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+
+    // Third failure (mid-session, non-final note) → tempo partial
+    vi.setSystemTime(base + 2900);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 70 }); });
+    expect(screen.getByTestId('tempo-stop-banner')).toBeTruthy();
+
+    // The grace note row: judged-not, status Correct, no timing deviation
+    const summaries = document.querySelectorAll('.practice-results__details-summary');
+    for (const s of summaries) fireEvent.click(s);
+    const rows = document.querySelectorAll('.practice-results__row');
+    const graceRow = rows[2];
+    expect(graceRow.className).toContain('practice-results__row--correct');
+    expect(graceRow.children[3].textContent).toContain('✅');
+    expect(graceRow.textContent).not.toContain('+200 ms');
+    // The three failures are marked
+    expect(document.querySelectorAll('.practice-results__row--strict-failure').length).toBe(3);
+  });
+
+  it('mid-session metronome disable clears the count and continues with legacy behavior', () => {
+    const ctx = setupT024(makeNotes(NOTES7), true);
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    // Two strict failures
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    vi.setSystemTime(base + 1200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+    expect(screen.queryByTestId('strict-tempo-indicator')).not.toBeNull();
+
+    // Disable mid-session
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    expect(screen.queryByTestId('strict-tempo-indicator')).toBeNull();
+
+    // Legacy off-beat patterns (200 ms past the grid) would have failed strictly:
+    // with the strict mode OFF they are acceptable correct-late results only.
+    vi.setSystemTime(base + 1700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+    vi.setSystemTime(base + 2200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 68 }); });
+    vi.setSystemTime(base + 2700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 70 }); });
+    vi.setSystemTime(base + 3200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 72 }); });
+
+    // No tempo stop; the session completes normally
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /replay your performance/i })).toBeTruthy();
+  });
+
+  it('a tempo change mid-session reanchors: the next note is grace and the failure count is preserved', () => {
+    const ctx = setupT024(makeNotes(NOTES7), true);
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    expect(screen.getByTestId('strict-tempo-indicator').textContent).toBe('Strict 1/3');
+
+    // Change tempo → REANCHOR (count preserved, next note grace)
+    fireEvent.change(screen.getByLabelText(/tempo multiplier/i), { target: { value: '1.5' } });
+
+    // Next note is grace — not judged. If it HAD been judged off the old grid
+    // (response 2300 vs expected 1000 → +1300) it would already be failure 2.
+    vi.setSystemTime(base + 2300);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+    expect(screen.getByTestId('strict-tempo-indicator').textContent).toBe('Strict 1/3');
+
+    // Off-beat note → failure 2 (count preserved from 1 + 1, not reset to 1)
+    vi.setSystemTime(base + 3200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+    expect(screen.getByTestId('strict-tempo-indicator').textContent).toBe('Strict 2/3');
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+
+    // One more off-beat → failure 3, mid-session stop
+    vi.setSystemTime(base + 3700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 68 }); });
+    expect(screen.getByTestId('tempo-stop-banner')).toBeTruthy();
+  });
+
+  it('a tempo change during a sustained hold judges the hold and makes the next note grace', () => {
+    // Hold note (3840 ticks → 2000 ms required, 1600 acceptance) + short notes
+    const ctx = setupT024(
+      makeNotes([0, 3840, 4800, 5760], [3840]),
+      true,
+    );
+    const base = Date.now();
+
+    // Press the hold (waiting grace → holding)
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    // Change tempo WHILE holding → REANCHOR pending
+    fireEvent.change(screen.getByLabelText(/tempo multiplier/i), { target: { value: '1.5' } });
+
+    // Release after the acceptance threshold → hold judged on its original grid
+    vi.setSystemTime(base + 1700);
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 60 }); });
+
+    // The next note is grace — never judged (0 failures live in the badge)
+    vi.setSystemTime(base + 2450);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    const badge = screen.getByTestId('strict-tempo-indicator');
+    expect(badge.getAttribute('data-failures')).toBe('0');
+
+    // Finish the session in time → complete, zero strict failures recorded
+    vi.setSystemTime(base + 2990);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+    vi.setSystemTime(base + 3490);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(screen.queryByTestId('strict-fail-count')).toBeNull();
+    expect(screen.getByRole('button', { name: /replay your performance/i })).toBeTruthy();
+  });
+
+  it('repractice after a tempo stop starts a new strict session with the count reset', () => {
+    const ctx = setupT024(makeNotes(NOTES7), false);
+    const base = Date.now();
+
+    // Arm the metronome while waiting (deferred start + strict enable)
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    // Three consecutive off-beat onsets → mid-session stop
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    vi.setSystemTime(base + 1200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+    vi.setSystemTime(base + 1700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+    expect(screen.getByTestId('tempo-stop-banner')).toBeTruthy();
+
+    // Repractice from the tempo partial
+    fireEvent.click(screen.getByTestId('tempo-stop-repractice'));
+
+    // New strict session: results closed, practice running, badge reset to 0/3
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(screen.queryByRole('button', { name: /stop practice/i })).toBeTruthy();
+    const badge = screen.getByTestId('strict-tempo-indicator');
+    expect(badge.textContent).toBe('Strict 0/3');
+
+    // The new session is strict: one off-beat note raises the badge to 1/3
+    const base2 = Date.now();
+    vi.setSystemTime(base2);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    vi.setSystemTime(base2 + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    expect(screen.getByTestId('strict-tempo-indicator').textContent).toBe('Strict 1/3');
+  });
+
+  it('free practice with the metronome never shows the strict badge and never tempo-stops', () => {
+    const ctx = createMockContext();
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    fireEvent.click(screen.getByRole('button', { name: /free practice/i }));
+    // Start a free session and enable the metronome (armed)
+    fireEvent.click(screen.getByRole('button', { name: /start practice mode/i }));
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    expect(screen.queryByTestId('strict-tempo-indicator')).toBeNull();
+
+    const base = Date.now();
+    // Play notes far off any grid — free practice just records them
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    vi.setSystemTime(base + 1300);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+    vi.setSystemTime(base + 2900);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 67 }); });
+    vi.setSystemTime(base + 4300);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(screen.queryByRole('region', { name: /practice results/i })).toBeNull();
+  });
+
+  it('the indicator updates on the same note as a failure and resets on the next in-time note', () => {
+    const ctx = setupT024(makeNotes([0, 960, 1920, 2880]), true);
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    let badge = screen.getByTestId('strict-tempo-indicator');
+    expect(badge.textContent).toBe('Strict 0/3');
+
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    badge = screen.getByTestId('strict-tempo-indicator');
+    expect(badge.textContent).toBe('Strict 1/3');
+    expect(badge.getAttribute('data-failures')).toBe('1');
+
+    vi.setSystemTime(base + 1200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+    badge = screen.getByTestId('strict-tempo-indicator');
+    expect(badge.textContent).toBe('Strict 2/3');
+
+    // In-time note → the count resets to zero on the very same note
+    vi.setSystemTime(base + 1550);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+    badge = screen.getByTestId('strict-tempo-indicator');
+    expect(badge.textContent).toBe('Strict 0/3');
+    expect(badge.getAttribute('data-failures')).toBe('0');
+  });
+
+  it('live feedback shows the strict beat delta for a strict onset failure even below the legacy threshold', () => {
+    const ctx = setupT024(makeNotes(NOTES7), false);
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    vi.setSystemTime(base + 700);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+
+    // Enable mid-session, then play the re-anchoring grace at 1200/1000.
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    vi.setSystemTime(base + 1200);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 64 }); });
+
+    // Strict onset failure: legacy absolute deviation is +400 ms, but the
+    // strict beat delta is +200 ms — the overlay shows the strict value.
+    vi.setSystemTime(base + 1900);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 66 }); });
+    expect(document.querySelector('.practice-plugin__timing-overlay')).not.toBeNull();
+    expect(document.querySelector('.practice-plugin__timing-overlay')!.textContent).toBe('+200 ms');
+
+    // Auto-dismiss after ~1 s
+    act(() => { vi.advanceTimersByTime(1100); });
+    expect(document.querySelector('.practice-plugin__timing-overlay')).toBeNull();
+  });
+
+  it('a strict early release flashes the negative shortfall', () => {
+    const ctx = setupT024(makeNotes([0], [3840]), true);
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    vi.setSystemTime(base + 800);
+    act(() => { ctx.simulateMidiEvent({ type: 'release', midiNote: 60 }); });
+
+    expect(document.querySelector('.practice-plugin__timing-overlay')).not.toBeNull();
+    expect(document.querySelector('.practice-plugin__timing-overlay')!.textContent).toBe('-1200 ms');
+  });
+
+  it('an in-time strict note does not flash the timing overlay', () => {
+    const ctx = setupT024(makeNotes([0, 960]), true);
+    const base = Date.now();
+
+    vi.setSystemTime(base);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
+    expect(document.querySelector('.practice-plugin__timing-overlay')).toBeNull();
+
+    vi.setSystemTime(base + 560);
+    act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
+    expect(document.querySelector('.practice-plugin__timing-overlay')).toBeNull();
   });
 });

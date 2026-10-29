@@ -10,6 +10,12 @@
 export interface ScorableNoteResult {
   readonly outcome: string;
   readonly wrongAttempts: number;
+  /**
+   * Feature 101: true when this attempt is one of the consecutive strict
+   * timing failures. Strict failures earn zero credit (they are what stopped
+   * the metronome); legacy results without the flag keep the existing credit.
+   */
+  readonly strictFailure?: boolean;
 }
 
 export interface PracticeScoreBreakdown {
@@ -18,6 +24,11 @@ export interface PracticeScoreBreakdown {
   readonly lateCount: number;
   readonly earlyReleaseCount: number;
   readonly totalWrongAttempts: number;
+  /**
+   * Feature 101: number of results with `strictFailure === true` — the
+   * consecutive strict timing misses recorded in this session.
+   */
+  readonly strictFailureCount: number;
   /** 0–100, clamped. Based solely on accuracy — tempo does not affect max score. */
   readonly score: number;
   /** The tempoMultiplier recorded for informational purposes. 1.0 when not supplied. */
@@ -46,10 +57,21 @@ export function computePracticeScore(
   const earlyReleaseCount = noteResults.filter((r) => r.outcome === 'early-release').length;
   const totalWrongAttempts = noteResults.reduce((sum, r) => sum + r.wrongAttempts, 0);
 
+  // Feature 101: strict timing failures earn zero credit — they are the
+  // misses that stopped the metronome. Legacy results (no strictFailure flag)
+  // keep the existing half credit.
+  const lateCreditCount = noteResults.filter(
+    (r) => r.outcome === 'correct-late' && r.strictFailure !== true,
+  ).length;
+  const earlyReleaseCreditCount = noteResults.filter(
+    (r) => r.outcome === 'early-release' && r.strictFailure !== true,
+  ).length;
+  const strictFailureCount = noteResults.filter((r) => r.strictFailure === true).length;
+
   const rawScore =
     totalNotes > 0
       ? Math.round(
-          ((correctCount + (lateCount + earlyReleaseCount) * 0.5) / totalNotes) * 100 -
+          ((correctCount + (lateCreditCount + earlyReleaseCreditCount) * 0.5) / totalNotes) * 100 -
             Math.min(totalWrongAttempts * 2, 30),
         )
       : 0;
@@ -57,5 +79,5 @@ export function computePracticeScore(
   const score = Math.max(0, Math.min(100, rawScore));
   const safeMult = tempoMultiplier != null && tempoMultiplier > 0 ? tempoMultiplier : 1.0;
 
-  return { totalNotes, correctCount, lateCount, earlyReleaseCount, totalWrongAttempts, score, tempoMultiplier: safeMult };
+  return { totalNotes, correctCount, lateCount, earlyReleaseCount, strictFailureCount, totalWrongAttempts, score, tempoMultiplier: safeMult };
 }

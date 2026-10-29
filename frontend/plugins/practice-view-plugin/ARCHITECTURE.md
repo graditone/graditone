@@ -158,6 +158,47 @@ State machine:
   'complete' → STOP  → 'inactive'
 ```
 
+### Strict tempo mode (Feature 101)
+
+When the session starts with the metronome armed or active (`START.strictTempo`),
+`practiceState.strictMode` turns on and every onset is additionally judged
+against the metronome grid. All timing math lives in the pure helper
+`strictTempo.ts` (window = 20% of the note gap, clamped to 60–150 ms; failure
+limit = 3):
+
+- **Grace notes** — when `strictAnchor` is null, the note is not judged: it
+  records `outcome 'correct'` with `beatDeltaMs 0` and becomes the anchor
+  (never scrolls with later notes). The first note of a session, a retry after
+  an early release, and the note following `STRICT_ENABLE` / `REANCHOR` /
+  `LOOP_RESTART` are grace notes.
+- **Judged notes** — signed deviation `(response − anchor.response) −
+  (expected − anchor.expected)`; off-beat increments `strictFailureCount` (3
+  consecutive → `mode 'tempo-stopped'`), on-beat resets it. Wrong pitches,
+  grace notes and early releases of accepted holds never change it. Results
+  carry the extras `beatDeltaMs` and `strictFailure` (legacy results have
+  neither).
+- **Actions** — `STRICT_ENABLE` / `STRICT_DISABLE` (metronome toggled
+  mid-session; clear count/anchor), `REANCHOR` (tempo change; count preserved,
+  honours an in-progress hold via `strictReanchorPending`), and
+  `LOOP_RESTART`/`SEEK` (anchor cleared, count kept).
+
+**Orchestrator side effects** — the reducer only signals `tempo-stopped`;
+`PracticeViewPlugin.tsx` runs the stop exactly once (guarded effect): builds a
+complete `PerformanceRecord` when the last recorded result is an accepted final
+note, otherwise a `PartialPerformanceRecord` with `stopReason: 'tempo'`;
+dispatches `STOP`; stops the metronome (`lifecycle.onSessionEnd`); seeks the
+score player to the loop start; opens the results overlay. The toolbar badge
+(`practiceToolbar.tsx`, `strictTempoActive`/`strictFailureCount`) and the live
+timing overlay show the same values during play.
+
+**Results / persistence** — `computePracticeScore` zero-credits strict
+failures and reports `strictFailureCount`; `ResultsOverlay` renders the
+`tempo-stop` banner with the last three failures, per-note picking from the
+extracted `PracticeTimingDetails` component (marked rows/chart dots). Saved
+partial practices persist `performanceData.stopReason: 'tempo' | 'manual'`
+(`savedPractice.types.ts`) and restore it on load; legacy partials without the
+field are presented as manual.
+
 ---
 
 ## WASM Layout Engine — Critical Notes

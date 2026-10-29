@@ -62,7 +62,26 @@ function activeState(
   currentIndex = 0,
   selectedStaffIndex = 0,
 ): PracticeState {
-  return { mode: 'active', notes, currentIndex, selectedStaffIndex, noteResults: [], currentWrongAttempts: 0, wrongNoteEvents: [], holdStartTimeMs: 0, requiredHoldMs: 0 };
+  return {
+    mode: 'active',
+    notes,
+    currentIndex,
+    selectedStaffIndex,
+    noteResults: [],
+    currentWrongAttempts: 0,
+    wrongNoteEvents: [],
+    holdStartTimeMs: 0,
+    requiredHoldMs: 0,
+    holdMidiNote: 0,
+    holdResponseTimeMs: 0,
+    holdExpectedTimeMs: 0,
+    holdEndIndex: -1,
+    currentLoopResultOffset: 0,
+    strictMode: false,
+    strictFailureCount: 0,
+    strictAnchor: null,
+    strictReanchorPending: false,
+  };
 }
 
 function waitingState(
@@ -70,7 +89,26 @@ function waitingState(
   currentIndex = 0,
   selectedStaffIndex = 0,
 ): PracticeState {
-  return { mode: 'waiting', notes, currentIndex, selectedStaffIndex, noteResults: [], currentWrongAttempts: 0, wrongNoteEvents: [], holdStartTimeMs: 0, requiredHoldMs: 0 };
+  return {
+    mode: 'waiting',
+    notes,
+    currentIndex,
+    selectedStaffIndex,
+    noteResults: [],
+    currentWrongAttempts: 0,
+    wrongNoteEvents: [],
+    holdStartTimeMs: 0,
+    requiredHoldMs: 0,
+    holdMidiNote: 0,
+    holdResponseTimeMs: 0,
+    holdExpectedTimeMs: 0,
+    holdEndIndex: -1,
+    currentLoopResultOffset: 0,
+    strictMode: false,
+    strictFailureCount: 0,
+    strictAnchor: null,
+    strictReanchorPending: false,
+  };
 }
 
 function holdingState(
@@ -93,6 +131,11 @@ function holdingState(
     holdResponseTimeMs: 1000,
     holdExpectedTimeMs: 1000,
     holdEndIndex: -1,
+    currentLoopResultOffset: 0,
+    strictMode: false,
+    strictFailureCount: 0,
+    strictAnchor: null,
+    strictReanchorPending: false,
   };
 }
 
@@ -242,6 +285,11 @@ describe('reduce() — CORRECT_MIDI action', () => {
       holdResponseTimeMs: 0,
       holdExpectedTimeMs: 0,
       holdEndIndex: -1,
+      currentLoopResultOffset: 0,
+      strictMode: false,
+      strictFailureCount: 0,
+      strictAnchor: null,
+      strictReanchorPending: false,
     };
     const next = reduce(state, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 3000, expectedTimeMs: 3000 });
     expect(next).toStrictEqual(state);
@@ -1102,5 +1150,438 @@ describe('[US5] Feature 053: semi-strict extra-notes policy (engine level)', () 
     const result = s.noteResults[0];
     expect(result).toBeDefined();
     expect(result.outcome).toBe('correct');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 101: Strict tempo mode (T003)
+// ---------------------------------------------------------------------------
+
+/** Local structural type mirroring strictTempo.ts's StrictAnchor (decoupled on purpose). */
+interface StrictAnchorLike {
+  expectedTimeMs: number;
+  responseTimeMs: number;
+}
+
+const ANCHOR_AT_ZERO: StrictAnchorLike = { expectedTimeMs: 0, responseTimeMs: 0 };
+const ANCHOR_AT_1000: StrictAnchorLike = { expectedTimeMs: 1000, responseTimeMs: 1000 };
+
+/** Active strict-mode state with explicit anchor / failure-count control. */
+function strictActiveState(
+  notes: PracticeNoteEntry[],
+  currentIndex = 0,
+  failureCount = 0,
+  anchor: StrictAnchorLike | null = null,
+): PracticeState {
+  return {
+    mode: 'active',
+    notes,
+    currentIndex,
+    selectedStaffIndex: 0,
+    noteResults: [],
+    currentWrongAttempts: 0,
+    wrongNoteEvents: [],
+    holdStartTimeMs: 0,
+    requiredHoldMs: 0,
+    holdMidiNote: 0,
+    holdResponseTimeMs: 0,
+    holdExpectedTimeMs: 0,
+    holdEndIndex: -1,
+    currentLoopResultOffset: 0,
+    strictMode: true,
+    strictFailureCount: failureCount,
+    strictAnchor: anchor,
+    strictReanchorPending: false,
+  };
+}
+
+/** Holding strict-mode state with explicit anchor / failure-count / onset control. */
+function strictHoldingState(
+  notes: PracticeNoteEntry[],
+  currentIndex: number,
+  options: {
+    failureCount?: number;
+    anchor?: StrictAnchorLike | null;
+    holdResponseTimeMs?: number;
+    holdExpectedTimeMs?: number;
+  } = {},
+): PracticeState {
+  return {
+    mode: 'holding',
+    notes,
+    currentIndex,
+    selectedStaffIndex: 0,
+    noteResults: [],
+    currentWrongAttempts: 0,
+    wrongNoteEvents: [],
+    holdStartTimeMs: 50_000,
+    requiredHoldMs: 2_000,
+    holdMidiNote: notes[currentIndex]?.midiPitches[0] ?? 60,
+    holdResponseTimeMs: options.holdResponseTimeMs ?? 1_050,
+    holdExpectedTimeMs: options.holdExpectedTimeMs ?? 1_000,
+    holdEndIndex: -1,
+    currentLoopResultOffset: 0,
+    strictMode: true,
+    strictFailureCount: options.failureCount ?? 0,
+    strictAnchor: options.anchor ?? null,
+    strictReanchorPending: false,
+  };
+}
+
+describe('reduce() — strict tempo START (feature 101)', () => {
+  it('START with strictTempo: true enables strict mode with clean strict fields', () => {
+    const next = reduce(INITIAL_PRACTICE_STATE, {
+      type: 'START',
+      notes: THREE_NOTES,
+      staffIndex: 0,
+      startIndex: 0,
+      strictTempo: true,
+    });
+    expect(next.mode).toBe('waiting');
+    expect(next.strictMode).toBe(true);
+    expect(next.strictFailureCount).toBe(0);
+    expect(next.strictAnchor).toBeNull();
+    expect(next.strictReanchorPending).toBe(false);
+  });
+
+  it('START without strictTempo keeps strict mode off', () => {
+    const next = reduce(INITIAL_PRACTICE_STATE, {
+      type: 'START',
+      notes: THREE_NOTES,
+      staffIndex: 0,
+      startIndex: 0,
+    });
+    expect(next.strictMode).toBe(false);
+    expect(next.strictFailureCount).toBe(0);
+    expect(next.strictAnchor).toBeNull();
+    expect(next.strictReanchorPending).toBe(false);
+  });
+});
+
+describe('reduce() — strict tempo evaluation (feature 101)', () => {
+  it('the first accepted note is a grace note: anchor established, not judged', () => {
+    const state = strictActiveState(THREE_NOTES, 0);
+    const next = reduce(state, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 1_000, expectedTimeMs: 1_000 });
+    expect(next.mode).toBe('active');
+    expect(next.currentIndex).toBe(1);
+    expect(next.strictAnchor).toEqual({ expectedTimeMs: 1_000, responseTimeMs: 1_000 });
+    expect(next.noteResults).toHaveLength(1);
+    expect(next.noteResults[0].outcome).toBe('correct');
+    expect(next.noteResults[0].strictFailure).toBe(false);
+    expect(next.noteResults[0].beatDeltaMs).toBe(0);
+    expect(next.strictFailureCount).toBe(0);
+  });
+
+  it('an off-beat judged note records correct-late + strictFailure and increments the count', () => {
+    const state = strictActiveState(THREE_NOTES, 0, 0, ANCHOR_AT_ZERO);
+    const next = reduce(state, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 650, expectedTimeMs: 500 });
+    // delta = (650−0) − (500−0) = 150, window 60 (no previous result) → off-beat
+    expect(next.noteResults[0].outcome).toBe('correct-late');
+    expect(next.noteResults[0].strictFailure).toBe(true);
+    expect(next.noteResults[0].beatDeltaMs).toBe(150);
+    expect(next.strictFailureCount).toBe(1);
+    expect(next.mode).toBe('active'); // not stopped yet
+    expect(next.currentIndex).toBe(1);
+    // The anchor is unchanged by a judged note
+    expect(next.strictAnchor).toEqual(ANCHOR_AT_ZERO);
+  });
+
+  it('the third consecutive failure enters tempo-stopped and records the result', () => {
+    let s = strictActiveState(THREE_NOTES, 0, 0, ANCHOR_AT_ZERO);
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 650, expectedTimeMs: 500 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 62, responseTimeMs: 1_150, expectedTimeMs: 1_000 });
+    expect(s.strictFailureCount).toBe(2);
+    expect(s.mode).toBe('active');
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 1_650, expectedTimeMs: 1_500 });
+    expect(s.strictFailureCount).toBe(3);
+    expect(s.mode).toBe('tempo-stopped');
+    expect(s.noteResults).toHaveLength(3);
+    expect(s.noteResults[2].strictFailure).toBe(true);
+    expect(s.noteResults[2].beatDeltaMs).toBe(150);
+    // The reducer does not advance or complete on the stop
+    expect(s.currentIndex).toBe(2);
+    expect(s.mode).not.toBe('complete');
+  });
+
+  it('an in-time judged note resets the count to 0', () => {
+    const state = strictActiveState(THREE_NOTES, 0, 2, ANCHOR_AT_ZERO);
+    const next = reduce(state, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 550, expectedTimeMs: 500 });
+    // delta = 50, window 60 (no previous result) → on the beat
+    expect(next.strictFailureCount).toBe(0);
+    expect(next.noteResults[0].outcome).toBe('correct');
+    expect(next.noteResults[0].strictFailure).toBe(false);
+    expect(next.noteResults[0].beatDeltaMs).toBe(50);
+  });
+
+  it('a wrong pitch changes neither the count nor the anchor', () => {
+    const state = strictActiveState(THREE_NOTES, 0, 2, ANCHOR_AT_ZERO);
+    const next = reduce(state, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 600 });
+    expect(next.strictFailureCount).toBe(2);
+    expect(next.strictAnchor).toEqual(ANCHOR_AT_ZERO);
+    expect(next.currentWrongAttempts).toBe(1);
+  });
+
+  it('a grace note never changes the count and establishes the anchor when it is null', () => {
+    const state = strictActiveState(THREE_NOTES, 2, 2, null);
+    const next = reduce(state, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 2_000, expectedTimeMs: 2_000 });
+    expect(next.strictFailureCount).toBe(2);
+    expect(next.strictAnchor).toEqual({ expectedTimeMs: 2_000, responseTimeMs: 2_000 });
+    expect(next.noteResults[0].outcome).toBe('correct');
+    expect(next.noteResults[0].strictFailure).toBe(false);
+    expect(next.noteResults[0].beatDeltaMs).toBe(0);
+  });
+
+  it('tempo-stopped is terminal for CORRECT_MIDI and WRONG_MIDI', () => {
+    let s = strictActiveState(THREE_NOTES, 0, 0, ANCHOR_AT_ZERO);
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 650, expectedTimeMs: 500 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 62, responseTimeMs: 1_150, expectedTimeMs: 1_000 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 1_650, expectedTimeMs: 1_500 });
+    expect(s.mode).toBe('tempo-stopped');
+    expect(reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 2_000, expectedTimeMs: 2_000 })).toBe(s);
+    expect(reduce(s, { type: 'WRONG_MIDI', midiNote: 61, responseTimeMs: 2_000 })).toBe(s);
+  });
+
+  it('an accepted final note with the third failure records the result and enters tempo-stopped (never complete)', () => {
+    const state = strictActiveState(THREE_NOTES, 2, 2, ANCHOR_AT_ZERO);
+    const next = reduce(state, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 1_650, expectedTimeMs: 1_500, endIndex: 2 });
+    expect(next.mode).toBe('tempo-stopped');
+    expect(next.mode).not.toBe('complete');
+    expect(next.noteResults).toHaveLength(1);
+    expect(next.noteResults[0].noteIndex).toBe(2);
+    expect(next.noteResults[0].strictFailure).toBe(true);
+  });
+});
+
+describe('reduce() — strict tempo hold / early-release (feature 101)', () => {
+  it('an early release records early-release + strictFailure, increments once, nulls the anchor, and stays on the same note', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    const state = strictHoldingState(notes, 0, { failureCount: 0, anchor: ANCHOR_AT_ZERO });
+    const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 300 });
+    expect(next.mode).toBe('active');
+    expect(next.currentIndex).toBe(0);
+    expect(next.noteResults).toHaveLength(1);
+    expect(next.noteResults[0].outcome).toBe('early-release');
+    expect(next.noteResults[0].strictFailure).toBe(true);
+    // onset delta against the anchor: (1050−0) − (1000−0) = 50
+    expect(next.noteResults[0].beatDeltaMs).toBe(50);
+    expect(next.strictFailureCount).toBe(1);
+    expect(next.strictAnchor).toBeNull();
+    expect(next.strictReanchorPending).toBe(false);
+  });
+
+  it('a retry after early release is a grace onset, does not duplicate the result, and does not reset the count', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    let s = strictHoldingState(notes, 0, { failureCount: 0, anchor: ANCHOR_AT_ZERO });
+    s = reduce(s, { type: 'EARLY_RELEASE', holdDurationMs: 300 });
+    expect(s.strictFailureCount).toBe(1);
+    // Retry press re-enters holding without judging the onset
+    s = reduce(s, {
+      type: 'CORRECT_MIDI',
+      midiNote: 60,
+      responseTimeMs: 1_200,
+      expectedTimeMs: 1_000,
+      pressTimeMs: 52_000,
+      requiredHoldMs: 2_000,
+    });
+    expect(s.mode).toBe('holding');
+    expect(s.noteResults).toHaveLength(1);
+    // Hold completes — retry onset is grace: no duplicate result, anchor established
+    s = reduce(s, { type: 'HOLD_COMPLETE', holdDurationMs: 1_900 });
+    expect(s.noteResults).toHaveLength(1);
+    expect(s.noteResults[0].outcome).toBe('early-release');
+    expect(s.strictAnchor).toEqual({ expectedTimeMs: 1_000, responseTimeMs: 1_200 });
+    expect(s.strictFailureCount).toBe(1);
+    expect(s.currentIndex).toBe(1); // advanced past the completed note
+  });
+
+  it('a repeated early release increments the count again; the third one stops', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    let s = strictHoldingState(notes, 0);
+    s = reduce(s, { type: 'EARLY_RELEASE', holdDurationMs: 300 });
+    expect(s.strictFailureCount).toBe(1);
+    s = reduce(s, {
+      type: 'CORRECT_MIDI',
+      midiNote: 60,
+      responseTimeMs: 1_200,
+      expectedTimeMs: 1_000,
+      pressTimeMs: 52_000,
+      requiredHoldMs: 2_000,
+    });
+    s = reduce(s, { type: 'EARLY_RELEASE', holdDurationMs: 300 });
+    expect(s.strictFailureCount).toBe(2);
+    expect(s.mode).toBe('active');
+    expect(s.noteResults).toHaveLength(2);
+    // Retry again, release early a third time
+    s = reduce(s, {
+      type: 'CORRECT_MIDI',
+      midiNote: 60,
+      responseTimeMs: 1_400,
+      expectedTimeMs: 1_000,
+      pressTimeMs: 54_000,
+      requiredHoldMs: 2_000,
+    });
+    s = reduce(s, { type: 'EARLY_RELEASE', holdDurationMs: 300 });
+    expect(s.strictFailureCount).toBe(3);
+    expect(s.mode).toBe('tempo-stopped');
+    expect(s.noteResults).toHaveLength(3);
+  });
+
+  it('an early-release final note with the third failure enters tempo-stopped, never complete', () => {
+    const notes = [WHOLE_NOTE_C4];
+    const state = strictHoldingState(notes, 0, { failureCount: 2, anchor: ANCHOR_AT_ZERO });
+    const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 300 });
+    expect(next.mode).toBe('tempo-stopped');
+    expect(next.mode).not.toBe('complete');
+    expect(next.noteResults).toHaveLength(1);
+    expect(next.noteResults[0].outcome).toBe('early-release');
+    expect(next.noteResults[0].strictFailure).toBe(true);
+  });
+
+  it('an early release at/above the acceptance threshold still delegates to HOLD_COMPLETE (feature 098 intact)', () => {
+    const notes = [WHOLE_NOTE_C4, NOTE_D4];
+    // Strict mode active: the hold is fully accepted → judged like HOLD_COMPLETE
+    const state = strictHoldingState(notes, 0, { failureCount: 0, anchor: ANCHOR_AT_ZERO });
+    const next = reduce(state, { type: 'EARLY_RELEASE', holdDurationMs: 1_900 });
+    // Judged on the strict grid: (1050−0) − (1000−0) = 50 ≤ window → correct
+    expect(next.noteResults[0].outcome).toBe('correct');
+    expect(next.noteResults[0].strictFailure).toBe(false);
+    expect(next.noteResults[0].beatDeltaMs).toBe(50);
+    expect(next.currentIndex).toBe(1);
+  });
+});
+
+describe('reduce() — strict tempo session actions (feature 101)', () => {
+  it('STRICT_ENABLE enables strict mode and clears the strict fields', () => {
+    const base = waitingState(THREE_NOTES, 0);
+    const state: PracticeState = {
+      ...base,
+      strictMode: false,
+      strictFailureCount: 2,
+      strictAnchor: ANCHOR_AT_ZERO,
+      strictReanchorPending: true,
+    };
+    const next = reduce(state, { type: 'STRICT_ENABLE' });
+    expect(next.mode).toBe('waiting');
+    expect(next.strictMode).toBe(true);
+    expect(next.strictFailureCount).toBe(0);
+    expect(next.strictAnchor).toBeNull();
+    expect(next.strictReanchorPending).toBe(false);
+  });
+
+  it('STRICT_ENABLE does nothing when the session is complete', () => {
+    let s = activeState(THREE_NOTES, 2);
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 3_000, expectedTimeMs: 3_000 });
+    expect(s.mode).toBe('complete');
+    const next = reduce(s, { type: 'STRICT_ENABLE' });
+    expect(next).toBe(s);
+    expect(next.strictMode).toBe(false);
+  });
+
+  it('STRICT_DISABLE clears count/anchor/pending and preserves already-recorded result flags', () => {
+    const base = strictActiveState(THREE_NOTES, 1, 2, ANCHOR_AT_ZERO);
+    const withFailures: PracticeState = {
+      ...base,
+      noteResults: [
+        {
+          noteIndex: 0,
+          outcome: 'correct-late',
+          playedMidi: 60,
+          expectedMidi: [60],
+          responseTimeMs: 650,
+          expectedTimeMs: 500,
+          relativeDeltaMs: 150,
+          wrongAttempts: 0,
+          holdDurationMs: 0,
+          requiredHoldMs: 0,
+          strictFailure: true,
+          beatDeltaMs: 150,
+        },
+      ],
+    };
+    const next = reduce(withFailures, { type: 'STRICT_DISABLE' });
+    expect(next.strictMode).toBe(false);
+    expect(next.strictFailureCount).toBe(0);
+    expect(next.strictAnchor).toBeNull();
+    expect(next.strictReanchorPending).toBe(false);
+    expect(next.noteResults[0].strictFailure).toBe(true); // flag preserved
+    expect(next.noteResults[0].beatDeltaMs).toBe(150); // data preserved
+    expect(next).not.toBe(withFailures);
+  });
+
+  it('REANCHOR while holding sets pending without touching the anchor; the hold is judged on the old grid, then the next note is grace', () => {
+    const notes = [WHOLE_NOTE_C4, makeNote([62])];
+    const state = strictHoldingState(notes, 0, { failureCount: 2, anchor: ANCHOR_AT_1000 });
+    const reanchored = reduce(state, { type: 'REANCHOR' });
+    expect(reanchored.strictReanchorPending).toBe(true);
+    expect(reanchored.strictAnchor).toEqual(ANCHOR_AT_1000);
+    expect(reanchored.strictFailureCount).toBe(2);
+    expect(reanchored.mode).toBe('holding');
+    // Hold completes: judged on the OLD grid — (1050−1000) − (1000−1000) = 50 → on beat
+    const done = reduce(reanchored, { type: 'HOLD_COMPLETE', holdDurationMs: 1_900 });
+    expect(done.noteResults[0].outcome).toBe('correct');
+    expect(done.noteResults[0].beatDeltaMs).toBe(50);
+    expect(done.strictFailureCount).toBe(0); // in-time reset
+    expect(done.strictAnchor).toBeNull(); // next note is grace
+    expect(done.strictReanchorPending).toBe(false);
+  });
+
+  it('REANCHOR while not holding clears the anchor and pending but preserves the count', () => {
+    const state = strictActiveState(THREE_NOTES, 0, 2, ANCHOR_AT_1000);
+    const next = reduce(state, { type: 'REANCHOR' });
+    expect(next.strictAnchor).toBeNull();
+    expect(next.strictReanchorPending).toBe(false);
+    expect(next.strictFailureCount).toBe(2);
+    expect(next.mode).toBe('active');
+    expect(next.currentIndex).toBe(0);
+  });
+
+  it('SEEK clears the anchor and pending but preserves the count', () => {
+    const state = strictActiveState(THREE_NOTES, 0, 2, ANCHOR_AT_ZERO);
+    const next = reduce(state, { type: 'SEEK', index: 2 });
+    expect(next.currentIndex).toBe(2);
+    expect(next.strictAnchor).toBeNull();
+    expect(next.strictReanchorPending).toBe(false);
+    expect(next.strictFailureCount).toBe(2);
+  });
+
+  it('LOOP_RESTART clears the anchor and pending but preserves the count', () => {
+    // Reach complete with a grace final note so the count is not reset.
+    let s = strictActiveState(THREE_NOTES, 2, 2, null);
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 64, responseTimeMs: 2_000, expectedTimeMs: 2_000, endIndex: 2 });
+    expect(s.mode).toBe('complete');
+    expect(s.strictFailureCount).toBe(2);
+    const restarted = reduce(s, { type: 'LOOP_RESTART', startIndex: 0 });
+    expect(restarted.mode).toBe('active');
+    expect(restarted.currentIndex).toBe(0);
+    expect(restarted.strictAnchor).toBeNull();
+    expect(restarted.strictReanchorPending).toBe(false);
+    expect(restarted.strictFailureCount).toBe(2);
+  });
+
+  it('STOP resets all strict fields', () => {
+    const state = strictActiveState(THREE_NOTES, 1, 2, ANCHOR_AT_ZERO);
+    const next = reduce(state, { type: 'STOP' });
+    expect(next.mode).toBe('inactive');
+    expect(next.strictMode).toBe(false);
+    expect(next.strictFailureCount).toBe(0);
+    expect(next.strictAnchor).toBeNull();
+    expect(next.strictReanchorPending).toBe(false);
+  });
+});
+
+describe('reduce() — strict mode off keeps legacy timing classification (feature 101)', () => {
+  it('a note the legacy logic accepts records no strict fields and never tempo-stops', () => {
+    let s = activeState(THREE_NOTES, 0);
+    expect(s.strictMode).toBe(false);
+    // 150 ms interval delta is within the legacy 500 ms threshold
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 60, responseTimeMs: 1_000, expectedTimeMs: 1_000 });
+    s = reduce(s, { type: 'CORRECT_MIDI', midiNote: 62, responseTimeMs: 1_650, expectedTimeMs: 1_500 });
+    expect(s.mode).toBe('active'); // never tempo-stopped
+    expect(s.noteResults[1].outcome).toBe('correct');
+    expect(s.noteResults[1].relativeDeltaMs).toBe(150);
+    expect('strictFailure' in s.noteResults[1]).toBe(false);
+    expect('beatDeltaMs' in s.noteResults[1]).toBe(false);
+    expect(s.strictFailureCount).toBe(0);
+    expect(s.strictAnchor).toBeNull();
   });
 });

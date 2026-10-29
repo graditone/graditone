@@ -18,17 +18,11 @@ import type {
 } from './practiceEngine.types';
 import type { FreeMidiRecord } from '../../src/plugin-api';
 import { formatStateLabel } from './stateLabel';
+import { PracticeTimingDetails } from './PracticeTimingDetails';
 
 // ---------------------------------------------------------------------------
 // Helpers (moved from PracticeViewPlugin.tsx)
 // ---------------------------------------------------------------------------
-
-const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
-function midiToLabel(midi: number): string {
-  const name = NOTE_NAMES[midi % 12];
-  const octave = Math.floor(midi / 12) - 1;
-  return `${name}${octave}`;
-}
 
 function formatTimeMs(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -324,9 +318,10 @@ export function ResultsOverlay({
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
-  // Complete results overlay — shown after practice completion OR when loading a saved complete practice
+  // Complete results overlay — shown after practice completion OR when loading a saved complete practice.
+  // Feature 101: a stale complete record must not mask an active tempo-stop partial.
   const showComplete = resultsOverlayVisible && practiceReport &&
-    (practiceState.mode === 'complete' || (practiceState.mode === 'inactive' && !!performanceRecord));
+    (practiceState.mode === 'complete' || (practiceState.mode === 'inactive' && !!performanceRecord && !partialPerformanceRecord));
   const completeOverlay = showComplete && (
     <>
       <div className="practice-results__backdrop" />
@@ -404,6 +399,15 @@ export function ResultsOverlay({
             </span>
             <span className="practice-results__stat-label">{t('practice.results.wrong')}</span>
           </div>
+          {/* Feature 101: strict tempo fails stat, only when any were recorded */}
+          {practiceReport.strictFailureCount > 0 && (
+            <div className="practice-results__stat" data-testid="strict-fail-count">
+              <span className="practice-results__stat-value practice-results__stat-value--error">
+                {practiceReport.strictFailureCount}
+              </span>
+              <span className="practice-results__stat-label">{t('practice.results.tempo_failures')}</span>
+            </div>
+          )}
         </div>
 
         {/* Time comparison */}
@@ -413,179 +417,8 @@ export function ResultsOverlay({
           <span>{t('practice.results.score_time')} <strong>{formatTimeMs(practiceReport.scoreTimeMs)}</strong></span>
         </div>
 
-        {/* Collapsible per-note details */}
-        <details className="practice-results__details">
-          <summary className="practice-results__details-summary">
-            {t('train.results.details')}
-          </summary>
-          <div className="practice-results__table-wrapper">
-            <table className="practice-results__table" aria-label="Per-note results">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>{t('practice.results.expected')}</th>
-                  <th>{t('practice.results.played')}</th>
-                  <th>{t('practice.results.status')}</th>
-                  <th>{t('practice.results.wrong_tries')}</th>
-                  <th>{t('practice.results.timing_delta')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {practiceReport.results.map((r: PracticeNoteResult, i: number) => (
-                  <tr
-                    key={i}
-                    className={`practice-results__row practice-results__row--${r.outcome}`}
-                  >
-                    <td>{i + 1}</td>
-                    <td>{r.expectedMidi.map(midiToLabel).join('+')}</td>
-                    <td>
-                      {r.outcome === 'correct' || r.outcome === 'correct-late'
-                        ? r.expectedMidi.map(midiToLabel).join('+')
-                        : r.playedMidi > 0 ? midiToLabel(r.playedMidi) : '—'}
-                    </td>
-                    <td>
-                      <span className="practice-results__status-icon">
-                        {r.outcome === 'correct' ? '✅'
-                          : r.outcome === 'correct-late' ? '⏱️'
-                          : r.outcome === 'early-release' ? '⏱️'
-                          : '❌'}
-                      </span>{' '}
-                      {r.outcome === 'correct' ? t('practice.results.correct')
-                        : r.outcome === 'correct-late' ? formatStateLabel(r.relativeDeltaMs)
-                        : r.outcome === 'early-release' ? formatStateLabel(r.relativeDeltaMs)
-                        : t('practice.results.wrong')}
-                    </td>
-                    <td>{r.wrongAttempts > 0 ? r.wrongAttempts : '—'}</td>
-                    <td>
-                      {r.relativeDeltaMs !== 0
-                        ? `${r.relativeDeltaMs > 0 ? '+' : ''}${r.relativeDeltaMs} ms`
-                        : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-
-        {/* Delay evolution graph */}
-        {(() => {
-          const delayData = practiceReport.results
-            .map((r: PracticeNoteResult, i: number) => ({
-              index: i, delay: r.relativeDeltaMs, timeMs: r.responseTimeMs,
-            }));
-
-          if (delayData.length < 2) return null;
-
-          const totalMs = Math.max(delayData[delayData.length - 1].timeMs, 1);
-
-          const W = 320;
-          const H = 140;
-          const PAD_L = 40;
-          const PAD_R = 10;
-          const PAD_T = 16;
-          const PAD_B = 24;
-
-          const chartW = W - PAD_L - PAD_R;
-          const chartH = H - PAD_T - PAD_B;
-
-          const delays = delayData.map((d) => d.delay);
-          const yMax = Math.max(Math.max(...delays), 50);
-          const yMin = Math.min(Math.min(...delays), -50);
-
-          const xScale = (ms: number) => PAD_L + (ms / totalMs) * chartW;
-          const yScale = (v: number) => PAD_T + ((yMax - v) / (yMax - yMin)) * chartH;
-
-          const polyline = delayData
-            .map((d) => `${xScale(d.timeMs).toFixed(1)},${yScale(d.delay).toFixed(1)}`)
-            .join(' ');
-
-          const zeroY = yScale(0);
-
-          const totalSec = totalMs / 1000;
-          const rawStep = totalSec / 6;
-          const niceSteps = [0.5, 1, 2, 5, 10, 15, 20, 30, 60, 120];
-          const tickStepSec = niceSteps.find((s) => s >= rawStep) ?? Math.ceil(rawStep / 10) * 10;
-          const xTicks: number[] = [];
-          for (let s = 0; s <= totalSec + tickStepSec * 0.01; s += tickStepSec) {
-            xTicks.push(Math.min(s, totalSec));
-            if (s >= totalSec) break;
-          }
-
-          return (
-            <details className="practice-results__details" style={{ marginTop: '8px' }}>
-              <summary className="practice-results__details-summary">
-                {t('train.results.timing_chart')}
-              </summary>
-              <div className="practice-results__graph-wrapper">
-                <svg
-                  viewBox={`0 0 ${W} ${H}`}
-                  width="100%"
-                  height={H}
-                  aria-label="Delay evolution graph"
-                  role="img"
-                  style={{ display: 'block', maxWidth: `${W}px`, margin: '8px auto 0' }}
-                >
-                  {/* Zero line */}
-                  <line
-                    x1={PAD_L} y1={zeroY} x2={W - PAD_R} y2={zeroY}
-                    stroke="#bbb" strokeWidth="1" strokeDasharray="4 2"
-                  />
-                  {/* Y axis labels */}
-                  <text x={PAD_L - 4} y={PAD_T + 4} textAnchor="end" fontSize="9" fill="#888">
-                    +{yMax}ms
-                  </text>
-                  <text x={PAD_L - 4} y={zeroY + 3} textAnchor="end" fontSize="9" fill="#888">
-                    0
-                  </text>
-                  <text x={PAD_L - 4} y={PAD_T + chartH - 2} textAnchor="end" fontSize="9" fill="#888">
-                    {yMin}ms
-                  </text>
-                  {/* X axis time ticks */}
-                  {xTicks.map((sec) => {
-                    const x = xScale(sec * 1000);
-                    const label = Number.isInteger(sec) ? `${sec}s` : `${sec.toFixed(1)}s`;
-                    return (
-                      <g key={sec}>
-                        <line x1={x} y1={PAD_T + chartH} x2={x} y2={PAD_T + chartH + 3} stroke="#ccc" strokeWidth="1" />
-                        <text x={x} y={H - 4} textAnchor="middle" fontSize="9" fill="#888">
-                          {label}
-                        </text>
-                      </g>
-                    );
-                  })}
-                  {/* Area fill */}
-                  <polygon
-                    points={`${xScale(delayData[0].timeMs).toFixed(1)},${zeroY} ${polyline} ${xScale(totalMs).toFixed(1)},${zeroY}`}
-                    fill="rgba(245, 163, 64, 0.15)"
-                  />
-                  {/* Line */}
-                  <polyline
-                    points={polyline}
-                    fill="none"
-                    stroke="#F5A340"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                  {/* Dots for off-beat notes */}
-                  {delayData.map((d, i) => {
-                    const r = practiceReport.results[d.index];
-                    if (r.outcome !== 'correct-late') return null;
-                    return (
-                      <circle
-                        key={i}
-                        cx={xScale(d.timeMs)}
-                        cy={yScale(d.delay)}
-                        r="3"
-                        fill="#f57f17"
-                      />
-                    );
-                  })}
-                </svg>
-              </div>
-            </details>
-          );
-        })()}
+        {/* Per-note table + delay chart (extracted component, also rendered by the partial branch) */}
+        <PracticeTimingDetails results={practiceReport.results} />
 
         {/* Replay / Stop / Save buttons */}
         {performanceRecord && (
@@ -668,6 +501,22 @@ export function ResultsOverlay({
   );
 
   // Partial results overlay (shown when Stop is pressed mid-session, or loading a saved partial practice)
+  const isTempoStop = partialPerformanceRecord?.stopReason === 'tempo';
+
+  /** Feature 101: one-line failure description for the tempo-stop banner. */
+  const formatFailure = useCallback((r: PracticeNoteResult): string => {
+    if (r.outcome === 'early-release' && (r.requiredHoldMs ?? 0) > 0) {
+      return t('practice.results.released_early', {
+        ms: String(Math.round(r.requiredHoldMs - r.holdDurationMs)),
+      });
+    }
+    return formatStateLabel(r.beatDeltaMs ?? r.relativeDeltaMs);
+  }, [t]);
+
+  const lastThreeFailures = isTempoStop && partialReport && !partialReport.zeroProgress
+    ? partialReport.results.filter((r) => r.strictFailure === true).slice(-3)
+    : [];
+
   const partialOverlay = partialReport && resultsOverlayVisible && !showComplete && (
     <>
       <div className="practice-results__backdrop" />
@@ -690,10 +539,32 @@ export function ResultsOverlay({
           </div>
         ) : (
           <>
-            {/* Stopped-at badge */}
-            <div className="practice-results__stopped-badge">
-              {t('practice.results.stopped_at', { x: String(partialReport.stoppedAtIndex), y: String(partialReport.totalNoteCount) })}
-            </div>
+            {/* Feature 101: tempo-stop banner when strict mode stopped the session */}
+            {partialPerformanceRecord?.stopReason === 'tempo' ? (
+              <div className="practice-results__tempo-stop" data-testid="tempo-stop-banner" role="status">
+                <div className="practice-results__tempo-stop-title">
+                  {t('practice.results.tempo_stopped')}
+                </div>
+                <div className="practice-results__tempo-stop-hint">
+                  {t('practice.results.tempo_stopped_hint')}
+                </div>
+                <ul className="practice-results__tempo-stop-list">
+                  {lastThreeFailures.map((r, i) => (
+                    <li key={`${r.noteIndex}-${i}`} data-testid="tempo-stop-failure">
+                      {t('practice.results.tempo_failure_item', {
+                        note: String(r.noteIndex + 1),
+                        delta: formatFailure(r),
+                      })}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              /* Stopped-at badge */
+              <div className="practice-results__stopped-badge">
+                {t('practice.results.stopped_at', { x: String(partialReport.stoppedAtIndex), y: String(partialReport.totalNoteCount) })}
+              </div>
+            )}
 
             {/* Score headline */}
             <div className="practice-results__score-block">
@@ -741,6 +612,15 @@ export function ResultsOverlay({
                 </span>
                 <span className="practice-results__stat-label">{t('practice.results.wrong')}</span>
               </div>
+              {/* Feature 101: strict tempo fails stat, only when any were recorded */}
+              {partialReport.strictFailureCount > 0 && (
+                <div className="practice-results__stat" data-testid="strict-fail-count">
+                  <span className="practice-results__stat-value practice-results__stat-value--error">
+                    {partialReport.strictFailureCount}
+                  </span>
+                  <span className="practice-results__stat-label">{t('practice.results.tempo_failures')}</span>
+                </div>
+              )}
             </div>
 
             {/* Time comparison */}
@@ -749,6 +629,47 @@ export function ResultsOverlay({
               <span className="practice-results__time-separator">vs</span>
               <span>{t('practice.results.score_time')} <strong>{formatTimeMs(partialReport.scoreTimeMs)}</strong></span>
             </div>
+
+            {/* Feature 101: per-note table + delay chart, marked for strict failures */}
+            <PracticeTimingDetails results={partialReport.results} />
+
+            {/* Feature 101: tempo-stop actions — repractice / save / return to session */}
+            {isTempoStop && (
+              <div className="practice-results__actions practice-results__actions--partial">
+                <button
+                  className="practice-results__repractice-btn"
+                  data-testid="tempo-stop-repractice"
+                  onClick={handleRepractice}
+                  aria-label={t('practice.results.repractice_aria')}
+                >
+                  ↺ Repractice
+                </button>
+                {onSave && (
+                  <button
+                    className={`practice-results__save-btn${isSaved ? ' practice-results__save-btn--saved' : ''}`}
+                    data-testid="tempo-stop-save"
+                    onClick={onSave}
+                    disabled={isSaved}
+                    aria-label={isSaved ? t('practice.results.saved_aria') : t('practice.results.save_aria')}
+                  >
+                    {isSaved ? '✓ Saved' : '💾 Save'}
+                  </button>
+                )}
+                {saveError && (
+                  <span className="practice-results__save-error" role="alert">{saveError}</span>
+                )}
+                {onReturnToSession && (
+                  <button
+                    className="practice-results__session-btn"
+                    data-testid="tempo-stop-session"
+                    onClick={onReturnToSession}
+                    aria-label={t('practice.results.session_aria')}
+                  >
+                    ↩ Session
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
 

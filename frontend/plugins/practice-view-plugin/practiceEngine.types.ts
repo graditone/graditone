@@ -7,6 +7,7 @@
  */
 
 import type { PluginPracticeNoteEntry } from '../../src/plugin-api/types';
+import type { StrictAnchor } from './strictTempo';
 
 // ---------------------------------------------------------------------------
 // Re-export — PracticeNoteEntry is a direct alias for the v6 plugin API type
@@ -59,6 +60,16 @@ export interface PracticeNoteResult {
    * 0 for notes that do not require a hold.
    */
   readonly requiredHoldMs: number;
+  /**
+   * Signed deviation from the strict tempo grid, in ms (feature 101).
+   * Present only for strict-mode results.
+   */
+  readonly beatDeltaMs?: number;
+  /**
+   * True when this attempt is one of the three consecutive strict timing
+   * failures (feature 101). Present only for strict-mode results.
+   */
+  readonly strictFailure?: boolean;
 }
 
 /** A single wrong-note event captured during practice (038-practice-replay Phase B). */
@@ -76,9 +87,12 @@ export interface WrongNoteEvent {
 // ---------------------------------------------------------------------------
 
 /** Current state of the practice session. */
-export type PracticeMode = 'inactive' | 'waiting' | 'active' | 'holding' | 'complete';
+export type PracticeMode = 'inactive' | 'waiting' | 'active' | 'holding' | 'complete' | 'tempo-stopped';
 // 'holding' (feature 042): the user pressed the correct pitch(es) but must
 // sustain them for ≥90% of the note's written duration before the session advances.
+// 'tempo-stopped' (feature 101): strict tempo stopped the session after three
+// consecutive timing failures — terminal for the reducer; the orchestrator
+// performs the stop side effects.
 
 /** Full state of the practice engine — produced by `reduce()`. */
 export interface PracticeState {
@@ -143,6 +157,24 @@ export interface PracticeState {
    * from previous loops being mistaken for the current loop's results).
    */
   readonly currentLoopResultOffset: number;
+  /**
+   * Strict tempo evaluation enabled for this session (feature 101).
+   * Set by START (metronome armed/active) or STRICT_ENABLE; reset by
+   * STRICT_DISABLE, STOP, and new sessions.
+   */
+  readonly strictMode: boolean;
+  /** Consecutive strict timing failure count, 0..3 (feature 101). */
+  readonly strictFailureCount: number;
+  /**
+   * Absolute tempo grid origin for the current segment (feature 101).
+   * Created only by a grace note; not changed by judged notes.
+   */
+  readonly strictAnchor: StrictAnchor | null;
+  /**
+   * True when a tempo change was detected while holding: the in-progress
+   * hold is judged on the old grid, then the following note is grace.
+   */
+  readonly strictReanchorPending: boolean;
 }
 
 /** Describes a staff available for selection during practice setup. */
@@ -192,6 +224,12 @@ export type PracticeAction =
        * Defaults to 0.
        */
       readonly startIndex: number;
+      /**
+       * Enable strict tempo evaluation for this session (feature 101).
+       * The component passes true when the metronome is armed/active;
+       * absent or false keeps the legacy classification.
+       */
+      readonly strictTempo?: boolean;
     }
   | {
       readonly type: 'CORRECT_MIDI';
@@ -226,6 +264,9 @@ export type PracticeAction =
     }
   | { readonly type: 'STOP' }
   | { readonly type: 'DEACTIVATE' }
+  | { readonly type: 'STRICT_ENABLE' }
+  | { readonly type: 'STRICT_DISABLE' }
+  | { readonly type: 'REANCHOR' }
   | {
       readonly type: 'SEEK';
       /** Target index in `notes` to jump to during active mode. */
@@ -261,7 +302,16 @@ export interface PartialPerformanceRecord {
   tempoMultiplier: number;
   stoppedAtIndex: number;
   totalNoteCount: number;
+  /**
+   * Why the session stopped (feature 101). `'tempo'` is set only by the
+   * strict-tempo third-failure stop; manual stops may omit it or set
+   * `'manual'`. Old records without the field load as manual/unknown.
+   */
+  readonly stopReason?: PracticeStopReason;
 }
+
+/** Why a practice session stopped (feature 101). */
+export type PracticeStopReason = 'manual' | 'tempo';
 
 // ---------------------------------------------------------------------------
 // Initial State
@@ -282,4 +332,8 @@ export const INITIAL_PRACTICE_STATE: PracticeState = {
   holdExpectedTimeMs: 0,
   holdEndIndex: -1,
   currentLoopResultOffset: 0,
+  strictMode: false,
+  strictFailureCount: 0,
+  strictAnchor: null,
+  strictReanchorPending: false,
 };

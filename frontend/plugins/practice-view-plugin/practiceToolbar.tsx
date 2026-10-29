@@ -94,6 +94,10 @@ export interface PracticeToolbarProps {
   isFreePractice?: boolean;
   /** Feature 092: Running count of MIDI note attacks captured so far (free practice only). */
   freeNoteCount?: number;
+  /** Feature 101: strict tempo mode is enforcing the tempo grid (Score Practice + metronome). */
+  strictTempoActive?: boolean;
+  /** Feature 101: number of consecutive strict timing failures so far (0–2 while running). */
+  strictFailureCount?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +138,8 @@ export function PracticeToolbar({
   onTaskTagClick,
   isFreePractice = false,
   freeNoteCount = 0,
+  strictTempoActive = false,
+  strictFailureCount = 0,
 }: PracticeToolbarProps) {
   const { t } = useTranslation();
   const isPlaying = status === 'playing';
@@ -456,6 +462,20 @@ export function PracticeToolbar({
         >
           ▾
         </button>
+        {/* Feature 101: strict tempo indicator — informational badge, not focusable */}
+        {strictTempoActive && !isFreePractice && (
+          <span
+            className={`practice-plugin__strict-badge practice-plugin__strict-badge--${
+              strictFailureCount === 0 ? 'none' : strictFailureCount === 1 ? 'warn' : 'danger'
+            }`}
+            data-testid="strict-tempo-indicator"
+            data-failures={strictFailureCount}
+            aria-live="polite"
+            title={t('practice.toolbar.strict_tempo_title', { n: String(strictFailureCount) })}
+          >
+            {t('practice.toolbar.strict_tempo', { n: String(strictFailureCount) })}
+          </span>
+        )}
         {metroMenuOpen && (
           <div className="practice-plugin__metro-menu" role="menu">
             {([1, 2, 4] as MetronomeSubdivision[]).map((s) => (
