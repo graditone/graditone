@@ -343,22 +343,6 @@
   pointer-events: none;
 }
 
-.practice-plugin__tempo-step-display {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: 74px;
-  min-height: 32px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--ls-accent, #3060cc) 25%, transparent);
-  border-radius: 8px;
-  background: var(--ls-bg, #fff);
-  user-select: none;
-  -webkit-user-select: none;
-  pointer-events: none;
-}
-
 .practice-plugin__tempo-step-value {
   font-size: 1rem;
   font-weight: 700;
@@ -469,6 +453,7 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  gap: 3px;
 }
 
 .practice-plugin__metro-btn {
@@ -478,15 +463,33 @@
   background: var(--ls-accent, #7c3aed);
   color: #fff;
   border: none;
-  border-radius: 8px 0 0 8px;
-  min-width: 40px;
-  padding: 0 10px;
+  border-radius: 8px;
+  min-width: 66px;
+  padding: 0 8px;
   font-size: 1.2rem;
   line-height: 1;
   min-height: 36px;
   cursor: pointer;
   white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
   transition: filter 0.12s;
+}
+
+/* BPM readout inside the metronome start button (stacked: value over unit) */
+.practice-plugin__metro-btn-bpm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.12;
+}
+
+/* Inherit the button's colour (white; gold while armed) for both lines */
+.practice-plugin__metro-btn .practice-plugin__tempo-step-value,
+.practice-plugin__metro-btn .practice-plugin__tempo-step-unit {
+  color: inherit;
 }
 
 /* Metro button hover — simple filter, no base-class conflict ——————————— */
@@ -541,8 +544,7 @@
   min-height: 36px;
   padding: 0 6px;
   border: none;
-  border-left: 1px solid rgba(255,255,255,0.25);
-  border-radius: 0 8px 8px 0;
+  border-radius: 8px;
   background: var(--ls-accent, #7c3aed);
   color: #fff;
   font-size: 0.75rem;

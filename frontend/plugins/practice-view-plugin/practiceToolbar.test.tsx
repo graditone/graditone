@@ -392,13 +392,19 @@ describe('PracticeToolbar — tempo stepper (Feature 101)', () => {
     expect(onTempoChange).toHaveBeenCalledWith(mult(135));
   });
 
-  it('tapping or pressing the display itself never changes the tempo', () => {
+  it('the metronome start button carries the BPM readout: pressing it never changes tempo, clicking it toggles the metronome', () => {
     const onTempoChange = vi.fn();
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120, onTempoChange })} />, { wrapper: TestWrapper });
-    const display = screen.getByTestId('tempo-display');
-    fireEvent.pointerDown(display);
-    fireEvent.pointerUp(display);
+    const onMetronomeToggle = vi.fn();
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120, onTempoChange, onMetronomeToggle })} />, { wrapper: TestWrapper });
+    const button = screen.getByTestId('tempo-display');
+    // A touch on the readout surface must not adjust the tempo.
+    fireEvent.pointerDown(button);
+    fireEvent.pointerUp(button);
     expect(onTempoChange).not.toHaveBeenCalled();
+    // It is still the metronome ON/OFF control.
+    fireEvent.click(button);
+    expect(onMetronomeToggle).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /toggle metronome/i })).toBeTruthy();
   });
 
   it('clamps at the 2× ceiling: pressing + at 240 BPM emits nothing', () => {

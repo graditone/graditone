@@ -160,7 +160,6 @@ export function PracticeToolbar({
     ...(metronomeActive && metronomeIsDownbeat ? ['practice-plugin__metro-btn--downbeat'] : []),
     ...(metronomeArmed && !metronomeActive ? ['practice-plugin__metro-btn--armed'] : []),
   ].join(' ');
-  const SUBDIV_ICONS: Record<MetronomeSubdivision, string> = { 1: '♩', 2: '♪', 4: '♬' };
   const SUBDIV_LABELS: Record<MetronomeSubdivision, string> = { 1: '♩ 1/4', 2: '♪ 1/8', 4: '♬ 1/16' };
 
   const [metroMenuOpen, setMetroMenuOpen] = useState(false);
@@ -517,65 +516,57 @@ export function PracticeToolbar({
         )}
       </span>
 
-      {/* Tempo — digital BPM stepper */}
+      {/* Tempo — label (the readout itself lives in the metronome button) */}
       <div className="practice-plugin__toolbar-tempo">
         <span className="practice-plugin__toolbar-tempo-label" id="practice-tempo-label">
           {t('practice.toolbar.tempo')}
         </span>
-        <div
-          className="practice-plugin__tempo-step"
-          role="group"
-          aria-label={t('practice.toolbar.tempo_aria')}
-        >
-          <button
-            type="button"
-            className={`practice-plugin__tempo-step-btn practice-plugin__tempo-step-btn--minus${tempoPressed === 'minus' ? ' is-pressed' : ''}`}
-            data-testid="tempo-minus"
-            aria-label={t('practice.toolbar.tempo_decrease')}
-            disabled={tempoDisabled}
-            onPointerDown={(e) => handleTempoPressStart(e, 'minus')}
-            onPointerUp={() => handleTempoPressEnd('minus')}
-            onPointerCancel={clearTempoPress}
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            −
-          </button>
-          <div
-            className="practice-plugin__tempo-step-display"
-            data-testid="tempo-display"
-            title={floorTooltip}
-          >
-            <span className="practice-plugin__toolbar-bpm practice-plugin__tempo-step-value">
-              {bpm > 0 ? String(Math.round(bpm)) : '—'}
-            </span>
-            <span className="practice-plugin__tempo-step-unit">BPM</span>
-          </div>
-          <button
-            type="button"
-            className={`practice-plugin__tempo-step-btn practice-plugin__tempo-step-btn--plus${tempoPressed === 'plus' ? ' is-pressed' : ''}`}
-            data-testid="tempo-plus"
-            aria-label={t('practice.toolbar.tempo_increase')}
-            disabled={tempoDisabled}
-            onPointerDown={(e) => handleTempoPressStart(e, 'plus')}
-            onPointerUp={() => handleTempoPressEnd('plus')}
-            onPointerCancel={clearTempoPress}
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            +
-          </button>
-        </div>
       </div>
 
-      {/* Metronome toggle + subdivision dropdown */}
+      {/* Metronome + tempo — the start button carries the BPM readout and the
+          − / + steppers flank it: one widget to set the tempo and start it. */}
       <div className="practice-plugin__metro-group" ref={metroGroupRef}>
+        <button
+          type="button"
+          className={`practice-plugin__tempo-step-btn practice-plugin__tempo-step-btn--minus${tempoPressed === 'minus' ? ' is-pressed' : ''}`}
+          data-testid="tempo-minus"
+          aria-label={t('practice.toolbar.tempo_decrease')}
+          disabled={tempoDisabled}
+          onPointerDown={(e) => handleTempoPressStart(e, 'minus')}
+          onPointerUp={() => handleTempoPressEnd('minus')}
+          onPointerCancel={clearTempoPress}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          −
+        </button>
         <button
           key={metronomeAnimKey}
           className={metronomeBtnClass}
           onClick={onMetronomeToggle}
+          data-testid="tempo-display"
           aria-label={t('practice.toolbar.metronome_aria')}
           aria-pressed={metronomeActive}
+          title={floorTooltip}
         >
-          {SUBDIV_ICONS[metronomeSubdivision]}
+          <span className="practice-plugin__metro-btn-bpm">
+            <span className="practice-plugin__toolbar-bpm practice-plugin__tempo-step-value">
+              {bpm > 0 ? String(Math.round(bpm)) : '—'}
+            </span>
+            <span className="practice-plugin__tempo-step-unit">BPM</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          className={`practice-plugin__tempo-step-btn practice-plugin__tempo-step-btn--plus${tempoPressed === 'plus' ? ' is-pressed' : ''}`}
+          data-testid="tempo-plus"
+          aria-label={t('practice.toolbar.tempo_increase')}
+          disabled={tempoDisabled}
+          onPointerDown={(e) => handleTempoPressStart(e, 'plus')}
+          onPointerUp={() => handleTempoPressEnd('plus')}
+          onPointerCancel={clearTempoPress}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          +
         </button>
         <button
           className="practice-plugin__metro-chevron"
