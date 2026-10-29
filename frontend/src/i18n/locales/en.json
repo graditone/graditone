@@ -142,6 +142,8 @@
   "play_score.toolbar.stop": "■ Stop",
   "play_score.toolbar.elapsed_aria": "Elapsed time",
   "play_score.toolbar.tempo": "TEMPO",
+  "play_score.toolbar.tempo_increase": "Increase tempo",
+  "play_score.toolbar.tempo_decrease": "Decrease tempo",
   "play_score.toolbar.tempo_aria": "Tempo",
   "play_score.toolbar.metronome_toggle_aria": "Toggle metronome",
   "play_score.toolbar.metronome_sub_aria": "Metronome subdivision",

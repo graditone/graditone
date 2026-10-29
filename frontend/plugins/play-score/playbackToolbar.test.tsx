@@ -6,7 +6,7 @@
  * beat-pulse CSS class application, and toggle callback.
  */
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PlaybackToolbar, type PlaybackToolbarProps } from './playbackToolbar';
@@ -106,7 +106,8 @@ describe('PlaybackToolbar — metronome button (Feature 035)', () => {
         })}
       />, { wrapper: TestWrapper });
     const btn = screen.getByRole('button', { name: /toggle metronome/i });
-    expect(btn.className).toContain('metro-pulse');
+    expect(btn.className).toContain('practice-plugin__metro-btn');
+    expect(btn.className).toContain('practice-plugin__metro-btn--active');
   });
 
   it('applies additional metro-downbeat class on a downbeat', () => {
@@ -120,8 +121,9 @@ describe('PlaybackToolbar — metronome button (Feature 035)', () => {
         })}
       />, { wrapper: TestWrapper });
     const btn = screen.getByRole('button', { name: /toggle metronome/i });
-    expect(btn.className).toContain('metro-pulse');
-    expect(btn.className).toContain('metro-downbeat');
+    expect(btn.className).toContain('practice-plugin__metro-btn');
+    expect(btn.className).toContain('practice-plugin__metro-btn--active');
+    expect(btn.className).toContain('practice-plugin__metro-btn--downbeat');
   });
 
   it('does NOT apply metro-pulse class when metronome is inactive', () => {
@@ -134,7 +136,7 @@ describe('PlaybackToolbar — metronome button (Feature 035)', () => {
         })}
       />, { wrapper: TestWrapper });
     const btn = screen.getByRole('button', { name: /toggle metronome/i });
-    expect(btn.className).not.toContain('metro-pulse');
+    expect(btn.className).not.toContain('practice-plugin__metro-btn--active');
   });
 
   it('updates aria-pressed reactively on re-render', () => {
@@ -154,85 +156,64 @@ describe('PlaybackToolbar — metronome button (Feature 035)', () => {
   });
 });
 
+
 // ---------------------------------------------------------------------------
-// Feature 083 — Tempo slider precision: 1% steps, ±0.03 snap (T002)
+// Shared tempo + metronome widget (Feature 101 polish)
+// The same digital BPM stepper the practice toolbar uses, now shared by the
+// Play Score toolbar so the metronome/tempo UI is identical everywhere.
 // ---------------------------------------------------------------------------
 
-describe('PlaybackToolbar — tempo slider precision (Feature 083)', () => {
-  it('slider step is 0.01 (1% granularity)', () => {
-    render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready' })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo/i }) as HTMLInputElement;
-    expect(slider.step).toBe('0.01');
+function stepTempoBtn(btn: HTMLElement, holdMs = 0) {
+  fireEvent.pointerDown(btn);
+  if (holdMs > 0) vi.setSystemTime(Date.now() + holdMs);
+  fireEvent.pointerUp(btn);
+}
+
+describe('PlaybackToolbar — tempo stepper (shared widget)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const mult = (next: number, from = 120) => Math.round((next / from) * 1000) / 1000;
+
+  it('renders the current BPM on the metronome start button', () => {
+    render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready', bpm: 137 })} />, { wrapper: TestWrapper });
+    const display = screen.getByTestId('tempo-display');
+    expect(display.querySelector('.practice-plugin__tempo-step-value')!.textContent).toBe('137');
+    expect(display.textContent).toContain('BPM');
   });
 
-  it('slider has a datalist providing the 100% snap tick mark', () => {
-    render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready' })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo/i }) as HTMLInputElement;
-    expect(slider.getAttribute('list')).toBeTruthy();
-    const datalist = document.getElementById(slider.getAttribute('list')!);
-    expect(datalist).not.toBeNull();
-    expect(datalist?.querySelector('option[value="1.0"]')).not.toBeNull();
-  });
-
-  it('snap zone is ±0.03: onChange at 0.96 does NOT snap to 1.0', () => {
+  it('a short minus press subtracts 1 BPM and a short plus press adds 1 BPM', () => {
     const onTempoChange = vi.fn();
     render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo/i });
-    fireEvent.change(slider, { target: { value: '0.96' } });
-    expect(onTempoChange).toHaveBeenCalledWith(0.96);
+    stepTempoBtn(screen.getByTestId('tempo-minus'), 0);
+    expect(onTempoChange).toHaveBeenLastCalledWith(mult(119));
+    stepTempoBtn(screen.getByTestId('tempo-plus'), 0);
+    expect(onTempoChange).toHaveBeenLastCalledWith(mult(121));
   });
 
-  it('snap zone is ±0.03: onChange at 0.97 snaps to 1.0', () => {
+  it('holding ≥ 1 s auto-repeats +5 every 300 ms until release', () => {
     const onTempoChange = vi.fn();
     render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo/i });
-    fireEvent.change(slider, { target: { value: '0.97' } });
-    expect(onTempoChange).toHaveBeenCalledWith(1.0);
+    fireEvent.pointerDown(screen.getByTestId('tempo-plus'));
+    act(() => { vi.advanceTimersByTime(1000); });
+    act(() => { vi.advanceTimersByTime(300); });
+    fireEvent.pointerUp(screen.getByTestId('tempo-plus'));
+    expect(onTempoChange).toHaveBeenCalledWith(mult(125));
+    expect(onTempoChange).toHaveBeenCalledWith(mult(130));
   });
 
-  it('snap zone is ±0.03: onChange at 1.03 snaps to 1.0', () => {
-    const onTempoChange = vi.fn();
-    render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo/i });
-    fireEvent.change(slider, { target: { value: '1.03' } });
-    expect(onTempoChange).toHaveBeenCalledWith(1.0);
+  it('shows the BPM-floor tooltip when the floor is raised (bpm=40), none at bpm=120', () => {
+    const low = render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready', bpm: 40 })} />, { wrapper: TestWrapper });
+    expect(low.getByTestId('tempo-display').getAttribute('title')).toMatch(/10\s*BPM/i);
+    low.unmount();
+    const ok = render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready', bpm: 120 })} />, { wrapper: TestWrapper });
+    expect(ok.getByTestId('tempo-display').getAttribute('title') ?? '').not.toMatch(/BPM/i);
   });
 
-  it('snap zone is ±0.03: onChange at 1.04 does NOT snap to 1.0', () => {
-    const onTempoChange = vi.fn();
-    render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo/i });
-    fireEvent.change(slider, { target: { value: '1.04' } });
-    expect(onTempoChange).toHaveBeenCalledWith(1.04);
+  it('disables the steppers while loading', () => {
+    render(<PlaybackToolbar {...makeDefaultProps({ status: 'loading' })} />, { wrapper: TestWrapper });
+    expect((screen.getByTestId('tempo-plus') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('tempo-minus') as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Feature 083 — Tempo slider dynamic minimum (FR-014) (T007)
-// ---------------------------------------------------------------------------
-
-describe('PlaybackToolbar — tempo slider dynamic minimum (Feature 083 FR-014)', () => {
-  it('slider min is 0.1 when bpm=120 (BPM floor not triggered)', () => {
-    render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready', bpm: 120 })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo/i }) as HTMLInputElement;
-    expect(parseFloat(slider.min)).toBeCloseTo(0.1);
-  });
-
-  it('slider min is ~0.25 when bpm=40 (10 BPM floor: 10/40=0.25)', () => {
-    render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready', bpm: 40 })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo/i }) as HTMLInputElement;
-    expect(parseFloat(slider.min)).toBeCloseTo(0.25);
-  });
-
-  it('shows BPM-floor tooltip on slider when effective min > 0.1 (bpm=40)', () => {
-    render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready', bpm: 40 })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo/i }) as HTMLInputElement;
-    expect(slider.getAttribute('title')).toMatch(/10\s*BPM/i);
-  });
-
-  it('does NOT show BPM-floor tooltip when effective min equals 0.1 (bpm=120)', () => {
-    render(<PlaybackToolbar {...makeDefaultProps({ status: 'ready', bpm: 120 })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo/i }) as HTMLInputElement;
-    expect(slider.getAttribute('title') ?? '').not.toMatch(/BPM/i);
-  });
-});

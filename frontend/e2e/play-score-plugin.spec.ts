@@ -112,7 +112,7 @@ test.describe('Feature 033: Play Score Plugin', () => {
     await expect(timer).toHaveText(/\d{2}:\d{2}/);
   });
 
-  test('Tempo slider is present with correct range', async ({ page }) => {
+  test('Tempo stepper is present; ± buttons adjust the BPM readout', async ({ page }) => {
     await page.route('**/*.mxl', route =>
       route.fulfill({ status: 200, body: '', contentType: 'application/octet-stream' }),
     );
@@ -120,9 +120,10 @@ test.describe('Feature 033: Play Score Plugin', () => {
     await page.getByTestId('plugin-launch-play-score').click();
     await page.getByText('Pachelbel — Canon in D').click();
 
-    const slider = page.getByRole('slider', { name: /tempo/i });
-    await expect(slider).toBeVisible();
-    await expect(slider).toHaveAttribute('min', '0.1');
-    await expect(slider).toHaveAttribute('max', '2');
+    const display = page.getByTestId('tempo-display');
+    await expect(display).toBeVisible();
+    await expect(display).toContainText('BPM');
+    await expect(page.getByTestId('tempo-plus')).toBeVisible();
+    await expect(page.getByTestId('tempo-minus')).toBeVisible();
   });
 });

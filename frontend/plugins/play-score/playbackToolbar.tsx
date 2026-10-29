@@ -14,10 +14,9 @@
  *   seconds = ticks / ((bpm / 60) * PPQ)
  */
 
-import { useState, useRef, useEffect } from 'react';
 import type { PluginPlaybackStatus } from '../../src/plugin-api/index';
 import type { MetronomeSubdivision } from '../../src/plugin-api/index';
-import { ProfileIcon, computeEffectiveMinMultiplier, MIN_TEMPO_MULTIPLIER, ABSOLUTE_BPM_FLOOR } from '../../src/plugin-api/index';
+import { ProfileIcon, TempoMetronomeControl } from '../../src/plugin-api/index';
 import { useTranslation } from '../../src/i18n';
 
 // Mirror of PlaybackScheduler.PPQ — no host imports in plugin code
@@ -86,7 +85,6 @@ export function PlaybackToolbar({
   onMetronomeToggle,
   metronomeSubdivision,
   onMetronomeSubdivisionChange,
-  metronomeSubBeatIndex,
 }: PlaybackToolbarProps) {
   const { t } = useTranslation();
   const isPlaying = status === 'playing';
@@ -96,38 +94,6 @@ export function PlaybackToolbar({
   const elapsedFormatted = formatElapsedTime(elapsedSeconds);
   const totalFormatted = totalDurationTicks > 0 ? formatElapsedTime(totalSeconds) : null;
 
-  // Feature 035: Build metronome button CSS class — pulse animates on every beat.
-  // metronomeBeatIndex changes each beat, which causes a re-render and restarts
-  // the CSS animation via the animation key (className changes each beat).
-  const metronomeBtnClass = [
-    'play-score__toolbar-btn',
-    'play-score__toolbar-btn--metronome',
-    ...(metronomeActive ? ['metro-pulse'] : []),
-    ...(metronomeActive && metronomeIsDownbeat ? ['metro-downbeat'] : []),
-  ].join(' ');
-
-  // Using beatIndex as `key` forces React to remount the button on each beat,
-  // which resets the CSS animation so it replays from 0% every beat.
-  const metronomeAnimKey = metronomeActive ? `metro-${metronomeBeatIndex}-${metronomeSubBeatIndex}` : 'metro-off';
-
-  // Subdivision dropdown state
-  const [menuOpen, setMenuOpen] = useState(false);
-  const metroGroupRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!menuOpen) return;
-    function handleOutside(e: MouseEvent) {
-      if (metroGroupRef.current && !metroGroupRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, [menuOpen]);
-
-  const SUBDIV_LABELS: Record<MetronomeSubdivision, string> = { 1: '♩ 1/4', 2: '♪ 1/8', 4: '♬ 1/16' };
-  const SUBDIV_ICONS: Record<MetronomeSubdivision, string> = { 1: '♩', 2: '♪', 4: '♬' };
 
   return (
     <div className="play-score__toolbar" role="toolbar" aria-label={t('play_score.toolbar.playback_controls_aria')}>
@@ -186,87 +152,31 @@ export function PlaybackToolbar({
         )}
       </span>
 
-      {/* Tempo control */}
+      {/* Tempo + metronome — shared widget, identical to the practice toolbar */}
       <div className="play-score__toolbar-tempo">
         <span className="play-score__toolbar-tempo-label">{t('play_score.toolbar.tempo')}</span>
-        {(() => {
-          // bpm prop is the effective BPM (scoreTempo × multiplier); derive original for floor calc
-          const originalBpm = tempoMultiplier > 0 ? bpm / tempoMultiplier : bpm;
-          const effectiveMin = computeEffectiveMinMultiplier(originalBpm);
-          const showFloorTooltip = effectiveMin > MIN_TEMPO_MULTIPLIER;
-          const floorTooltip = showFloorTooltip ? `Min. speed limited to ${ABSOLUTE_BPM_FLOOR} BPM` : undefined;
-          return (
-            <>
-              <input
-                id="play-score-tempo"
-                type="range"
-                min={effectiveMin}
-                max={2.0}
-                step={0.01}
-                value={tempoMultiplier}
-                onChange={e => {
-                  const raw = Math.round(parseFloat(e.target.value) * 100) / 100;
-                  // Snap to 100% when within ±3 steps (±3pp) of 1.0
-                  onTempoChange(Math.round(Math.abs(raw - 1.0) * 100) <= 3 ? 1.0 : raw);
-                }}
-                aria-label={t('play_score.toolbar.tempo_aria')}
-                className="play-score__toolbar-tempo-slider"
-                disabled={status === 'loading'}
-                list="play-score-tempo-ticks"
-                title={floorTooltip}
-              />
-              <datalist id="play-score-tempo-ticks">
-                <option value="1.0" />
-              </datalist>
-            </>
-          );
-        })()}
-        {bpm > 0 && (
-          <span className="play-score__toolbar-bpm">{bpm}</span>
-        )}
       </div>
+      <TempoMetronomeControl
+        bpm={bpm}
+        baseTempo={tempoMultiplier > 0 ? bpm / tempoMultiplier : bpm}
+        tempoMultiplier={tempoMultiplier}
+        onTempoChange={onTempoChange}
+        metronomeActive={metronomeActive}
+        metronomeBeatIndex={metronomeBeatIndex}
+        metronomeIsDownbeat={metronomeIsDownbeat}
+        onMetronomeToggle={onMetronomeToggle}
+        metronomeSubdivision={metronomeSubdivision}
+        onMetronomeSubdivisionChange={onMetronomeSubdivisionChange}
+        disabled={status === 'loading'}
+        labels={{
+          increaseAria: t('play_score.toolbar.tempo_increase'),
+          decreaseAria: t('play_score.toolbar.tempo_decrease'),
+          metronomeAria: t('play_score.toolbar.metronome_toggle_aria'),
+          subdivisionAria: t('play_score.toolbar.metronome_sub_aria'),
+        }}
+      />
 
-      {/* Metronome toggle + subdivision dropdown — Feature 035 */}
-      <div className="play-score__metro-group" ref={metroGroupRef}>
-        <button
-          key={metronomeAnimKey}
-          className={metronomeBtnClass}
-          onClick={onMetronomeToggle}
-          aria-label={t('play_score.toolbar.metronome_toggle_aria')}
-          aria-pressed={metronomeActive}
-        >
-          {SUBDIV_ICONS[metronomeSubdivision]}
-        </button>
-        <button
-          className="play-score__metro-chevron"
-          onClick={() => setMenuOpen(o => !o)}
-          aria-label={t('play_score.toolbar.metronome_sub_aria')}
-          aria-expanded={menuOpen}
-          aria-haspopup="menu"
-        >
-          ▾
-        </button>
-        {menuOpen && (
-          <div className="play-score__metro-menu" role="menu">
-            {([1, 2, 4] as MetronomeSubdivision[]).map(s => (
-              <button
-                key={s}
-                role="menuitem"
-                className={
-                  'play-score__metro-menu-item' +
-                  (metronomeSubdivision === s ? ' play-score__metro-menu-item--active' : '')
-                }
-                onClick={() => { onMetronomeSubdivisionChange(s); setMenuOpen(false); }}
-              >
-                {metronomeSubdivision === s && <span className="play-score__metro-menu-check">✓</span>}
-                {SUBDIV_LABELS[s]}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Feature 080: Profile icon — rightmost toolbar element */}
+            {/* Feature 080: Profile icon — rightmost toolbar element */}
       <ProfileIcon className="profile-icon-container--toolbar" />
     </div>
   );
