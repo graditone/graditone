@@ -313,89 +313,104 @@ describe('PracticeToolbar — MIDI not supported', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Feature 083 — Tempo slider precision: 1% steps, ±0.03 snap (T003)
+// Feature 101 — Digital BPM stepper (replaces the tempo slider)
+//
+// The slider had far too little precision on touch/tablet. The stepper edits
+// the effective BPM in whole beats: a short press (hold < 1 s) steps ±1 BPM,
+// a long press (hold ≥ 1 s) steps ±5 BPM. onTempoChange receives the
+// resulting multiplier (next BPM / original score BPM).
 // ---------------------------------------------------------------------------
 
-describe('PracticeToolbar — tempo slider precision (Feature 083)', () => {
-  it('slider step is 0.01 (1% granularity)', () => {
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready' })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    expect(slider.step).toBe('0.01');
+function stepTempoBtn(btn: HTMLElement, holdMs = 0) {
+  fireEvent.pointerDown(btn);
+  if (holdMs > 0) vi.setSystemTime(Date.now() + holdMs);
+  fireEvent.pointerUp(btn);
+}
+
+describe('PracticeToolbar — tempo stepper (Feature 101)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const mult = (next: number, from = 120) => Math.round((next / from) * 1000) / 1000;
+
+  it('renders the current BPM with the BPM unit', () => {
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 137 })} />, { wrapper: TestWrapper });
+    const display = screen.getByTestId('tempo-display');
+    expect(display.querySelector('.practice-plugin__tempo-step-value')!.textContent).toBe('137');
+    expect(display.textContent).toContain('BPM');
   });
 
-  it('slider has a datalist providing the 100% snap tick mark', () => {
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready' })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    expect(slider.getAttribute('list')).toBeTruthy();
-    const datalist = document.getElementById(slider.getAttribute('list')!);
-    expect(datalist).not.toBeNull();
-    expect(datalist?.querySelector('option[value="1.0"]')).not.toBeNull();
-  });
-
-  it('snap zone is ±0.03: onChange at 0.96 does NOT snap to 1.0', () => {
+  it('a short minus press subtracts 1 BPM', () => {
     const onTempoChange = vi.fn();
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i });
-    fireEvent.change(slider, { target: { value: '0.96' } });
-    expect(onTempoChange).toHaveBeenCalledWith(0.96);
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120, onTempoChange })} />, { wrapper: TestWrapper });
+    stepTempoBtn(screen.getByTestId('tempo-minus'), 0);
+    expect(onTempoChange).toHaveBeenCalledTimes(1);
+    expect(onTempoChange).toHaveBeenCalledWith(mult(119));
   });
 
-  it('snap zone is ±0.03: onChange at 0.97 snaps to 1.0', () => {
+  it('a short plus press adds 1 BPM', () => {
     const onTempoChange = vi.fn();
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i });
-    fireEvent.change(slider, { target: { value: '0.97' } });
-    expect(onTempoChange).toHaveBeenCalledWith(1.0);
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120, onTempoChange })} />, { wrapper: TestWrapper });
+    stepTempoBtn(screen.getByTestId('tempo-plus'), 0);
+    expect(onTempoChange).toHaveBeenCalledWith(mult(121));
   });
 
-  it('snap zone is ±0.03: onChange at 1.03 snaps to 1.0', () => {
+  it('the 1 s hold boundary: 999 ms steps 1 BPM, 1000 ms steps 5 BPM', () => {
     const onTempoChange = vi.fn();
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i });
-    fireEvent.change(slider, { target: { value: '1.03' } });
-    expect(onTempoChange).toHaveBeenCalledWith(1.0);
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120, onTempoChange })} />, { wrapper: TestWrapper });
+
+    stepTempoBtn(screen.getByTestId('tempo-plus'), 999);
+    expect(onTempoChange).toHaveBeenLastCalledWith(mult(121));
+
+    stepTempoBtn(screen.getByTestId('tempo-plus'), 1000);
+    expect(onTempoChange).toHaveBeenLastCalledWith(mult(125));
+
+    stepTempoBtn(screen.getByTestId('tempo-minus'), 1000);
+    expect(onTempoChange).toHaveBeenLastCalledWith(mult(115));
   });
 
-  it('snap zone is ±0.03: onChange at 1.04 does NOT snap to 1.0', () => {
+  it('clamps at the 2× ceiling (120 → 240 BPM)', () => {
     const onTempoChange = vi.fn();
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i });
-    fireEvent.change(slider, { target: { value: '1.04' } });
-    expect(onTempoChange).toHaveBeenCalledWith(1.04);
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 240, tempoMultiplier: 2.0, onTempoChange })} />, { wrapper: TestWrapper });
+    stepTempoBtn(screen.getByTestId('tempo-plus'), 0);
+    expect(onTempoChange).toHaveBeenCalledWith(2.0);
+  });
+
+  it('clamps at the absolute BPM floor (40 → 10 BPM)', () => {
+    const onTempoChange = vi.fn();
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 10, tempoMultiplier: 0.25, onTempoChange })} />, { wrapper: TestWrapper });
+    stepTempoBtn(screen.getByTestId('tempo-minus'), 0);
+    expect(onTempoChange).toHaveBeenCalledWith(0.25);
+  });
+
+  it('caps the displayed BPM just below 999 (fast base 600 → 998)', () => {
+    const onTempoChange = vi.fn();
+    // bpm 998 with multiplier 998/600 ≈ 1.663 → base 600 → maxBpm = min(998, 1200).
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 998, tempoMultiplier: 1.663, onTempoChange })} />, { wrapper: TestWrapper });
+    stepTempoBtn(screen.getByTestId('tempo-plus'), 0);
+    // +1 would be 999 → clamped to 998 → multiplier stays 998/600.
+    expect(onTempoChange).toHaveBeenCalledWith(Math.round((998 / 600) * 1000) / 1000);
+  });
+
+  it('shows the BPM-floor tooltip when the floor is raised (bpm=40), none at bpm=120', () => {
+    const low = render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 40 })} />, { wrapper: TestWrapper });
+    expect(low.getByTestId('tempo-display').getAttribute('title')).toMatch(/10\s*BPM/i);
+    low.unmount();
+    const ok = render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120 })} />, { wrapper: TestWrapper });
+    expect(ok.getByTestId('tempo-display').getAttribute('title') ?? '').not.toMatch(/BPM/i);
+  });
+
+  it('disables the stepper while loading or when the task is locked', () => {
+    const taskTag = { taskNumber: 1, sessionName: 's' };
+    const locked = render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', taskTag })} />, { wrapper: TestWrapper });
+    expect((locked.getByTestId('tempo-plus') as HTMLButtonElement).disabled).toBe(true);
+    expect((locked.getByTestId('tempo-minus') as HTMLButtonElement).disabled).toBe(true);
+    locked.unmount();
+    const loading = render(<PracticeToolbar {...makeDefaultProps({ status: 'loading' })} />, { wrapper: TestWrapper });
+    expect((loading.getByTestId('tempo-plus') as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Feature 083 — Tempo slider dynamic minimum (FR-014) (T008)
-// ---------------------------------------------------------------------------
-
-describe('PracticeToolbar — tempo slider dynamic minimum (Feature 083 FR-014)', () => {
-  it('slider min is 0.1 when bpm=120 (BPM floor not triggered)', () => {
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120 })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    expect(parseFloat(slider.min)).toBeCloseTo(0.1);
-  });
-
-  it('slider min is ~0.25 when bpm=40 (10 BPM floor: 10/40=0.25)', () => {
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 40 })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    expect(parseFloat(slider.min)).toBeCloseTo(0.25);
-  });
-
-  it('shows BPM-floor tooltip on slider when effective min > 0.1 (bpm=40)', () => {
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 40 })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    expect(slider.getAttribute('title')).toMatch(/10\s*BPM/i);
-  });
-
-  it('does NOT show BPM-floor tooltip when effective min equals 0.1 (bpm=120)', () => {
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120 })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    expect(slider.getAttribute('title') ?? '').not.toMatch(/BPM/i);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Feature 093 — Tempo readout is orchestrator-driven (guard test)
 // ---------------------------------------------------------------------------
 

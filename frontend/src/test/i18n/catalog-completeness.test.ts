@@ -18,11 +18,11 @@ describe('Translation catalog completeness', () => {
   const esKeys = Object.keys(esCatalog) as Array<keyof typeof esCatalog>;
 
   it('English catalog has exactly 376 keys', () => {
-    expect(enKeys).toHaveLength(387);
+    expect(enKeys).toHaveLength(389);
   });
 
   it('Spanish catalog has exactly 376 keys', () => {
-    expect(esKeys).toHaveLength(387);
+    expect(esKeys).toHaveLength(389);
   });
 
   it('every key in en.json exists in es.json', () => {

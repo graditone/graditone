@@ -296,6 +296,8 @@
   "practice.toolbar.elapsed_aria": "Tiempo transcurrido",
   "practice.toolbar.tempo": "TIEMPO",
   "practice.toolbar.tempo_aria": "Multiplicador de tempo",
+  "practice.toolbar.tempo_increase": "Aumentar tempo",
+  "practice.toolbar.tempo_decrease": "Reducir tempo",
   "practice.toolbar.metronome_aria": "Activar/desactivar metrónomo",
   "practice.toolbar.metronome_sub_aria": "Subdivisión del metrónomo",
   "practice.toolbar.strict_tempo": "Tempo estricto",

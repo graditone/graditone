@@ -45,6 +45,15 @@ const MOCK_CATALOGUE = [
   { id: 'bach-invention-1', displayName: 'Bach — Invention No. 1' },
 ];
 
+/** Step the tempo stepper N times with short presses (±1 BPM each). */
+function stepTempo(testid: 'tempo-plus' | 'tempo-minus', presses: number): void {
+  const btn = screen.getByTestId(testid) as HTMLElement;
+  for (let i = 0; i < presses; i++) {
+    fireEvent.pointerDown(btn);
+    fireEvent.pointerUp(btn);
+  }
+}
+
 function makeIdleState(overrides: Partial<ScorePlayerState> = {}): ScorePlayerState {
   return {
     status: 'idle' as PluginPlaybackStatus,
@@ -2301,9 +2310,8 @@ describe('PracticeViewPlugin — free practice tempo readout (Feature 093)', () 
     expect(screen.queryByTestId('score-selector')).toBeNull();
     expect(readoutBpm()).toBe('120');
 
-    // Drag the tempo slider to 1.25 (base 120 → expected readout round(120×1.25)=150).
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    fireEvent.change(slider, { target: { value: '1.25' } });
+    // Step the tempo up to 150 BPM (30 × +1 from 120 → multiplier 1.25).
+    stepTempo('tempo-plus', 30);
 
     // BUG (Feature 093): the readout stayed frozen at 120 — it must now read 150.
     expect(readoutBpm()).toBe('150');
@@ -2314,14 +2322,11 @@ describe('PracticeViewPlugin — free practice tempo readout (Feature 093)', () 
     render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
 
     fireEvent.click(screen.getByRole('button', { name: /free practice/i }));
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
+    // Two +1 steps then two −1 steps; the readout must track every change.
+    stepTempo('tempo-plus', 2);
+    expect(readoutBpm()).toBe('122');
 
-    // 120 × 2.0 = 240 (max multiplier).
-    fireEvent.change(slider, { target: { value: '2.0' } });
-    expect(readoutBpm()).toBe('240');
-
-    // Back down to 1.0 → 120.
-    fireEvent.change(slider, { target: { value: '1.0' } });
+    stepTempo('tempo-minus', 2);
     expect(readoutBpm()).toBe('120');
   });
 
@@ -2333,9 +2338,8 @@ describe('PracticeViewPlugin — free practice tempo readout (Feature 093)', () 
     fireEvent.click(screen.getByRole('button', { name: /free practice/i }));
     expect(readoutBpm()).toBe('120');
 
-    // Set tempo to 30 (multiplier 0.25 of nominal 120).
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    fireEvent.change(slider, { target: { value: '0.25' } });
+    // Set tempo down to 30 (90 × −1 from 120 → multiplier 0.25).
+    stepTempo('tempo-minus', 90);
     expect(readoutBpm()).toBe('30');
 
     // Start then stop a free session to reach the results overlay.
@@ -2880,7 +2884,7 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     expect(screen.getByTestId('strict-tempo-indicator').getAttribute('data-failures')).toBe('1');
 
     // Change tempo → REANCHOR (count preserved, next note grace)
-    fireEvent.change(screen.getByLabelText(/tempo multiplier/i), { target: { value: '1.5' } });
+    stepTempo('tempo-plus', 60); // 120 BPM → 180 BPM → multiplier 1.5
 
     // Next note is grace — not judged. If it HAD been judged off the old grid
     // (response 2300 vs expected 1000 → +1300) it would already be failure 2.
@@ -2913,7 +2917,7 @@ describe('PracticeViewPlugin — strict tempo wiring (feature 101 US3)', () => {
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
 
     // Change tempo WHILE holding → REANCHOR pending
-    fireEvent.change(screen.getByLabelText(/tempo multiplier/i), { target: { value: '1.5' } });
+    stepTempo('tempo-plus', 60); // 120 BPM → 180 BPM → multiplier 1.5
 
     // Release after the acceptance threshold → hold judged on its original grid
     vi.setSystemTime(base + 1700);

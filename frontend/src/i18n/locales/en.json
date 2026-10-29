@@ -297,6 +297,8 @@
   "practice.toolbar.elapsed_aria": "Elapsed time",
   "practice.toolbar.tempo": "TEMPO",
   "practice.toolbar.tempo_aria": "Tempo multiplier",
+  "practice.toolbar.tempo_increase": "Increase tempo",
+  "practice.toolbar.tempo_decrease": "Decrease tempo",
   "practice.toolbar.metronome_aria": "Toggle metronome",
   "practice.toolbar.metronome_sub_aria": "Metronome subdivision",
   "practice.toolbar.strict_tempo": "Strict tempo",

@@ -3,7 +3,7 @@
  * Feature 037: Practice View Plugin
  *
  * Renders: Back (close), score title, Play/Pause, Stop, elapsed timer,
- * tempo slider, Staff selector (hidden when staffCount ≤ 1),
+ * tempo stepper (− BPM display / +), Staff selector (hidden when staffCount ≤ 1),
  * Practice toggle button, inline staff picker, no-MIDI notice.
  *
  * Pure presentational component — all state lives in PracticeViewPlugin.tsx.
@@ -13,9 +13,9 @@
  * US2 (T035): No-MIDI notice when practice active and MIDI not connected.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { PluginPlaybackStatus, MetronomeSubdivision } from '../../src/plugin-api/index';
-import { ProfileIcon, computeEffectiveMinMultiplier, MIN_TEMPO_MULTIPLIER, ABSOLUTE_BPM_FLOOR } from '../../src/plugin-api/index';
+import { ProfileIcon, computeEffectiveMinMultiplier, MIN_TEMPO_MULTIPLIER, MAX_TEMPO_MULTIPLIER, ABSOLUTE_BPM_FLOOR } from '../../src/plugin-api/index';
 import type { PracticeMode } from './practiceEngine.types';
 import { useTranslation } from '../../src/i18n';
 // Mirror of PlaybackScheduler.PPQ — no host imports allowed
@@ -45,6 +45,8 @@ export interface PracticeToolbarProps {
   totalDurationTicks: number;
   bpm: number;
   tempoMultiplier: number;
+  /** 1× original tempo (score tempo, or the free nominal). When absent, derived from bpm/tempoMultiplier. */
+  baseTempo?: number;
   // Playback handlers
   onBack: () => void;
   onPlay: () => void;
@@ -111,6 +113,7 @@ export function PracticeToolbar({
   totalDurationTicks,
   bpm,
   tempoMultiplier,
+  baseTempo,
   onBack,
   onPlay,
   onPause,
@@ -200,6 +203,66 @@ export function PracticeToolbar({
     })),
     { value: -1, label: t('practice.toolbar.both_hands') },
   ];
+
+  // ─── Tempo stepper (digital BPM display + short/long step buttons) ─────────
+  // A slider has far too little precision on touch/tablet; the stepper edits
+  // the effective BPM in whole beats: short press (±1), hold ≥1 s (±5).
+  const [tempoPressed, setTempoPressed] = useState<'plus' | 'minus' | null>(null);
+  const tempoPressStartRef = useRef<number | null>(null);
+
+  const tempoDisabled = status === 'loading' || !!taskTag;
+  // bpm prop is the effective BPM; baseTempo is the 1× original (stable:
+  // the score tempo or the free nominal) so stepping never drifts through
+  // the rounded effective/multiplier round-trip.
+  const originalBpm =
+    baseTempo > 0 ? baseTempo : tempoMultiplier > 0 ? bpm / tempoMultiplier : bpm;
+  const effectiveMin = computeEffectiveMinMultiplier(originalBpm);
+  const floorTooltip =
+    effectiveMin > MIN_TEMPO_MULTIPLIER
+      ? `Min. speed limited to ${ABSOLUTE_BPM_FLOOR} BPM`
+      : undefined;
+
+  const applyTempoStep = useCallback(
+    (dir: 1 | -1, long: boolean) => {
+      if (bpm <= 0) return;
+      const step = long ? 5 : 1;
+      if (originalBpm <= 0) return;
+      const minBpm = Math.max(1, Math.round(originalBpm * effectiveMin));
+      const maxBpm = Math.min(998, Math.round(originalBpm * MAX_TEMPO_MULTIPLIER));
+      const next = Math.min(maxBpm, Math.max(minBpm, Math.round(bpm) + dir * step));
+      const multiplier = Math.round((next / originalBpm) * 1000) / 1000;
+      onTempoChange(multiplier);
+    },
+    [bpm, originalBpm, effectiveMin, onTempoChange],
+  );
+
+  const handleTempoPressStart = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>, side: 'plus' | 'minus') => {
+      if (tempoDisabled) return;
+      tempoPressStartRef.current = Date.now();
+      setTempoPressed(side);
+      // Keep receiving the pointer-up even when the finger drifts off the button.
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* jsdom/tests */ }
+    },
+    [tempoDisabled],
+  );
+
+  const handleTempoPressEnd = useCallback(
+    (side: 'plus' | 'minus') => {
+      const start = tempoPressStartRef.current;
+      tempoPressStartRef.current = null;
+      setTempoPressed(null);
+      if (start === null) return;
+      const heldMs = Date.now() - start;
+      applyTempoStep(side === 'plus' ? 1 : -1, heldMs >= 1000);
+    },
+    [applyTempoStep],
+  );
+
+  const clearTempoPress = useCallback(() => {
+    tempoPressStartRef.current = null;
+    setTempoPressed(null);
+  }, []);
 
   // Practice button label and CSS class
   // 'holding' is a sub-state of active (note duration being measured) — show Stop button during both
@@ -404,42 +467,53 @@ export function PracticeToolbar({
         )}
       </span>
 
-      {/* Tempo */}
+      {/* Tempo — digital BPM stepper */}
       <div className="practice-plugin__toolbar-tempo">
-        <span className="practice-plugin__toolbar-tempo-label">{t('practice.toolbar.tempo')}</span>
-        {(() => {
-          // bpm prop is the effective BPM (scoreTempo × multiplier); derive original for floor calc
-          const originalBpm = tempoMultiplier > 0 ? bpm / tempoMultiplier : bpm;
-          const effectiveMin = computeEffectiveMinMultiplier(originalBpm);
-          const showFloorTooltip = effectiveMin > MIN_TEMPO_MULTIPLIER;
-          const floorTooltip = showFloorTooltip ? `Min. speed limited to ${ABSOLUTE_BPM_FLOOR} BPM` : undefined;
-          return (
-            <>
-              <input
-                type="range"
-                min={effectiveMin}
-                max={2.0}
-                step={0.01}
-                value={tempoMultiplier}
-                onChange={(e) => {
-                  const raw = Math.round(parseFloat(e.target.value) * 100) / 100;
-                  onTempoChange(Math.round(Math.abs(raw - 1.0) * 100) <= 3 ? 1.0 : raw);
-                }}
-                aria-label={t('practice.toolbar.tempo_aria')}
-                className="practice-plugin__toolbar-tempo-slider"
-                disabled={status === 'loading' || !!taskTag}
-                list="practice-tempo-ticks"
-                title={floorTooltip}
-              />
-              <datalist id="practice-tempo-ticks">
-                <option value="1.0" />
-              </datalist>
-            </>
-          );
-        })()}
-        {bpm > 0 && (
-          <span className="practice-plugin__toolbar-bpm">{bpm}</span>
-        )}
+        <span className="practice-plugin__toolbar-tempo-label" id="practice-tempo-label">
+          {t('practice.toolbar.tempo')}
+        </span>
+        <div
+          className="practice-plugin__tempo-step"
+          role="group"
+          aria-label={t('practice.toolbar.tempo_aria')}
+        >
+          <button
+            type="button"
+            className={`practice-plugin__tempo-step-btn practice-plugin__tempo-step-btn--minus${tempoPressed === 'minus' ? ' is-pressed' : ''}`}
+            data-testid="tempo-minus"
+            aria-label={t('practice.toolbar.tempo_decrease')}
+            disabled={tempoDisabled}
+            onPointerDown={(e) => handleTempoPressStart(e, 'minus')}
+            onPointerUp={() => handleTempoPressEnd('minus')}
+            onPointerCancel={clearTempoPress}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            −
+          </button>
+          <div
+            className="practice-plugin__tempo-step-display"
+            data-testid="tempo-display"
+            title={floorTooltip}
+          >
+            <span className="practice-plugin__toolbar-bpm practice-plugin__tempo-step-value">
+              {bpm > 0 ? String(Math.round(bpm)) : '—'}
+            </span>
+            <span className="practice-plugin__tempo-step-unit">BPM</span>
+          </div>
+          <button
+            type="button"
+            className={`practice-plugin__tempo-step-btn practice-plugin__tempo-step-btn--plus${tempoPressed === 'plus' ? ' is-pressed' : ''}`}
+            data-testid="tempo-plus"
+            aria-label={t('practice.toolbar.tempo_increase')}
+            disabled={tempoDisabled}
+            onPointerDown={(e) => handleTempoPressStart(e, 'plus')}
+            onPointerUp={() => handleTempoPressEnd('plus')}
+            onPointerCancel={clearTempoPress}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            +
+          </button>
+        </div>
       </div>
 
       {/* Metronome toggle + subdivision dropdown */}

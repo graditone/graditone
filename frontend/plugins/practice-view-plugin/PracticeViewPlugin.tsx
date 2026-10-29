@@ -1013,7 +1013,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         currentTick={freePractice.isFreePractice ? Math.round((freePractice.freeElapsedMs / 1000) * (freePractice.freeEffectiveBpm / 60) * 960) : playerState.currentTick}
         totalDurationTicks={freePractice.isFreePractice ? 0 : playerState.totalDurationTicks}
         bpm={freePractice.isFreePractice ? freePractice.freeEffectiveBpm : playerState.bpm}
-        tempoMultiplier={tempoMultiplier}
+        tempoMultiplier={freePractice.isFreePractice ? freePractice.freeTempoMultiplier : tempoMultiplier}
+        baseTempo={freePractice.isFreePractice
+          ? freePractice.freeStaffBpm
+          : tempoMultiplier > 0 ? playerState.bpm / tempoMultiplier : playerState.bpm}
         onBack={() => {
           // Feature 092: Exit free practice on back
           if (freePractice.isFreePractice) {
