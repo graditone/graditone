@@ -556,6 +556,15 @@ export function PracticeToolbar({
           </span>
         </button>
         <button
+          className="practice-plugin__metro-chevron"
+          onClick={() => setMetroMenuOpen((o) => !o)}
+          aria-label={t('practice.toolbar.metronome_sub_aria')}
+          aria-expanded={metroMenuOpen}
+          aria-haspopup="menu"
+        >
+          ▾
+        </button>
+        <button
           type="button"
           className={`practice-plugin__tempo-step-btn practice-plugin__tempo-step-btn--plus${tempoPressed === 'plus' ? ' is-pressed' : ''}`}
           data-testid="tempo-plus"
@@ -567,15 +576,6 @@ export function PracticeToolbar({
           onContextMenu={(e) => e.preventDefault()}
         >
           +
-        </button>
-        <button
-          className="practice-plugin__metro-chevron"
-          onClick={() => setMetroMenuOpen((o) => !o)}
-          aria-label={t('practice.toolbar.metronome_sub_aria')}
-          aria-expanded={metroMenuOpen}
-          aria-haspopup="menu"
-        >
-          ▾
         </button>
         {/* Feature 101: strict tempo indicator — informational badge, not focusable */}
         {strictTempoActive && !isFreePractice && (
