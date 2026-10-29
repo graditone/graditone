@@ -100,7 +100,9 @@ jobs:
   # appear on the deployed sub-path, not during local dev.
   # -----------------------------------------------------------------------
   e2e-production:
-    runs-on: ubuntu-latest
+    # Pin to 24.04: `ubuntu-latest` has moved to 26.04, which the pinned
+    # Playwright 1.58.x does not support (fails in `playwright install`).
+    runs-on: ubuntu-24.04
     needs: validate-frontend   # reuse type-check / lint result; skip if already failing
 
     steps:
