@@ -288,7 +288,7 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  min-width: 220px;
+  min-width: 160px;
 }
 
 .practice-plugin__toolbar-tempo-label {
@@ -298,19 +298,6 @@
   text-transform: uppercase;
   color: var(--ls-body, #999);
   white-space: nowrap;
-}
-
-.practice-plugin__toolbar-tempo-slider {
-  width: 130px;
-  accent-color: var(--ls-accent, #3060cc);
-}
-
-.practice-plugin__toolbar-bpm {
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--ls-body, #555);
-  white-space: nowrap;
-  min-width: 2.5ch;
 }
 
 /* ─── Staff selector (custom themed dropdown, mirrors metronome) ─────────── */
@@ -391,143 +378,6 @@
 }
 
 .practice-plugin__staff-menu-check {
-  color: var(--ls-accent, #a78bfa);
-  font-size: 0.8rem;
-  width: 12px;
-  flex-shrink: 0;
-}
-
-/* ─── Metronome group ────────────────────────────────────────────────────── */
-
-.practice-plugin__metro-group {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.practice-plugin__metro-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--ls-accent, #7c3aed);
-  color: #fff;
-  border: none;
-  border-radius: 8px 0 0 8px;
-  min-width: 40px;
-  padding: 0 10px;
-  font-size: 1.2rem;
-  line-height: 1;
-  min-height: 36px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: filter 0.12s;
-}
-
-/* Metro button hover — simple filter, no base-class conflict ——————————— */
-.practice-plugin__metro-btn:hover {
-  filter: brightness(1.18);
-}
-
-.practice-plugin__metro-btn:focus-visible {
-  outline: 2px solid rgba(255,255,255,0.5);
-  outline-offset: -2px;
-}
-
-.practice-plugin__metro-btn--active,
-.practice-plugin__metro-btn--active:hover {
-  background: var(--ls-accent, #7c3aed);
-  animation: practice-metro-pulse 0.12s ease-out;
-}
-
-.practice-plugin__metro-btn--downbeat,
-.practice-plugin__metro-btn--downbeat:hover {
-  background: color-mix(in srgb, var(--ls-accent, #7c3aed) 80%, #000);
-  animation: practice-metro-pulse-down 0.14s ease-out;
-}
-
-/* Armed state: metronome will start on the first MIDI note attack */
-.practice-plugin__metro-btn--armed,
-.practice-plugin__metro-btn--armed:hover {
-  color: #c8a000;
-  border-color: #c8a000;
-  animation: practice-metro-armed-pulse 0.5s ease-in-out infinite alternate;
-}
-
-@keyframes practice-metro-armed-pulse {
-  0%   { opacity: 0.4; }
-  100% { opacity: 1.0; }
-}
-
-@keyframes practice-metro-pulse {
-  0% { filter: brightness(1.6); }
-  100% { filter: brightness(1); }
-}
-
-@keyframes practice-metro-pulse-down {
-  0% { filter: brightness(2) saturate(1.4); }
-  100% { filter: brightness(1); }
-}
-
-.practice-plugin__metro-chevron {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 36px;
-  padding: 0 6px;
-  border: none;
-  border-left: 1px solid rgba(255,255,255,0.25);
-  border-radius: 0 8px 8px 0;
-  background: var(--ls-accent, #7c3aed);
-  color: #fff;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: filter 0.12s;
-}
-
-.practice-plugin__metro-chevron:hover {
-  filter: brightness(1.15);
-}
-
-.practice-plugin__metro-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 120px;
-  background: color-mix(in srgb, var(--ls-accent, #7c3aed) 15%, #111);
-  border: 1px solid var(--ls-accent, #7c3aed);
-  border-radius: 8px;
-  padding: 4px 0;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
-  z-index: 200;
-}
-
-.practice-plugin__metro-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 8px 14px;
-  border: none;
-  background: transparent;
-  color: #e2d9f3;
-  font-size: 0.9rem;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.1s;
-  white-space: nowrap;
-}
-
-.practice-plugin__metro-menu-item:hover {
-  background: color-mix(in srgb, var(--ls-accent, #7c3aed) 25%, transparent);
-}
-
-.practice-plugin__metro-menu-item--active {
-  color: #fff;
-  font-weight: 700;
-}
-
-.practice-plugin__metro-menu-check {
   color: var(--ls-accent, #a78bfa);
   font-size: 0.8rem;
   width: 12px;
@@ -1029,3 +879,102 @@
   color: var(--ls-text-primary, #222);
 }
 
+
+/* ── Feature 101: strict tempo stop banner (US1) ──────────────────────────── */
+
+.practice-results__tempo-stop {
+  /* Compact: the banner must not crowd the per-note table and delay chart
+     that the partial result is meant to explain. */
+  margin: 0 auto 0.5rem;
+  max-width: 360px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--ls-accent, #f59e0b) 55%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ls-accent, #f59e0b) 12%, var(--ls-bg, #fff));
+  text-align: center;
+}
+
+.practice-results__tempo-stop-title {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: color-mix(in srgb, var(--ls-accent, #f59e0b) 75%, #000);
+}
+
+.practice-results__tempo-stop-hint {
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--ls-text-secondary, #666);
+}
+
+/* ── Feature 101: tempo-stop failure list, marked rows and stat (US1/US2) ─── */
+
+.practice-results__tempo-stop-list {
+  margin: 0.3rem 0 0;
+  padding-left: 1rem;
+  list-style: disc;
+  text-align: left;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: var(--ls-text-primary, #222);
+}
+
+.practice-results__tempo-stop-list li + li {
+  margin-top: 0.1rem;
+}
+
+/* Strict failure rows keep the outcome class and gain a visible marker */
+.practice-results__row--strict-failure {
+  box-shadow: inset 3px 0 0 #c62828;
+  background: rgba(198, 40, 40, 0.08);
+}
+
+/* Allow the conditional fifth (tempo fails) stat to wrap instead of overflow */
+.practice-results__stats {
+  flex-wrap: wrap;
+}
+
+/* Tempo-stop partial action row sits under the timing details */
+.practice-results__actions--partial {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0.75rem auto 0;
+  max-width: 480px;
+}
+
+/* Strict failure chart dots are danger-red; the inline fill uses the same tone */
+.practice-results__chart-dot--strict {
+  fill: #c62828;
+}
+
+/* ── Feature 101: strict tempo toolbar badge (US3) ────────────────────────── */
+
+.practice-plugin__strict-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.5rem;
+  margin-left: 0.35rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--ls-accent, #f59e0b) 45%, transparent);
+  background: color-mix(in srgb, var(--ls-accent, #f59e0b) 10%, var(--ls-bg, #fff));
+  color: color-mix(in srgb, var(--ls-accent, #f59e0b) 70%, #000);
+  user-select: none;
+  pointer-events: none;
+}
+
+.practice-plugin__strict-badge--warn {
+  border-color: color-mix(in srgb, #f57f17 55%, transparent);
+  background: color-mix(in srgb, #f57f17 16%, var(--ls-bg, #fff));
+  color: color-mix(in srgb, #f57f17 75%, #000);
+}
+
+.practice-plugin__strict-badge--danger {
+  border-color: color-mix(in srgb, #c62828 55%, transparent);
+  background: color-mix(in srgb, #c62828 16%, var(--ls-bg, #fff));
+  color: color-mix(in srgb, #c62828 75%, #000);
+}

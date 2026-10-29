@@ -54,6 +54,7 @@ export type { ChordDetectorOptions, ChordResult } from '../utils/chordDetector';
 
 // Feature 080: Profile icon for plugin toolbars
 export { ProfileIcon } from '../components/ProfileIcon';
+export { TempoMetronomeControl } from '../components/TempoMetronomeControl';
 export { scopedGetItem, scopedSetItem, scopedRemoveItem, getActiveProfileId } from '../services/profiles/profileStorage';
 
 // Feature 056: Saved practice types and storage services

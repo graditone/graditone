@@ -1,4 +1,4 @@
-import { render, fireEvent } from '@testing-library/react';
+import { render, fireEvent, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { ResultsOverlay } from './ResultsOverlay';
 import { INITIAL_PRACTICE_STATE } from './practiceEngine.types';
@@ -258,5 +258,275 @@ describe('ResultsOverlay', () => {
     // The right-hand onset is attacked at its own time.
     expect(byMidi(67)).toHaveLength(1);
     expect(byMidi(67)[0][0].offsetMs).toBe(500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 101 — Strict tempo partial results (T015)
+// ---------------------------------------------------------------------------
+
+/** Three strict failures: +220 ms late, −180 ms early-onset, early release 1200 ms short. */
+function makeTempoFailureResults(): PracticeNoteResult[] {
+  return [
+    {
+      noteIndex: 0,
+      outcome: 'correct-late',
+      playedMidi: 60,
+      expectedMidi: [60],
+      responseTimeMs: 720,
+      expectedTimeMs: 500,
+      relativeDeltaMs: 220,
+      wrongAttempts: 0,
+      holdDurationMs: 0,
+      requiredHoldMs: 0,
+      beatDeltaMs: 220,
+      strictFailure: true,
+    },
+    {
+      noteIndex: 1,
+      outcome: 'correct-late',
+      playedMidi: 62,
+      expectedMidi: [62],
+      responseTimeMs: 820,
+      expectedTimeMs: 1000,
+      relativeDeltaMs: -180,
+      wrongAttempts: 0,
+      holdDurationMs: 0,
+      requiredHoldMs: 0,
+      beatDeltaMs: -180,
+      strictFailure: true,
+    },
+    {
+      noteIndex: 2,
+      outcome: 'early-release',
+      playedMidi: 64,
+      expectedMidi: [64],
+      responseTimeMs: 1300,
+      expectedTimeMs: 1500,
+      relativeDeltaMs: -200,
+      wrongAttempts: 0,
+      holdDurationMs: 800,
+      requiredHoldMs: 2000,
+      beatDeltaMs: 0,
+      strictFailure: true,
+    },
+    {
+      noteIndex: 3,
+      outcome: 'correct',
+      playedMidi: 66,
+      expectedMidi: [66],
+      responseTimeMs: 2000,
+      expectedTimeMs: 2000,
+      relativeDeltaMs: 0,
+      wrongAttempts: 0,
+      holdDurationMs: 0,
+      requiredHoldMs: 0,
+    },
+  ] as unknown as PracticeNoteResult[];
+}
+
+/** Tempo-stop partial props — stopped after the 3rd failure at note 2 of 5. */
+function makeTempoPartialProps(extra?: Record<string, unknown>) {
+  const base = makeMockProps();
+  const results = makeTempoFailureResults();
+  const partialPerformanceRecord = {
+    notes: results.map((r, i) => ({
+      midiPitches: [60 + i * 2],
+      noteIds: [`n${i}`],
+      tick: i * 960,
+      durationTicks: 0,
+    })),
+    noteResults: results,
+    wrongNoteEvents: [],
+    bpmAtCompletion: 120,
+    tempoMultiplier: 1.0,
+    stoppedAtIndex: 2,
+    totalNoteCount: 5,
+    stopReason: 'tempo' as const,
+  };
+  return {
+    ...base,
+    practiceState: { ...INITIAL_PRACTICE_STATE, mode: 'inactive' as const, noteResults: [] },
+    resultsOverlayVisible: true,
+    partialPerformanceRecord,
+    ...extra,
+  };
+}
+
+/** Open both collapsible sections in the rendered overlay. */
+function openOverlayDetails(container: HTMLElement) {
+  const summaries = container.querySelectorAll('.practice-results__details-summary');
+  for (const s of summaries) fireEvent.click(s);
+}
+
+describe('ResultsOverlay — tempo-stop partial (feature 101, T015)', () => {
+  it('shows the tempo banner with exactly three failure items (note numbers + signed values)', () => {
+    const props = makeTempoPartialProps();
+    render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+
+    expect(screen.getByTestId('tempo-stop-banner')).toBeTruthy();
+    expect(screen.getByText('Tempo not followed')).toBeTruthy();
+    expect(screen.getByText('Practice stopped after 3 consecutive timing misses.')).toBeTruthy();
+
+    const items = screen.getAllByTestId('tempo-stop-failure');
+    expect(items).toHaveLength(3);
+    expect(items[0].textContent).toContain('Note 1: +220 ms');
+    expect(items[1].textContent).toContain('Note 2: -180 ms');
+    expect(items[2].textContent).toContain('Note 3: Released 1200 ms early');
+  });
+
+  it('shows the tempo-fails stat for a tempo partial and hides it for a clean complete session', () => {
+    const tempoProps = makeTempoPartialProps();
+    const tempo = render(<ResultsOverlay {...tempoProps} />, { wrapper: TestWrapper });
+    expect(tempo.getByTestId('strict-fail-count')).toBeTruthy();
+    expect(tempo.getByTestId('strict-fail-count').textContent).toContain('3');
+    tempo.unmount();
+
+    const completeProps = makeCompleteOverlayProps();
+    const complete = render(<ResultsOverlay {...completeProps} />, { wrapper: TestWrapper });
+    expect(complete.queryByTestId('strict-fail-count')).toBeNull();
+  });
+
+  it('strict sessions show ONE timing metric — the tempo stats replace the legacy off-beat stat', () => {
+    // Tempo partial: the strict "Tempo fails" stat represents the off-beat
+    // notes (a strict failure IS the off-beat note), so the legacy stat must
+    // not appear — two stats for the same count broke the stat-row layout.
+    const tempoProps = makeTempoPartialProps();
+    const tempo = render(<ResultsOverlay {...tempoProps} />, { wrapper: TestWrapper });
+    expect(tempo.getByTestId('strict-fail-count')).toBeTruthy();
+    expect(tempo.queryByText('Off-beat')).toBeNull();
+    tempo.unmount();
+
+    // A legacy session (no strict fields) keeps the legacy off-beat stat.
+    const base = makeTempoPartialProps();
+    const legacyRecord = { ...base.partialPerformanceRecord } as Record<string, unknown>;
+    delete legacyRecord.stopReason;
+    const legacyPartial = {
+      ...base,
+      partialPerformanceRecord: {
+        ...legacyRecord,
+        noteResults: legacyRecord.noteResults.map((r: PracticeNoteResult) => {
+          const clean = { ...r };
+          delete (clean as Record<string, unknown>).strictFailure;
+          delete (clean as Record<string, unknown>).beatDeltaMs;
+          return clean;
+        }),
+      } as unknown as typeof base.partialPerformanceRecord,
+    };
+    const legacy = render(<ResultsOverlay {...legacyPartial} />, { wrapper: TestWrapper });
+    expect(legacy.queryByTestId('strict-fail-count')).toBeNull();
+    expect(legacy.getAllByText('Off-beat').length).toBeGreaterThan(0);
+  });
+
+  it('renders the timing table and chart in the tempo partial and marks all three failing notes', () => {
+    const props = makeTempoPartialProps();
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+    openOverlayDetails(container);
+
+    // Marked table rows: every recorded strict failure
+    const strictRows = container.querySelectorAll('.practice-results__row--strict-failure');
+    expect(strictRows.length).toBe(3);
+
+    // Chart renders (4 results ≥ 2) and marks the strict failure points
+    const svg = container.querySelector('.practice-results__chart');
+    expect(svg).not.toBeNull();
+    const strictDots = svg!.querySelectorAll('[data-strict-failure="true"]');
+    expect(strictDots.length).toBe(3);
+  });
+
+  it('tempo actions call Repractice / Save / Session, disable Save once saved, and show save errors', () => {
+    const onSave = vi.fn();
+    const onReturnToSession = vi.fn();
+    const props = makeTempoPartialProps({ onSave, onReturnToSession, isSaved: false, saveError: null });
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+
+    fireEvent.click(container.querySelector('[data-testid="tempo-stop-repractice"]')!);
+    expect(props.onRepractice).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(container.querySelector('[data-testid="tempo-stop-save"]')!);
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(container.querySelector('[data-testid="tempo-stop-session"]')!);
+    expect(onReturnToSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the tempo Save button when the practice is already saved', () => {
+    const props = makeTempoPartialProps({ onSave: vi.fn(), isSaved: true });
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+    const save = container.querySelector('[data-testid="tempo-stop-save"]') as HTMLButtonElement | null;
+    expect(save).not.toBeNull();
+    expect(save!.disabled).toBe(true);
+  });
+
+  it('shows a save error next to the tempo actions', () => {
+    const props = makeTempoPartialProps({ onSave: vi.fn(), saveError: 'Storage full' });
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+    const error = container.querySelector('.practice-results__save-error');
+    expect(error).not.toBeNull();
+    expect(error!.textContent).toBe('Storage full');
+  });
+
+  it('a stale complete record does not mask the tempo partial', () => {
+    const staleCompleteRecord = {
+      notes: [],
+      noteResults: [],
+      wrongNoteEvents: [],
+      bpmAtCompletion: 120,
+      tempoMultiplier: 1.0,
+    };
+    const props = makeTempoPartialProps({ performanceRecord: staleCompleteRecord });
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+
+    // The tempo partial wins: banner shown, complete-only replay row absent.
+    expect(screen.getByTestId('tempo-stop-banner')).toBeTruthy();
+    expect(container.querySelector('.practice-results__replay-btn')).toBeNull();
+  });
+
+  it('a manual partial with strict failures keeps the stopped badge, no banner and no tempo actions', () => {
+    const base = makeTempoPartialProps();
+    const record = {
+      ...base.partialPerformanceRecord,
+      stopReason: 'manual' as const,
+    };
+    const props = { ...base, partialPerformanceRecord: record };
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(container.querySelector('.practice-results__stopped-badge')).not.toBeNull();
+    expect(container.querySelector('[data-testid="tempo-stop-repractice"]')).toBeNull();
+    expect(container.querySelector('[data-testid="tempo-stop-save"]')).toBeNull();
+
+    // Strict failures are still marked in the details
+    openOverlayDetails(container);
+    expect(container.querySelectorAll('.practice-results__row--strict-failure').length).toBe(3);
+  });
+
+  it('a legacy saved partial without a stop reason is presented as a manual partial', () => {
+    const base = makeTempoPartialProps();
+    const legacyRecord = { ...base.partialPerformanceRecord } as Record<string, unknown>;
+    delete legacyRecord.stopReason;
+    const props = { ...base, partialPerformanceRecord: legacyRecord };
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(container.querySelector('.practice-results__stopped-badge')).not.toBeNull();
+    expect(container.querySelector('[data-testid="tempo-stop-repractice"]')).toBeNull();
+  });
+
+  it('a clean complete overlay shows no tempo banner', () => {
+    const performanceRecord = {
+      notes: [],
+      noteResults: [],
+      wrongNoteEvents: [],
+      bpmAtCompletion: 120,
+      tempoMultiplier: 1.0,
+    };
+    const props = makeCompleteOverlayProps({ performanceRecord });
+    const { container } = render(<ResultsOverlay {...props} />, { wrapper: TestWrapper });
+    expect(screen.queryByTestId('tempo-stop-banner')).toBeNull();
+    expect(container.querySelector('.practice-results__replay-btn')).not.toBeNull();
+    // No strict rows are marked when every note was on time
+    openOverlayDetails(container);
+    expect(container.querySelectorAll('.practice-results__row--strict-failure').length).toBe(0);
   });
 });

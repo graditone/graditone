@@ -3,7 +3,7 @@
  * Feature 037: Practice View Plugin
  *
  * Renders: Back (close), score title, Play/Pause, Stop, elapsed timer,
- * tempo slider, Staff selector (hidden when staffCount ≤ 1),
+ * tempo stepper (− BPM display / +), Staff selector (hidden when staffCount ≤ 1),
  * Practice toggle button, inline staff picker, no-MIDI notice.
  *
  * Pure presentational component — all state lives in PracticeViewPlugin.tsx.
@@ -15,7 +15,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { PluginPlaybackStatus, MetronomeSubdivision } from '../../src/plugin-api/index';
-import { ProfileIcon, computeEffectiveMinMultiplier, MIN_TEMPO_MULTIPLIER, ABSOLUTE_BPM_FLOOR } from '../../src/plugin-api/index';
+import { ProfileIcon, TempoMetronomeControl } from '../../src/plugin-api/index';
 import type { PracticeMode } from './practiceEngine.types';
 import { useTranslation } from '../../src/i18n';
 // Mirror of PlaybackScheduler.PPQ — no host imports allowed
@@ -45,6 +45,8 @@ export interface PracticeToolbarProps {
   totalDurationTicks: number;
   bpm: number;
   tempoMultiplier: number;
+  /** 1× original tempo (score tempo, or the free nominal). When absent, derived from bpm/tempoMultiplier. */
+  baseTempo?: number;
   // Playback handlers
   onBack: () => void;
   onPlay: () => void;
@@ -94,6 +96,10 @@ export interface PracticeToolbarProps {
   isFreePractice?: boolean;
   /** Feature 092: Running count of MIDI note attacks captured so far (free practice only). */
   freeNoteCount?: number;
+  /** Feature 101: strict tempo mode is enforcing the tempo grid (Score Practice + metronome). */
+  strictTempoActive?: boolean;
+  /** Feature 101: number of consecutive strict timing failures so far (0–2 while running). */
+  strictFailureCount?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,6 +113,7 @@ export function PracticeToolbar({
   totalDurationTicks,
   bpm,
   tempoMultiplier,
+  baseTempo,
   onBack,
   onPlay,
   onPause,
@@ -134,6 +141,8 @@ export function PracticeToolbar({
   onTaskTagClick,
   isFreePractice = false,
   freeNoteCount = 0,
+  strictTempoActive = false,
+  strictFailureCount = 0,
 }: PracticeToolbarProps) {
   const { t } = useTranslation();
   const isPlaying = status === 'playing';
@@ -142,30 +151,6 @@ export function PracticeToolbar({
   const elapsedFormatted = formatTime(ticksToSeconds(currentTick, bpm));
   const totalFormatted =
     totalDurationTicks > 0 ? formatTime(ticksToSeconds(totalDurationTicks, bpm)) : null;
-
-  // Metronome beat animation key — changing it on every beat restarts CSS animation
-  const metronomeAnimKey = metronomeActive ? `metro-${metronomeBeatIndex}` : 'metro-off';
-  const metronomeBtnClass = [
-    'practice-plugin__metro-btn',
-    ...(metronomeActive ? ['practice-plugin__metro-btn--active'] : []),
-    ...(metronomeActive && metronomeIsDownbeat ? ['practice-plugin__metro-btn--downbeat'] : []),
-    ...(metronomeArmed && !metronomeActive ? ['practice-plugin__metro-btn--armed'] : []),
-  ].join(' ');
-  const SUBDIV_ICONS: Record<MetronomeSubdivision, string> = { 1: '♩', 2: '♪', 4: '♬' };
-  const SUBDIV_LABELS: Record<MetronomeSubdivision, string> = { 1: '♩ 1/4', 2: '♪ 1/8', 4: '♬ 1/16' };
-
-  const [metroMenuOpen, setMetroMenuOpen] = useState(false);
-  const metroGroupRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!metroMenuOpen) return;
-    function handleOutside(e: MouseEvent) {
-      if (metroGroupRef.current && !metroGroupRef.current.contains(e.target as Node)) {
-        setMetroMenuOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, [metroMenuOpen]);
 
   const [staffMenuOpen, setStaffMenuOpen] = useState(false);
   const staffGroupRef = useRef<HTMLDivElement>(null);
@@ -398,88 +383,49 @@ export function PracticeToolbar({
         )}
       </span>
 
-      {/* Tempo */}
+      {/* Tempo — label (the readout itself lives in the shared widget) */}
       <div className="practice-plugin__toolbar-tempo">
-        <span className="practice-plugin__toolbar-tempo-label">{t('practice.toolbar.tempo')}</span>
-        {(() => {
-          // bpm prop is the effective BPM (scoreTempo × multiplier); derive original for floor calc
-          const originalBpm = tempoMultiplier > 0 ? bpm / tempoMultiplier : bpm;
-          const effectiveMin = computeEffectiveMinMultiplier(originalBpm);
-          const showFloorTooltip = effectiveMin > MIN_TEMPO_MULTIPLIER;
-          const floorTooltip = showFloorTooltip ? `Min. speed limited to ${ABSOLUTE_BPM_FLOOR} BPM` : undefined;
-          return (
-            <>
-              <input
-                type="range"
-                min={effectiveMin}
-                max={2.0}
-                step={0.01}
-                value={tempoMultiplier}
-                onChange={(e) => {
-                  const raw = Math.round(parseFloat(e.target.value) * 100) / 100;
-                  onTempoChange(Math.round(Math.abs(raw - 1.0) * 100) <= 3 ? 1.0 : raw);
-                }}
-                aria-label={t('practice.toolbar.tempo_aria')}
-                className="practice-plugin__toolbar-tempo-slider"
-                disabled={status === 'loading' || !!taskTag}
-                list="practice-tempo-ticks"
-                title={floorTooltip}
-              />
-              <datalist id="practice-tempo-ticks">
-                <option value="1.0" />
-              </datalist>
-            </>
-          );
-        })()}
-        {bpm > 0 && (
-          <span className="practice-plugin__toolbar-bpm">{bpm}</span>
-        )}
+        <span className="practice-plugin__toolbar-tempo-label" id="practice-tempo-label">
+          {t('practice.toolbar.tempo')}
+        </span>
       </div>
 
-      {/* Metronome toggle + subdivision dropdown */}
-      <div className="practice-plugin__metro-group" ref={metroGroupRef}>
-        <button
-          key={metronomeAnimKey}
-          className={metronomeBtnClass}
-          onClick={onMetronomeToggle}
-          aria-label={t('practice.toolbar.metronome_aria')}
-          aria-pressed={metronomeActive}
+      {/* Shared metronome + tempo widget (also used by the Play Score toolbar) */}
+      <TempoMetronomeControl
+        bpm={bpm}
+        baseTempo={baseTempo}
+        tempoMultiplier={tempoMultiplier}
+        onTempoChange={onTempoChange}
+        metronomeActive={metronomeActive}
+        metronomeArmed={metronomeArmed}
+        metronomeBeatIndex={metronomeBeatIndex}
+        metronomeIsDownbeat={metronomeIsDownbeat}
+        onMetronomeToggle={onMetronomeToggle}
+        metronomeSubdivision={metronomeSubdivision}
+        onMetronomeSubdivisionChange={onMetronomeSubdivisionChange}
+        disabled={status === 'loading' || !!taskTag}
+        labels={{
+          increaseAria: t('practice.toolbar.tempo_increase'),
+          decreaseAria: t('practice.toolbar.tempo_decrease'),
+          metronomeAria: t('practice.toolbar.metronome_aria'),
+          subdivisionAria: t('practice.toolbar.metronome_sub_aria'),
+        }}
+      />
+      {/* Feature 101: strict tempo indicator — informational badge, not focusable */}
+      {strictTempoActive && !isFreePractice && (
+        <span
+          className={`practice-plugin__strict-badge practice-plugin__strict-badge--${
+            strictFailureCount === 0 ? 'none' : strictFailureCount === 1 ? 'warn' : 'danger'
+          }`}
+          data-testid="strict-tempo-indicator"
+          data-failures={strictFailureCount}
+          aria-live="polite"
+          title={t('practice.toolbar.strict_tempo_title', { n: String(strictFailureCount) })}
+          aria-label={t('practice.toolbar.strict_tempo_title', { n: String(strictFailureCount) })}
         >
-          {SUBDIV_ICONS[metronomeSubdivision]}
-        </button>
-        <button
-          className="practice-plugin__metro-chevron"
-          onClick={() => setMetroMenuOpen((o) => !o)}
-          aria-label={t('practice.toolbar.metronome_sub_aria')}
-          aria-expanded={metroMenuOpen}
-          aria-haspopup="menu"
-        >
-          ▾
-        </button>
-        {metroMenuOpen && (
-          <div className="practice-plugin__metro-menu" role="menu">
-            {([1, 2, 4] as MetronomeSubdivision[]).map((s) => (
-              <button
-                key={s}
-                role="menuitem"
-                className={
-                  'practice-plugin__metro-menu-item' +
-                  (metronomeSubdivision === s ? ' practice-plugin__metro-menu-item--active' : '')
-                }
-                onClick={() => {
-                  onMetronomeSubdivisionChange(s);
-                  setMetroMenuOpen(false);
-                }}
-              >
-                {metronomeSubdivision === s && (
-                  <span className="practice-plugin__metro-menu-check">✓</span>
-                )}
-                {SUBDIV_LABELS[s]}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+          {t('practice.toolbar.strict_tempo')}
+        </span>
+      )}
 
       {/* MIDI badge — only shown when a MIDI device is detected */}
       {midiConnected && (

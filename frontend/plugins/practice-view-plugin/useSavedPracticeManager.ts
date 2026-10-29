@@ -308,6 +308,9 @@ export function useSavedPracticeManager({
           bpmAtCompletion: partialPerformanceRecord!.bpmAtCompletion,
           stoppedAtIndex: partialPerformanceRecord!.stoppedAtIndex,
           totalNoteCount: partialPerformanceRecord!.totalNoteCount,
+          // Feature 101: persist why the session stopped; legacy manual
+          // partials without a reason are recorded as 'manual'.
+          stopReason: partialPerformanceRecord!.stopReason ?? 'manual',
         };
 
     const practice: SavedPractice = {

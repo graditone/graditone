@@ -1,0 +1,218 @@
+/**
+ * TempoMetronomeControl.css — shared tempo + metronome widget styling.
+ * Used by every plugin toolbar (Practice, Play Score) so the widget looks
+ * identical everywhere. Follows the app theme variables (--ls-*).
+ */
+
+/* ─── Stepper buttons (− / +) ───────────────────────────────────────────── */
+
+.practice-plugin__tempo-step-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--ls-accent, #3060cc) 40%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ls-accent, #3060cc) 8%, var(--ls-bg, #fff));
+  color: var(--ls-accent, #3060cc);
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  transition: background 0.12s, filter 0.12s, transform 0.05s;
+}
+
+.practice-plugin__tempo-step-btn:hover {
+  background: color-mix(in srgb, var(--ls-accent, #3060cc) 16%, var(--ls-bg, #fff));
+}
+
+.practice-plugin__tempo-step-btn:active,
+.practice-plugin__tempo-step-btn.is-pressed {
+  background: var(--ls-accent, #3060cc);
+  color: var(--ls-bg, #fff);
+}
+
+.practice-plugin__tempo-step-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+.practice-plugin__tempo-step-value {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ls-text-primary, #222);
+  white-space: nowrap;
+  text-align: center;
+}
+
+.practice-plugin__tempo-step-unit {
+  font-size: 0.5rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  color: var(--ls-body, #999);
+  white-space: nowrap;
+}
+
+/* ─── Metronome group + start button (BPM readout) ──────────────────────── */
+
+.practice-plugin__metro-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 3px;
+}
+
+.practice-plugin__metro-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ls-accent, #7c3aed);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  min-width: 66px;
+  padding: 0 8px;
+  font-size: 1.2rem;
+  line-height: 1;
+  min-height: 36px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: filter 0.12s;
+}
+
+/* BPM readout inside the metronome start button (stacked: value over unit) */
+.practice-plugin__metro-btn-bpm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.12;
+}
+
+/* Inherit the button's colour (white; gold while armed) for both lines */
+.practice-plugin__metro-btn .practice-plugin__tempo-step-value,
+.practice-plugin__metro-btn .practice-plugin__tempo-step-unit {
+  color: inherit;
+}
+
+.practice-plugin__metro-btn:hover {
+  filter: brightness(1.18);
+}
+
+.practice-plugin__metro-btn:focus-visible {
+  outline: 2px solid rgba(255,255,255,0.5);
+  outline-offset: -2px;
+}
+
+.practice-plugin__metro-btn--active,
+.practice-plugin__metro-btn--active:hover {
+  background: var(--ls-accent, #7c3aed);
+  animation: practice-metro-pulse 0.12s ease-out;
+}
+
+.practice-plugin__metro-btn--downbeat,
+.practice-plugin__metro-btn--downbeat:hover {
+  background: color-mix(in srgb, var(--ls-accent, #7c3aed) 80%, #000);
+  animation: practice-metro-pulse-down 0.14s ease-out;
+}
+
+/* Armed state: metronome will start on the first MIDI note attack */
+.practice-plugin__metro-btn--armed,
+.practice-plugin__metro-btn--armed:hover {
+  color: #c8a000;
+  border-color: #c8a000;
+  animation: practice-metro-armed-pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes practice-metro-armed-pulse {
+  0%   { opacity: 0.4; }
+  100% { opacity: 1.0; }
+}
+
+@keyframes practice-metro-pulse {
+  0% { filter: brightness(1.6); }
+  100% { filter: brightness(1); }
+}
+
+@keyframes practice-metro-pulse-down {
+  0% { filter: brightness(2) saturate(1.4); }
+  100% { filter: brightness(1); }
+}
+
+/* ─── Subdivision chevron + dropdown ────────────────────────────────────── */
+
+.practice-plugin__metro-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 8px;
+  background: var(--ls-accent, #7c3aed);
+  color: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: filter 0.12s;
+}
+
+.practice-plugin__metro-chevron:hover {
+  filter: brightness(1.15);
+}
+
+.practice-plugin__metro-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 120px;
+  background: color-mix(in srgb, var(--ls-accent, #7c3aed) 15%, #111);
+  border: 1px solid var(--ls-accent, #7c3aed);
+  border-radius: 8px;
+  padding: 4px 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  z-index: 200;
+}
+
+.practice-plugin__metro-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: #e2d9f3;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.practice-plugin__metro-menu-item:hover {
+  background: color-mix(in srgb, var(--ls-accent, #7c3aed) 25%, transparent);
+}
+
+.practice-plugin__metro-menu-item--active {
+  color: #fff;
+  font-weight: 700;
+}
+
+.practice-plugin__metro-menu-check {
+  color: var(--ls-accent, #a78bfa);
+  font-size: 0.8rem;
+  width: 12px;
+  flex-shrink: 0;
+}

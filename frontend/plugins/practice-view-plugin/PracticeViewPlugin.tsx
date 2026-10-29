@@ -312,6 +312,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         tempoMultiplier: saved.tempoMultiplier ?? 1.0,
         stoppedAtIndex: saved.performanceData.stoppedAtIndex ?? 0,
         totalNoteCount: saved.performanceData.totalNoteCount ?? saved.performanceData.notes.length,
+        // Feature 101: restore why the session stopped; legacy saved partials
+        // without the reason are presented as manual partials.
+        stopReason: saved.performanceData.stopReason ?? 'manual',
       });
       setPerformanceRecord(null);
     }
@@ -395,6 +398,64 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const loopCountRef = useRef(loopCount);
   loopCountRef.current = loopCount;
 
+  // Feature 101: exact-once side effects for the strict-tempo stop (US1).
+  // The reducer only signals 'tempo-stopped' (mode); this orchestrator performs
+  // the stop: snapshot results, decide complete vs tempo partial, show the
+  // results overlay, stop the session, stop/re-arm the metronome, and stop +
+  // seek the score player. Guarded so re-renders/Strict Mode never repeat it.
+  const tempoStopHandledRef = useRef(false);
+  useEffect(() => {
+    if (practiceState.mode === 'waiting') {
+      // A new session began — re-arm the once-guard.
+      tempoStopHandledRef.current = false;
+    }
+    if (practiceState.mode !== 'tempo-stopped') return;
+    if (tempoStopHandledRef.current) return;
+    tempoStopHandledRef.current = true;
+
+    const ps = practiceState;
+    const last = ps.noteResults[ps.noteResults.length - 1];
+
+    // Same final-index logic as handlePracticeToggle / usePracticeLoop: the
+    // loop region's endIndex when one exists, else the last note of the score.
+    const range = loopPracticeRangeRef.current;
+    const lastIndex = range ? range.endIndex : ps.notes.length - 1;
+    const isFinalIteration = remainingLoopsRef.current <= 0;
+    const isAccepted = !!last && (last.outcome === 'correct' || last.outcome === 'correct-late');
+    const completeStop = isAccepted && isFinalIteration && ps.currentIndex >= lastIndex;
+
+    if (completeStop) {
+      setPerformanceRecord({
+        notes: [...ps.notes],
+        noteResults: [...ps.noteResults],
+        wrongNoteEvents: [...ps.wrongNoteEvents],
+        bpmAtCompletion: playerState.bpm,
+        tempoMultiplier: tempoMultiplierRef.current ?? 1.0,
+      });
+      setPartialPerformanceRecord(null);
+    } else {
+      setPartialPerformanceRecord({
+        notes: [...ps.notes],
+        noteResults: [...ps.noteResults],
+        wrongNoteEvents: [...ps.wrongNoteEvents],
+        bpmAtCompletion: playerState.bpm,
+        tempoMultiplier: tempoMultiplierRef.current ?? 1.0,
+        stoppedAtIndex: ps.currentIndex,
+        totalNoteCount: ps.notes.length,
+        stopReason: 'tempo',
+      });
+      setPerformanceRecord(null);
+    }
+
+    setResultsOverlayVisible(true);
+    dispatchPractice({ type: 'STOP' });
+    // Feature 097: stop the metronome engine (re-arms if enabled) exactly once.
+    lifecycle.onSessionEnd();
+    context.scorePlayer.stop();
+    context.scorePlayer.seekToTick(loopRegionRef.current?.startTick ?? 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [practiceState.mode]);
+
   // Flash the auto-advanced note IDs in red for 600 ms.
   useEffect(() => {
     const results = practiceState.noteResults;
@@ -423,8 +484,21 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     if (last.outcome !== 'correct-late' && last.outcome !== 'early-release') return;
     if (isReplaying || freePractice.isFreePractice || resultsOverlayVisible) return;
 
+    // Feature 101: strict failures display the strict value — the beat delta
+    // for an onset miss (even when the legacy relative delta is smaller) and
+    // the negative shortfall for an early release. Legacy results keep the
+    // relative delta exactly as before.
+    let value: string;
+    if (last.strictFailure === true && last.outcome === 'early-release') {
+      value = formatStateLabel(-Math.round(last.requiredHoldMs - last.holdDurationMs));
+    } else if (last.strictFailure === true) {
+      value = formatStateLabel(last.beatDeltaMs ?? last.relativeDeltaMs);
+    } else {
+      value = formatStateLabel(last.relativeDeltaMs);
+    }
+
     const id = ++timingFeedbackIdRef.current;
-    setTimingFeedback({ value: formatStateLabel(last.relativeDeltaMs), id });
+    setTimingFeedback({ value, id });
     if (timingFeedbackTimerRef.current !== null) clearTimeout(timingFeedbackTimerRef.current);
     timingFeedbackTimerRef.current = setTimeout(() => {
       timingFeedbackTimerRef.current = null;
@@ -624,6 +698,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       // feed the multiplier through so the effective BPM (and saved record) follow.
       if (freePractice.isFreePracticeRef.current) {
         freePractice.setFreeTempo(m);
+        return;
+      }
+      // Feature 101: a running strict session re-anchors on a tempo change —
+      // the next note is a grace note and the failure count is preserved. A
+      // hold in progress keeps its original grid (strictReanchorPending).
+      const ps = practiceStateRef.current;
+      if (ps.strictMode && (ps.mode === 'waiting' || ps.mode === 'active' || ps.mode === 'holding')) {
+        dispatchPractice({ type: 'REANCHOR' });
       }
     },
     // freePractice is a stable hook-backed API; isFreePracticeRef is read at call time.
@@ -634,10 +716,22 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
   const handleMetronomeToggle = useCallback(() => {
     // Free practice always defers (arms); score practice arms only while
     // waiting for the first note, otherwise toggles immediately.
-    const canArm = freePractice.isFreePracticeRef.current
-      ? true
-      : practiceStateRef.current.mode === 'waiting';
+    const freePracticeMode = freePractice.isFreePracticeRef.current;
+    const canArm = freePracticeMode ? true : practiceStateRef.current.mode === 'waiting';
+    const wasOn = metronomeStateRef.current.active || metronomeStateRef.current.armed;
     lifecycle.onToggle(canArm);
+    // Feature 101: running Score Practice sessions follow the metronome —
+    // enabling it mid-session starts strict evaluation (next note grace,
+    // count from zero); disabling clears the count and returns to legacy.
+    // Free Practice never dispatches strict actions; inactive/complete/
+    // tempo-stopped sessions are untouched.
+    if (!freePracticeMode) {
+      const ps = practiceStateRef.current;
+      const running = ps.mode === 'waiting' || ps.mode === 'active' || ps.mode === 'holding';
+      if (running) {
+        dispatchPractice(wasOn ? { type: 'STRICT_DISABLE' } : { type: 'STRICT_ENABLE' });
+      }
+    }
     // freePractice.isFreePracticeRef is a stable ref; read at call time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lifecycle]);
@@ -753,6 +847,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       notes,
       staffIndex,
       startIndex,
+      // Feature 101: strict tempo evaluation is on whenever the metronome is
+      // armed/active when the session starts; metronome-off stays legacy.
+      strictTempo: metronomeStateRef.current.active || metronomeStateRef.current.armed,
     });
 
     // Feature 097: if a metronome is still running standalone, stop it and
@@ -916,7 +1013,10 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         currentTick={freePractice.isFreePractice ? Math.round((freePractice.freeElapsedMs / 1000) * (freePractice.freeEffectiveBpm / 60) * 960) : playerState.currentTick}
         totalDurationTicks={freePractice.isFreePractice ? 0 : playerState.totalDurationTicks}
         bpm={freePractice.isFreePractice ? freePractice.freeEffectiveBpm : playerState.bpm}
-        tempoMultiplier={tempoMultiplier}
+        tempoMultiplier={freePractice.isFreePractice ? freePractice.freeTempoMultiplier : tempoMultiplier}
+        baseTempo={freePractice.isFreePractice
+          ? freePractice.freeStaffBpm
+          : tempoMultiplier > 0 ? playerState.bpm / tempoMultiplier : playerState.bpm}
         onBack={() => {
           // Feature 092: Exit free practice on back
           if (freePractice.isFreePractice) {
@@ -933,6 +1033,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         staffCount={freePractice.isFreePractice ? 0 : playerState.staffCount}
         selectedStaffIndex={selectedStaffIndex}
         onStaffChange={handleStaffChange}
+        // Feature 101: strict tempo indicator (Score Practice only)
+        strictTempoActive={practiceState.strictMode}
+        strictFailureCount={practiceState.strictFailureCount}
         practiceMode={freePractice.isFreePractice ? (freePractice.freeSessionActive ? 'active' : 'inactive') : practiceState.mode}
         currentPracticeIndex={(() => {
           if (freePractice.isFreePractice) return 0;

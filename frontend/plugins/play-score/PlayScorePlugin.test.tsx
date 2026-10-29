@@ -702,7 +702,15 @@ describe('PlayScorePlugin — US6: Load from file', () => {
 // ---------------------------------------------------------------------------
 
 describe('PlayScorePlugin — US7: Tempo control', () => {
-  it('adjusting tempo slider calls setTempoMultiplier(multiplier)', async () => {
+  function stepTempo(testid: 'tempo-plus' | 'tempo-minus', presses: number) {
+    const btn = screen.getByTestId(testid) as HTMLElement;
+    for (let i = 0; i < presses; i++) {
+      fireEvent.pointerDown(btn);
+      fireEvent.pointerUp(btn);
+    }
+  }
+
+  it('adjusting the tempo stepper calls setTempoMultiplier(multiplier)', async () => {
     const ctx = createMockContext();
     ctx.mockLoadScore.mockResolvedValueOnce(undefined);
     render(<PlayScorePlugin context={ctx.context} />, { wrapper: TestWrapper });
@@ -714,11 +722,11 @@ describe('PlayScorePlugin — US7: Tempo control', () => {
     });
 
     const mockSetTempo = ctx.context.scorePlayer.setTempoMultiplier as ReturnType<typeof vi.fn>;
-    const slider = screen.getByRole('slider', { name: /tempo/i });
+    // One short (+1) press at 120 BPM → multiplier 121/120.
+    stepTempo('tempo-plus', 1);
 
-    fireEvent.change(slider, { target: { value: '1.5' } });
-
-    expect(mockSetTempo).toHaveBeenCalledWith(1.5);
+    expect(mockSetTempo).toHaveBeenCalledTimes(1);
+    expect(mockSetTempo).toHaveBeenLastCalledWith(expect.closeTo(121 / 120, 3));
   });
 
   it('BPM display updates from ScorePlayerState.bpm', async () => {
@@ -745,10 +753,10 @@ describe('PlayScorePlugin — US7: Tempo control', () => {
     });
 
     const mockSetTempo = ctx.context.scorePlayer.setTempoMultiplier as ReturnType<typeof vi.fn>;
-    const slider = screen.getByRole('slider', { name: /tempo/i });
-    fireEvent.change(slider, { target: { value: '0.75' } });
+    // One short (−1) press at 120 BPM → multiplier 119/120.
+    stepTempo('tempo-minus', 1);
 
-    expect(mockSetTempo).toHaveBeenCalledWith(0.75);
+    expect(mockSetTempo).toHaveBeenLastCalledWith(expect.closeTo(119 / 120, 3));
     // Stop/play should NOT have been called
     expect(ctx.context.scorePlayer.stop as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
     expect(ctx.context.scorePlayer.play as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();

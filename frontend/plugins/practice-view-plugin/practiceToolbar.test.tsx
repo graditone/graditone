@@ -14,7 +14,7 @@
  *   - Staff selector calls onStaffChange with numeric index
  */
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PracticeToolbar, type PracticeToolbarProps } from './practiceToolbar';
@@ -313,89 +313,140 @@ describe('PracticeToolbar — MIDI not supported', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Feature 083 — Tempo slider precision: 1% steps, ±0.03 snap (T003)
+// Feature 101 — Digital BPM stepper (replaces the tempo slider)
+//
+// The slider had far too little precision on touch/tablet. The stepper edits
+// the effective BPM in whole beats: a short press (hold < 1 s) steps ±1 BPM,
+// a long press (hold ≥ 1 s) steps ±5 BPM. onTempoChange receives the
+// resulting multiplier (next BPM / original score BPM).
 // ---------------------------------------------------------------------------
 
-describe('PracticeToolbar — tempo slider precision (Feature 083)', () => {
-  it('slider step is 0.01 (1% granularity)', () => {
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready' })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    expect(slider.step).toBe('0.01');
+function stepTempoBtn(btn: HTMLElement, holdMs = 0) {
+  fireEvent.pointerDown(btn);
+  if (holdMs > 0) vi.setSystemTime(Date.now() + holdMs);
+  fireEvent.pointerUp(btn);
+}
+
+describe('PracticeToolbar — tempo stepper (Feature 101)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const mult = (next: number, from = 120) => Math.round((next / from) * 1000) / 1000;
+
+  it('renders the current BPM with the BPM unit', () => {
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 137 })} />, { wrapper: TestWrapper });
+    const display = screen.getByTestId('tempo-display');
+    expect(display.querySelector('.practice-plugin__tempo-step-value')!.textContent).toBe('137');
+    expect(display.textContent).toContain('BPM');
   });
 
-  it('slider has a datalist providing the 100% snap tick mark', () => {
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready' })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    expect(slider.getAttribute('list')).toBeTruthy();
-    const datalist = document.getElementById(slider.getAttribute('list')!);
-    expect(datalist).not.toBeNull();
-    expect(datalist?.querySelector('option[value="1.0"]')).not.toBeNull();
-  });
-
-  it('snap zone is ±0.03: onChange at 0.96 does NOT snap to 1.0', () => {
+  it('a short minus press subtracts 1 BPM', () => {
     const onTempoChange = vi.fn();
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i });
-    fireEvent.change(slider, { target: { value: '0.96' } });
-    expect(onTempoChange).toHaveBeenCalledWith(0.96);
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120, onTempoChange })} />, { wrapper: TestWrapper });
+    stepTempoBtn(screen.getByTestId('tempo-minus'), 0);
+    expect(onTempoChange).toHaveBeenCalledTimes(1);
+    expect(onTempoChange).toHaveBeenCalledWith(mult(119));
   });
 
-  it('snap zone is ±0.03: onChange at 0.97 snaps to 1.0', () => {
+  it('a short plus press adds 1 BPM', () => {
     const onTempoChange = vi.fn();
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i });
-    fireEvent.change(slider, { target: { value: '0.97' } });
-    expect(onTempoChange).toHaveBeenCalledWith(1.0);
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120, onTempoChange })} />, { wrapper: TestWrapper });
+    stepTempoBtn(screen.getByTestId('tempo-plus'), 0);
+    expect(onTempoChange).toHaveBeenCalledWith(mult(121));
   });
 
-  it('snap zone is ±0.03: onChange at 1.03 snaps to 1.0', () => {
+  it('the 1 s hold boundary: 999 ms steps 1 BPM, 1000 ms steps 5 BPM', () => {
     const onTempoChange = vi.fn();
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i });
-    fireEvent.change(slider, { target: { value: '1.03' } });
-    expect(onTempoChange).toHaveBeenCalledWith(1.0);
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120, onTempoChange })} />, { wrapper: TestWrapper });
+
+    stepTempoBtn(screen.getByTestId('tempo-plus'), 999);
+    expect(onTempoChange).toHaveBeenLastCalledWith(mult(121));
+
+    stepTempoBtn(screen.getByTestId('tempo-plus'), 1000);
+    expect(onTempoChange).toHaveBeenLastCalledWith(mult(125));
+
+    stepTempoBtn(screen.getByTestId('tempo-minus'), 1000);
+    expect(onTempoChange).toHaveBeenLastCalledWith(mult(115));
   });
 
-  it('snap zone is ±0.03: onChange at 1.04 does NOT snap to 1.0', () => {
+  it('holding ≥ 1 s auto-repeats +5 every 300 ms until release', () => {
     const onTempoChange = vi.fn();
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', onTempoChange })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i });
-    fireEvent.change(slider, { target: { value: '1.04' } });
-    expect(onTempoChange).toHaveBeenCalledWith(1.04);
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120, onTempoChange })} />, { wrapper: TestWrapper });
+    const plus = screen.getByTestId('tempo-plus');
+
+    fireEvent.pointerDown(plus);
+    // 1 s → the first +5 lands (120 → 125), then +5 every 300 ms.
+    act(() => { vi.advanceTimersByTime(1000); });
+    act(() => { vi.advanceTimersByTime(300); });  // 130
+    act(() => { vi.advanceTimersByTime(300); });  // 135
+
+    fireEvent.pointerUp(plus);
+    const callsAfterRelease = onTempoChange.mock.calls.length;
+
+    // Nothing after the release: the interval is gone.
+    act(() => { vi.advanceTimersByTime(1200); });
+    expect(onTempoChange.mock.calls.length).toBe(callsAfterRelease);
+
+    expect(onTempoChange).toHaveBeenCalledWith(mult(125));
+    expect(onTempoChange).toHaveBeenCalledWith(mult(130));
+    expect(onTempoChange).toHaveBeenCalledWith(mult(135));
+  });
+
+  it('the metronome start button carries the BPM readout: pressing it never changes tempo, clicking it toggles the metronome', () => {
+    const onTempoChange = vi.fn();
+    const onMetronomeToggle = vi.fn();
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120, onTempoChange, onMetronomeToggle })} />, { wrapper: TestWrapper });
+    const button = screen.getByTestId('tempo-display');
+    // A touch on the readout surface must not adjust the tempo.
+    fireEvent.pointerDown(button);
+    fireEvent.pointerUp(button);
+    expect(onTempoChange).not.toHaveBeenCalled();
+    // It is still the metronome ON/OFF control.
+    fireEvent.click(button);
+    expect(onMetronomeToggle).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /toggle metronome/i })).toBeTruthy();
+  });
+
+  it('clamps at the 2× ceiling: pressing + at 240 BPM emits nothing', () => {
+    const onTempoChange = vi.fn();
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 240, tempoMultiplier: 2.0, onTempoChange })} />, { wrapper: TestWrapper });
+    stepTempoBtn(screen.getByTestId('tempo-plus'), 0);
+    expect(onTempoChange).not.toHaveBeenCalled();
+  });
+
+  it('clamps at the absolute BPM floor: pressing − at 10 BPM emits nothing', () => {
+    const onTempoChange = vi.fn();
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 10, tempoMultiplier: 0.25, onTempoChange })} />, { wrapper: TestWrapper });
+    stepTempoBtn(screen.getByTestId('tempo-minus'), 0);
+    expect(onTempoChange).not.toHaveBeenCalled();
+  });
+
+  it('caps the displayed BPM just below 999: pressing + at 998 emits nothing', () => {
+    const onTempoChange = vi.fn();
+    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 998, tempoMultiplier: 1.663, onTempoChange })} />, { wrapper: TestWrapper });
+    stepTempoBtn(screen.getByTestId('tempo-plus'), 0);
+    expect(onTempoChange).not.toHaveBeenCalled();
+  });
+
+  it('shows the BPM-floor tooltip when the floor is raised (bpm=40), none at bpm=120', () => {
+    const low = render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 40 })} />, { wrapper: TestWrapper });
+    expect(low.getByTestId('tempo-display').getAttribute('title')).toMatch(/10\s*BPM/i);
+    low.unmount();
+    const ok = render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120 })} />, { wrapper: TestWrapper });
+    expect(ok.getByTestId('tempo-display').getAttribute('title') ?? '').not.toMatch(/BPM/i);
+  });
+
+  it('disables the stepper while loading or when the task is locked', () => {
+    const taskTag = { taskNumber: 1, sessionName: 's' };
+    const locked = render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', taskTag })} />, { wrapper: TestWrapper });
+    expect((locked.getByTestId('tempo-plus') as HTMLButtonElement).disabled).toBe(true);
+    expect((locked.getByTestId('tempo-minus') as HTMLButtonElement).disabled).toBe(true);
+    locked.unmount();
+    const loading = render(<PracticeToolbar {...makeDefaultProps({ status: 'loading' })} />, { wrapper: TestWrapper });
+    expect((loading.getByTestId('tempo-plus') as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Feature 083 — Tempo slider dynamic minimum (FR-014) (T008)
-// ---------------------------------------------------------------------------
-
-describe('PracticeToolbar — tempo slider dynamic minimum (Feature 083 FR-014)', () => {
-  it('slider min is 0.1 when bpm=120 (BPM floor not triggered)', () => {
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120 })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    expect(parseFloat(slider.min)).toBeCloseTo(0.1);
-  });
-
-  it('slider min is ~0.25 when bpm=40 (10 BPM floor: 10/40=0.25)', () => {
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 40 })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    expect(parseFloat(slider.min)).toBeCloseTo(0.25);
-  });
-
-  it('shows BPM-floor tooltip on slider when effective min > 0.1 (bpm=40)', () => {
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 40 })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    expect(slider.getAttribute('title')).toMatch(/10\s*BPM/i);
-  });
-
-  it('does NOT show BPM-floor tooltip when effective min equals 0.1 (bpm=120)', () => {
-    render(<PracticeToolbar {...makeDefaultProps({ status: 'ready', bpm: 120 })} />, { wrapper: TestWrapper });
-    const slider = screen.getByRole('slider', { name: /tempo multiplier/i }) as HTMLInputElement;
-    expect(slider.getAttribute('title') ?? '').not.toMatch(/BPM/i);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Feature 093 — Tempo readout is orchestrator-driven (guard test)
 // ---------------------------------------------------------------------------
 
@@ -527,5 +578,65 @@ describe('PracticeToolbar — Staff dropdown hand mode (Feature 084)', () => {
     fireEvent.click(screen.getByRole('button', { name: /select hand/i }));
     fireEvent.click(screen.getByRole('option', { name: /right hand/i }));
     expect(onStaffChange).toHaveBeenCalledWith(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature 101 — Strict tempo indicator (US3, T023)
+// ---------------------------------------------------------------------------
+
+describe('PracticeToolbar — strict tempo badge (feature 101, T023)', () => {
+  it('is hidden when strictTempoActive is false', () => {
+    render(<PracticeToolbar {...makeDefaultProps({ metronomeActive: true, strictTempoActive: false })} />, { wrapper: TestWrapper });
+    expect(screen.queryByTestId('strict-tempo-indicator')).toBeNull();
+  });
+
+  it('is hidden during Free Practice even when active', () => {
+    render(
+      <PracticeToolbar
+        {...makeDefaultProps({
+          metronomeActive: true,
+          strictTempoActive: true,
+          strictFailureCount: 1,
+          isFreePractice: true,
+        })}
+      />,
+      { wrapper: TestWrapper },
+    );
+    expect(screen.queryByTestId('strict-tempo-indicator')).toBeNull();
+  });
+
+  it('shows the strict-tempo label at the none level when practice starts', () => {
+    render(<PracticeToolbar {...makeDefaultProps({ metronomeActive: true, strictTempoActive: true })} />, { wrapper: TestWrapper });
+    const badge = screen.getByTestId('strict-tempo-indicator');
+    expect(badge.textContent).toBe('Strict tempo');
+    expect(badge.className).toContain('practice-plugin__strict-badge--none');
+    expect(badge.getAttribute('data-failures')).toBe('0');
+  });
+
+  it('keeps the static label while the warn/danger levels follow the count', () => {
+    const one = render(<PracticeToolbar {...makeDefaultProps({ metronomeActive: true, strictTempoActive: true, strictFailureCount: 1 })} />, { wrapper: TestWrapper });
+    let badge = screen.getByTestId('strict-tempo-indicator');
+    expect(badge.textContent).toBe('Strict tempo');
+    expect(badge.className).toContain('practice-plugin__strict-badge--warn');
+    expect(badge.getAttribute('data-failures')).toBe('1');
+    one.unmount();
+
+    render(<PracticeToolbar {...makeDefaultProps({ metronomeActive: true, strictTempoActive: true, strictFailureCount: 2 })} />, { wrapper: TestWrapper });
+    badge = screen.getByTestId('strict-tempo-indicator');
+    expect(badge.textContent).toBe('Strict tempo');
+    expect(badge.className).toContain('practice-plugin__strict-badge--danger');
+    expect(badge.getAttribute('data-failures')).toBe('2');
+  });
+
+  it('is informational: aria-live polite, localized title + aria-label with the count, and not a focusable button', () => {
+    render(<PracticeToolbar {...makeDefaultProps({ metronomeActive: true, strictTempoActive: true, strictFailureCount: 1 })} />, { wrapper: TestWrapper });
+    const badge = screen.getByTestId('strict-tempo-indicator');
+    expect(badge.getAttribute('aria-live')).toBe('polite');
+    expect(badge.getAttribute('title')).toContain('Metronome strict tempo — 1 of 3 consecutive timing misses');
+    // The live label carries the count for screen readers even though the
+    // visible text is the static "Strict tempo".
+    expect(badge.getAttribute('aria-label')).toContain('Metronome strict tempo — 1 of 3 consecutive timing misses');
+    expect(badge.tagName).toBe('SPAN');
   });
 });
