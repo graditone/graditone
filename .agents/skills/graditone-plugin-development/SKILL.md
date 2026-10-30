@@ -119,10 +119,32 @@ Manifest (`plugin.json`), all shapes: `id`, `name`, `version`,
 `pluginApiVersion`, `entryPoint` are required strings. Do **not** include
 `origin` — the host sets it (`builtin` | `imported`).
 
-`pluginApiVersion` must equal `PLUGIN_API_VERSION` exported from
-`frontend/src/plugin-api/index.ts` — read it, do not hardcode a number.
-Additive-only versioning means newer app versions keep loading older plugins;
-a plugin requiring an API version the host doesn't have is rejected.
+`pluginApiVersion` is the **minimum** host API version the plugin needs. It must
+be **≤** the host's `PLUGIN_API_VERSION`: the importer rejects any plugin whose
+declared version exceeds the host's (`PluginImporter.ts`), while older plugins
+keep working. Read the host constant, don't hardcode a number.
+
+## Plugin API versioning policy
+
+`PLUGIN_API_VERSION` (in `frontend/src/plugin-api/types.ts`) is a single
+integer — the host's current public-surface version. `pluginApiVersion` in a
+manifest is the minimum the plugin requires.
+
+**Bump it (+1) on *any* change to the public surface:** a new exported type,
+`PluginContext` member, host-provided component, utility class, or shared value
+(e.g. `SCALE_OPTIONS`). Rationale: the importer gates on
+`pluginApiVersion ≤ PLUGIN_API_VERSION`, so an un-bumped addition could load on
+an older host that lacks it. Do **not** bump for internal-only changes.
+
+When you bump, in the same change:
+1. Update the constant in `types.ts`.
+2. Update the barrel header and its versioned export comments (`index.ts`).
+3. Update the `PLUGIN_API_VERSION` contract test in `plugin-api.test.ts`.
+4. Any plugin that newly depends on the surface sets its `plugin.json`
+   `pluginApiVersion` to the new value (private plugins too).
+
+**Additive only.** Never rename or remove an existing export — that breaks
+already-published plugins. Extend with new members and leave the old ones.
 
 ## Plugin entry skeleton (public and private, same shape)
 
