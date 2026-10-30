@@ -606,6 +606,8 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       if (errorFlashTimerRef.current !== null) clearTimeout(errorFlashTimerRef.current);
       // Feature 092: Free practice timer cleanup
       freePractice.cleanupFreeTimers();
+      // Leaving the plugin (any exit path): never leave the metronome armed.
+      lifecycle.onExit();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -621,8 +623,11 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
 
   // Back / close
   const handleBack = useCallback(() => {
+    // Leaving the practice entirely: stop + disarm the metronome so it is not
+    // left armed for the next practice (Feature 097 onExit policy).
+    lifecycle.onExit();
     context.close();
-  }, [context]);
+  }, [context, lifecycle.onExit]);
 
   // Select a catalogue score
   const handleSelectScore = useCallback(
@@ -1183,10 +1188,14 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
         onSave={loadedScoreRefRef.current ? savedPracticeManager.handleSave : undefined}
         isSaved={isSaved}
         saveError={saveError}
-        onReturnToSession={savedPracticeManager.sessionIdRef.current ? () => context.openPlugin('sessions-plugin', {
-          expandSessionId: savedPracticeManager.sessionIdRef.current,
-          expandTaskId: savedPracticeManager.taskIdRef.current,
-        }) : undefined}
+        onReturnToSession={savedPracticeManager.sessionIdRef.current ? () => {
+          // Leaving for the sessions plugin: disarm the metronome first.
+          lifecycle.onExit();
+          context.openPlugin('sessions-plugin', {
+            expandSessionId: savedPracticeManager.sessionIdRef.current,
+            expandTaskId: savedPracticeManager.taskIdRef.current,
+          });
+        } : undefined}
         loopCountLocked={!!savedPracticeManager.taskIdRef.current}
         isFreePractice={freePractice.isFreePractice}
         freeMidiRecord={freePractice.freeMidiRecord}

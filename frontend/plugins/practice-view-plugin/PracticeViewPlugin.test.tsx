@@ -298,6 +298,47 @@ describe('PracticeViewPlugin — Back button', () => {
     fireEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(ctx.mockClose).toHaveBeenCalledTimes(1);
   });
+
+  it('disarms an armed metronome when exiting Score Practice via Back', () => {
+    const ctx = createMockContext({ status: 'ready', title: 'Test', staffCount: 1, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [{ midiPitches: [60], noteIds: ['n0'], tick: 0, durationTicks: 0 }],
+      totalAvailable: 1,
+      clef: 'Treble',
+    });
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    // Start practice (waiting for the first note) and arm the metronome.
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    expect(ctx.context.metronome.arm).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
+
+    vi.mocked(ctx.context.metronome.disarm).mockClear();
+
+    // Leaving the practice must not leave the metronome armed for the next one.
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    expect(ctx.context.metronome.disarm).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .not.toContain('practice-plugin__metro-btn--armed');
+  });
+
+  it('disarms the metronome on unmount (safety net for any exit path)', () => {
+    const ctx = createMockContext({ status: 'ready', title: 'Test', staffCount: 1, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [{ midiPitches: [60], noteIds: ['n0'], tick: 0, durationTicks: 0 }],
+      totalAvailable: 1,
+      clef: 'Treble',
+    });
+    const { unmount } = render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    vi.mocked(ctx.context.metronome.disarm).mockClear();
+
+    unmount();
+    expect(ctx.context.metronome.disarm).toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
