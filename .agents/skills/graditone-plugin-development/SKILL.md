@@ -41,12 +41,12 @@ const ctx = new AudioContext();
 Route audio through `context.playNote()` / `context.stopPlayback()`.
 The host owns Tone.js + the shared AudioContext; plugins must not create one.
 
-**Note the scope:** the lint rule covers `frontend/plugins/` (public plugins).
-Private plugins under `plugins-external/` follow the same boundary but are *not*
-caught by the host lint rule — their repo has its own `eslint.config.js` (which
-today has **no** `no-restricted-imports` rule), so there the boundary holds by
-convention and code review. The host-side files *inside* `src/plugin-api/` are
-the adapters and legitimately use host internals.
+**Note the scope:** the host lint rule covers `frontend/plugins/` (public
+plugins). Private plugins under `plugins-external/` are guarded by their own
+`eslint.config.js`, which carries a matching `no-restricted-imports` boundary
+rule (same Plugin API-only rule, matched at any nesting depth). The host-side
+files *inside* `src/plugin-api/` are the adapters and legitimately use host
+internals.
 
 ## Constitution Principle VI — layout authority
 
@@ -69,7 +69,7 @@ Decide which one a task belongs to before touching anything.
 | Tooling | host Vite / esbuild / `tsc` / Vitest / main ESLint | own `package.json`, `tsconfig.json`, Vitest, esbuild `build.sh`, own `eslint.config.js` |
 | Host dev | bundled at build time via `import.meta.glob` | symlinked into `frontend/plugins/` for HMR, or ZIP import |
 | Shipped as | part of the app | `build.sh` → `<id>.zip` (bundled ESM + inlined CSS) |
-| Boundary guard | ESLint `no-restricted-imports` — hard error | own ESLint + review (**no import rule today**) |
+| Boundary guard | ESLint `no-restricted-imports` — hard error | own ESLint `no-restricted-imports` in `plugins-external/eslint.config.js` — hard error |
 | E2E tests | `frontend/e2e/` | the plugin's own `e2e/` folder, not `frontend/e2e/` |
 
 ### Private-plugin workflow (gitignored, separate repo)
