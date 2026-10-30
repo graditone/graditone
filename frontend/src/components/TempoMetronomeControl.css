@@ -128,16 +128,21 @@
   animation: practice-metro-pulse-down 0.14s ease-out;
 }
 
-/* Armed state: metronome will start on the first MIDI note attack */
+/* Armed state: metronome will start on the first MIDI note attack.
+   Theme-based, contrast-safe in every theme: an inverted chip using the
+   theme's own audited body/bg pair (dark surface + light text), plus an
+   accent-derived ring and a gentle pulse for the "armed" affordance.
+   (A gold-on-accent chip was low contrast and broke on warm themes.) */
 .practice-plugin__metro-btn--armed,
 .practice-plugin__metro-btn--armed:hover {
-  color: #c8a000;
-  border-color: #c8a000;
-  animation: practice-metro-armed-pulse 0.5s ease-in-out infinite alternate;
+  background: var(--ls-body, #212121);
+  color: var(--ls-bg, #ffffff);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ls-accent, #7c3aed) 60%, #fff);
+  animation: practice-metro-armed-pulse 0.6s ease-in-out infinite alternate;
 }
 
 @keyframes practice-metro-armed-pulse {
-  0%   { opacity: 0.4; }
+  0%   { opacity: 0.72; }
   100% { opacity: 1.0; }
 }
 
