@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PluginContext, PluginPitchEvent, PluginNoteEvent, PluginScorePitches, ScorePlayerState, MetronomeState, MetronomeSubdivision, HandMode } from '../../src/plugin-api/index';
-import { broadcastPracticeSaved, ProfileIcon } from '../../src/plugin-api/index';
+import { broadcastPracticeSaved, ProfileIcon, SCALE_OPTIONS } from '../../src/plugin-api/index';
 import type {
   TrainPhase,
   TrainExercise,
@@ -28,7 +28,7 @@ import type {
 import { COMPLEXITY_PRESETS, COMPLEXITY_LEVEL_STORAGE_KEY, midiToLabel } from './trainTypes';
 import { scopedGetItem, scopedSetItem } from './scopedStorage';
 import { TrainResultsOverlay } from './TrainResultsOverlay';
-import { generateExercise, generateScoreExercise, generateScaleExercise, DEFAULT_EXERCISE_CONFIG, SCALE_OPTIONS } from './exerciseGenerator';
+import { generateExercise, generateScoreExercise, generateScaleExercise, DEFAULT_EXERCISE_CONFIG } from './exerciseGenerator';
 import { scoreCapture } from './exerciseScorer';
 import { useTranslation } from '../../src/i18n';
 import './TrainPlugin.css';

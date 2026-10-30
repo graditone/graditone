@@ -1,5 +1,5 @@
 /**
- * Graditone Plugin API — public barrel (v5)
+ * Graditone Plugin API — public barrel (current: v9)
  * Feature 030: Plugin Architecture (v1 baseline)
  * Feature 031: Practice View Plugin — adds PluginPitchEvent, PluginRecordingContext (v2)
  * Feature 033: Play Score Plugin — adds scorePlayer namespace + ScoreRenderer (v3)
@@ -8,6 +8,8 @@
  * Feature 035: Metronome — adds MetronomeState, PluginMetronomeContext,
  *   context.metronome namespace, ScorePlayerState.timeSignature (v5) * Feature 037 (amendment): adds ChordDetector, ChordDetectorOptions, ChordResult —
  *   reusable simultaneous chord detection utility; no version bump (additive only). *
+ * Feature 071 (amendment): adds SCALE_OPTIONS — shared musical scale catalog,
+ *   re-exported from ./scaleOptions (v9). *
  * THIS IS THE ONLY MODULE plugin code is permitted to import from the host.
  * ESLint enforces this boundary via `no-restricted-imports` scoped to plugins/**.
  *
@@ -75,3 +77,8 @@ export type { PracticeScoreBreakdown, ScorableNoteResult } from './computePracti
 
 // Feature 083: Tempo calculation utilities (re-exported so plugins can import from plugin-api)
 export { computeEffectiveMinMultiplier, MIN_TEMPO_MULTIPLIER, MAX_TEMPO_MULTIPLIER, ABSOLUTE_BPM_FLOOR } from '../utils/tempoCalculations';
+
+// v9: Shared musical scale catalog (host-owned shared data, re-exported so
+// plugins can build a scale picker without importing another plugin's internals).
+export { SCALE_OPTIONS } from './scaleOptions';
+export type { ScaleOption } from './scaleOptions';

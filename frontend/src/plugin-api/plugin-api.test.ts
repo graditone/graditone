@@ -14,6 +14,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   PLUGIN_API_VERSION,
+  SCALE_OPTIONS,
+  type ScaleOption,
   type PluginManifest,
   type PluginNoteEvent,
   type PluginContext,
@@ -24,8 +26,8 @@ import {
 
 describe('Plugin API contract', () => {
   describe('PLUGIN_API_VERSION', () => {
-    it('is the string "8" (v8 — adds PracticeSavedEvent, openPlugin, protectedPracticeIds on ScoreSelector)', () => {
-      expect(PLUGIN_API_VERSION).toBe('8');
+    it('is the string "9" (v9 — adds SCALE_OPTIONS shared scale catalog)', () => {
+      expect(PLUGIN_API_VERSION).toBe('9');
     });
 
     it('is a string (not a number)', () => {
@@ -260,6 +262,37 @@ describe('Plugin API contract', () => {
     it('offsetMs can be set to a positive number', () => {
       const event: PluginNoteEvent = { midiNote: 60, timestamp: 0, offsetMs: 500 };
       expect(event.offsetMs).toBe(500);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // SCALE_OPTIONS — shared scale catalog exposed through the API
+  // -------------------------------------------------------------------------
+  describe('SCALE_OPTIONS (shared scale catalog)', () => {
+    it('exports all 24 scales (12 major + 12 natural minor)', () => {
+      expect(SCALE_OPTIONS).toHaveLength(24);
+    });
+
+    it('every entry satisfies the ScaleOption shape and has a unique id', () => {
+      const ids = new Set<string>();
+      for (const scale of SCALE_OPTIONS) {
+        const option: ScaleOption = scale;
+        expect(typeof option.id).toBe('string');
+        expect(option.id.length).toBeGreaterThan(0);
+        expect(typeof option.displayName).toBe('string');
+        expect(typeof option.rootMidi).toBe('number');
+        expect(Array.isArray(option.intervals)).toBe(true);
+        expect(option.intervals).toHaveLength(8);
+        expect(typeof option.fifths).toBe('number');
+        ids.add(option.id);
+      }
+      expect(ids.size).toBe(SCALE_OPTIONS.length);
+    });
+
+    it('starts at C Major (circle-of-fifths order)', () => {
+      expect(SCALE_OPTIONS[0].id).toBe('c-major');
+      expect(SCALE_OPTIONS[0].rootMidi).toBe(60);
+      expect(SCALE_OPTIONS[0].fifths).toBe(0);
     });
   });
 });
