@@ -1,7 +1,14 @@
 /**
  * TempoMetronomeControl.css — shared tempo + metronome widget styling.
  * Used by every plugin toolbar (Practice, Play Score) so the widget looks
- * identical everywhere. Follows the app theme variables (--ls-*).
+ * identical everywhere.
+ *
+ * All colours come from the active landing theme (--ls-* tokens declared on
+ * body[data-landing-theme], which cascade into full-screen plugins). Solid
+ * buttons use the theme's audited CTA pair (--ls-cta-bg / --ls-cta-text) so
+ * text stays legible in every theme — including the warm ones whose accent is
+ * a light amber where white text would fail. Interval-fallbacks on each token
+ * only apply outside a themed body.
  */
 
 /* ─── Stepper buttons (− / +) ───────────────────────────────────────────── */
@@ -16,7 +23,7 @@
   border: 1px solid color-mix(in srgb, var(--ls-accent, #3060cc) 40%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--ls-accent, #3060cc) 8%, var(--ls-bg, #fff));
-  color: var(--ls-accent, #3060cc);
+  color: var(--ls-body, #212121);
   font-size: 1.15rem;
   font-weight: 700;
   line-height: 1;
@@ -32,8 +39,8 @@
 
 .practice-plugin__tempo-step-btn:active,
 .practice-plugin__tempo-step-btn.is-pressed {
-  background: var(--ls-accent, #3060cc);
-  color: var(--ls-bg, #fff);
+  background: var(--ls-cta-bg, #3060cc);
+  color: var(--ls-cta-text, #fff);
 }
 
 .practice-plugin__tempo-step-btn:disabled {
@@ -75,8 +82,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--ls-accent, #7c3aed);
-  color: #fff;
+  background: var(--ls-cta-bg, #7c3aed);
+  color: var(--ls-cta-text, #fff);
   border: none;
   border-radius: 8px;
   min-width: 66px;
@@ -101,7 +108,8 @@
   line-height: 1.12;
 }
 
-/* Inherit the button's colour (white; gold while armed) for both lines */
+/* Both readout lines inherit the button's text colour (CTA text normally,
+   theme bg while armed) — set by the state rules below. */
 .practice-plugin__metro-btn .practice-plugin__tempo-step-value,
 .practice-plugin__metro-btn .practice-plugin__tempo-step-unit {
   color: inherit;
@@ -112,32 +120,33 @@
 }
 
 .practice-plugin__metro-btn:focus-visible {
-  outline: 2px solid rgba(255,255,255,0.5);
+  outline: 2px solid var(--ls-cta-text, #fff);
   outline-offset: -2px;
 }
 
 .practice-plugin__metro-btn--active,
 .practice-plugin__metro-btn--active:hover {
-  background: var(--ls-accent, #7c3aed);
+  background: var(--ls-cta-bg, #7c3aed);
   animation: practice-metro-pulse 0.12s ease-out;
 }
 
 .practice-plugin__metro-btn--downbeat,
 .practice-plugin__metro-btn--downbeat:hover {
-  background: color-mix(in srgb, var(--ls-accent, #7c3aed) 80%, #000);
+  /* Deeper shade of the theme button colour (mixed with the theme's dark
+     surface colour rather than a literal black). */
+  background: color-mix(in srgb, var(--ls-cta-bg, #7c3aed) 80%, var(--ls-body, #000));
   animation: practice-metro-pulse-down 0.14s ease-out;
 }
 
 /* Armed state: metronome will start on the first MIDI note attack.
    Theme-based, contrast-safe in every theme: an inverted chip using the
    theme's own audited body/bg pair (dark surface + light text), plus an
-   accent-derived ring and a gentle pulse for the "armed" affordance.
-   (A gold-on-accent chip was low contrast and broke on warm themes.) */
+   accent-derived ring and a gentle pulse for the "armed" affordance. */
 .practice-plugin__metro-btn--armed,
 .practice-plugin__metro-btn--armed:hover {
   background: var(--ls-body, #212121);
   color: var(--ls-bg, #ffffff);
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ls-accent, #7c3aed) 60%, #fff);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ls-accent, #7c3aed) 60%, var(--ls-bg, #fff));
   animation: practice-metro-armed-pulse 0.6s ease-in-out infinite alternate;
 }
 
@@ -166,8 +175,8 @@
   padding: 0 6px;
   border: none;
   border-radius: 8px;
-  background: var(--ls-accent, #7c3aed);
-  color: #fff;
+  background: var(--ls-cta-bg, #7c3aed);
+  color: var(--ls-cta-text, #fff);
   font-size: 0.75rem;
   cursor: pointer;
   transition: filter 0.12s;
@@ -182,11 +191,12 @@
   top: calc(100% + 6px);
   right: 0;
   min-width: 120px;
-  background: color-mix(in srgb, var(--ls-accent, #7c3aed) 15%, #111);
+  /* Dark panel tinted with the theme accent, built from theme colours. */
+  background: color-mix(in srgb, var(--ls-accent, #7c3aed) 15%, var(--ls-body, #111));
   border: 1px solid var(--ls-accent, #7c3aed);
   border-radius: 8px;
   padding: 4px 0;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--ls-body, #000) 45%, transparent);
   z-index: 200;
 }
 
@@ -198,7 +208,7 @@
   padding: 8px 14px;
   border: none;
   background: transparent;
-  color: #e2d9f3;
+  color: var(--ls-bg, #fff);
   font-size: 0.9rem;
   text-align: left;
   cursor: pointer;
@@ -211,12 +221,12 @@
 }
 
 .practice-plugin__metro-menu-item--active {
-  color: #fff;
+  color: var(--ls-bg, #fff);
   font-weight: 700;
 }
 
 .practice-plugin__metro-menu-check {
-  color: var(--ls-accent, #a78bfa);
+  color: color-mix(in srgb, var(--ls-accent, #a78bfa) 55%, var(--ls-bg, #fff));
   font-size: 0.8rem;
   width: 12px;
   flex-shrink: 0;
