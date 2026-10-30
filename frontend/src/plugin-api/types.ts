@@ -1206,8 +1206,16 @@ export interface GraditonePlugin {
 // Current API version
 // ---------------------------------------------------------------------------
 
-/** Major version of the currently running Graditone Plugin API. */
-export const PLUGIN_API_VERSION = '8' as const;
+/**
+ * Major version of the currently running Graditone Plugin API.
+ *
+ * Bump this whenever the public surface changes — a new type, context member,
+ * component, utility, or shared value (e.g. SCALE_OPTIONS). A plugin's manifest
+ * `pluginApiVersion` is the minimum it requires, and the importer rejects any
+ * plugin whose declared version exceeds this value, so an un-bumped addition
+ * could load on an older host that lacks it.
+ */
+export const PLUGIN_API_VERSION = '9' as const;
 
 // ---------------------------------------------------------------------------
 // v8 types — Practice Saved Event (Feature 060)

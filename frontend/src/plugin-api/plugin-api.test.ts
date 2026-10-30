@@ -26,8 +26,8 @@ import {
 
 describe('Plugin API contract', () => {
   describe('PLUGIN_API_VERSION', () => {
-    it('is the string "8" (v8 — adds PracticeSavedEvent, openPlugin, protectedPracticeIds on ScoreSelector)', () => {
-      expect(PLUGIN_API_VERSION).toBe('8');
+    it('is the string "9" (v9 — adds SCALE_OPTIONS shared scale catalog)', () => {
+      expect(PLUGIN_API_VERSION).toBe('9');
     });
 
     it('is a string (not a number)', () => {
