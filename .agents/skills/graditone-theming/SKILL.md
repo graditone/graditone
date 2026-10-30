@@ -144,17 +144,27 @@ box-shadow: 0 4px 16px color-mix(in srgb, var(--ls-body) 45%, transparent);
 
 ## Definition of done — verify across all themes
 
-1. **Grep for stray literals** in the files you touched; every hit must be a
-   `var(--token, <fallback>)` fallback:
+1. **Run the guard** (part of `npm run lint`, so it runs in CI and pre-commit):
    ```bash
-   grep -rnE '#[0-9a-fA-F]{3,8}|rgba?\(' path/to/Component.css
+   npm run lint:colors          # fails on any NEW hardcoded colour
+   npm run lint:colors:update   # refresh the ratchet baseline after a reviewed sweep
+   npm run lint:colors -- --list  # print every current offender, file:line
    ```
-2. **Reason against all 10 palettes** (`landing-themes.ts`) — especially the
+   It scans `frontend/src` + `frontend/plugins` CSS, allows literals only as
+   `var(--token, <fallback>)` fallbacks, and grandfathers existing debt via
+   `frontend/scripts/theme-colors-baseline.json` (a file → count ratchet). Do
+   **not** add a file to the baseline to silence a real violation — fix it with
+   a token instead; only `lint:colors:update` after a genuine, reviewed change.
+2. **Manual grep** (for files the guard excludes, e.g. TSX inline styles):
+   ```bash
+   grep -rnE '#[0-9a-fA-F]{3,8}|rgba?\(' path/to/File.tsx
+   ```
+3. **Reason against all 10 palettes** (`landing-themes.ts`) — especially the
    light-accent ones (`saffron`, `honey`, `marigold`) and the dark-text CTA
    themes where `--ls-cta-text` is `#1A1A1A`.
-3. **Eyeball in the running app** by cycling URL hashes `#ember` … `#rust`
+4. **Eyeball in the running app** by cycling URL hashes `#ember` … `#rust`
    (the design navbar appears when the hash names a theme).
-4. Prefer the audited pairs above so the result is correct by construction.
+5. Prefer the audited pairs above so the result is correct by construction.
 
 ## File map
 
