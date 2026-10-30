@@ -50,8 +50,10 @@ interface PluginMetronomeContext {
 - Toggle while active                         → `toggle()` (stop; enabled=false)
 - Toggle while practice not waiting           → `toggle()` (start; enabled=true)
 - First note while armed                      → `startFromDeferred()`
-- Session end (finish/stop) with enabled      → `stop()` then `arm()`
-- Session end with disabled                   → `stop()`
+- Session start (start/repractice), enabled   → `arm()` (re-arm for the new session)
+- Session end (finish/stop), enabled or not   → `stop()` then `disarm()` (preference kept)
+  — `armed` is only meaningful *inside* a practice, so it is never left set on
+  session end; the "enabled" preference survives so the next session re-arms.
 
 ## Testable Assertions
 
@@ -60,4 +62,4 @@ interface PluginMetronomeContext {
 - `toggle()` from armed disarms; from active stops; from idle starts.
 - `stop()` sets both `active=false` and `armed=false`.
 - `armed` present (boolean) in every emitted snapshot.
-- Practice: armed only in waiting; first note (score and free) triggers deferred start; session end re-arms iff enabled; Play/Train never assert armed=true.
+- Practice: armed only in waiting; first note (score and free) triggers deferred start; session end stops + disarms (never left armed); the next session start re-arms iff enabled; Play/Train never assert armed=true.

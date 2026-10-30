@@ -298,6 +298,47 @@ describe('PracticeViewPlugin — Back button', () => {
     fireEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(ctx.mockClose).toHaveBeenCalledTimes(1);
   });
+
+  it('disarms an armed metronome when exiting Score Practice via Back', () => {
+    const ctx = createMockContext({ status: 'ready', title: 'Test', staffCount: 1, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [{ midiPitches: [60], noteIds: ['n0'], tick: 0, durationTicks: 0 }],
+      totalAvailable: 1,
+      clef: 'Treble',
+    });
+    render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+
+    // Start practice (waiting for the first note) and arm the metronome.
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    expect(ctx.context.metronome.arm).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
+
+    vi.mocked(ctx.context.metronome.disarm).mockClear();
+
+    // Leaving the practice must not leave the metronome armed for the next one.
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    expect(ctx.context.metronome.disarm).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .not.toContain('practice-plugin__metro-btn--armed');
+  });
+
+  it('disarms the metronome on unmount (safety net for any exit path)', () => {
+    const ctx = createMockContext({ status: 'ready', title: 'Test', staffCount: 1, bpm: 120 });
+    ctx.mockExtractPracticeNotes.mockReturnValue({
+      notes: [{ midiPitches: [60], noteIds: ['n0'], tick: 0, durationTicks: 0 }],
+      totalAvailable: 1,
+      clef: 'Treble',
+    });
+    const { unmount } = render(<PracticeViewPlugin context={ctx.context} />, { wrapper: TestWrapper });
+    fireEvent.click(screen.getByRole('button', { name: /start practice/i }));
+    fireEvent.click(screen.getByRole('button', { name: /toggle metronome/i }));
+    vi.mocked(ctx.context.metronome.disarm).mockClear();
+
+    unmount();
+    expect(ctx.context.metronome.disarm).toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2040,10 +2081,10 @@ describe('PracticeViewPlugin — metronome stops when score practice ends (Featu
     expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
     // ...and the engine acks inactive (real app acks via the subscriber).
     act(() => { ctx.simulateMetronomeState({ active: false, beatIndex: -1, isDownbeat: false, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
-    // ...and the metronome returns to the ARMED state (ready to start on the
-    // first note of the next practice), not fully off.
+    // ...and the metronome is NOT left armed — armed only makes sense inside a
+    // practice (the preference is kept, so the next session re-arms it).
     expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
-      .toContain('practice-plugin__metro-btn--armed');
+      .not.toContain('practice-plugin__metro-btn--armed');
   });
 
   it('stops the metronome when the user stops the score practice manually', () => {
@@ -2064,9 +2105,9 @@ describe('PracticeViewPlugin — metronome stops when score practice ends (Featu
     expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
     // ...engine acks inactive (real app acks via the subscriber)...
     act(() => { ctx.simulateMetronomeState({ active: false, beatIndex: -1, isDownbeat: false, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
-    // ...and returns to the armed state (ready for the next practice).
+    // ...and it is NOT left armed (armed only makes sense inside a practice).
     expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
-      .toContain('practice-plugin__metro-btn--armed');
+      .not.toContain('practice-plugin__metro-btn--armed');
   });
 
   it('re-arms the metronome on Repractice when it was enabled in the finished session', () => {
@@ -2095,7 +2136,7 @@ describe('PracticeViewPlugin — metronome stops when score practice ends (Featu
       .toContain('practice-plugin__metro-btn--armed');
   });
 
-  it('keeps the metronome armed across stop → start so the next practice starts it on the first note', () => {
+  it('disarms on stop → re-arms on the next start so it starts on the first note', () => {
     const ctx = setupFinishingPractice();
     const base = Date.now();
 
@@ -2104,19 +2145,23 @@ describe('PracticeViewPlugin — metronome stops when score practice ends (Featu
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
     act(() => { ctx.simulateMetronomeState({ active: true, beatIndex: 0, isDownbeat: true, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
 
-    // Complete the practice → engine stopped, metronome re-armed.
+    // Complete the practice → engine stopped and the metronome is disarmed
+    // (armed only makes sense inside a practice).
     vi.setSystemTime(base + 600);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 62 }); });
     act(() => { ctx.simulateMetronomeState({ active: false, beatIndex: -1, isDownbeat: false, bpm: 120, subdivision: 1, subBeatIndex: 0 }); });
     expect(screen.getByRole('region', { name: /practice results/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
-      .toContain('practice-plugin__metro-btn--armed');
+      .not.toContain('practice-plugin__metro-btn--armed');
 
     vi.mocked(ctx.context.metronome.toggle).mockClear();
 
-    // Fresh start (not Repractice) → armed is preserved → first note starts it.
+    // Fresh start (not Repractice) → re-armed for the new session (preference
+    // kept) → the first note starts it, without toggling the engine on early.
     fireEvent.click(screen.getByRole('button', { name: /start practice mode/i }));
-    expect(ctx.context.metronome.toggle).not.toHaveBeenCalled(); // still armed
+    expect(ctx.context.metronome.toggle).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
+      .toContain('practice-plugin__metro-btn--armed');
     vi.mocked(ctx.context.metronome.startFromDeferred).mockClear();
     vi.setSystemTime(base + 2000);
     act(() => { ctx.simulateMidiEvent({ type: 'attack', midiNote: 60 }); });
@@ -2159,9 +2204,9 @@ describe('PracticeViewPlugin — free practice metronome lifecycle (Feature 083 
       fireEvent.click(screen.getByRole('button', { name: /stop practice mode/i }));
     });
     expect(ctx.context.metronome.toggle).toHaveBeenCalledTimes(1);
-    // ...and (because it was enabled) returns to the ARMED state for the next session.
+    // ...and it is NOT left armed (armed only makes sense inside a practice).
     expect(screen.getByRole('button', { name: /toggle metronome/i }).className)
-      .toContain('practice-plugin__metro-btn--armed');
+      .not.toContain('practice-plugin__metro-btn--armed');
   });
 
   it('exiting free practice (Back) stops a running metronome', () => {

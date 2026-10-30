@@ -22,7 +22,7 @@
 
 **Decision**: A new `useMetronomeLifecycle` hook (practice plugin) that owns the single "enabled during session" preference and exposes `onToggle`, `onFirstNote`, `onSessionStart`, `onSessionEnd`, plus `armed`/`active`/`state` from subscription. Both score and free practice wire their first-note triggers into `onFirstNote`; the toolbar reads `state.armed`.
 
-**Rationale**: The *mechanics* (armed → start → stop → re-arm) are now in the engine/API (FR-003..005). The *policy* (armed only in waiting mode, re-arm after finish when enabled) is one hook — a single, testable surface instead of code in 4 files.
+**Rationale**: The *mechanics* (armed → start → stop → disarm → re-arm on next start) are now in the engine/API (FR-003..005). The *policy* (armed only in waiting mode and only inside a practice, re-arm when the next session starts if enabled) is one hook — a single, testable surface instead of code in 4 files.
 
 ### RQ-4: BPM phase-lock inside `startFromDeferred()`
 
@@ -35,4 +35,4 @@
 - `MetronomeState` gains a required `armed: boolean`. All state literals (`types.ts` doc, `metronomeContext.INACTIVE_STATE`, `useMetronome.INACTIVE_STATE`, engine `_getState`, Play/Train `INITIAL_METRONOME_STATE`, test fixtures) must be updated — additive, compile-forced.
 - Free-practice's `onFreeNoteAttackRef` is currently the *trigger*; the hook replaces the *handler*. Keep the trigger points (MIDI subscribe callbacks) but route them into `lifecycle.onFirstNote`.
 - The `practice-plugin__metro-btn--armed` visual must now come from `state.armed` (toolbar prop unchanged, value source changes).
-- The recent fixes (arm-only-in-waiting, stop→re-arm when enabled, Transport-reset-before-repeat) must keep passing — they are the regression guard for this refactor.
+- The recent fixes (arm-only-in-waiting, stop → disarm, re-arm on next start when enabled, Transport-reset-before-repeat) must keep passing — they are the regression guard for this refactor.

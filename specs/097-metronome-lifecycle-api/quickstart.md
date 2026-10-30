@@ -24,7 +24,7 @@ Validates that the refactor keeps behaviour identical while moving armed state i
 
 **Run**: `npx vitest run plugins/practice-view-plugin`.
 
-**Expected**: existing metronome behaviour tests (deferred start in waiting, first-note start, stop-on-finish re-arm, no silent-arm, free lifecycle, cross-stop→start) green against `state.armed`; toolbar class from `state.armed`.
+**Expected**: existing metronome behaviour tests (deferred start in waiting, first-note start, stop-on-finish disarm + re-arm on next start, no silent-arm, free lifecycle, cross-stop→start) green against `state.armed`; toolbar class from `state.armed`.
 
 ### VS-04 — No bespoke logic left (SC-001)
 
@@ -40,7 +40,7 @@ Validates that the refactor keeps behaviour identical while moving armed state i
 
 ### VS-06 — Manual sanity
 
-Run dev server (worktree) — arm metronome in practice, confirm it ticks with the first note and re-arms after stop; Play/Train metronome unchanged.
+Run dev server (worktree) — arm metronome in practice, confirm it ticks with the first note; after stop it is disarmed (not left armed), and the next Start/Repractice re-arms it for the first note. Play/Train metronome unchanged.
 
 ## Out of Scope
 
