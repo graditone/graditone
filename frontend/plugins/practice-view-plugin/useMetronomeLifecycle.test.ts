@@ -96,7 +96,7 @@ describe('useMetronomeLifecycle (Feature 097)', () => {
     expect(ctx.startFromDeferred).toHaveBeenCalledOnce();
   });
 
-  it('onSessionEnd stops the engine and re-arms when enabled', async () => {
+  it('onSessionEnd stops the engine and disarms (preference kept, no re-arm)', async () => {
     const { ctx, result } = setup(makeState(false, false));
     act(() => result.current.onToggle(true)); // arm (enabled=true)
     await act(async () => { await ctx.startFromDeferred(); });
@@ -104,7 +104,8 @@ describe('useMetronomeLifecycle (Feature 097)', () => {
 
     act(() => { void result.current.onSessionEnd(); });
     expect(ctx.toggle).toHaveBeenCalledTimes(1); // stop the running engine
-    expect(ctx.arm).toHaveBeenCalledTimes(2); // arm (onToggle) + re-arm (onSessionEnd)
+    expect(ctx.arm).toHaveBeenCalledTimes(1); // only the initial arm — no re-arm
+    expect(ctx.disarm).toHaveBeenCalled(); // armed only makes sense inside a practice
   });
 
   it('onSessionEnd when disabled fully stops (no re-arm)', () => {
@@ -113,6 +114,7 @@ describe('useMetronomeLifecycle (Feature 097)', () => {
     act(() => { void result.current.onSessionEnd(); });
     expect(ctx.toggle).toHaveBeenCalledOnce();
     expect(ctx.arm).not.toHaveBeenCalled();
+    expect(ctx.disarm).toHaveBeenCalled();
   });
 
   it('onExit stops, disarms and clears the enabled preference', async () => {
@@ -132,5 +134,16 @@ describe('useMetronomeLifecycle (Feature 097)', () => {
     act(() => { void result.current.onSessionStart(); });
     expect(ctx.toggle).toHaveBeenCalledOnce(); // stop the running engine
     expect(ctx.arm).toHaveBeenCalledOnce(); // defer to first note
+  });
+
+  it('onSessionStart re-arms the next session when the preference was enabled', async () => {
+    const { ctx, result } = setup(makeState(false, false));
+    act(() => result.current.onToggle(true)); // arm → enabled=true
+    await act(async () => { await ctx.startFromDeferred(); }); // active
+    act(() => { void result.current.onSessionEnd(); }); // stop + disarm (enabled kept)
+
+    vi.mocked(ctx.arm).mockClear();
+    act(() => { void result.current.onSessionStart(); }); // next session begins
+    expect(ctx.arm).toHaveBeenCalledOnce(); // re-armed for the first note
   });
 });

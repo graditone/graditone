@@ -769,12 +769,12 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       const wasSessionActive = freePractice.freeSessionActiveRef.current;
       freePractice.handleFreeToggle();
       if (wasSessionActive) {
-        // Free practice stopped → the metronome stops too (Feature 083 parity
-        // with score practice); re-arms if it was enabled.
+        // Free practice stopped → the metronome stops and disarms (Feature 083
+        // parity with score practice); the preference is kept.
         lifecycle.onSessionEnd();
-      } else if (metronomeStateRef.current.active) {
-        // Starting a free session while the metronome is running standalone:
-        // restart it deferred so it aligns to the first played note.
+      } else {
+        // Starting a free session: (re-)arm when enabled so the first played
+        // note starts it.
         lifecycle.onSessionStart();
       }
       return;
@@ -847,21 +847,23 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
       }
     }
 
+    // Feature 097/101: entering a practice (re-)arms the metronome when the
+    // preference is on — armed only makes sense inside a practice. Strict tempo
+    // follows the (possibly re-armed) metronome, so repractice stays strict.
+    lifecycle.onSessionStart();
+
     dispatchPractice({
       type: 'START',
       notes,
       staffIndex,
       startIndex,
       // Feature 101: strict tempo evaluation is on whenever the metronome is
-      // armed/active when the session starts; metronome-off stays legacy.
-      strictTempo: metronomeStateRef.current.active || metronomeStateRef.current.armed,
+      // active/armed, or enabled for this session; metronome-off stays legacy.
+      strictTempo:
+        metronomeStateRef.current.active ||
+        metronomeStateRef.current.armed ||
+        lifecycle.enabledRef.current,
     });
-
-    // Feature 097: if a metronome is still running standalone, stop it and
-    // defer to the first note of the new session.
-    if (metronomeStateRef.current.active) {
-      lifecycle.onSessionStart();
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     context.scorePlayer,
@@ -928,9 +930,9 @@ export function PracticeViewPlugin({ context }: PracticeViewPluginProps) {
     // 120 × 1.0) while the free readout still said 30.
     if (freePractice.isFreePracticeRef.current) {
       freePractice.handleFreeRepractice();
-      // The shared lifecycle keeps the "enabled" preference across repractice,
-      // and onSessionEnd (from the previous session) already re-armed the
-      // metronome — the first note of the new session starts it.
+      // The preference is kept across the stop; re-arm for the new free session
+      // so its first note starts the metronome (armed only inside a practice).
+      lifecycle.onSessionStart();
       return;
     }
     setResultsOverlayVisible(false);

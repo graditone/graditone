@@ -27,15 +27,15 @@ A developer integrating the metronome into any plugin uses a single, consistent 
 
 The Practice plugin's score and free practice both drive the metronome through the single lifecycle hook built on the API. All bespoke armed/enabled refs (`metronomeArmedRef`, `scoreMetronomeEnabledRef`, `freeMetronomeEnabledRef`, `stopScoreMetronome`, `stopFreeMetronome`, the inline `onFirstNoteAttack`) are removed; the button state reads `state.armed`.
 
-**Why this priority**: Eliminates the duplicate/diverging logic that caused the recent metronome regressions, and keeps behaviour identical: deferred start on first note when armed, immediate toggle mid-session, re-arm after stop/finish when the metronome was enabled.
+**Why this priority**: Eliminates the duplicate/diverging logic that caused the recent metronome regressions, and keeps behaviour identical: deferred start on first note when armed, immediate toggle mid-session, stop + disarm on stop/finish, and re-arm when the next session starts if the metronome was enabled.
 
-**Independent Test**: Existing metronome plugin tests (deferred start, stop-on-finish, re-arm, no silent-arm) pass unchanged in behaviour; free-practice lifecycle tests pass unchanged.
+**Independent Test**: Existing metronome plugin tests (deferred start, stop-on-finish, re-arm on next start, no silent-arm) pass unchanged in behaviour; free-practice lifecycle tests pass unchanged.
 
 **Acceptance Scenarios**:
 
 1. **Given** practice is in 'waiting' mode, **When** the user toggles the metronome, **Then** it becomes `armed` (not ticking); the button shows the armed state.
 2. **Given** an armed metronome and an idle practice session, **When** the first note is played, **Then** the engine starts on the first note (score practice and free practice behave identically).
-3. **Given** a practice session finishes or is stopped with the metronome enabled, **When** results appear, **Then** the engine stops audibly and the metronome returns to the armed state.
+3. **Given** a practice session finishes or is stopped with the metronome enabled, **When** results appear, **Then** the engine stops audibly and the metronome is NOT left armed (`armed` only makes sense inside a practice); the enabled preference is kept, so the next session (Start or Repractice) re-arms it for the first note.
 4. **Given** a practice session finishes or is stopped with the metronome disabled, **When** results appear, **Then** the metronome remains fully off.
 5. **Given** the user toggles the metronome OFF mid-session (active mode), **When** the session stops, **Then** the metronome stays off (preference cleared, no surprise re-arm).
 
@@ -62,7 +62,7 @@ The Play and Train plugins continue to use `toggle()` / `setSubdivision()` / `su
 - **FR-004**: `startFromDeferred()` MUST start the engine (consuming `armed`) only when armed; otherwise MUST be a no-op. It MUST be safe to call from any plugin on every first-note event.
 - **FR-005**: `stop()` MUST stop the engine AND clear `armed` (full stop). Callers that want "stopped but re-armed for next session" MUST call `arm()` afterwards — composed by the shared practice lifecycle hook.
 - **FR-006**: The Practice plugin MUST drive the metronome exclusively through one shared lifecycle hook (new `useMetronomeLifecycle`) built on the API. All bespoke armed/enabled refs and stop/disarm helpers MUST be removed from practice code.
-- **FR-007**: Score practice and free practice MUST produce identical metronome behaviour through the shared hook: armed in waiting, first-note deferred start, immediate toggle mid-session, re-arm on session end if enabled, full-off otherwise.
+- **FR-007**: Score practice and free practice MUST produce identical metronome behaviour through the shared hook: armed in waiting, first-note deferred start, immediate toggle mid-session, stop + disarm on session end, and re-arm when the next session starts if enabled. `armed` MUST never be set outside a running/pending practice.
 - **FR-008**: Practice toolbar MUST render armed/active solely from `MetronomeState` (`state.armed`, `state.active`), not from plugin-local flags.
 - **FR-009**: Play and Train plugins MUST keep using only `toggle()`, `setSubdivision()`, `subscribe()`; their behaviour MUST be unchanged.
 
@@ -78,10 +78,10 @@ The Play and Train plugins continue to use `toggle()` / `setSubdivision()` / `su
 ### Measurable Outcomes
 
 - **SC-001**: Zero references to `metronomeArmed*`, `*MetronomeEnabledRef`, `stopScoreMetronome`, `stopFreeMetronome`, or bespoke `onFirstNoteAttack` logic remain in practice code (grep-verifiable).
-- **SC-002**: 100% of existing metronome behaviour tests (deferred start, stop-on-finish, re-arm, no silent-arm, free lifecycle) pass unchanged or with only mechanical constant/name updates — no assertion about behaviour weakens.
+- **SC-002**: 100% of existing metronome behaviour tests (deferred start, stop-on-finish disarm, re-arm on next start, no silent-arm, free lifecycle) pass unchanged or with only mechanical constant/name updates — no assertion about behaviour weakens.
 - **SC-003**: `armed` is present in 100% of emitted `MetronomeState` snapshots; Play/Train suites pass with zero behaviour changes.
-- **SC-004**: Score and free practice each have at least one test driving the full lifecycle (arm → first note → running → stop → re-arm) through the shared hook/API, not against plugin internals.
+- **SC-004**: Score and free practice each have at least one test driving the full lifecycle (arm → first note → running → stop/disarm → re-arm on next start) through the shared hook/API, not against plugin internals.
 
 ## Known Issues & Regression Tests *(if applicable)*
 
-No issues recorded yet. This section will grow during implementation, deployment, or production use per Principle VII (Regression Prevention).
+- **Regression (exit/stop left the metronome armed)**: leaving Score Practice via Back / Return-to-session, and stopping a session while the metronome was enabled, left `armed` set with no practice running. Fixed by disarming on every exit path and on session end, and re-arming only when the next session starts (armed ⟺ inside a practice). Guarded by `PracticeViewPlugin` exit/stop tests and the `useMetronomeLifecycle` session-end/session-start tests.

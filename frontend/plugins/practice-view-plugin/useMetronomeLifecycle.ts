@@ -12,12 +12,14 @@
  *   - onToggle        while active      → toggle() (stop)
  *   - onToggle(false) while idle        → toggle() (start now)
  *   - onFirstNote()                     → startFromDeferred() (only acts while armed)
- *   - onSessionStart()                  → if running standalone, stop + arm (defer)
- *   - onSessionEnd()                    → stop engine, then re-arm if enabled
+ *   - onSessionStart()                  → running standalone: stop + arm; else if enabled: re-arm
+ *   - onSessionEnd()                    → stop engine + disarm (preference kept; armed only
+ *                                          makes sense inside a practice)
  *   - onExit()                          → stop + disarm + clear enabled preference
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type React from 'react';
 import type { MetronomeState, PluginMetronomeContext } from '../../src/plugin-api/index';
 
 const INACTIVE: MetronomeState = {
@@ -50,12 +52,17 @@ export interface UseMetronomeLifecycleReturn {
   onToggle: (canArm: boolean) => void;
   /** First-note handler — consumes the arm via startFromDeferred(). */
   onFirstNote: () => void;
-  /** Practice-session start: stop a running standalone metronome and defer it. */
+  /** Practice-session start: (re)arm the metronome for the new session. */
   onSessionStart: () => void;
-  /** Practice-session end: stop the engine, re-arm if the metronome was enabled. */
+  /** Practice-session end: stop the engine and disarm (`armed` only makes sense inside a practice). */
   onSessionEnd: () => void;
   /** Leave the practice entirely: stop + disarm + clear the enabled preference. */
   onExit: () => void;
+  /**
+   * The "metronome enabled" preference, kept across a session end so the next
+   * session can re-arm. Read it (do not write) when deciding strictTempo.
+   */
+  enabledRef: React.MutableRefObject<boolean>;
 }
 
 export function useMetronomeLifecycle({
@@ -101,25 +108,27 @@ export function useMetronomeLifecycle({
   }, [metro]);
 
   const onSessionStart = useCallback((): void => {
-    // A metronome left running standalone (e.g. toggled on manually) is
-    // stopped and deferred to the first note of the new session.
     if (stateRef.current.active) {
+      // A metronome left running standalone (e.g. toggled on manually) is
+      // stopped and deferred to the first note of the new session.
       enabledRef.current = true;
       void metro.toggle().catch(() => {});
       metro.arm();
+    } else if (enabledRef.current) {
+      // The preference survived a previous session end — arm again so the new
+      // session's first note starts the metronome.
+      metro.arm();
     }
-    // Otherwise armed (from a previous onSessionEnd) or fully off — nothing to do.
   }, [metro]);
 
   const onSessionEnd = useCallback((): void => {
+    // Session over: stop the engine and never leave it armed — `armed` only
+    // makes sense inside a running practice. The enabled preference is kept so
+    // the next session (Start/Repractice) re-arms via onSessionStart().
     if (stateRef.current.active) {
       void metro.toggle().catch(() => {});
     }
-    if (enabledRef.current) {
-      metro.arm();
-    } else {
-      metro.disarm();
-    }
+    metro.disarm();
   }, [metro]);
 
   const onExit = useCallback((): void => {
@@ -139,5 +148,6 @@ export function useMetronomeLifecycle({
     onSessionStart,
     onSessionEnd,
     onExit,
+    enabledRef,
   };
 }
