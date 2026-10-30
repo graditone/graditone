@@ -75,3 +75,8 @@ export type { PracticeScoreBreakdown, ScorableNoteResult } from './computePracti
 
 // Feature 083: Tempo calculation utilities (re-exported so plugins can import from plugin-api)
 export { computeEffectiveMinMultiplier, MIN_TEMPO_MULTIPLIER, MAX_TEMPO_MULTIPLIER, ABSOLUTE_BPM_FLOOR } from '../utils/tempoCalculations';
+
+// Shared musical scale catalog (host-owned shared data, re-exported so plugins
+// can build a scale picker without importing another plugin's internals).
+export { SCALE_OPTIONS } from './scaleOptions';
+export type { ScaleOption } from './scaleOptions';
