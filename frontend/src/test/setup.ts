@@ -216,6 +216,12 @@ vi.mock('tone', () => {
       this.toDestination = function() { return self; };
       this.connect = function() { return self; };
     },
+    Gain: function GainStub(this: Record<string, unknown>) {
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const self = this;
+      this.connect = function() { return self; };
+      this.dispose = function() {};
+    },
     Frequency: vi.fn(() => ({ toNote: vi.fn(() => 'C4') })),
     Destination: {
       mute: false,

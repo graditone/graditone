@@ -1,8 +1,19 @@
 import * as Tone from 'tone';
-import { velocityToGain, applyCCScaling, DEFAULT_VELOCITY } from './volumeUtils';
+import { velocityToGain, applyCCScaling, DEFAULT_VELOCITY, percentToDb, dbToPercent } from './volumeUtils';
 import { scopedGetItem, scopedSetItem } from '../profiles/profileStorage';
 import { PlaybackChannel, type IPlaybackChannel } from './PlaybackChannel';
 import { getTimbre, type TimbreConfig } from './InstrumentTimbres';
+
+/**
+ * Make-up gain (dB) applied to the instrument chain before the limiter.
+ *
+ * Salamander piano samples peak around −8…−11 dBFS and the velocity curve is
+ * linear (v/127), so a mf note leaves the sampler near −13 dBFS. Without this
+ * the app played back 15–25 dB below a normal listening level. +7 dB brings the
+ * loudest single notes to ≈ −2 dBFS; summed chord peaks are still caught by the
+ * 0 dB limiter that sits downstream.
+ */
+const MAKEUP_GAIN_DB = 7;
 
 /**
  * ToneAdapter - Singleton wrapper for Tone.js audio synthesis
@@ -45,6 +56,12 @@ export class ToneAdapter {
   private ccExpression = 127;
   /** Limiter node to prevent clipping (Feature 063, FR-012). */
   private limiter: Tone.Limiter | null = null;
+  /**
+   * Make-up gain applied to the whole instrument chain before the limiter.
+   * Created in _doInit(); all sources (piano sampler, instrument samplers,
+   * PolySynth, and every PlaybackChannel) route through it.
+   */
+  private makeUpGain: Tone.Gain | null = null;
   /** Per-instrument playback channels. Feature 088. */
   private channels = new Map<number, PlaybackChannel>();
   /**
@@ -120,10 +137,13 @@ export class ToneAdapter {
     try {
       // Note: We don't start Tone.Transport here - we'll start it fresh each playback
 
-      // Feature 063: Insert a brick-wall limiter to prevent clipping (FR-012).
-      // Threshold at 0 dBFS — only catches chord peaks where multiple notes sum
-      // above full scale. Single-note dynamics pass through unaffected.
+      // Feature 063 + audio-level fix: insert a brick-wall limiter to prevent
+      // clipping (FR-012), preceded by a fixed make-up gain. The limiter
+      // threshold stays at 0 dBFS — only chord peaks where multiple notes sum
+      // above full scale are caught; single-note dynamics pass through.
+      this.makeUpGain = new Tone.Gain(Math.pow(10, MAKEUP_GAIN_DB / 20));
       this.limiter = new Tone.Limiter(0).toDestination();
+      this.makeUpGain.connect(this.limiter);
 
       if (this.useSampler) {
         // US3: Use Salamander Grand Piano samples for realistic sound
@@ -166,7 +186,7 @@ export class ToneAdapter {
             release: 1,
             baseUrl: `${import.meta.env.BASE_URL}audio/salamander/`,
             volume: 0,
-          }).connect(this.limiter!);
+          }).connect(this.makeUpGain!);
 
           // CRITICAL: Wait for samples to load before allowing playback
           // Timeout after 5 seconds to avoid hanging offline
@@ -188,7 +208,7 @@ export class ToneAdapter {
                   release: timbre.sampleRelease ?? 0.5,
                   baseUrl: `${import.meta.env.BASE_URL}${timbre.sampleBaseUrl}`,
                   volume: 0,
-                }).connect(this.limiter!),
+                }).connect(this.makeUpGain!),
               );
             }
           }
@@ -215,7 +235,7 @@ export class ToneAdapter {
             sustain: 0.3,
             release: 1.0,
           },
-        }).connect(this.limiter!);
+        }).connect(this.makeUpGain!);
       }
 
       this.initialized = true;
@@ -538,9 +558,9 @@ export class ToneAdapter {
   }
 
   /**
-   * Set the master volume (0–100%). Maps to Tone.Destination.volume in dB.
-   * 0% mutes output completely. 1–100% maps linearly to -60 dB … 0 dB.
-   * Persists value to localStorage. Feature 063.
+   * Set the master volume (0–100%). Maps to Tone.Destination.volume in dB
+   * using a linear-amplitude curve: 100% → 0 dB, 50% → −6 dB, 0% mutes.
+   * Persists value to localStorage. Feature 063 / audio-level fix.
    *
    * @param percent - Volume percentage (0–100)
    */
@@ -550,9 +570,9 @@ export class ToneAdapter {
       Tone.Destination.mute = true;
     } else {
       Tone.Destination.mute = false;
-      // Linear map: 1% → -60 dB, 100% → 0 dB
-      const dB = -60 + (clamped / 100) * 60;
-      Tone.Destination.volume.value = dB;
+      // Linear-amplitude map (was linear-in-dB): the top of the slider now
+      // reaches 0 dB and the whole travel is audible.
+      Tone.Destination.volume.value = percentToDb(clamped);
     }
     try {
       scopedSetItem(ToneAdapter.VOLUME_STORAGE_KEY, String(clamped));
@@ -568,14 +588,18 @@ export class ToneAdapter {
   public getMasterVolume(): number {
     if (Tone.Destination.mute) return 0;
     const dB = Tone.Destination.volume.value;
-    // Inverse of setMasterVolume: percent = ((dB + 60) / 60) * 100
-    const percent = ((dB + 60) / 60) * 100;
+    const percent = dbToPercent(dB);
     return Math.round(Math.max(0, Math.min(100, percent)));
   }
 
   /**
    * Load persisted master volume from localStorage and apply it.
    * Called during init. Feature 063.
+   *
+   * NOTE (audio-level fix): the master-volume curve changed from linear-in-dB
+   * to linear-in-amplitude, so a value stored before this change is
+   * reinterpreted — e.g. a stored 80 now means ≈ −2 dB instead of −12 dB. This
+   * is intentional: it lifts existing users out of the too-quiet default.
    */
   public loadPersistedVolume(): void {
     try {
@@ -590,8 +614,8 @@ export class ToneAdapter {
     } catch {
       // localStorage unavailable
     }
-    // Default: 80%
-    this.setMasterVolume(80);
+    // Default: 100%
+    this.setMasterVolume(100);
   }
 
   // ============================================================================
@@ -622,7 +646,7 @@ export class ToneAdapter {
               release: timbre.sampleRelease ?? 0.5,
               baseUrl: `${import.meta.env.BASE_URL}${timbre.sampleBaseUrl}`,
               volume: 0,
-            }).connect(this.limiter!),
+            }).connect(this.makeUpGain!),
           );
         }
         samplerRef = this.instrumentSamplers.get(instrumentType);
@@ -631,7 +655,7 @@ export class ToneAdapter {
         samplerRef = this.sampler ?? undefined;
       }
     }
-    const channel = new PlaybackChannel(timbre, this.limiter!, samplerRef);
+    const channel = new PlaybackChannel(timbre, this.makeUpGain!, samplerRef);
     this.channels.set(partIndex, channel);
     return channel;
   }
