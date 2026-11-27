@@ -19,9 +19,10 @@ flow (YAML) ─▶ Playwright runner ─▶ video.webm + audio.webm
 
 ```bash
 cd demos
-npm install
+npm ci
+(cd ../frontend && npm ci)        # the runner serves this app
 
-# Make sure the app is reachable (or let the runner start it):
+# Let the runner start the app, or start it yourself:
 #   (cd ../frontend && PLAYWRIGHT_TEST=1 npm run dev -- --port 5174)
 
 node src/run.ts play-a-score      # one flow by id
@@ -33,11 +34,24 @@ DEMO_DEBUG=1 node src/run.ts play-a-score           # step + audio timings
 ```
 
 Outputs land in `demos/out/` (git-ignored): the muxed `<id>.webm`, the finished
-`<id>.mp4` from DemoClip, and the raw takes in `out/raw/<id>/`.
+`<id>.mp4` from DemoClip, and the raw takes in `out/raw/<id>/`. The flow YAML is
+the artifact to commit — `out/` never is.
 
-The harness is written in TypeScript and **run directly by Node** (type
-stripping — there is no build step). That needs **Node 22.18+** (or 23.6+). To
-check the types: `npm run typecheck`.
+### Prerequisites
+
+- **Node 22.18+** (or 23.6+). The harness is TypeScript run directly by Node
+  (type stripping — no build step).
+- `npm ci` in **`demos/` and `frontend/`** — the runner serves the app from
+  `frontend/`. `npm run typecheck` checks the harness types.
+- **ffmpeg** on `PATH` (audio mux, loudness normalisation).
+- A **working audio output device** — Chromium's Web Audio clock drives the
+  recording; without one the clip is silent (see *The audio*).
+- A **DemoClip** build for the title card and MP4 export, at
+  `~/devel/democlip/dist` or `DEMOCLIP_APP`. Without it the capture still runs;
+  the export step is skipped with a note.
+
+Agent sessions: load the **`graditone-demo-videos`** skill for the runbook and
+traps (selectors, the port collision, verification).
 
 ## Writing a flow
 
@@ -96,6 +110,15 @@ Audio clock from the audio device; if none is available the clock freezes at
 interface that is unplugged or asleep is enough to cause this — `afplay`/`say`
 fail the same way. The runner says so and still produces a silent video. If the
 audio is silent, check the system output device first.
+
+## Troubleshooting
+
+| Symptom | Likely cause and fix |
+|---------|----------------------|
+| The run dies at the **first** step, `waiting for locator('[data-testid="plugin-launch-play-score"]')` | The runner found *something* on port 5174 — any HTTP status below 500 counts as "the app is up" — usually another worktree's Vite server answering 404, so it never started Graditone. Free the port, or start the app yourself on a free port and set `DEMO_BASE_URL` (see the `graditone-demo-videos` skill for the exact commands). |
+| The clip is **silent** | No working audio output device; Chromium freezes the Web Audio clock. Check the system output device (an asleep USB interface is the usual cause) — see *The audio*. |
+| `DemoClip: no build found … skipping` | No DemoClip `dist/`. Set `DEMOCLIP_APP=/path/to/dist`, or capture only with `DEMO_SKIP_DEMOCLIP=1`. |
+| A selector is not found | Confirm the hook in `frontend/` — `[data-testid=…]`, `[role="toolbar"] [aria-label=…]` (labels in `frontend/src/i18n/locales/en.json`), or an existing `frontend/e2e/*.spec.ts`. |
 
 ## DemoClip
 
