@@ -24,16 +24,20 @@ npm install
 # Make sure the app is reachable (or let the runner start it):
 #   (cd ../frontend && PLAYWRIGHT_TEST=1 npm run dev -- --port 5174)
 
-node src/run.mjs play-a-score     # one flow by id
-node src/run.mjs --all            # every flow
-node src/run.mjs --list           # list the catalogue
-DEMO_HEADFUL=1 node src/run.mjs   # watch it happen in a real window
-DEMO_SKIP_DEMOCLIP=1 node src/run.mjs play-a-score   # capture only
-DEMO_DEBUG=1 node src/run.mjs play-a-score           # step + audio timings
+node src/run.ts play-a-score      # one flow by id
+node src/run.ts --all             # every flow
+node src/run.ts --list            # list the catalogue
+DEMO_HEADFUL=1 node src/run.ts    # watch it happen in a real window
+DEMO_SKIP_DEMOCLIP=1 node src/run.ts play-a-score   # capture only
+DEMO_DEBUG=1 node src/run.ts play-a-score           # step + audio timings
 ```
 
 Outputs land in `demos/out/` (git-ignored): the muxed `<id>.webm`, the finished
 `<id>.mp4` from DemoClip, and the raw takes in `out/raw/<id>/`.
+
+The harness is written in TypeScript and **run directly by Node** (type
+stripping — there is no build step). That needs **Node 22.18+** (or 23.6+). To
+check the types: `npm run typecheck`.
 
 ## Writing a flow
 
@@ -67,12 +71,13 @@ tap reads on video.
 
 | File | What it is |
 |------|------------|
-| `src/run.mjs` | CLI: pick flows, ensure the app is served, orchestrate |
-| `src/runner.mjs` | the generic Playwright driver (no flow-specific code) |
-| `src/pageChrome.mjs` | injected pointer + click ripple + caption bar |
-| `src/audioCapture.mjs` | injects an AudioContext tap recorded with `MediaRecorder` |
-| `src/postprocess.mjs` | ffmpeg: align the audio, mux, normalise loudness |
-| `src/democlip.mjs` | drives DemoClip headlessly over its `window.democlip` surface |
+| `src/types.ts` | the flow / capture / path types, and the page globals |
+| `src/run.ts` | CLI: pick flows, ensure the app is served, orchestrate |
+| `src/runner.ts` | the generic Playwright driver (no flow-specific code) |
+| `src/pageChrome.ts` | injected pointer + click ripple + caption bar |
+| `src/audioCapture.ts` | injects an AudioContext tap recorded with `MediaRecorder` |
+| `src/postprocess.ts` | ffmpeg: align the audio, mux, normalise loudness |
+| `src/democlip.ts` | drives DemoClip headlessly over its `window.democlip` surface |
 
 ## The audio
 

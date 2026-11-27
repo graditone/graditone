@@ -2,23 +2,24 @@
 /**
  * graditone-demos — turn a flow into a demo video.
  *
- *   node src/run.mjs play-a-score      # one flow, by id
- *   node src/run.mjs --all             # every flow in flows/
- *   node src/run.mjs --list            # list the catalog
- *   DEMO_HEADFUL=1 node src/run.mjs    # watch it happen in a real window
+ *   node src/run.ts play-a-score      # one flow, by id
+ *   node src/run.ts --all             # every flow in flows/
+ *   node src/run.ts --list            # list the catalog
+ *   DEMO_HEADFUL=1 node src/run.ts    # watch it happen in a real window
  *
  * It makes sure the app is served, records the flow, muxes in the audio, and
  * (unless DEMO_SKIP_DEMOCLIP=1) hands the result to DemoClip.
  */
 
 import { readFile, readdir, mkdir } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { runFlow } from './runner.mjs';
-import { muxWithAudio, audioDelayMs, defaultPaths } from './postprocess.mjs';
-import { postProcessWithDemoClip } from './democlip.mjs';
+import { runFlow } from './runner.ts';
+import { muxWithAudio, audioDelayMs, defaultPaths } from './postprocess.ts';
+import { postProcessWithDemoClip } from './democlip.ts';
+import type { Flow } from './types.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = path.resolve(ROOT, '..');
@@ -26,7 +27,7 @@ const FLOWS_DIR = path.join(ROOT, 'flows');
 const OUT_DIR = path.join(ROOT, 'out');
 const BASE = process.env.DEMO_BASE_URL || 'http://localhost:5174';
 
-async function reachable(url) {
+async function reachable(url: string): Promise<boolean> {
   try {
     const res = await fetch(url, { method: 'HEAD' });
     return res.status < 500;
@@ -36,7 +37,7 @@ async function reachable(url) {
 }
 
 /** Start the app's dev server if one is not already answering. */
-async function ensureServer() {
+async function ensureServer(): Promise<ChildProcess | null> {
   if (await reachable(BASE)) return null;
   console.log('· starting the Graditone dev server…');
   const child = spawn('npm', ['run', 'dev', '--', '--port', '5174', '--strictPort'], {
@@ -52,16 +53,16 @@ async function ensureServer() {
   throw new Error('the dev server did not come up');
 }
 
-async function loadFlows() {
+async function loadFlows(): Promise<Flow[]> {
   const files = (await readdir(FLOWS_DIR))
     .filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'))
     .sort();
   return Promise.all(
-    files.map(async (f) => parseYaml(await readFile(path.join(FLOWS_DIR, f), 'utf8'))),
+    files.map(async (f) => parseYaml(await readFile(path.join(FLOWS_DIR, f), 'utf8')) as Flow),
   );
 }
 
-async function main() {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const flags = new Set(args.filter((a) => a.startsWith('--')));
   const ids = args.filter((a) => !a.startsWith('--'));
@@ -108,7 +109,7 @@ async function main() {
         paths.muxed,
       );
       console.log(
-        `  ✓ recorded video · muxed` +
+        '  ✓ recorded video · muxed' +
           (muxed.hasAudio ? ` (+${muxed.delayMs} ms audio delay)` : ' (silent)') +
           ` → ${path.relative(REPO, paths.muxed)}`,
       );
@@ -124,7 +125,7 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   console.error(error);
   process.exit(1);
 });

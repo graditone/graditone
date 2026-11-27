@@ -5,15 +5,20 @@
   "version": "0.1.0",
   "description": "Declarative user-flow demo video generator for Graditone (Playwright capture + DemoClip post-processing)",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.18"
   },
   "scripts": {
-    "demo": "node src/run.mjs",
-    "demo:all": "node src/run.mjs --all",
-    "demo:list": "node src/run.mjs --list"
+    "demo": "node src/run.ts",
+    "demo:all": "node src/run.ts --all",
+    "demo:list": "node src/run.ts --list",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "playwright": "^1.64.1",
     "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
   }
 }

@@ -3,16 +3,26 @@
  * recording video and audio. It knows nothing about any particular flow.
  */
 
-import { chromium } from 'playwright';
+import { chromium, type Page } from 'playwright';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { installDemoChrome } from './pageChrome.mjs';
-import { installAudioCapture } from './audioCapture.mjs';
+import { installDemoChrome } from './pageChrome.ts';
+import { installAudioCapture } from './audioCapture.ts';
+import type { CaptureResult, CaptureTimeline, Flow, FlowStep, StepMark } from './types.ts';
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
+interface GlideOptions {
+  steps?: number;
+  settle?: number;
+}
+
 /** Glide the (hidden) mouse to an element's centre, then click it. */
-async function glideClick(page, selector, { steps = 22, settle = 140 } = {}) {
+async function glideClick(
+  page: Page,
+  selector: string,
+  { steps = 22, settle = 140 }: GlideOptions = {},
+): Promise<void> {
   const locator = page.locator(selector).first();
   await locator.waitFor({ state: 'visible', timeout: 30_000 });
   const box = await locator.boundingBox();
@@ -26,13 +36,18 @@ async function glideClick(page, selector, { steps = 22, settle = 140 } = {}) {
   await page.mouse.up();
 }
 
-async function setCaption(page, text) {
-  await page.evaluate((t) => window.__demoCaption?.(t), text ?? '');
+/** The selector a step needs, or a clear error naming the step that lacks one. */
+function requireSelector(step: FlowStep): string {
+  if (!step.selector) throw new Error(`step "${step.action ?? 'click'}" needs a selector`);
+  return step.selector;
 }
 
-async function runStep(page, step) {
+async function setCaption(page: Page, text: string | undefined): Promise<void> {
+  await page.evaluate((t: string) => window.__demoCaption?.(t), text ?? '');
+}
+
+async function runStep(page: Page, step: FlowStep): Promise<void> {
   if (step.caption !== undefined) await setCaption(page, step.caption);
-  // (marks are recorded by the caller, around each step)
 
   switch (step.action) {
     case undefined:
@@ -42,35 +57,44 @@ async function runStep(page, step) {
       await page.goto(step.url ?? '/', { waitUntil: 'domcontentloaded' });
       break;
     case 'click':
-      await glideClick(page, step.selector, step);
+      await glideClick(page, requireSelector(step), step);
       break;
     case 'waitFor':
       await page
-        .locator(step.selector)
+        .locator(requireSelector(step))
         .first()
         .waitFor({ state: step.state ?? 'visible', timeout: step.timeout ?? 30_000 });
       break;
     case 'waitForFunction':
-      await page.waitForFunction(step.script, undefined, { timeout: step.timeout ?? 30_000 });
+      await page.waitForFunction(step.script ?? 'true', undefined, { timeout: step.timeout ?? 30_000 });
       break;
     case 'press':
-      await page.keyboard.press(step.key);
+      await page.keyboard.press(step.key ?? '');
       break;
     case 'evaluate':
-      await page.evaluate(step.script);
+      await page.evaluate(step.script ?? '');
       break;
     default:
-      throw new Error(`unknown action: ${step.action}`);
+      throw new Error(`unknown action: ${String(step.action)}`);
   }
 
   if (step.hold) await page.waitForTimeout(step.hold);
+}
+
+export interface RunOptions {
+  base: string;
+  out: string;
+  headless?: boolean;
 }
 
 /**
  * Run one flow. Returns the raw video path, the parallel audio path (if any),
  * and the wall-clock marks the post-processing needs to line them up.
  */
-export async function runFlow(flow, { base, out, headless = true }) {
+export async function runFlow(
+  flow: Flow,
+  { base, out, headless = true }: RunOptions,
+): Promise<CaptureResult> {
   const viewport = flow.viewport ?? DEFAULT_VIEWPORT;
   const rawDir = path.join(out, 'raw', flow.id);
   await rm(rawDir, { recursive: true, force: true });
@@ -100,34 +124,38 @@ export async function runFlow(flow, { base, out, headless = true }) {
   const videoStartMs = Date.now();
   const video = page.video();
 
-  const pageErrors = [];
+  const pageErrors: string[] = [];
   page.on('pageerror', (e) => pageErrors.push(String(e)));
 
   try {
     await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
 
-    const marks = [];
+    const marks: StepMark[] = [];
     for (const step of flow.steps) {
       marks.push({ label: step.caption ?? step.action ?? 'hold', at: Date.now() - videoStartMs });
       await runStep(page, step);
     }
 
     // Stop the in-page recorder and collect the audio the app produced.
-    let audio = null;
-    let timeline = null;
+    let audio: string | null = null;
+    let timeline: CaptureTimeline | null = null;
     try {
       const result = await page.evaluate(async () => {
         const tap = window.__demoAudio;
         if (!tap) return null;
         return tap.stop();
       });
+      const dataUrl = result?.dataUrl ?? null;
       if (process.env.DEMO_DEBUG) {
-        console.log('  · audio result:', JSON.stringify(result && { bytes: result.bytes, timeline: result.timeline }));
+        console.log(
+          '  · audio result:',
+          JSON.stringify(result && { bytes: result.bytes, timeline: result.timeline }),
+        );
       }
-      if (result?.dataUrl && result.bytes > 0) {
+      if (dataUrl && result && result.bytes > 0) {
         timeline = result.timeline;
         audio = path.join(rawDir, `${flow.id}.audio.webm`);
-        await writeFile(audio, Buffer.from(result.dataUrl.split(',')[1], 'base64'));
+        await writeFile(audio, Buffer.from(dataUrl.split(',')[1] ?? '', 'base64'));
       } else {
         console.warn(
           '  ! no audio was captured — the AudioContext clock was silent/frozen.\n' +
@@ -136,14 +164,14 @@ export async function runFlow(flow, { base, out, headless = true }) {
         );
       }
     } catch (error) {
-      console.warn(`  ! audio capture failed: ${error.message}`);
+      console.warn(`  ! audio capture failed: ${(error as Error).message}`);
     }
 
     return { video, videoStartMs, audio, timeline, marks, pageErrors };
   } finally {
     await context.close();
     const videoPath = path.join(rawDir, `${flow.id}.video.webm`);
-    await video.saveAs(videoPath);
+    if (video) await video.saveAs(videoPath);
     await browser.close();
   }
 }

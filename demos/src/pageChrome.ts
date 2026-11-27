@@ -11,10 +11,13 @@
  *
  * Because it lives in the page, it is part of the recorded video for free — no
  * ffmpeg overlay needed for captions.
+ *
+ * The function is serialised and run in the browser, so it uses DOM globals and
+ * takes nothing from this module's scope.
  */
 
-export function installDemoChrome() {
-  const whenReady = (fn) => {
+export function installDemoChrome(): void {
+  const whenReady = (fn: () => void): void => {
     if (document.documentElement) fn();
     else document.addEventListener('DOMContentLoaded', fn, { once: true });
   };
@@ -67,7 +70,7 @@ export function installDemoChrome() {
     document.documentElement.appendChild(cursor);
     document.documentElement.appendChild(caption);
 
-    const move = (x, y) => {
+    const move = (x: number, y: number): void => {
       cursor.style.transform = `translate(${x}px, ${y}px)`;
     };
 
@@ -86,7 +89,7 @@ export function installDemoChrome() {
       true,
     );
 
-    window.__demoCaption = (text) => {
+    window.__demoCaption = (text: string) => {
       caption.textContent = text || '';
       caption.classList.toggle('visible', Boolean(text));
     };
