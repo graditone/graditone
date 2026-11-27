@@ -65,7 +65,8 @@ steps:
 
 Steps: `click`, `waitFor`, `waitForFunction`, `press`, `evaluate`, `goto`, and
 `caption`/`hold` modifiers. Clicks glide the (injected) pointer and ripple, so a
-tap reads on video.
+tap reads on video. `pressMs` keeps the pointer down before release, for controls
+that repeat while held — the tempo ± buttons step by 5 BPM after a second.
 
 ## Pieces
 
