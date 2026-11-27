@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as Tone from 'tone';
 import { ToneAdapter } from './ToneAdapter';
+
+/** Records the linear gain passed to `new Tone.Gain(...)` in _doInit. */
+const gainSpy = vi.hoisted(() => vi.fn());
 
 // Mock Tone.js at the module level
 vi.mock('tone', () => {
@@ -54,6 +58,15 @@ vi.mock('tone', () => {
     toDestination() { return this; }
   }
 
+  // Audio-level fix: make-up gain node mock
+  class MockGain {
+    constructor(value: number) {
+      gainSpy(value);
+    }
+    connect() { return this; }
+    dispose() { /* no-op */ }
+  }
+
   return {
     start: vi.fn().mockResolvedValue(undefined),
     loaded: vi.fn().mockResolvedValue(undefined), // US3: Mock Tone.loaded() for sampler
@@ -62,6 +75,7 @@ vi.mock('tone', () => {
     Sampler: MockSampler, // US3: Add Sampler mock
     Synth: vi.fn(),
     Limiter: MockLimiter, // Feature 063: Limiter mock
+    Gain: MockGain, // Audio-level fix: make-up gain
     Destination: {
       mute: false,
       volume: { value: -12 },
@@ -111,6 +125,9 @@ describe('ToneAdapter', () => {
     // Reset the singleton instance for each test
     (ToneAdapter as any).instance = null;
     vi.clearAllMocks();
+    // Reset the shared Destination mock state between tests
+    Tone.Destination.mute = false;
+    Tone.Destination.volume.value = 0;
   });
 
   afterEach(() => {
@@ -259,5 +276,68 @@ describe('ToneAdapter', () => {
 
     expect(adapter.playNote).toBeDefined();
     expect(typeof adapter.playNote).toBe('function');
+  });
+
+  /**
+   * Audio-level fix: master-volume mapping and make-up gain.
+   *
+   * The curve is linear in amplitude, so 100% → 0 dB and 50% → −6 dB. The
+   * previous linear-in-dB curve left the 80% default at −12 dB, which (with the
+   * samples' headroom) made playback ~25 dB too quiet.
+   */
+  describe('master volume mapping (audio-level fix)', () => {
+    it('maps 100% to 0 dB and unmutes', () => {
+      adapter = ToneAdapter.getInstance();
+      adapter.setMasterVolume(100);
+      expect(Tone.Destination.mute).toBe(false);
+      expect(Tone.Destination.volume.value).toBeCloseTo(0, 5);
+    });
+
+    it('maps 50% to ≈ −6 dB (linear-amplitude curve)', () => {
+      adapter = ToneAdapter.getInstance();
+      adapter.setMasterVolume(50);
+      expect(Tone.Destination.volume.value).toBeCloseTo(-6.0206, 3);
+    });
+
+    it('maps 80% to ≈ −1.94 dB (not the old −12 dB)', () => {
+      adapter = ToneAdapter.getInstance();
+      adapter.setMasterVolume(80);
+      expect(Tone.Destination.volume.value).toBeCloseTo(-1.9382, 3);
+    });
+
+    it('mutes at 0%', () => {
+      adapter = ToneAdapter.getInstance();
+      adapter.setMasterVolume(0);
+      expect(Tone.Destination.mute).toBe(true);
+    });
+
+    it('round-trips a percentage through getMasterVolume', () => {
+      adapter = ToneAdapter.getInstance();
+      adapter.setMasterVolume(80);
+      expect(adapter.getMasterVolume()).toBe(80);
+    });
+
+    it('reports 0 when muted', () => {
+      adapter = ToneAdapter.getInstance();
+      adapter.setMasterVolume(0);
+      expect(adapter.getMasterVolume()).toBe(0);
+    });
+
+    it('defaults to 100% when nothing is persisted', () => {
+      adapter = ToneAdapter.getInstance();
+      adapter.loadPersistedVolume();
+      expect(adapter.getMasterVolume()).toBe(100);
+    });
+  });
+
+  /**
+   * Audio-level fix: a fixed +7 dB make-up gain feeds the limiter so the
+   * loudest material lands near −1 dBFS instead of ~−25 dBFS.
+   */
+  it('inserts a +7 dB make-up gain before the limiter on init', async () => {
+    adapter = ToneAdapter.getInstance();
+    await adapter.init();
+    expect(gainSpy).toHaveBeenCalledTimes(1);
+    expect(gainSpy.mock.calls[0][0]).toBeCloseTo(Math.pow(10, 7 / 20), 5);
   });
 });

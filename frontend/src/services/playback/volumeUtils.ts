@@ -4,6 +4,9 @@
  * Feature: 063-midi-volume-control
  * Provides linear velocity-to-gain conversion
  * and MIDI CC scaling for the playback pipeline.
+ *
+ * Audio-level fix: master-volume percentage ↔ dBFS conversion lives here so the
+ * curve is testable in isolation from the Tone.js graph.
  */
 
 /** Default velocity when no dynamic marking is present (mezzo-forte). */
@@ -45,4 +48,32 @@ export function applyCCScaling(
   expression: number = 127,
 ): number {
   return noteGain * (channelVolume / 127) * (expression / 127);
+}
+
+/**
+ * Convert a 0–100 master-volume percentage to dBFS using a linear-amplitude
+ * curve: 100% → 0 dB, 50% → −6 dB, 0% → −Infinity.
+ *
+ * Amplitude is what a percentage slider should mean to the ear, and it keeps
+ * the whole travel useful. The previous curve was linear in dB
+ * (−60 dB … 0 dB), which made most of the slider barely audible and left the
+ * 80% default at −12 dB — the root cause of Graditone's low playback volume.
+ *
+ * @param percent - Volume percentage (0–100)
+ * @returns Gain in dBFS (−Infinity at 0%)
+ */
+export function percentToDb(percent: number): number {
+  if (percent <= 0) return -Infinity;
+  return 20 * Math.log10(percent / 100);
+}
+
+/**
+ * Inverse of {@link percentToDb}: convert a dBFS value back to a 0–100
+ * percentage.
+ *
+ * @param db - Gain in dBFS
+ * @returns Volume percentage (0–100)
+ */
+export function dbToPercent(db: number): number {
+  return 100 * Math.pow(10, db / 20);
 }

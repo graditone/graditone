@@ -1,7 +1,7 @@
 /**
  * PlaybackChannel — audio graph fragment for a single instrument part.
  *
- * Owns:  synth/sampler → Tone.Volume → (shared) limiter → destination
+ * Owns:  synth/sampler → Tone.Volume → (shared) make-up gain → limiter → destination
  * Lifecycle: created by ToneAdapter.initChannel(), destroyed on ToneAdapter.destroyChannels()
  *
  * Feature 088: Piano and Violin Playback Support
@@ -36,8 +36,8 @@ export interface IPlaybackChannel {
 
 /**
  * PlaybackChannel wraps a Tone.js synth/sampler and a Volume node for a single
- * instrument part. Multiple channels share a single upstream Limiter node owned
- * by ToneAdapter.
+ * instrument part. Multiple channels share a single upstream make-up gain node
+ * owned by ToneAdapter, which feeds the limiter.
  */
 export class PlaybackChannel implements IPlaybackChannel {
   private readonly polySynth: Tone.PolySynth | null = null;
@@ -46,8 +46,8 @@ export class PlaybackChannel implements IPlaybackChannel {
    * call dispose() on it — only on its own Volume node.
    */
   private readonly samplerRef: Tone.Sampler | null = null;
-  /** Stored so we can re-attach the sampler to the limiter on dispose(). */
-  private readonly limiterRef: Tone.Limiter;
+  /** Stored so we can re-attach the sampler to the upstream node on dispose(). */
+  private readonly upstreamRef: Tone.Gain;
   private readonly volumeNode: Tone.Volume;
   private _isMuted = false;
   private _volume = 1.0;
@@ -55,23 +55,24 @@ export class PlaybackChannel implements IPlaybackChannel {
 
   /**
    * @param config  Timbre configuration from InstrumentTimbres registry
-   * @param limiter Shared Tone.Limiter owned by ToneAdapter (not disposed here)
+   * @param upstream  Shared upstream node owned by ToneAdapter (the make-up gain
+   *   that feeds the limiter). Not disposed here.
    * @param samplerRef  When config.source === 'sampler', the shared Sampler node
    */
   constructor(
     config: TimbreConfig,
-    limiter: Tone.Limiter,
+    upstream: Tone.Gain,
     samplerRef?: Tone.Sampler,
   ) {
-    this.limiterRef = limiter;
+    this.upstreamRef = upstream;
     // Create a Volume node with the timbre's initial gain setting
-    this.volumeNode = new Tone.Volume(config.volumeDb).connect(limiter);
+    this.volumeNode = new Tone.Volume(config.volumeDb).connect(upstream);
 
     if (config.source === 'sampler' && samplerRef) {
-      // The shared Sampler is connected to the limiter directly by ToneAdapter
-      // (so legacy playNote()/attackNote() can drive it). We must REPLACE that
-      // direct connection with our Volume node, otherwise piano audio plays via
-      // both paths and channel mute/volume only affects half of it.
+      // The shared Sampler is connected to the make-up gain directly by
+      // ToneAdapter (so legacy playNote()/attackNote() can drive it). We must
+      // REPLACE that direct connection with our Volume node, otherwise piano
+      // audio plays via both paths and channel mute/volume only affects half of it.
       console.log(`[PlaybackChannel] partIndex sampler path: ${Object.prototype.toString.call(samplerRef)}`);
       try { samplerRef.disconnect(); } catch { /* no prior connections */ }
       samplerRef.connect(this.volumeNode);
@@ -147,11 +148,11 @@ export class PlaybackChannel implements IPlaybackChannel {
       this.polySynth.dispose();
     }
     // samplerRef is shared — do NOT dispose it, but restore its direct
-    // connection to the limiter so legacy playNote()/attackNote() keep working
-    // after this channel is gone (e.g. after destroyChannels()).
+    // connection to the upstream node so legacy playNote()/attackNote() keep
+    // working after this channel is gone (e.g. after destroyChannels()).
     if (this.samplerRef) {
       try { this.samplerRef.disconnect(this.volumeNode); } catch { /* already disconnected */ }
-      try { this.samplerRef.connect(this.limiterRef); } catch { /* limiter disposed */ }
+      try { this.samplerRef.connect(this.upstreamRef); } catch { /* upstream disposed */ }
     }
     // Volume node is owned by this channel — dispose it
     this.volumeNode.dispose();
