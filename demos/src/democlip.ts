@@ -34,7 +34,7 @@ declare global {
 
 /** As much of DemoClip's surface as we touch; the rest is reached by name. */
 interface DemoClipSurface {
-  describe(): { takes: unknown[] };
+  describe(): { takes: unknown[]; annotations: { id: string }[] };
   readonly [key: string]: unknown;
 }
 
@@ -150,16 +150,40 @@ export async function postProcessWithDemoClip(
     });
 
     // 2. Brand it from the flow, the way a person would in the properties panel.
+    //
+    // Title before logo, deliberately. DemoClip builds the clip's watermark (the
+    // mark over the top-right corner) from its `logo` and `title` properties, and
+    // each change rebuilds it. Setting the logo first is a race: the title change
+    // that follows supersedes the in-flight logo pass and the mark — the icon — is
+    // dropped, leaving only the title line. Setting the title first makes the logo
+    // pass the last one, so the mark lands and the title line is kept.
     const brand: Record<string, string> = {
-      logo: flow.democlip?.logo ?? 'graditone',
       title: flow.title,
       description: typeof flow.description === 'string' ? flow.description.trim() : '',
+      logo: flow.democlip?.logo ?? 'graditone',
     };
     for (const [property, value] of Object.entries(brand)) {
       if (value) await call('edit.setClipProperty', property, value);
     }
     if (flow.democlip?.titleCard !== false) {
       await call('edit.setClipProperty', 'addToExport', 'true');
+    }
+
+    // The watermark is rebuilt asynchronously (the logo file is fetched), so wait
+    // for the parts we asked for before the export reads the clip.
+    const wantMark = Boolean(flow.democlip?.logo ?? 'graditone');
+    const wantTitle = Boolean(flow.title);
+    if (wantMark || wantTitle) {
+      await page
+        .waitForFunction(
+          ([mark, title]) => {
+            const ids = window.democlip!.describe().annotations.map((a) => a.id);
+            return (!mark || ids.includes('watermark')) && (!title || ids.includes('watermark-title'));
+          },
+          [wantMark, wantTitle],
+          { timeout: 15_000 },
+        )
+        .catch(() => undefined);
     }
 
     // 3. Any annotations the flow declares.
