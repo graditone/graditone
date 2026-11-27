@@ -15,13 +15,14 @@ const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 interface GlideOptions {
   steps?: number;
   settle?: number;
+  pressMs?: number;
 }
 
 /** Glide the (hidden) mouse to an element's centre, then click it. */
 async function glideClick(
   page: Page,
   selector: string,
-  { steps = 22, settle = 140 }: GlideOptions = {},
+  { steps = 22, settle = 140, pressMs = 70 }: GlideOptions = {},
 ): Promise<void> {
   const locator = page.locator(selector).first();
   await locator.waitFor({ state: 'visible', timeout: 30_000 });
@@ -32,7 +33,7 @@ async function glideClick(
   await page.mouse.move(x, y, { steps });
   await page.waitForTimeout(settle);
   await page.mouse.down();
-  await page.waitForTimeout(70);
+  await page.waitForTimeout(pressMs);
   await page.mouse.up();
 }
 

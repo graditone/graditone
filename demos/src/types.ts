@@ -33,6 +33,8 @@ export interface FlowStep {
   steps?: number;
   /** Pause after the glide, before the click, in milliseconds. */
   settle?: number;
+  /** How long the pointer stays down for `click`, in milliseconds (default 70). */
+  pressMs?: number;
 }
 
 /** One annotation a flow hands to DemoClip. */
