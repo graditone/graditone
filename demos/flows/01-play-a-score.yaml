@@ -1,0 +1,57 @@
+# DemoClip source flow: Play a Score
+#
+# A flow is data. This file is the single source of truth for the video, its
+# title and its description — the runner turns it into a video, and a catalog
+# page can be generated from the same file. See demos/README.md.
+#
+# This is the shortest "hello world" path through Graditone: open the app, open
+# the Play Score plugin, choose a bundled piece and listen to it.
+
+id: play-a-score
+title: Play a Score
+audience: first-time user
+description: >
+  Open the Play Score plugin, pick a bundled piece from the catalogue and listen
+  to it while the notes light up and the page scrolls along — the shortest path
+  from "just opened Graditone" to hearing music.
+
+# The demos are aimed at a tablet, since Graditone is tablet-native.
+viewport: { width: 1440, height: 900 }
+
+steps:
+  - caption: "Graditone opens on a shelf of plugins. Let's hear a piece."
+    hold: 1200
+
+  - caption: "Tap Play Score."
+    action: click
+    selector: '[data-testid="plugin-launch-play-score"]'
+    hold: 700
+
+  - action: waitFor
+    selector: '[data-testid="score-selector-dialog"]'
+
+  - caption: "Choose a piece — Beethoven's Für Elise."
+    action: click
+    selector: '.score-selector-item__btn:has-text("Für Elise")'
+
+  - action: waitFor
+    selector: '[role="toolbar"]'
+
+  # Wait for the WASM engine to parse and engrave the score.
+  - action: waitForFunction
+    script: "document.querySelectorAll('svg line, svg path').length > 40"
+    timeout: 30000
+    hold: 1200
+
+  - caption: "Press ▶ Play."
+    action: click
+    selector: '[role="toolbar"] [aria-label="Play"]'
+    hold: 1800
+
+  - caption: "Follow the music — the page scrolls and the current note is highlighted."
+    hold: 14000
+
+  - caption: "Press ■ Stop when you're done."
+    action: click
+    selector: '[role="toolbar"] [aria-label="Stop"]'
+    hold: 1500
