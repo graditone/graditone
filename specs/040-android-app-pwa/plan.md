@@ -70,7 +70,7 @@ android/                              # NEW — Bubblewrap-generated TWA Android
 ├── gradle.properties
 ├── twa-manifest.json                 # Bubblewrap source config (checked in)
 ├── scripts/
-│   └── validate-manifest.js          # TWA manifest readiness check
+│   └── validate-manifest.ts          # TWA manifest readiness check
 ├── store-listing.md                  # Play Store copy (descriptions)
 └── RELEASE.md                        # Release process documentation
 assets/
