@@ -27,6 +27,13 @@ export interface CatalogEntry {
   selectorHints?: string[];
   /** Extra phrases a goal may use. */
   aliases?: string[];
+  /**
+   * For a dynamic family the static scan cannot enumerate (e.g. `measure-<n>`):
+   * a template id. A phrase with a number resolves to it.
+   */
+  pattern?: string;
+  /** A selector template whose `<n>` is filled from the phrase's number. */
+  selectorTemplate?: string;
 }
 
 /** The whole index and its provenance (data-model.md §2). */

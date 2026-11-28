@@ -142,6 +142,27 @@ export function parseReferences(
 
 const SOURCE_RANK: Record<CatalogSource, number> = { annotation: 3, snapshot: 2, e2e: 1 };
 
+/**
+ * Dynamic control families the static scan cannot enumerate. The measures are
+ * numbered 1..N, so the app marks each note glyph with `data-measure="N"` (and
+ * `aria-label="Measure N"`); this templates that family for the lookup.
+ */
+export function dynamicEntries(): CatalogEntry[] {
+  return [
+    {
+      id: 'measure-<n>',
+      role: 'note',
+      name: 'Measure',
+      testid: null,
+      screen: 'play-score',
+      source: 'annotation',
+      pattern: 'measure-<n>',
+      selectorTemplate: '[data-measure="<n>"]',
+      aliases: ['measure', 'bar'],
+    },
+  ];
+}
+
 /** Merge entries by identity, preferring the higher-ranked source's fields. */
 export function mergeEntries(entries: CatalogEntry[]): CatalogEntry[] {
   const byId = new Map<string, CatalogEntry>();
@@ -230,6 +251,7 @@ export async function buildCatalog(options: BuildOptions): Promise<Catalog> {
   }
 
   const entries = mergeEntries(collected);
+  entries.push(...dynamicEntries());
   if (entries.length === 0) {
     throw new Error(
       'No demo-relevant controls could be read.\n' +

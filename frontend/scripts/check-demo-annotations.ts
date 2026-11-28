@@ -94,6 +94,17 @@ const CHECKS: FileCheck[] = [
     ],
   },
   {
+    file: 'src/components/renderer/RenderingPipeline.ts',
+    requirements: [
+      { label: 'note glyphs carry their measure (dataset.measure)', pattern: /dataset\.measure = String\(measure\)/ },
+      {
+        label: 'note glyphs carry a "Measure N" aria-label',
+        pattern: /setAttribute\('aria-label', `Measure \$\{measure\}`\)/,
+      },
+      { label: 'per-measure numbering comes from the bar lines', pattern: /firstMeasure \+ barlineXs\.filter/ },
+    ],
+  },
+  {
     file: 'plugins/play-score/playbackToolbar.tsx',
     requirements: [
       { label: 'playback toolbar keeps role="toolbar"', pattern: /role="toolbar"/ },

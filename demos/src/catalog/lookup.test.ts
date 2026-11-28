@@ -55,3 +55,28 @@ test('a phrase that matches nothing is missing with no entry', () => {
   assert.equal(r.entry, null);
   assert.equal(r.reason, 'missing');
 });
+
+const measurePattern = {
+  id: 'measure-<n>',
+  role: 'note',
+  name: 'Measure',
+  testid: null,
+  screen: 'play-score',
+  source: 'annotation' as const,
+  pattern: 'measure-<n>',
+  selectorTemplate: '[data-measure="<n>"]',
+  aliases: ['measure', 'bar'],
+};
+
+test('a numbered measure phrase resolves to the measure template', () => {
+  const c: Catalog = { ...catalog, entries: [...catalog.entries, measurePattern] };
+  const r = lookup(c, 'measure 10');
+  assert.equal(r.resolved, true);
+  assert.deepEqual(r.entry?.selectorHints, ['[data-measure="10"]']);
+});
+
+test('a measure phrase without a number does not resolve to the template', () => {
+  const c: Catalog = { ...catalog, entries: [...catalog.entries, measurePattern] };
+  const r = lookup(c, 'measure');
+  assert.notDeepEqual(r.entry?.selectorHints, ['[data-measure="<n>"]']);
+});

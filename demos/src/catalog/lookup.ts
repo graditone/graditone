@@ -52,7 +52,33 @@ export function lookup(
     ? catalog.entries.filter((e) => e.screen === options.screen)
     : catalog.entries;
 
+  // Dynamic families (e.g. measures): a phrase that names the family and carries
+  // a number resolves to its template with the number filled in.
+  const numberMatch = phrase.match(/\d+/);
+  if (numberMatch) {
+    const n = numberMatch[0];
+    for (const entry of pool) {
+      if (!entry.pattern || !entry.selectorTemplate) continue;
+      const named = [entry.name ?? '', ...(entry.aliases ?? [])].some((t) =>
+        t && norm(phrase).includes(norm(t)),
+      );
+      if (!named) continue;
+      return {
+        phrase,
+        resolved: true,
+        entry: {
+          ...entry,
+          id: entry.pattern.replace('<n>', n),
+          selectorHints: [entry.selectorTemplate.replace('<n>', n)],
+        },
+        candidates: [],
+        reason: null,
+      };
+    }
+  }
+
   const scored = pool
+    .filter((entry) => !entry.pattern)
     .map((entry) => ({ entry, score: scoreEntry(entry, phrase) }))
     .filter((s) => s.score >= THRESHOLD)
     .sort((a, b) => b.score - a.score);
