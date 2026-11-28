@@ -21,7 +21,9 @@ the full flow DSL — this skill is the runbook and the traps.
    Keep the `NN-` filename prefix for ordering; the flow's `id` is what
    `node src/run.ts <id>` takes.
 4. **Run**: `cd demos && node src/run.ts <id>` (or `--all`, `--list`).
-5. **Verify** the clip before you call it done (see *Verifying*).
+5. **Stop there.** The deliverable is the YAML plus the generated video: do not
+   inspect frames, check audio or review the clip unless the user asks. This is
+   the project owner's standing preference — demo work must be quick.
 6. **Commit** the flow (and any harness/doc change). `demos/out/` is ignored.
    New flows get a PR; open it and link the session.
 
@@ -86,7 +88,10 @@ with a timeout (looks like a bad selector; it is a wrong server).
 | `DEMO_DEBUG=1` | Print step timings and the audio timeline. |
 | `DEMOCLIP_APP` | Path to a built DemoClip `dist/` (else `~/devel/democlip/dist`). |
 
-## Verifying a capture
+## Verifying a capture (only when asked)
+
+The default is to ship the YAML and the video without inspecting them. Run this
+only when the user asks for a check, or when a capture visibly failed.
 
 1. `DEMO_DEBUG=1` shows step marks; watch the log for `! no audio was captured`
    and for page errors.
@@ -122,5 +127,5 @@ Brand a clip entirely from the flow — do not edit the video by hand.
 - Selectors from the conventions above; no coordinates.
 - Uses real UI gestures, including `pressMs` where the control repeats on hold.
 - The `title`/`description` match what the video shows.
-- Ran clean (no page errors, audio present) and the frames confirm the change.
+- Ran clean: `node src/run.ts <id>` finished without a page error.
 - `demos/README.md` still matches the DSL if you added an attribute or action.
