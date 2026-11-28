@@ -93,23 +93,28 @@ function isAction(step: FlowStep): boolean {
 
 /**
  * The cues a flow asks for: an **arrow** at the control each action lands on, and a
- * **sound** the moment it lands. Nothing unless the flow asks (`democlip.actionCues`).
+ * **sound** the moment it lands. A step is cued when it asks (`cue: true`), or when the
+ * demo asks (`democlip.actionCues`) and the step does not opt out (`cue: false`); its sound
+ * is the step's `sound`, or a `thud`.
  *
  * The arrow points at the control's centre — tail a little above it, or below when the
  * control sits near the top so the arrow stays on the picture — over the stretch the step
  * owns (to the next step, or the end). The sound is placed where the action landed
- * (`doneAt`, taken at the press rather than after the step's hold), a `thud` by default.
+ * (`doneAt`, taken at the press rather than after the step's hold).
  */
 export function actionCueAnnotations(
   flow: Flow,
   marks: StepMark[],
   durationSec: number,
 ): FlowAnnotation[] {
-  if (!flow.democlip?.actionCues || !(durationSec > 0)) return [];
+  if (!(durationSec > 0)) return [];
+  const demo = flow.democlip?.actionCues === true;
   const cues: FlowAnnotation[] = [];
   flow.steps.forEach((step, index) => {
     const mark = marks[index];
     if (!mark || !isAction(step)) return;
+    if (!(step.cue ?? demo)) return;
+    const sound = step.sound || ACTION_SOUND;
 
     if (mark.target) {
       const { x, y } = mark.target;
@@ -129,7 +134,7 @@ export function actionCueAnnotations(
     cues.push({
       kind: 'sound',
       span: { s: landed, e: clamp01(Math.min(1, landed + ACTION_SOUND_SECONDS / durationSec)) },
-      sound: ACTION_SOUND,
+      sound,
     });
   });
   return cues;
