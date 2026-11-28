@@ -1,0 +1,34 @@
+{
+  "goal": {
+    "text": "Open Train View, start a training session and wait for the on-screen keyboard",
+    "id": "train-a-session",
+    "audience": "first-time user"
+  },
+  "steps": [
+    {
+      "phrase": "open train view",
+      "action": "click",
+      "caption": "Open the Train View plugin.",
+      "hold": 700,
+      "waitForContent": {
+        "script": "!!document.querySelector('[data-testid=\"train-view\"]')",
+        "timeout": 30000
+      }
+    },
+    {
+      "selector": "[data-testid=\"train-play-btn\"]",
+      "action": "click",
+      "caption": "Start a training session.",
+      "waitForContent": {
+        "script": "!!document.querySelector('[data-testid=\"train-vkb\"], [data-testid=\"vkb-panel\"]')",
+        "timeout": 30000
+      }
+    },
+    {
+      "action": "hold",
+      "caption": "The on-screen keyboard is ready — follow the notes.",
+      "hold": 2000
+    }
+  ],
+  "expect": { "resolved": 3, "unresolved": 0, "steps": 5 }
+}

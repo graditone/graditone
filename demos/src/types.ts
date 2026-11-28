@@ -75,6 +75,8 @@ export interface CaptureTimeline {
 export interface StepMark {
   label: string;
   at: number;
+  /** The caption shown from this step onwards, if the step has one. */
+  caption?: string;
 }
 
 /** What the in-page tap answers when the runner stops it. */
@@ -98,7 +100,6 @@ export interface DemoAudioTap {
 declare global {
   interface Window {
     /** Set by the injected page chrome. */
-    __demoCaption?: (text: string) => void;
     __demoMoveCursor?: (x: number, y: number) => void;
     /** Set by the injected audio tap. */
     __demoAudio?: DemoAudioTap;

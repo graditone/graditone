@@ -1,107 +1,66 @@
-# DemoClip source flow: Play a Score — Change the Tempo
-#
-# A flow is data. This file is the single source of truth for the video, its
-# title and its description — the runner turns it into a video, and a catalog
-# page can be generated from the same file. See demos/README.md.
-#
-# Based on 01-play-a-score.yaml: the same path into the Play Score plugin, but
-# once the music is playing it shows how the tempo control changes the playback
-# speed — a tap for 1 BPM, a hold for 5 BPM steps.
-
 id: play-a-score-tempo
-title: Play a Score — Change the Tempo
-audience: first-time user
-description: >
-  Open the Play Score plugin, start a piece and change the playback tempo while
-  it plays: tap + or − for one BPM at a time, or hold either button to speed up
-  or slow down in 5 BPM steps. The BPM readout and the page scroll follow the
-  music in real time.
-
-# The demos are aimed at a tablet, since Graditone is tablet-native.
-viewport: { width: 1440, height: 900 }
-
+title: Open Play Score, choose Für Elise, start playback and change…
+description: Open Play Score, choose Für Elise, start playback and change the tempo while it plays
+viewport:
+  width: 1440
+  height: 900
 steps:
-  - caption: "Graditone opens on a shelf of plugins. Let's hear a piece."
-    hold: 1200
-
-  - caption: "Tap Play Score."
-    action: click
+  - action: click
     selector: '[data-testid="plugin-launch-play-score"]'
-    hold: 700
-
+    caption: Graditone opens on a shelf of plugins. Let's hear a piece.
+    hold: 1200
   - action: waitFor
     selector: '[data-testid="score-selector-dialog"]'
-
-  - caption: "Choose a piece — Beethoven's Für Elise."
-    action: click
-    selector: '.score-selector-item__btn:has-text("Für Elise")'
-
+    caption: Choose a piece — Beethoven's Für Elise.
+  - action: click
+    selector: '[data-testid="score-selector-item-beethoven-fur-elise"]'
   - action: waitFor
     selector: '[role="toolbar"]'
-
-  # Wait for the WASM engine to parse and engrave the score.
   - action: waitForFunction
-    script: "document.querySelectorAll('svg line, svg path').length > 40"
+    script: document.querySelectorAll('svg line, svg path').length > 40
     timeout: 30000
-    hold: 1200
-
-  - caption: "Press ▶ Play."
-    action: click
-    selector: '[role="toolbar"] [aria-label="Play"]'
+  - action: click
+    selector: '[data-testid="play-score-play"]'
+    caption: Press ▶ Play.
     hold: 3500
-
-  # Short taps: one BPM per tap. Repeat a few times so the readout visibly moves.
-  - caption: "Tap + to nudge the tempo up — one BPM per tap."
-    action: click
-    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
-    hold: 250
-
   - action: click
-    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
+    selector: '[data-testid="tempo-plus"]'
+    caption: Tap + to nudge the tempo up — one BPM per tap.
     hold: 250
-
   - action: click
-    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
+    selector: '[data-testid="tempo-plus"]'
     hold: 250
-
   - action: click
-    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
+    selector: '[data-testid="tempo-plus"]'
     hold: 250
-
   - action: click
-    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
+    selector: '[data-testid="tempo-plus"]'
+    hold: 250
+  - action: click
+    selector: '[data-testid="tempo-plus"]'
     hold: 1200
-
-  # Hold to repeat: after one second the control steps by 5 BPM every 300 ms.
-  - caption: "Hold + to speed up quickly — each repeat adds 5 BPM."
-    action: click
-    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
-    pressMs: 2500
-    hold: 3000
-
-  - caption: "The music plays faster — the BPM readout and the page scroll keep up."
-    hold: 3000
-
-  - caption: "Hold − to slow the playback back down."
-    action: click
-    selector: '[role="toolbar"] [aria-label="Decrease tempo"]'
-    pressMs: 2500
-    hold: 3000
-
-  - caption: "Tap − for 1 BPM steps, or hold it to slow down faster."
-    action: click
-    selector: '[role="toolbar"] [aria-label="Decrease tempo"]'
-    hold: 250
-
   - action: click
-    selector: '[role="toolbar"] [aria-label="Decrease tempo"]'
-    hold: 250
-
+    selector: '[data-testid="tempo-plus"]'
+    caption: Hold + to speed up quickly — each repeat adds 5 BPM.
+    hold: 3000
+    pressMs: 2500
   - action: click
-    selector: '[role="toolbar"] [aria-label="Decrease tempo"]'
+    selector: '[data-testid="tempo-minus"]'
+    caption: Hold − to slow the playback back down.
+    hold: 3000
+    pressMs: 2500
+  - action: click
+    selector: '[data-testid="tempo-minus"]'
+    caption: Tap − for 1 BPM steps, or hold it to slow down faster.
+    hold: 250
+  - action: click
+    selector: '[data-testid="tempo-minus"]'
+    hold: 250
+  - action: click
+    selector: '[data-testid="tempo-minus"]'
     hold: 1200
-
-  - caption: "Press ■ Stop when you're done."
-    action: click
-    selector: '[role="toolbar"] [aria-label="Stop"]'
+  - action: click
+    selector: '[data-testid="play-score-stop"]'
+    caption: Press ■ Stop when you're done.
     hold: 1500
+audience: first-time user

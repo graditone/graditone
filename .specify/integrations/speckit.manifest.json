@@ -1,6 +1,6 @@
 {
   "integration": "speckit",
-  "version": "1.0.2.dev0",
+  "version": "1.4.6.dev0",
   "installed_at": "2026-04-10T03:21:56.088903+00:00",
   "files": {
     ".specify/scripts/bash/common.sh": "e58fe0b681121b172ddb79e68bec8171511430de71e5899c56ec4d77c256e1f3",
@@ -14,7 +14,8 @@
     ".specify/templates/plan-template.md": "416e046f97be9accff8d1f36cb100b58384157440978ea3871568859527f6d72",
     ".specify/scripts/bash/setup-tasks.sh": "cf6e99575a24b64ac01ffa3a50a40971ba95e3c1ec269b9a6dc3e35bbbb09191",
     ".specify/scripts/bash/resolve-template.sh": "829e227096abc8bf0889889ec9f792f503ca5d395b7836a8a7eb739ee75214e7",
-    ".specify/.gitignore": "8c908410d177a1ef3d0dee16d7ad55f2ac3333df3104c4d4adee1c9b82f1dbc1"
+    ".specify/.gitignore": "8c908410d177a1ef3d0dee16d7ad55f2ac3333df3104c4d4adee1c9b82f1dbc1",
+    ".specify/scripts/bash/markdown_sections.py": "89612d66c3fa77288ec929cc8851ab8c38cc9c001c800af4398715f57f7af4a1"
   },
   "recovered_files": [
     ".specify/scripts/bash/check-prerequisites.sh",

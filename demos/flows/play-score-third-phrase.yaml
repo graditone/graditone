@@ -1,0 +1,41 @@
+id: play-score-third-phrase
+title: Open Play Score, show the phrases, select the third phrase an…
+description: Open Play Score, show the phrases, select the third phrase and reproduce it
+viewport:
+  width: 1440
+  height: 900
+steps:
+  - action: click
+    selector: '[data-testid="plugin-launch-play-score"]'
+    caption: Graditone opens on a shelf of plugins. Let's open Play Score.
+    hold: 900
+  - action: waitFor
+    selector: '[data-testid="score-selector-dialog"]'
+    caption: Choose a piece — Burgmüller's Arabesque.
+  - action: click
+    selector: '[data-testid="score-selector-item-burgmuller-arabesque"]'
+  - action: waitFor
+    selector: '[role="toolbar"]'
+  - action: waitForFunction
+    script: document.querySelectorAll('svg line, svg path').length > 40
+    timeout: 30000
+  - action: click
+    selector: '[data-testid="score-phrases-toggle"]'
+    caption: Show the phrases to see how the piece is built from musical phrases.
+    hold: 1600
+  - action: click
+    selector: '[data-testid="score-phrases-next"]'
+    caption: Step through the phrases — this is the first one.
+    hold: 900
+  - action: click
+    selector: '[data-testid="score-phrases-next"]'
+    hold: 900
+  - action: click
+    selector: '[data-testid="score-phrases-next"]'
+    caption: Now the third phrase is selected.
+    hold: 1200
+  - action: click
+    selector: '[data-testid="play-score-play"]'
+    caption: Press ▶ Play to reproduce the third phrase.
+    hold: 7000
+audience: first-time user

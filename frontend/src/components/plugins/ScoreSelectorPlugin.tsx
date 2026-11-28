@@ -116,6 +116,7 @@ export function ScoreSelectorPlugin({
                     <button
                       type="button"
                       className="score-selector-item__btn"
+                      data-testid={`score-selector-item-${entry.id}`}
                       aria-label={entry.displayName}
                       onClick={() => onSelectScore(entry.id)}
                     >

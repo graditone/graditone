@@ -1,0 +1,24 @@
+id: train-a-session
+title: Open Train View, start a training session and wait for the on…
+description: Open Train View, start a training session and wait for the on-screen keyboard
+viewport:
+  width: 1440
+  height: 900
+steps:
+  - action: waitForFunction
+    script: "!!document.querySelector('[data-testid=\"train-view\"]')"
+    timeout: 30000
+  - action: click
+    selector: '[data-testid="plugin-launch-train-view"]'
+    caption: Open the Train View plugin.
+    hold: 700
+  - action: waitForFunction
+    script: "!!document.querySelector('[data-testid=\"train-vkb\"], [data-testid=\"vkb-panel\"]')"
+    timeout: 30000
+  - action: click
+    selector: '[data-testid="train-play-btn"]'
+    caption: Start a training session.
+  - action: hold
+    caption: The on-screen keyboard is ready — follow the notes.
+    hold: 2000
+audience: first-time user
