@@ -4,7 +4,16 @@
  * DemoClip is a browser studio, and it publishes its own operations on
  * `window.democlip` when a page is opened with `?agent=1` (the same surface its
  * MCP server drives). Importing a file needs no screen picker — the app's own
- * `#file-input` takes it — so the whole step runs headless.
+ * `#file-input` takes it.
+ *
+ * DemoClip keeps everything in the browser — projects and profiles in
+ * `localStorage`, recordings in IndexedDB — and browser storage is keyed by
+ * **origin**: scheme, host *and port*. So the step pins one origin per host: it
+ * serves the build on a fixed port (`DEMOCLIP_PORT`, default 57364) instead of a
+ * random one, and drives a **persistent** browser profile kept per **host name**.
+ * That way all the work on 127.0.0.1 is one tenant — it does not move when a port
+ * changes — so past demos stay openable. The browser is headful by default, so the
+ * edits can be watched; `DEMOCLIP_HEADLESS=1` hides it.
  *
  * What we do with it here is deliberately small and declarative: import the
  * recording, then brand it from the flow's own metadata (logo, title,
@@ -16,7 +25,7 @@
  * capture-only run still works.
  */
 
-import { chromium, type Browser, type Download, type Page } from 'playwright';
+import { chromium, type BrowserContext, type Download, type Page } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -70,13 +79,78 @@ function findAppRoot(): string | null {
   return candidates.find((dir) => existsSync(path.join(dir, 'index.html'))) ?? null;
 }
 
+/** The host all demo work is served from, so the tenant is one per host name. */
+const DEMOCLIP_HOST = '127.0.0.1';
+
+/** The fixed port DemoClip is served on when `DEMOCLIP_PORT` is not set. */
+const DEFAULT_DEMOCLIP_PORT = 57364;
+
+/** The port to serve DemoClip on, from `DEMOCLIP_PORT` or the fixed default. */
+function demoClipPort(): number {
+  const raw = process.env.DEMOCLIP_PORT;
+  if (!raw) return DEFAULT_DEMOCLIP_PORT;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`DEMOCLIP_PORT must be a port number, got "${raw}"`);
+  }
+  return port;
+}
+
+/**
+ * The browser profile DemoClip keeps its projects, profiles and recordings in.
+ *
+ * It is persistent (not a throwaway one per run), lives in one place per user (so
+ * it does not follow a worktree), and is keyed by **host name, not port** — so all
+ * the demo work on a host is the same tenant. Browser storage is still per-origin,
+ * so the fixed port is what keeps that origin — and its storage — from moving.
+ * Override the location with `DEMOCLIP_PROFILE`.
+ */
+function demoClipProfileDir(): string {
+  const base = process.env.DEMOCLIP_PROFILE ?? path.join(homedir(), '.democlip', 'browser');
+  return path.join(base, DEMOCLIP_HOST);
+}
+
 interface AppServer {
   origin: string;
   close: () => Promise<void>;
 }
 
-/** A tiny static server, because the app is a folder of files. */
-async function serveDirectory(root: string): Promise<AppServer> {
+/** How a served DemoClip page is told from a stranger already on the port. */
+const DEMOCLIP_TITLE = /<title>\s*DemoClip\s*<\/title>/i;
+
+/** Whether DemoClip is already served at `origin` — the MCP's own server, or a run's. */
+async function demoClipServingAt(origin: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${origin}/`);
+    return response.ok && DEMOCLIP_TITLE.test(await response.text());
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The DemoClip server for the fixed origin. If DemoClip already answers there — the
+ * DemoClip MCP's own server, most often — it is **reused**, so the harness and the
+ * person are on the same origin; otherwise this run serves the build itself. Serving
+ * on the fixed port is what keeps the origin, and so the app's browser storage, from
+ * moving between runs.
+ */
+async function ensureDemoClipServer(root: string, port: number): Promise<AppServer> {
+  const origin = `http://${DEMOCLIP_HOST}:${port}`;
+  if (await demoClipServingAt(origin)) {
+    console.log(`  · DemoClip already served at ${origin}; reusing that server`);
+    return { origin, close: async () => {} };
+  }
+  return serveDirectory(root, port);
+}
+
+/**
+ * A tiny static server, because the app is a folder of files. It binds the fixed
+ * DemoClip port, so the origin is stable across runs and the app's browser storage
+ * stays the same tenant. A port already in use by something that is not DemoClip is
+ * a plain error — silently falling back to another port would split the tenant.
+ */
+async function serveDirectory(root: string, port: number): Promise<AppServer> {
   const server = createServer(async (req, res) => {
     try {
       const pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
@@ -94,11 +168,21 @@ async function serveDirectory(root: string): Promise<AppServer> {
       res.writeHead(500).end(String(error));
     }
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
-  const address = server.address();
-  const port = typeof address === 'object' && address ? address.port : 0;
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, DEMOCLIP_HOST, () => resolve());
+  }).catch((error: unknown) => {
+    server.close();
+    if ((error as { code?: string }).code === 'EADDRINUSE') {
+      throw new Error(
+        `DemoClip port ${port} is already in use — set DEMOCLIP_PORT to another ` +
+          `port, or free it (another demo run or DemoClip server may hold it)`,
+      );
+    }
+    throw error;
+  });
   return {
-    origin: `http://127.0.0.1:${port}`,
+    origin: `http://${DEMOCLIP_HOST}:${port}`,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }
@@ -125,12 +209,20 @@ export async function postProcessWithDemoClip(
     return null;
   }
 
-  const app = await serveDirectory(appRoot);
-  let browser: Browser | undefined;
+  const app = await ensureDemoClipServer(appRoot, demoClipPort());
+  const profile = demoClipProfileDir();
+  await mkdir(profile, { recursive: true });
+  let context: BrowserContext | undefined;
   try {
-    browser = await chromium.launch({ headless: !process.env.DEMO_HEADFUL });
-    const context = await browser.newContext({ viewport: null, acceptDownloads: true });
-    const page = await context.newPage();
+    // A persistent profile, so the projects and profiles the app writes in
+    // localStorage (and the recordings in IndexedDB) outlive the run.
+    context = await chromium.launchPersistentContext(profile, {
+      headless: process.env.DEMOCLIP_HEADLESS === '1',
+      viewport: null,
+      acceptDownloads: true,
+      args: ['--no-first-run', '--no-default-browser-check'],
+    });
+    const page = context.pages()[0] ?? (await context.newPage());
     await page.goto(`${app.origin}/?agent=1`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => Boolean(window.democlip), undefined, { timeout: 30_000 });
 
@@ -194,12 +286,13 @@ export async function postProcessWithDemoClip(
     }
 
     await context.close();
+    context = undefined;
     return target;
   } catch (error) {
     console.warn(`  ! DemoClip step failed: ${(error as Error).message}`);
     return null;
   } finally {
-    if (browser) await browser.close().catch(() => {});
+    if (context) await context.close().catch(() => {});
     await app.close();
   }
 }

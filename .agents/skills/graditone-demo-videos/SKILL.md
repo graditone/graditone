@@ -101,10 +101,14 @@ with a timeout (looks like a bad selector; it is a wrong server).
 | Var | Effect |
 |-----|--------|
 | `DEMO_BASE_URL` | App URL the runner drives (default `http://localhost:5174`). |
-| `DEMO_HEADFUL=1` | Watch it in a real window (also used for DemoClip). |
+| `DEMO_HEADFUL=1` | Watch the capture in a real window. |
 | `DEMO_SKIP_DEMOCLIP=1` | Capture only — skip the title card/MP4 export. |
+| `DEMO_NO_EDITABLE=1` | Write only the finished MP4, not the `out/edit/` editable pair. |
 | `DEMO_DEBUG=1` | Print step timings and the audio timeline. |
 | `DEMOCLIP_APP` | Path to a built DemoClip `dist/` (else `~/devel/democlip/dist`). |
+| `DEMOCLIP_PORT` | Port DemoClip is served on (default `57364`), so its origin is stable. |
+| `DEMOCLIP_PROFILE` | Where the persistent browser profile lives (default `~/.democlip/browser`). |
+| `DEMOCLIP_HEADLESS=1` | Hide the DemoClip window (headful by default, so edits can be watched). |
 
 ## Verifying a capture
 
@@ -131,10 +135,21 @@ with a timeout (looks like a bad selector; it is a wrong server).
 
 ## DemoClip
 
-Post-processing imports the muxed recording into a headless DemoClip, brands it
-from the flow (`title`, `description`, `logo`, `titleCard`) and exports the MP4.
-If no build is found the step is skipped with a note (capture still succeeds).
-Brand a clip entirely from the flow — do not edit the video by hand.
+Post-processing imports the muxed recording into DemoClip, brands it from the flow
+(`title`, `description`, `logo`, `titleCard`) and exports the MP4. If no build is
+found the step is skipped with a note (capture still succeeds). Brand a clip
+entirely from the flow — do not edit the video by hand.
+
+**One origin, one tenant per host.** DemoClip keeps its projects, profiles and
+recordings in the browser, and browser storage is keyed by the whole origin —
+scheme, host *and port* — so a random port would give every run its own, empty
+DemoClip. The step therefore serves DemoClip on a **fixed port** (`DEMOCLIP_PORT`,
+default `57364`) and **reuses** a DemoClip already answering there (the DemoClip
+MCP's server, most often), and drives a **persistent** browser profile kept per
+**host name** (`~/.democlip/browser/127.0.0.1`, override with `DEMOCLIP_PROFILE`).
+So all the demo work on a host is one tenant and past demos stay openable; each run
+still starts a fresh clip (export clears the open pointer), so takes do not stack.
+The window is **headful by default**; `DEMOCLIP_HEADLESS=1` hides it.
 
 **Captions live in DemoClip.** The runner does not draw captions into the page
 (they would be burned in and uneditable); instead each step's `caption` becomes a

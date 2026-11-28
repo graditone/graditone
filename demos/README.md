@@ -151,11 +151,21 @@ audio is silent, check the system output device first.
 
 [DemoClip](https://github.com/acs/democlip) is a browser studio whose own MCP
 server drives it through `window.democlip` (enabled with `?agent=1`). This runner
-uses the same surface, headless: it imports the recording through the app's own
-file input, sets the **Graditone** logo, the title card and the flow's
-title/description, then exports an MP4. A build is found via `DEMOCLIP_APP`, or
-at `~/devel/democlip/dist`. Importing needs no screen picker, so the whole step
-is scriptable in CI.
+uses the same surface: it imports the recording through the app's own file input,
+sets the **Graditone** logo, the title card and the flow's title/description, then
+exports an MP4. A build is found via `DEMOCLIP_APP`, or at `~/devel/democlip/dist`.
+Importing needs no screen picker, so the whole step is scriptable in CI.
+
+The runner serves DemoClip on a **fixed port** (`DEMOCLIP_PORT`, default `57364`)
+and **reuses** a DemoClip already answering there — the DemoClip MCP's own server,
+most often — so the harness and the MCP share one origin. It then drives a
+**persistent** browser profile, kept in one place per user and keyed by **host
+name** (`~/.democlip/browser/127.0.0.1`; override with `DEMOCLIP_PROFILE`).
+DemoClip keeps its projects, profiles and recordings in the browser, and browser
+storage is keyed by the whole origin — scheme, host *and port* — so the fixed port
+is what keeps that storage from moving between runs: all the demo work on a host is
+**one tenant**, and past demos stay openable. The browser is **headful by default**
+so the edits can be watched; `DEMOCLIP_HEADLESS=1` hides it.
 
 The export runs twice. The first is the finished `<id>.mp4`, with the captions and
 watermark **drawn** into the picture — the clip to send out. The second writes the
