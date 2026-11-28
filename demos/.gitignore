@@ -2,6 +2,10 @@
 out/
 node_modules/
 
+# A repo-local DemoClip browser profile, if DEMOCLIP_PROFILE points here. By default
+# the persistent profile lives in ~/.democlip/browser/<host>, not in the repo.
+.democlip/
+
 # Generated element index — derived from the app's annotations; rebuild with
 # `npm run catalog:build`. Not committed so it cannot drift (feature 102, D8).
 # Anchored to demos/ so it ignores only the generated index, not the source

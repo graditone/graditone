@@ -4,7 +4,16 @@
  * DemoClip is a browser studio, and it publishes its own operations on
  * `window.democlip` when a page is opened with `?agent=1` (the same surface its
  * MCP server drives). Importing a file needs no screen picker — the app's own
- * `#file-input` takes it — so the whole step runs headless.
+ * `#file-input` takes it.
+ *
+ * DemoClip keeps everything in the browser — projects and profiles in
+ * `localStorage`, recordings in IndexedDB — and browser storage is keyed by
+ * **origin**: scheme, host *and port*. So the step pins one origin per host: it
+ * serves the build on a fixed port (`DEMOCLIP_PORT`, default 57364) instead of a
+ * random one, and drives a **persistent** browser profile kept per **host name**.
+ * That way all the work on 127.0.0.1 is one tenant — it does not move when a port
+ * changes — so past demos stay openable. The browser is headful by default, so the
+ * edits can be watched; `DEMOCLIP_HEADLESS=1` hides it.
  *
  * What we do with it here is deliberately small and declarative: import the
  * recording, then brand it from the flow's own metadata (logo, title,
@@ -16,9 +25,9 @@
  * capture-only run still works.
  */
 
-import { chromium, type Browser } from 'playwright';
+import { chromium, type BrowserContext, type Download, type Page } from 'playwright';
 import { createServer } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
@@ -57,6 +66,9 @@ const MIME: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
+/** The colour captions are made in — Graditone's orange — unless a flow names another. */
+const DEFAULT_ANNOTATION_COLOUR = '#ff6c23';
+
 /** Where the built DemoClip app lives. */
 function findAppRoot(): string | null {
   if (process.env.DEMOCLIP_APP) return process.env.DEMOCLIP_APP;
@@ -70,13 +82,78 @@ function findAppRoot(): string | null {
   return candidates.find((dir) => existsSync(path.join(dir, 'index.html'))) ?? null;
 }
 
+/** The host all demo work is served from, so the tenant is one per host name. */
+const DEMOCLIP_HOST = '127.0.0.1';
+
+/** The fixed port DemoClip is served on when `DEMOCLIP_PORT` is not set. */
+const DEFAULT_DEMOCLIP_PORT = 57364;
+
+/** The port to serve DemoClip on, from `DEMOCLIP_PORT` or the fixed default. */
+function demoClipPort(): number {
+  const raw = process.env.DEMOCLIP_PORT;
+  if (!raw) return DEFAULT_DEMOCLIP_PORT;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`DEMOCLIP_PORT must be a port number, got "${raw}"`);
+  }
+  return port;
+}
+
+/**
+ * The browser profile DemoClip keeps its projects, profiles and recordings in.
+ *
+ * It is persistent (not a throwaway one per run), lives in one place per user (so
+ * it does not follow a worktree), and is keyed by **host name, not port** — so all
+ * the demo work on a host is the same tenant. Browser storage is still per-origin,
+ * so the fixed port is what keeps that origin — and its storage — from moving.
+ * Override the location with `DEMOCLIP_PROFILE`.
+ */
+function demoClipProfileDir(): string {
+  const base = process.env.DEMOCLIP_PROFILE ?? path.join(homedir(), '.democlip', 'browser');
+  return path.join(base, DEMOCLIP_HOST);
+}
+
 interface AppServer {
   origin: string;
   close: () => Promise<void>;
 }
 
-/** A tiny static server, because the app is a folder of files. */
-async function serveDirectory(root: string): Promise<AppServer> {
+/** How a served DemoClip page is told from a stranger already on the port. */
+const DEMOCLIP_TITLE = /<title>\s*DemoClip\s*<\/title>/i;
+
+/** Whether DemoClip is already served at `origin` — the MCP's own server, or a run's. */
+async function demoClipServingAt(origin: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${origin}/`);
+    return response.ok && DEMOCLIP_TITLE.test(await response.text());
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The DemoClip server for the fixed origin. If DemoClip already answers there — the
+ * DemoClip MCP's own server, most often — it is **reused**, so the harness and the
+ * person are on the same origin; otherwise this run serves the build itself. Serving
+ * on the fixed port is what keeps the origin, and so the app's browser storage, from
+ * moving between runs.
+ */
+async function ensureDemoClipServer(root: string, port: number): Promise<AppServer> {
+  const origin = `http://${DEMOCLIP_HOST}:${port}`;
+  if (await demoClipServingAt(origin)) {
+    console.log(`  · DemoClip already served at ${origin}; reusing that server`);
+    return { origin, close: async () => {} };
+  }
+  return serveDirectory(root, port);
+}
+
+/**
+ * A tiny static server, because the app is a folder of files. It binds the fixed
+ * DemoClip port, so the origin is stable across runs and the app's browser storage
+ * stays the same tenant. A port already in use by something that is not DemoClip is
+ * a plain error — silently falling back to another port would split the tenant.
+ */
+async function serveDirectory(root: string, port: number): Promise<AppServer> {
   const server = createServer(async (req, res) => {
     try {
       const pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
@@ -94,11 +171,21 @@ async function serveDirectory(root: string): Promise<AppServer> {
       res.writeHead(500).end(String(error));
     }
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
-  const address = server.address();
-  const port = typeof address === 'object' && address ? address.port : 0;
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, DEMOCLIP_HOST, () => resolve());
+  }).catch((error: unknown) => {
+    server.close();
+    if ((error as { code?: string }).code === 'EADDRINUSE') {
+      throw new Error(
+        `DemoClip port ${port} is already in use — set DEMOCLIP_PORT to another ` +
+          `port, or free it (another demo run or DemoClip server may hold it)`,
+      );
+    }
+    throw error;
+  });
   return {
-    origin: `http://127.0.0.1:${port}`,
+    origin: `http://${DEMOCLIP_HOST}:${port}`,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }
@@ -125,12 +212,20 @@ export async function postProcessWithDemoClip(
     return null;
   }
 
-  const app = await serveDirectory(appRoot);
-  let browser: Browser | undefined;
+  const app = await ensureDemoClipServer(appRoot, demoClipPort());
+  const profile = demoClipProfileDir();
+  await mkdir(profile, { recursive: true });
+  let context: BrowserContext | undefined;
   try {
-    browser = await chromium.launch({ headless: !process.env.DEMO_HEADFUL });
-    const context = await browser.newContext({ viewport: null, acceptDownloads: true });
-    const page = await context.newPage();
+    // A persistent profile, so the projects and profiles the app writes in
+    // localStorage (and the recordings in IndexedDB) outlive the run.
+    context = await chromium.launchPersistentContext(profile, {
+      headless: process.env.DEMOCLIP_HEADLESS === '1',
+      viewport: null,
+      acceptDownloads: true,
+      args: ['--no-first-run', '--no-default-browser-check'],
+    });
+    const page = context.pages()[0] ?? (await context.newPage());
     await page.goto(`${app.origin}/?agent=1`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => Boolean(window.democlip), undefined, { timeout: 30_000 });
 
@@ -164,6 +259,13 @@ export async function postProcessWithDemoClip(
     if (flow.democlip?.titleCard !== false) {
       await call('edit.setClipProperty', 'addToExport', 'true');
     }
+    // The captions are made in the Graditone orange — not the app's red, and not the white
+    // this used to force; a flow may name another with `democlip.annotationColour`.
+    await call(
+      'edit.setClipProperty',
+      'annotationColour',
+      flow.democlip?.annotationColour ?? DEFAULT_ANNOTATION_COLOUR,
+    );
 
     // 3. Captions — placed as DemoClip text annotations, never burned into the
     //    recording, so the author can adjust them in DemoClip.
@@ -174,23 +276,97 @@ export async function postProcessWithDemoClip(
       await call('edit.annotate', annotation.kind, annotation);
     }
 
-    // 5. Export the finished file and catch the download.
+    // 5. Export the finished MP4 with its annotations drawn in — that is the
+    //    clip to send out.
     const target = path.join(out, `${flow.id}.mp4`);
-    const download = page.waitForEvent('download', { timeout: 300_000 });
-    const result = (await call('out.export', 'mp4')) as { ok?: boolean; reason?: string } | undefined;
-    if (result?.ok === false) throw new Error(`export refused: ${result.reason}`);
-    await (await download).saveAs(target);
-
+    await exportClip(page, call, 'mp4', 'drawn', [target]);
     console.log(`  ✓ DemoClip → ${path.basename(target)}`);
+
+    // 6. Also export the editable pair: the same clip with the annotations *carried*
+    //    in a `.democlip.json` sidecar beside a caption-free video. `import_take`
+    //    reads the sidecar back, so the author can reopen the demo in DemoClip and
+    //    move, reword or restyle the captions the flow declared. Set
+    //    DEMO_NO_EDITABLE=1 to skip it.
+    if (!process.env.DEMO_NO_EDITABLE) {
+      const editDir = path.join(out, 'edit');
+      await mkdir(editDir, { recursive: true });
+      const editVideo = path.join(editDir, `${flow.id}.mp4`);
+      await exportClip(page, call, 'mp4', 'carried', [editVideo, sidecarPathFor(editVideo)]);
+      console.log(`  ✓ DemoClip editable → ${path.relative(process.cwd(), editVideo)}`);
+    }
+
     await context.close();
+    context = undefined;
     return target;
   } catch (error) {
     console.warn(`  ! DemoClip step failed: ${(error as Error).message}`);
     return null;
   } finally {
-    if (browser) await browser.close().catch(() => {});
+    if (context) await context.close().catch(() => {});
     await app.close();
   }
+}
+
+/** The sidecar name for a video: its name with the extension replaced by `.democlip.json`. */
+function sidecarPathFor(video: string): string {
+  const dot = video.lastIndexOf('.');
+  return `${dot > 0 ? video.slice(0, dot) : video}.democlip.json`;
+}
+
+/**
+ * Ask DemoClip to export the clip and catch the file(s) it downloads.
+ *
+ * `annotations` is `drawn` — the picture carries them — or `carried`, which writes a
+ * caption-free video plus a `.democlip.json` sidecar beside it, the pair `import_take`
+ * brings back whole. `destinations` are the paths to save to; the sidecar is told
+ * apart by its name, so their order does not matter.
+ */
+async function exportClip(
+  page: Page,
+  call: (surfacePath: string, ...args: unknown[]) => Promise<unknown>,
+  target: 'mp4' | 'webm',
+  annotations: 'drawn' | 'carried',
+  destinations: string[],
+): Promise<void> {
+  const wanted = destinations.length;
+  const files: Download[] = [];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const collected = new Promise<Download[]>((resolve, reject) => {
+    const onDownload = (download: Download): void => {
+      files.push(download);
+      if (files.length >= wanted) {
+        if (timer) clearTimeout(timer);
+        page.off('download', onDownload);
+        resolve(files);
+      }
+    };
+    timer = setTimeout(() => {
+      page.off('download', onDownload);
+      reject(new Error(`export produced ${files.length} of ${wanted} file(s)`));
+    }, 300_000);
+    page.on('download', onDownload);
+  });
+
+  const result = (await call('out.export', target, annotations)) as
+    | { ok?: boolean; reason?: string }
+    | undefined;
+  if (result?.ok === false) throw new Error(`export refused: ${result.reason}`);
+  await saveDownloads(await collected, destinations);
+}
+
+/** Save the downloads, pairing a carried sidecar with the video it belongs to. */
+async function saveDownloads(downloads: Download[], destinations: string[]): Promise<void> {
+  if (downloads.length === 1) {
+    await downloads[0].saveAs(destinations[0]);
+    return;
+  }
+  const isSidecar = (file: Download): boolean => file.suggestedFilename().endsWith('.democlip.json');
+  const sidecar = downloads.find(isSidecar);
+  const video = downloads.find((file) => !isSidecar(file)) ?? downloads[0];
+  const videoDest = destinations.find((dest) => !dest.endsWith('.democlip.json')) ?? destinations[0];
+  const sidecarDest = destinations.find((dest) => dest.endsWith('.democlip.json'));
+  await video.saveAs(videoDest);
+  if (sidecar && sidecarDest) await sidecar.saveAs(sidecarDest);
 }
 
 function clamp01(value: number): number {
@@ -198,10 +374,10 @@ function clamp01(value: number): number {
 }
 
 /**
- * Place each caption as a DemoClip text annotation over the stretch its step
- * owns, derived from the recorded marks. The annotation colour is set to white
- * first so captions do not inherit the app's default (red) colour. The position
- * is bottom-ish and horizontally centred (DemoClip centres text by default).
+ * Place each caption as a DemoClip text annotation over the stretch its step owns, derived
+ * from the recorded marks. The colour is the clip's own — set to the Graditone orange before
+ * this runs, so captions are not the app's default red. The position is bottom-ish and
+ * horizontally centred (DemoClip centres text by default).
  */
 async function addCaptions(
   call: (surfacePath: string, ...args: unknown[]) => Promise<unknown>,
@@ -217,7 +393,6 @@ async function addCaptions(
     return;
   }
 
-  await call('edit.setClipProperty', 'annotationColour', '#ffffff');
   for (let i = 0; i < captions.length; i += 1) {
     const start = captions[i].at / 1000;
     const end = i + 1 < captions.length ? captions[i + 1].at / 1000 : durationSec;

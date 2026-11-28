@@ -34,8 +34,10 @@ DEMO_DEBUG=1 node src/run.ts play-a-score           # step + audio timings
 ```
 
 Outputs land in `demos/out/` (git-ignored): the muxed `<id>.webm`, the finished
-`<id>.mp4` from DemoClip, and the raw takes in `out/raw/<id>/`. The flow YAML is
-the artifact to commit — `out/` never is.
+`<id>.mp4` from DemoClip, the **editable pair** in `out/edit/` (the same clip,
+caption-free, with a `.democlip.json` sidecar holding its annotations), and the
+raw takes in `out/raw/<id>/`. The flow YAML is the artifact to commit — `out/`
+never is.
 
 ### Prerequisites
 
@@ -149,18 +151,39 @@ audio is silent, check the system output device first.
 
 [DemoClip](https://github.com/acs/democlip) is a browser studio whose own MCP
 server drives it through `window.democlip` (enabled with `?agent=1`). This runner
-uses the same surface, headless: it imports the recording through the app's own
-file input, sets the **Graditone** logo, the title card and the flow's
-title/description, then exports an MP4. A build is found via `DEMOCLIP_APP`, or
-at `~/devel/democlip/dist`. Importing needs no screen picker, so the whole step
-is scriptable in CI.
+uses the same surface: it imports the recording through the app's own file input,
+sets the **Graditone** logo, the title card and the flow's title/description, then
+exports an MP4. A build is found via `DEMOCLIP_APP`, or at `~/devel/democlip/dist`.
+Importing needs no screen picker, so the whole step is scriptable in CI.
 
-A flow may also carry DemoClip annotations:
+The runner serves DemoClip on a **fixed port** (`DEMOCLIP_PORT`, default `57364`)
+and **reuses** a DemoClip already answering there — the DemoClip MCP's own server,
+most often — so the harness and the MCP share one origin. It then drives a
+**persistent** browser profile, kept in one place per user and keyed by **host
+name** (`~/.democlip/browser/127.0.0.1`; override with `DEMOCLIP_PROFILE`).
+DemoClip keeps its projects, profiles and recordings in the browser, and browser
+storage is keyed by the whole origin — scheme, host *and port* — so the fixed port
+is what keeps that storage from moving between runs: all the demo work on a host is
+**one tenant**, and past demos stay openable. The browser is **headful by default**
+so the edits can be watched; `DEMOCLIP_HEADLESS=1` hides it.
+
+The export runs twice. The first is the finished `<id>.mp4`, with the captions and
+watermark **drawn** into the picture — the clip to send out. The second writes the
+**editable pair** into `out/edit/`: the same clip with its annotations **carried**
+in a `<id>.democlip.json` sidecar beside a caption-free `<id>.mp4`. Bring the video
+back into DemoClip (its `import_take` reads the sidecar) and the captions are put
+back over the stretches they belong to, so you can move, reword or restyle them.
+Set `DEMO_NO_EDITABLE=1` to write only the finished clip.
+
+A flow may also say how the clip is branded, and carry DemoClip annotations. The
+mark is Graditone's and the **captions are made in Graditone's orange** unless a flow
+names another; `democlip.annotationColour` is the one that overrides it:
 
 ```yaml
 democlip:
-  logo: graditone
-  titleCard: true
+  logo: graditone                  # the mark the clip wears (Graditone by default)
+  titleCard: true                  # the card at the head of the file (on by default)
+  annotationColour: '#ff6c23'      # the captions' colour (this orange by default)
   annotations:
     - kind: arrow
       span: { s: 0.1, e: 0.3 }
