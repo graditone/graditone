@@ -33,6 +33,13 @@ import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { probeDurationSec } from './postprocess.ts';
+import {
+  CAPTION_HEIGHT,
+  CAPTION_Y,
+  DEFAULT_ANNOTATION_COLOUR,
+  actionCueAnnotations,
+  captionSpans,
+} from './handoff.ts';
 import type { Flow, FlowPaths, StepMark } from './types.ts';
 
 declare global {
@@ -65,9 +72,6 @@ const MIME: Record<string, string> = {
   '.webm': 'video/webm',
   '.ico': 'image/x-icon',
 };
-
-/** The colour captions are made in — Graditone's orange — unless a flow names another. */
-const DEFAULT_ANNOTATION_COLOUR = '#ff6c23';
 
 /** Where the built DemoClip app lives. */
 function findAppRoot(): string | null {
@@ -268,11 +272,18 @@ export async function postProcessWithDemoClip(
     );
 
     // 3. Captions — placed as DemoClip text annotations, never burned into the
-    //    recording, so the author can adjust them in DemoClip.
-    await addCaptions(call, paths.muxed, marks);
+    //    recording, so the author can adjust them in DemoClip. The clip's length is read
+    //    once, for the captions and for the action cues below.
+    const durationSec = await probeDurationSec(paths.muxed).catch(() => 0);
+    await addCaptions(call, durationSec, marks);
 
-    // 4. Any other annotations the flow declares (arrows, sounds, …).
-    for (const annotation of flow.democlip?.annotations ?? []) {
+    // 4. The flow's own annotations, and the action cues it asked for — an arrow at each
+    //    control and a sound when it lands (`democlip.actionCues`).
+    const annotations = [
+      ...(flow.democlip?.annotations ?? []),
+      ...actionCueAnnotations(flow, marks, durationSec),
+    ];
+    for (const annotation of annotations) {
       await call('edit.annotate', annotation.kind, annotation);
     }
 
@@ -369,39 +380,29 @@ async function saveDownloads(downloads: Download[], destinations: string[]): Pro
   if (sidecar && sidecarDest) await sidecar.saveAs(sidecarDest);
 }
 
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
 /**
  * Place each caption as a DemoClip text annotation over the stretch its step owns, derived
  * from the recorded marks. The colour is the clip's own — set to the Graditone orange before
  * this runs, so captions are not the app's default red. The position is bottom-ish and
- * horizontally centred (DemoClip centres text by default).
+ * horizontally centred (DemoClip centres text by default). The span arithmetic lives in
+ * `handoff.ts`, so this path and the MCP hand-off place captions identically.
  */
 async function addCaptions(
   call: (surfacePath: string, ...args: unknown[]) => Promise<unknown>,
-  muxed: string,
+  durationSec: number,
   marks: StepMark[],
 ): Promise<void> {
-  const captions = marks.filter((mark) => mark.caption && mark.caption.trim());
-  if (captions.length === 0) return;
-
-  const durationSec = await probeDurationSec(muxed).catch(() => 0);
   if (!(durationSec > 0)) {
     console.warn('  ! DemoClip: could not read the clip duration; captions not placed');
     return;
   }
 
-  for (let i = 0; i < captions.length; i += 1) {
-    const start = captions[i].at / 1000;
-    const end = i + 1 < captions.length ? captions[i + 1].at / 1000 : durationSec;
-    const span = { s: clamp01(start / durationSec), e: clamp01(Math.max(end / durationSec, start / durationSec + 0.01)) };
+  for (const caption of captionSpans(marks, durationSec)) {
     await call('edit.annotate', 'text', {
-      span,
-      text: captions[i].caption,
-      y: 0.82,
-      height: 0.05,
+      span: caption.span,
+      text: caption.text,
+      y: CAPTION_Y,
+      height: CAPTION_HEIGHT,
     });
   }
 }

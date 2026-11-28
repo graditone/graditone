@@ -6,19 +6,25 @@
  *   node src/run.ts --all             # every flow in flows/
  *   node src/run.ts --list            # list the catalog
  *   DEMO_HEADFUL=1 node src/run.ts    # watch it happen in a real window
+ *   node src/run.ts --handoff <id>    # capture only; write the DemoClip plan
  *
- * It makes sure the app is served, records the flow, muxes in the audio, and
- * (unless DEMO_SKIP_DEMOCLIP=1) hands the result to DemoClip.
+ * It makes sure the app is served, records the flow and muxes in the audio. Then,
+ * unless --handoff / DEMO_HANDOFF=1 asks it to stop at the recording, it finishes
+ * the clip in DemoClip. `--handoff` is the agent path: the recording and a
+ * `<id>.democlip-plan.json` are left for the DemoClip **MCP** to apply in the
+ * window the person can see, so the clip stays open for them to evolve by hand.
+ * (DEMO_SKIP_DEMOCLIP=1 also stops at the recording, but writes no plan.)
  */
 
-import { readFile, readdir, mkdir } from 'node:fs/promises';
+import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { runFlow } from './runner.ts';
-import { muxWithAudio, audioDelayMs, defaultPaths } from './postprocess.ts';
+import { muxWithAudio, audioDelayMs, defaultPaths, probeDurationSec } from './postprocess.ts';
 import { postProcessWithDemoClip } from './democlip.ts';
+import { buildHandoffPlan, handoffInstructions } from './handoff.ts';
 import type { Flow } from './types.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -66,6 +72,9 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const flags = new Set(args.filter((a) => a.startsWith('--')));
   const ids = args.filter((a) => !a.startsWith('--'));
+  // Capture only and leave a plan for the DemoClip MCP: the agent applies it in
+  // the visible window, which then stays open for the person to edit by hand.
+  const handoff = flags.has('--handoff') || process.env.DEMO_HANDOFF === '1';
 
   const flows = await loadFlows();
 
@@ -114,7 +123,15 @@ async function main(): Promise<void> {
           ` → ${path.relative(REPO, paths.muxed)}`,
       );
 
-      if (!process.env.DEMO_SKIP_DEMOCLIP) {
+      if (handoff) {
+        // Stop at the recording. The DemoClip MCP finishes the clip in the window
+        // the person can see, from this plan, and leaves it open to evolve by hand.
+        const seconds = await probeDurationSec(paths.muxed).catch(() => 0);
+        const plan = buildHandoffPlan(flow, capture.marks, seconds);
+        const planPath = path.join(OUT_DIR, `${flow.id}.democlip-plan.json`);
+        await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`);
+        console.log(handoffInstructions(plan, paths.muxed, planPath));
+      } else if (!process.env.DEMO_SKIP_DEMOCLIP) {
         await postProcessWithDemoClip(flow, paths, { out: OUT_DIR, marks: capture.marks });
       }
 
