@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * check-demo-annotations.mjs — guards the demo-relevant control annotations.
+ * check-demo-annotations.ts — guards the demo-relevant control annotations.
  *
  * Feature 102: the application's own accessibility surface (role + accessible
  * name + a stable `data-testid`) is the source of truth for the generated demo
@@ -14,7 +14,7 @@
  * Scope: annotation-contract.md §2. Extend CHECKS when a surface is added.
  *
  * Usage:
- *   node scripts/check-demo-annotations.mjs
+ *   node scripts/check-demo-annotations.ts
  */
 
 import { readFileSync } from 'node:fs';
@@ -23,11 +23,20 @@ import { fileURLToPath } from 'node:url';
 
 const FRONTEND_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-/**
- * Each entry: a source file and the annotations it MUST keep. `pattern` is a
- * RegExp tested against the file's raw text.
- */
-const CHECKS = [
+/** One annotation a source file MUST keep: a human label and the pattern. */
+interface Requirement {
+  label: string;
+  pattern: RegExp;
+}
+
+/** A source file and the annotations it must keep. */
+interface FileCheck {
+  file: string;
+  requirements: Requirement[];
+}
+
+/** Each entry: a source file and the annotations it MUST keep. */
+const CHECKS: FileCheck[] = [
   {
     file: 'src/components/LandingScreen.tsx',
     requirements: [
@@ -97,7 +106,7 @@ const CHECKS = [
 ];
 
 /** i18n keys the accessible names bind to; they must exist in both locales. */
-const REQUIRED_I18N_KEYS = [
+const REQUIRED_I18N_KEYS: string[] = [
   'plugin.name.play-score',
   'score_selector.title',
   'play_score.toolbar.play_aria',
@@ -112,14 +121,14 @@ const REQUIRED_I18N_KEYS = [
   'score.phrases.next_aria',
 ];
 
-const LOCALES = ['src/i18n/locales/en.json', 'src/i18n/locales/es.json'];
+const LOCALES: string[] = ['src/i18n/locales/en.json', 'src/i18n/locales/es.json'];
 
-const problems = [];
+const problems: string[] = [];
 
 // ── Source annotations ───────────────────────────────────────────────────────
 
 for (const { file, requirements } of CHECKS) {
-  let source;
+  let source: string;
   try {
     source = readFileSync(join(FRONTEND_ROOT, file), 'utf8');
   } catch {
@@ -136,15 +145,16 @@ for (const { file, requirements } of CHECKS) {
 // ── i18n key parity for the bound accessible names ───────────────────────────
 
 for (const localeFile of LOCALES) {
-  let catalog;
+  let catalog: Record<string, unknown>;
   try {
-    catalog = JSON.parse(readFileSync(join(FRONTEND_ROOT, localeFile), 'utf8'));
+    catalog = JSON.parse(readFileSync(join(FRONTEND_ROOT, localeFile), 'utf8')) as Record<string, unknown>;
   } catch (err) {
-    problems.push(`${localeFile}: could not be read/parsed — ${err.message}`);
+    problems.push(`${localeFile}: could not be read/parsed — ${(err as Error).message}`);
     continue;
   }
   for (const key of REQUIRED_I18N_KEYS) {
-    if (typeof catalog[key] !== 'string' || catalog[key].trim() === '') {
+    const value = catalog[key];
+    if (typeof value !== 'string' || value.trim() === '') {
       problems.push(`${localeFile}: missing or empty i18n key "${key}"`);
     }
   }
