@@ -27,11 +27,14 @@ the full flow DSL — this skill is the runbook and the traps.
 
 ## Flow DSL, in one screen
 
-`click` · `waitFor` · `waitForFunction` · `press` · `evaluate` · `goto`, plus
-`caption` (caption bar) and `hold` (ms pause after the step). `click` extras:
-`steps` (glide steps), `settle` (pre-press pause), **`pressMs`** (keep the
-pointer down — for hold-to-repeat controls). See `demos/README.md` for the
-canonical list; it is the source of truth for the DSL.
+`click` · `holdUntil` · `waitFor` · `waitForFunction` · `press` · `evaluate` ·
+`goto`, plus `caption` (caption bar) and `hold` (ms pause after the step).
+`click` extras: `steps` (glide steps), `settle` (pre-press pause), **`pressMs`**
+(keep the pointer down — for hold-to-repeat controls). **`holdUntil`** presses an
+element and holds until a page condition (`script`) is true, then releases — the
+deterministic way to drive a hold-to-repeat stepper to an exact value (e.g. the
+tempo readout reaching 80). See `demos/README.md` for the canonical list; it is
+the source of truth for the DSL.
 
 Timing that reads well: caption + `hold` at the start, let each action land,
 then hold the final state long enough to be seen (~1.5–3 s). When changing

@@ -4,18 +4,20 @@
 # title and its description — the runner turns it into a video, and a catalog
 # page can be generated from the same file. See demos/README.md.
 #
-# Based on 01-play-a-score.yaml: the same path into the Play Score plugin, but
-# once the music is playing it shows how the tempo control changes the playback
-# speed — a tap for 1 BPM, a hold for 5 BPM steps.
+# Based on 01-play-a-score.yaml, but it drives the shared tempo control: hold −
+# down to 80 BPM, then hold + up to 180 BPM. Graditone locks in the new tempo
+# when playback starts, so the flow stops and replays the piece after each
+# change — that is where the faster/slower music is actually heard.
 
 id: play-a-score-tempo
 title: Play a Score — Change the Tempo
 audience: first-time user
 description: >
-  Open the Play Score plugin, start a piece and change the playback tempo while
-  it plays: tap + or − for one BPM at a time, or hold either button to speed up
-  or slow down in 5 BPM steps. The BPM readout and the page scroll follow the
-  music in real time.
+  Open the Play Score plugin, start a piece and change the playback tempo with
+  the − / + steppers: hold − to slow the piece to 80 BPM, then hold + to push it
+  to 180 BPM. Graditone applies the new tempo when you press ▶ Play again, so
+  the piece is stopped and replayed at each tempo — the BPM readout and the page
+  scroll follow the music in real time.
 
 # The demos are aimed at a tablet, since Graditone is tablet-native.
 viewport: { width: 1440, height: 900 }
@@ -45,61 +47,46 @@ steps:
     timeout: 30000
     hold: 1200
 
-  - caption: "Press ▶ Play."
+  - caption: "Press ▶ Play — the piece starts at its original tempo."
     action: click
     selector: '[role="toolbar"] [aria-label="Play"]'
     hold: 3500
 
-  # Short taps: one BPM per tap. Repeat a few times so the readout visibly moves.
-  - caption: "Tap + to nudge the tempo up — one BPM per tap."
-    action: click
-    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
-    hold: 250
-
-  - action: click
-    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
-    hold: 250
-
-  - action: click
-    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
-    hold: 250
-
-  - action: click
-    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
-    hold: 250
-
-  - action: click
-    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
-    hold: 1200
-
-  # Hold to repeat: after one second the control steps by 5 BPM every 300 ms.
-  - caption: "Hold + to speed up quickly — each repeat adds 5 BPM."
-    action: click
-    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
-    pressMs: 2500
-    hold: 3000
-
-  - caption: "The music plays faster — the BPM readout and the page scroll keep up."
-    hold: 3000
-
-  - caption: "Hold − to slow the playback back down."
-    action: click
+  # Hold − until the BPM readout reaches 80. The control steps by 5 BPM every
+  # 300 ms while held, so the readout counts 115, 110 … 80.
+  - caption: "Hold − to slow it down — the tempo counts to 80 BPM."
+    action: holdUntil
     selector: '[role="toolbar"] [aria-label="Decrease tempo"]'
-    pressMs: 2500
-    hold: 3000
+    script: "parseInt(document.querySelector('[data-testid=\"tempo-display\"]')?.textContent ?? '0', 10) <= 80"
+    timeout: 20000
+    hold: 900
 
-  - caption: "Tap − for 1 BPM steps, or hold it to slow down faster."
+  # The new tempo is heard on the next Play, so stop and replay.
+  - caption: "Press ■ Stop, then ▶ Play to hear 80 BPM."
     action: click
-    selector: '[role="toolbar"] [aria-label="Decrease tempo"]'
-    hold: 250
+    selector: '[role="toolbar"] [aria-label="Stop"]'
+    hold: 700
 
   - action: click
-    selector: '[role="toolbar"] [aria-label="Decrease tempo"]'
-    hold: 250
+    selector: '[role="toolbar"] [aria-label="Play"]'
+    hold: 5000
+
+  # Hold + until the BPM readout reaches 180.
+  - caption: "Hold + to speed it up — this time to 180 BPM."
+    action: holdUntil
+    selector: '[role="toolbar"] [aria-label="Increase tempo"]'
+    script: "parseInt(document.querySelector('[data-testid=\"tempo-display\"]')?.textContent ?? '0', 10) >= 180"
+    timeout: 25000
+    hold: 900
+
+  - caption: "Press ■ Stop, then ▶ Play to hear 180 BPM."
+    action: click
+    selector: '[role="toolbar"] [aria-label="Stop"]'
+    hold: 700
 
   - action: click
-    selector: '[role="toolbar"] [aria-label="Decrease tempo"]'
-    hold: 1200
+    selector: '[role="toolbar"] [aria-label="Play"]'
+    hold: 5000
 
   - caption: "Press ■ Stop when you're done."
     action: click

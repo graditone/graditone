@@ -77,10 +77,12 @@ steps:
     hold: 14000
 ```
 
-Steps: `click`, `waitFor`, `waitForFunction`, `press`, `evaluate`, `goto`, and
-`caption`/`hold` modifiers. Clicks glide the (injected) pointer and ripple, so a
-tap reads on video. `pressMs` keeps the pointer down before release, for controls
-that repeat while held — the tempo ± buttons step by 5 BPM after a second.
+Steps: `click`, `holdUntil`, `waitFor`, `waitForFunction`, `press`, `evaluate`,
+`goto`, and `caption`/`hold` modifiers. Clicks glide the (injected) pointer and
+ripple, so a tap reads on video. `pressMs` keeps the pointer down before release,
+for controls that repeat while held — the tempo ± buttons step by 5 BPM after a
+second. `holdUntil` presses an element and holds it until a page condition is
+true (e.g. the BPM readout reaches a target), then releases.
 
 ## Pieces
 

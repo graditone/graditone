@@ -18,11 +18,11 @@ interface GlideOptions {
   pressMs?: number;
 }
 
-/** Glide the (hidden) mouse to an element's centre, then click it. */
-async function glideClick(
+/** Glide the (hidden) mouse to an element's centre and leave it there. */
+async function glideTo(
   page: Page,
   selector: string,
-  { steps = 22, settle = 140, pressMs = 70 }: GlideOptions = {},
+  { steps = 22, settle = 140 }: GlideOptions = {},
 ): Promise<void> {
   const locator = page.locator(selector).first();
   await locator.waitFor({ state: 'visible', timeout: 30_000 });
@@ -32,6 +32,15 @@ async function glideClick(
   const y = box.y + box.height / 2;
   await page.mouse.move(x, y, { steps });
   await page.waitForTimeout(settle);
+}
+
+/** Glide the (hidden) mouse to an element's centre, then click it. */
+async function glideClick(
+  page: Page,
+  selector: string,
+  { pressMs = 70, ...glide }: GlideOptions = {},
+): Promise<void> {
+  await glideTo(page, selector, glide);
   await page.mouse.down();
   await page.waitForTimeout(pressMs);
   await page.mouse.up();
@@ -60,6 +69,21 @@ async function runStep(page: Page, step: FlowStep): Promise<void> {
     case 'click':
       await glideClick(page, requireSelector(step), step);
       break;
+    case 'holdUntil': {
+      // Press and keep the pointer down until the page satisfies the condition
+      // (e.g. a hold-to-repeat stepper reaching the target value), then release.
+      // The release is in `finally` so a timeout still lifts the pointer.
+      await glideTo(page, requireSelector(step), step);
+      await page.mouse.down();
+      try {
+        await page.waitForFunction(step.script ?? 'true', undefined, {
+          timeout: step.timeout ?? 30_000,
+        });
+      } finally {
+        await page.mouse.up();
+      }
+      break;
+    }
     case 'waitFor':
       await page
         .locator(requireSelector(step))

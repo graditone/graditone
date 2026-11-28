@@ -12,12 +12,12 @@ import type { Video } from 'playwright';
 /** One step of a flow — the small DSL the runner executes. */
 export interface FlowStep {
   /** What to do. Omitted (or `hold`) just captions and waits. */
-  action?: 'goto' | 'click' | 'waitFor' | 'waitForFunction' | 'press' | 'evaluate' | 'hold';
+  action?: 'goto' | 'click' | 'holdUntil' | 'waitFor' | 'waitForFunction' | 'press' | 'evaluate' | 'hold';
   /** CSS selector, for `click` / `waitFor`. */
   selector?: string;
   /** URL, for `goto`. */
   url?: string;
-  /** Script body, for `waitForFunction` / `evaluate`. */
+  /** Script body, for `waitForFunction` / `holdUntil` / `evaluate`. */
   script?: string;
   /** Key, for `press`. */
   key?: string;
