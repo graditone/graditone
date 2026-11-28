@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * check-budget.mjs — CI asset budget gate
+ * check-budget.ts — CI asset budget gate
  * Feature 001-pwa-hosting-service — US3 (T022)
  *
  * Calculates estimated gzip-compressed sizes of all INITIAL-LOAD assets in
@@ -9,7 +9,7 @@
  * excluded because they are deferred and not in the initial transfer.
  *
  * Usage:
- *   node scripts/check-budget.mjs          # from frontend/ directory
+ *   node scripts/check-budget.ts          # from frontend/ directory
  *   npm run check-budget                    # via npm script
  *
  * Exit codes:
@@ -25,16 +25,16 @@ const BUDGET_BYTES = 2 * 1024 * 1024; // 2 MB
 const DIST_DIR = new URL('../dist', import.meta.url).pathname;
 
 // Extensions that represent initial-load assets
-const INITIAL_EXTENSIONS = new Set(['.js', '.css', '.wasm', '.html', '.woff2']);
+const INITIAL_EXTENSIONS = new Set<string>(['.js', '.css', '.wasm', '.html', '.woff2']);
 
 // Chunk name patterns to exclude (lazy/deferred bundles)
 const LAZY_PATTERNS = ['tone-audio'];
 
-function isLazyChunk(filePath) {
-  return LAZY_PATTERNS.some(p => filePath.includes(p));
+function isLazyChunk(filePath: string): boolean {
+  return LAZY_PATTERNS.some((p) => filePath.includes(p));
 }
 
-function walkDir(dir, results = []) {
+function walkDir(dir: string, results: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const fullPath = join(dir, entry);
     if (statSync(fullPath).isDirectory()) {
@@ -46,19 +46,25 @@ function walkDir(dir, results = []) {
   return results;
 }
 
-function gzipSize(filePath) {
+function gzipSize(filePath: string): number {
   const content = readFileSync(filePath);
   return gzipSync(content, { level: 9 }).length;
 }
 
-function formatBytes(bytes) {
+function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
+interface Row {
+  path: string;
+  uncompressed: number;
+  compressed: number;
+}
+
 // ----- main -----
 
-let files;
+let files: string[];
 try {
   files = walkDir(DIST_DIR);
 } catch {
@@ -67,7 +73,7 @@ try {
   process.exit(1);
 }
 
-const rows = [];
+const rows: Row[] = [];
 let totalCompressed = 0;
 let totalUncompressed = 0;
 

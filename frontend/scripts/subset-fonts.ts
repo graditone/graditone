@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * subset-fonts.mjs — Latin font subsetting pre-build step
+ * subset-fonts.ts — Latin font subsetting pre-build step
  * Feature 001-pwa-hosting-service — US3 (T024)
  *
  * For each *.woff2 file in frontend/public/fonts/ (except Bravura which is a
@@ -21,19 +21,19 @@
  *   pip install fonttools   (or: pip3 install fonttools)
  *
  * Usage:
- *   node scripts/subset-fonts.mjs    # from frontend/ directory
+ *   node scripts/subset-fonts.ts    # from frontend/ directory
  *   npm run subset-fonts              # via npm script
  */
 
 import { execSync } from 'child_process';
-import { readdirSync, statSync, existsSync } from 'fs';
-import { join, basename } from 'path';
+import { readdirSync, statSync } from 'fs';
+import { join } from 'path';
 
 const FONTS_DIR = new URL('../public/fonts', import.meta.url).pathname;
 const UNICODE_RANGE = 'U+0000-024F';
 
 // Fonts to skip — non-text fonts or fonts that must keep full glyph set
-const SKIP_FONTS = new Set(['Bravura.woff2']);
+const SKIP_FONTS = new Set<string>(['Bravura.woff2']);
 
 // Verify pyftsubset is available
 try {
@@ -44,7 +44,7 @@ try {
   process.exit(1);
 }
 
-const files = readdirSync(FONTS_DIR).filter(f => f.endsWith('.woff2'));
+const files = readdirSync(FONTS_DIR).filter((f) => f.endsWith('.woff2'));
 
 if (files.length === 0) {
   console.warn(`\n⚠️  No .woff2 files found in ${FONTS_DIR}\n`);
@@ -80,7 +80,7 @@ for (const file of files) {
   try {
     execSync(cmd, { stdio: 'pipe' });
   } catch (err) {
-    console.error(`  ❌ FAILED ${file}: ${err.message}`);
+    console.error(`  ❌ FAILED ${file}: ${(err as Error).message}`);
     process.exit(1);
   }
 

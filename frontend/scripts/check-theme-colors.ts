@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * check-theme-colors.mjs — guards the Graditone theme-token rule.
+ * check-theme-colors.ts — guards the Graditone theme-token rule.
  *
  * UI must style colours through the landing-theme tokens (--ls-*), the app
  * bridge tokens (--color-*, --dialog-*), and color-mix() over them. Hardcoded
@@ -14,9 +14,9 @@
  * exceeds its recorded count. Shrink the baseline over time.
  *
  * Usage:
- *   node scripts/check-theme-colors.mjs            # check (CI / pre-commit)
- *   node scripts/check-theme-colors.mjs --update   # rewrite the baseline
- *   node scripts/check-theme-colors.mjs --list      # print current offenders
+ *   node scripts/check-theme-colors.ts            # check (CI / pre-commit)
+ *   node scripts/check-theme-colors.ts --update   # rewrite the baseline
+ *   node scripts/check-theme-colors.ts --list      # print current offenders
  */
 
 import { readdirSync, readFileSync, writeFileSync, statSync, existsSync } from 'node:fs';
@@ -30,9 +30,7 @@ const BASELINE_PATH = join(FRONTEND_ROOT, 'scripts', 'theme-colors-baseline.json
 const SCAN_DIRS = ['src', 'plugins'];
 
 /** Files whose literals are legitimate: the theme palette source itself. */
-const ALLOWLIST = new Set([
-  'src/themes/landing-themes.css',
-]);
+const ALLOWLIST = new Set<string>(['src/themes/landing-themes.css']);
 
 const args = new Set(process.argv.slice(2));
 const UPDATE = args.has('--update');
@@ -43,7 +41,7 @@ const LIST = args.has('--list');
 const COLOR_RE = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/g;
 
 /** Blank out block comments, preserving length so indices and lines stay put. */
-function maskComments(src) {
+function maskComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
 }
 
@@ -51,11 +49,11 @@ function maskComments(src) {
  * Index ranges of every `var(--token, <fallback>)` fallback argument. Colour
  * literals inside these ranges are allowed (that is what fallbacks are for).
  */
-function fallbackRanges(src) {
-  const ranges = [];
+function fallbackRanges(src: string): [number, number][] {
+  const ranges: [number, number][] = [];
   const varRe = /var\(\s*--[a-zA-Z0-9-]+\s*,/g;
-  let m;
-  while ((m = varRe.exec(src))) {
+  let m: RegExpExecArray | null;
+  while ((m = varRe.exec(src)) !== null) {
     const open = src.indexOf('(', m.index); // the var( paren
     let depth = 0;
     let close = -1;
@@ -79,24 +77,33 @@ function fallbackRanges(src) {
   return ranges;
 }
 
-const inRanges = (idx, ranges) => ranges.some(([a, b]) => idx >= a && idx < b);
+const inRanges = (idx: number, ranges: [number, number][]): boolean =>
+  ranges.some(([a, b]) => idx >= a && idx < b);
 
-/** Return [{ line, col, text }] for hardcoded colours in one CSS source. */
-function findViolations(src) {
+/** One hardcoded colour found in a CSS source. */
+interface Violation {
+  line: number;
+  col: number;
+  text: string;
+}
+
+/** Return the hardcoded colours in one CSS source. */
+function findViolations(src: string): Violation[] {
   const masked = maskComments(src);
   const ranges = fallbackRanges(masked);
   const lineStarts = [0];
   for (let i = 0; i < masked.length; i++) if (masked[i] === '\n') lineStarts.push(i + 1);
-  const lineOf = (idx) => {
+  const lineOf = (idx: number): { line: number; col: number } => {
     let lo = 0, hi = lineStarts.length - 1;
     while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (lineStarts[mid] <= idx) lo = mid; else hi = mid - 1; }
     return { line: lo + 1, col: idx - lineStarts[lo] + 1 };
   };
 
-  const out = [];
+  const out: Violation[] = [];
   for (const match of masked.matchAll(COLOR_RE)) {
-    if (inRanges(match.index, ranges)) continue;
-    const { line, col } = lineOf(match.index);
+    const index = match.index ?? 0;
+    if (inRanges(index, ranges)) continue;
+    const { line, col } = lineOf(index);
     out.push({ line, col, text: match[0] });
   }
   return out;
@@ -104,7 +111,7 @@ function findViolations(src) {
 
 // ── File scanning ────────────────────────────────────────────────────────────
 
-function walkCss(dir, out = []) {
+function walkCss(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out;
   for (const entry of readdirSync(dir)) {
     if (entry === 'node_modules' || entry === 'dist' || entry.startsWith('.')) continue;
@@ -116,9 +123,9 @@ function walkCss(dir, out = []) {
   return out;
 }
 
-function scan() {
+function scan(): Map<string, Violation[]> {
   /** Map of frontend-relative path → violations[] */
-  const results = new Map();
+  const results = new Map<string, Violation[]>();
   for (const d of SCAN_DIRS) {
     for (const abs of walkCss(join(FRONTEND_ROOT, d))) {
       const rel = relative(FRONTEND_ROOT, abs).split('\\').join('/');
@@ -133,7 +140,7 @@ function scan() {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 const current = scan();
-const currentCounts = Object.fromEntries(
+const currentCounts: Record<string, number> = Object.fromEntries(
   [...current.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([f, v]) => [f, v.length]),
 );
 
@@ -152,12 +159,12 @@ if (LIST) {
   process.exit(0);
 }
 
-const baseline = existsSync(BASELINE_PATH)
-  ? JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))
+const baseline: Record<string, number> = existsSync(BASELINE_PATH)
+  ? (JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as Record<string, number>)
   : {};
 
 /** Violations that are new or exceed the baseline: file → violations[:] */
-const failures = [];
+const failures: [string, Violation[], number][] = [];
 let reduced = 0;
 for (const [file, violations] of current) {
   const allowed = baseline[file] ?? 0;
