@@ -210,6 +210,11 @@ position and the press's instant), so nothing is written per step; set it and ev
 cued. The arrows and sounds are ordinary DemoClip annotations, applied with the captions —
 move, restyle or drop them in the window.
 
+A step may decide for itself, too: `cue: false` skips its cue, `cue: true` cues it even when
+the demo asks for none, and `sound: whoosh` names its own sound (a `thud` when it names none).
+So a demo can cue most taps and stay quiet on one, or mark a single tap in a demo that
+otherwise carries no cues.
+
 ### Finishing a clip in the MCP window
 
 The export above runs DemoClip in a browser the runner owns and **closes when it

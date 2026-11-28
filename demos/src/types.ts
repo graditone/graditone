@@ -35,6 +35,17 @@ export interface FlowStep {
   settle?: number;
   /** How long the pointer stays down for `click`, in milliseconds (default 70). */
   pressMs?: number;
+  /**
+   * Cue this step (true) or never cue it (false), overriding the demo's
+   * `democlip.actionCues`. Omitted, the demo decides — so a step may cue itself in a demo
+   * that asks for no cues, or opt out of one that does.
+   */
+  cue?: boolean;
+  /**
+   * The stock sound this step's cue plays when it lands — `thud` when it names none. Used
+   * only when the step is cued.
+   */
+  sound?: string;
 }
 
 /** One annotation a flow hands to DemoClip. */
@@ -51,9 +62,10 @@ export interface FlowDemoClip {
   /** The colour the captions are made in — Graditone's orange when a flow names none. */
   annotationColour?: string;
   /**
-   * Mark every action (a `click`, or a `press` that has a control) with an **arrow** at the
+   * Cue every action (a `click`, or a `press` that has a control) with an **arrow** at the
    * control it lands on, and a **sound** the moment it lands — so a tap on a button reads on
-   * the video. Off unless a flow asks for it.
+   * the video. Off unless a flow asks for it; a step may override it with `cue`, and name its
+   * own sound with `sound`.
    */
   actionCues?: boolean;
   annotations?: FlowAnnotation[];

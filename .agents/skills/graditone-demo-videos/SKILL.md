@@ -48,8 +48,9 @@ the full flow DSL — this skill is the runbook and the traps.
 `steps` (glide steps), `settle` (pre-press pause), **`pressMs`** (keep the
 pointer down — for hold-to-repeat controls). A flow's `democlip.actionCues: true`
 marks every action with an **arrow** at its control and a **`thud`** as it lands,
-taken from the recorded marks. See `demos/README.md` for the canonical list; it is
-the source of truth for the DSL.
+taken from the recorded marks; a step may override it with `cue: true`/`cue: false` and
+name its own sound with `sound: whoosh`. See `demos/README.md` for the canonical list;
+it is the source of truth for the DSL.
 
 Timing that reads well: caption + `hold` at the start, let each action land,
 then hold the final state long enough to be seen (~1.5–3 s). When changing

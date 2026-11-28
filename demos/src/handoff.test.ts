@@ -130,6 +130,44 @@ test('nothing is cued unless the flow asks, or without a clip length', () => {
   assert.deepEqual(actionCueAnnotations(cuesFlow, cuesMarks, 0), []);
 });
 
+test('a step may cue itself in a demo that asks for none', () => {
+  const flow: Flow = {
+    id: 'x',
+    title: 'X',
+    steps: [{ action: 'click' }, { action: 'click', cue: true }],
+  };
+  const marks: StepMark[] = [
+    { label: 'click', at: 0, doneAt: 0, target: { x: 0.5, y: 0.5 } },
+    { label: 'click', at: 1000, doneAt: 1000, target: { x: 0.5, y: 0.5 } },
+  ];
+  assert.deepEqual(actionCueAnnotations(flow, marks, 10).map((cue) => cue.kind), ['arrow', 'sound']);
+});
+
+test('a step may opt out of the demo’s cues, and name its own sound', () => {
+  const flow: Flow = {
+    id: 'x',
+    title: 'X',
+    democlip: { actionCues: true },
+    steps: [
+      { action: 'click', cue: false },
+      { action: 'click', sound: 'whoosh' },
+      { action: 'click' },
+    ],
+  };
+  const marks: StepMark[] = [0, 1000, 2000].map((at) => ({
+    label: 'click',
+    at,
+    doneAt: at,
+    target: { x: 0.5, y: 0.5 },
+  }));
+  const cues = actionCueAnnotations(flow, marks, 10);
+  assert.deepEqual(cues.map((cue) => cue.kind), ['arrow', 'sound', 'arrow', 'sound']);
+  assert.deepEqual(
+    cues.filter((cue) => cue.kind === 'sound').map((cue) => cue.sound),
+    ['whoosh', 'thud'],
+  );
+});
+
 test('the plan carries the cues after the flow’s own annotations', () => {
   const plan = buildHandoffPlan({ ...cuesFlow, democlip: { actionCues: true, annotations: [{ kind: 'text', span: { s: 0, e: 0.1 }, text: 'hi' }] } }, cuesMarks, 10);
   assert.equal(plan.annotations.length, 6);
