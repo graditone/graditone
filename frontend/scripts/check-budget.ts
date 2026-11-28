@@ -75,7 +75,6 @@ try {
 
 const rows: Row[] = [];
 let totalCompressed = 0;
-let totalUncompressed = 0;
 
 for (const filePath of files) {
   const ext = extname(filePath);
@@ -84,7 +83,6 @@ for (const filePath of files) {
 
   const uncompressed = statSync(filePath).size;
   const compressed = gzipSize(filePath);
-  totalUncompressed += uncompressed;
   totalCompressed += compressed;
 
   rows.push({ path: relative(DIST_DIR, filePath), uncompressed, compressed });
