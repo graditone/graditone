@@ -1,0 +1,70 @@
+{
+  "goal": {
+    "text": "Open Play Score, choose Für Elise, start playback and change the tempo while it plays",
+    "id": "play-a-score-tempo",
+    "audience": "first-time user"
+  },
+  "steps": [
+    {
+      "phrase": "open play score",
+      "action": "click",
+      "caption": "Graditone opens on a shelf of plugins. Let's hear a piece.",
+      "hold": 1200
+    },
+    { "phrase": "score chooser", "action": "waitFor", "caption": "Choose a piece — Beethoven's Für Elise." },
+    {
+      "selector": "[data-testid=\"score-selector-item-beethoven-fur-elise\"]",
+      "action": "click"
+    },
+    { "selector": "[role=\"toolbar\"]", "action": "waitFor" },
+    {
+      "phrase": "press play",
+      "action": "click",
+      "waitForContent": {
+        "script": "document.querySelectorAll('svg line, svg path').length > 40",
+        "timeout": 30000
+      },
+      "caption": "Press ▶ Play.",
+      "hold": 3500
+    },
+    {
+      "phrase": "raise the tempo",
+      "action": "click",
+      "caption": "Tap + to nudge the tempo up — one BPM per tap.",
+      "hold": 250
+    },
+    { "phrase": "raise the tempo", "action": "click", "hold": 250 },
+    { "phrase": "raise the tempo", "action": "click", "hold": 250 },
+    { "phrase": "raise the tempo", "action": "click", "hold": 250 },
+    { "phrase": "raise the tempo", "action": "click", "hold": 1200 },
+    {
+      "phrase": "raise the tempo",
+      "action": "click",
+      "caption": "Hold + to speed up quickly — each repeat adds 5 BPM.",
+      "pressMs": 2500,
+      "hold": 3000
+    },
+    {
+      "phrase": "lower the tempo",
+      "action": "click",
+      "caption": "Hold − to slow the playback back down.",
+      "pressMs": 2500,
+      "hold": 3000
+    },
+    {
+      "phrase": "lower the tempo",
+      "action": "click",
+      "caption": "Tap − for 1 BPM steps, or hold it to slow down faster.",
+      "hold": 250
+    },
+    { "phrase": "lower the tempo", "action": "click", "hold": 250 },
+    { "phrase": "lower the tempo", "action": "click", "hold": 1200 },
+    {
+      "phrase": "press stop",
+      "action": "click",
+      "caption": "Press ■ Stop when you're done.",
+      "hold": 1500
+    }
+  ],
+  "expect": { "resolved": 16, "unresolved": 0, "steps": 17 }
+}

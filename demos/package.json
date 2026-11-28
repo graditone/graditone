@@ -11,6 +11,10 @@
     "demo": "node src/run.ts",
     "demo:all": "node src/run.ts --all",
     "demo:list": "node src/run.ts --list",
+    "catalog:build": "node src/tools/build-index.ts",
+    "catalog:find": "node src/tools/find-element.ts",
+    "flow:author": "node src/tools/author-flow.ts",
+    "test": "node --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

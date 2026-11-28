@@ -100,7 +100,9 @@ export function PlaybackToolbar({
       {/* Back button — icon only, compact */}
       {showBack && (
         <button
+          type="button"
           className="play-score__toolbar-btn play-score__toolbar-btn--back"
+          data-testid="play-score-back"
           onClick={onBack}
           aria-label={t('play_score.toolbar.back_aria')}
         >
@@ -116,7 +118,9 @@ export function PlaybackToolbar({
       {/* Play/Pause toggle */}
       {isPlaying ? (
         <button
+          type="button"
           className="play-score__toolbar-btn play-score__toolbar-btn--pause"
+          data-testid="play-score-pause"
           onClick={onPause}
           aria-label={t('play_score.toolbar.pause_aria')}
           disabled={!isActive}
@@ -125,7 +129,9 @@ export function PlaybackToolbar({
         </button>
       ) : (
         <button
+          type="button"
           className="play-score__toolbar-btn play-score__toolbar-btn--play"
+          data-testid="play-score-play"
           onClick={onPlay}
           aria-label={t('play_score.toolbar.play_aria')}
           disabled={status === 'idle' || status === 'loading' || status === 'error'}
@@ -136,7 +142,9 @@ export function PlaybackToolbar({
 
       {/* Stop button */}
       <button
+        type="button"
         className="play-score__toolbar-btn play-score__toolbar-btn--stop"
+        data-testid="play-score-stop"
         onClick={onStop}
         aria-label={t('play_score.toolbar.stop_aria')}
         disabled={!isActive}

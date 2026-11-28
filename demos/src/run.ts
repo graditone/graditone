@@ -115,7 +115,7 @@ async function main(): Promise<void> {
       );
 
       if (!process.env.DEMO_SKIP_DEMOCLIP) {
-        await postProcessWithDemoClip(flow, paths, { out: OUT_DIR });
+        await postProcessWithDemoClip(flow, paths, { out: OUT_DIR, marks: capture.marks });
       }
 
       console.log(`  · done in ${((Date.now() - started) / 1000).toFixed(1)}s`);

@@ -309,6 +309,8 @@ export function ScoreRendererPlugin({
         <div className="score-renderer-bottom-bar">
           <button
             className={`score-renderer-phrases-btn${phrasesVisible ? ' active' : ''}`}
+            type="button"
+            data-testid="score-phrases-toggle"
             onClick={togglePhrases}
             disabled={!hasPhrases}
             aria-label={phrasesVisible ? t('score.phrases.hide_aria') : t('score.phrases.show_aria')}
@@ -321,6 +323,8 @@ export function ScoreRendererPlugin({
             <>
               <button
                 className="score-renderer-nav-btn"
+                type="button"
+                data-testid="score-phrases-prev"
                 onClick={goToPreviousPhrase}
                 aria-label={t('score.phrases.prev_aria')}
                 title={t('score.phrases.prev_aria')}
@@ -329,6 +333,8 @@ export function ScoreRendererPlugin({
               </button>
               <button
                 className="score-renderer-nav-btn"
+                type="button"
+                data-testid="score-phrases-next"
                 onClick={goToNextPhrase}
                 aria-label={t('score.phrases.next_aria')}
                 title={t('score.phrases.next_aria')}

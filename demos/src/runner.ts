@@ -43,13 +43,7 @@ function requireSelector(step: FlowStep): string {
   return step.selector;
 }
 
-async function setCaption(page: Page, text: string | undefined): Promise<void> {
-  await page.evaluate((t: string) => window.__demoCaption?.(t), text ?? '');
-}
-
 async function runStep(page: Page, step: FlowStep): Promise<void> {
-  if (step.caption !== undefined) await setCaption(page, step.caption);
-
   switch (step.action) {
     case undefined:
     case 'hold':
@@ -133,7 +127,11 @@ export async function runFlow(
 
     const marks: StepMark[] = [];
     for (const step of flow.steps) {
-      marks.push({ label: step.caption ?? step.action ?? 'hold', at: Date.now() - videoStartMs });
+      marks.push({
+        label: step.caption ?? step.action ?? 'hold',
+        at: Date.now() - videoStartMs,
+        caption: step.caption,
+      });
       await runStep(page, step);
     }
 

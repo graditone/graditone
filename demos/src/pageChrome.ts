@@ -6,11 +6,11 @@
  * script runs:
  *
  *   - a pointer that follows the real (invisible) mouse Playwright moves,
- *   - a ripple wherever it clicks, so a tap reads even at a glance,
- *   - a caption bar the runner writes into, per step.
+ *   - a ripple wherever it clicks, so a tap reads even at a glance.
  *
- * Because it lives in the page, it is part of the recorded video for free — no
- * ffmpeg overlay needed for captions.
+ * Because it lives in the page, it is part of the recorded video for free.
+ * Captions are deliberately NOT drawn here — they become DemoClip text
+ * annotations so the author can adjust them in DemoClip (see democlip.ts).
  *
  * The function is serialised and run in the browser, so it uses DOM globals and
  * takes nothing from this module's scope.
@@ -42,17 +42,6 @@ export function installDemoChrome(): void {
         from { transform: scale(1); opacity: .75; }
         to   { transform: scale(10); opacity: 0; }
       }
-
-      #demo-caption {
-        position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%);
-        z-index: 2147483645; max-width: 78%; padding: 13px 22px;
-        border-radius: 14px; background: rgba(17,17,20,.84); color: #fff;
-        font: 500 21px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
-        text-align: center; opacity: 0; transition: opacity .25s ease;
-        pointer-events: none; box-shadow: 0 10px 34px rgba(0,0,0,.38);
-        -webkit-font-smoothing: antialiased;
-      }
-      #demo-caption.visible { opacity: 1; }
     `;
     document.documentElement.appendChild(style);
 
@@ -64,11 +53,7 @@ export function installDemoChrome(): void {
       '<path d="M4 2l14 8-6 1.5L9 20 4 2z" fill="#ffffff" stroke="#111111" ' +
       'stroke-width="1.2" stroke-linejoin="round"/></svg>';
 
-    const caption = document.createElement('div');
-    caption.id = 'demo-caption';
-
     document.documentElement.appendChild(cursor);
-    document.documentElement.appendChild(caption);
 
     const move = (x: number, y: number): void => {
       cursor.style.transform = `translate(${x}px, ${y}px)`;
@@ -89,10 +74,6 @@ export function installDemoChrome(): void {
       true,
     );
 
-    window.__demoCaption = (text: string) => {
-      caption.textContent = text || '';
-      caption.classList.toggle('visible', Boolean(text));
-    };
     window.__demoMoveCursor = move;
   });
 }

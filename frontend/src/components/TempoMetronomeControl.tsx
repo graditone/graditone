@@ -211,6 +211,10 @@ export function TempoMetronomeControl({
   ].join(' ');
 
   // ─── Render ───────────────────────────────────────────────────────────────
+  // BPM readout, exposed both visually and in the metronome button's accessible
+  // name so the current tempo is announced (annotation-contract.md §2).
+  const bpmReadout = bpm > 0 ? String(Math.round(bpm)) : '—';
+
   return (
     <div className="practice-plugin__metro-group" ref={groupRef}>
       <button
@@ -227,23 +231,26 @@ export function TempoMetronomeControl({
         −
       </button>
       <button
+        type="button"
         key={metronomeAnimKey}
         className={metronomeBtnClass}
         onClick={onMetronomeToggle}
         data-testid="tempo-display"
-        aria-label={labels.metronomeAria}
+        aria-label={`${labels.metronomeAria} — ${bpmReadout} BPM`}
         aria-pressed={metronomeActive}
         title={floorTooltip}
       >
         <span className="practice-plugin__metro-btn-bpm">
           <span className="practice-plugin__toolbar-bpm practice-plugin__tempo-step-value">
-            {bpm > 0 ? String(Math.round(bpm)) : '—'}
+            {bpmReadout}
           </span>
           <span className="practice-plugin__tempo-step-unit">BPM</span>
         </span>
       </button>
       <button
+        type="button"
         className="practice-plugin__metro-chevron"
+        data-testid="metronome-subdivision"
         onClick={() => setMenuOpen((o) => !o)}
         aria-label={labels.subdivisionAria}
         aria-expanded={menuOpen}
@@ -269,7 +276,9 @@ export function TempoMetronomeControl({
           {([1, 2, 4] as MetronomeSubdivision[]).map((s) => (
             <button
               key={s}
+              type="button"
               role="menuitem"
+              data-testid={`metronome-subdivision-${s}`}
               className={
                 'practice-plugin__metro-menu-item' +
                 (metronomeSubdivision === s ? ' practice-plugin__metro-menu-item--active' : '')

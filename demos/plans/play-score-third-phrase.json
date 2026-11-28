@@ -1,0 +1,62 @@
+{
+  "goal": {
+    "text": "Open Play Score, show the phrases, select the third phrase and reproduce it",
+    "id": "play-score-third-phrase",
+    "audience": "first-time user"
+  },
+  "steps": [
+    {
+      "phrase": "open play score",
+      "action": "click",
+      "caption": "Graditone opens on a shelf of plugins. Let's open Play Score.",
+      "hold": 900
+    },
+    {
+      "phrase": "score chooser",
+      "action": "waitFor",
+      "caption": "Choose a piece — Burgmüller's Arabesque."
+    },
+    {
+      "selector": "[data-testid=\"score-selector-item-burgmuller-arabesque\"]",
+      "action": "click"
+    },
+    {
+      "selector": "[role=\"toolbar\"]",
+      "action": "waitFor"
+    },
+    {
+      "phrase": "show phrases",
+      "action": "click",
+      "waitForContent": {
+        "script": "document.querySelectorAll('svg line, svg path').length > 40",
+        "timeout": 30000
+      },
+      "caption": "Show the phrases to see how the piece is built from musical phrases.",
+      "hold": 1600
+    },
+    {
+      "phrase": "next phrase",
+      "action": "click",
+      "caption": "Step through the phrases — this is the first one.",
+      "hold": 900
+    },
+    {
+      "phrase": "next phrase",
+      "action": "click",
+      "hold": 900
+    },
+    {
+      "phrase": "next phrase",
+      "action": "click",
+      "caption": "Now the third phrase is selected.",
+      "hold": 1200
+    },
+    {
+      "phrase": "press play",
+      "action": "click",
+      "caption": "Press ▶ Play to reproduce the third phrase.",
+      "hold": 7000
+    }
+  ],
+  "expect": { "resolved": 9, "unresolved": 0, "steps": 10 }
+}

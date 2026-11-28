@@ -1,0 +1,47 @@
+{
+  "goal": {
+    "text": "Open Play Score, choose Für Elise and slow the music down",
+    "id": "play-score-slow-down",
+    "audience": "first-time user"
+  },
+  "steps": [
+    {
+      "phrase": "open play score",
+      "action": "click",
+      "caption": "Graditone opens on a shelf of plugins. Let's hear a piece.",
+      "hold": 1200
+    },
+    {
+      "phrase": "score chooser",
+      "action": "waitFor",
+      "caption": "Tap Play Score, then choose a piece."
+    },
+    {
+      "selector": "[data-testid=\"score-selector-item-beethoven-fur-elise\"]",
+      "action": "click",
+      "caption": "Choose Beethoven's Für Elise."
+    },
+    {
+      "selector": "[role=\"toolbar\"]",
+      "action": "waitFor"
+    },
+    {
+      "selector": "[data-testid=\"play-score-play\"]",
+      "action": "click",
+      "waitForContent": {
+        "script": "document.querySelectorAll('svg line, svg path').length > 40",
+        "timeout": 30000
+      },
+      "caption": "Press ▶ Play.",
+      "hold": 3500
+    },
+    {
+      "phrase": "slow down",
+      "action": "click",
+      "caption": "Hold − to slow the playback down.",
+      "pressMs": 2500,
+      "hold": 3000
+    }
+  ],
+  "expect": { "resolved": 6, "unresolved": 0, "steps": 7 }
+}

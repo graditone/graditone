@@ -63,7 +63,7 @@ description: >                   # → the clip's description
 viewport: { width: 1440, height: 900 }
 
 steps:
-  - caption: "Graditone opens on a shelf of plugins."   # caption bar in the video
+  - caption: "Graditone opens on a shelf of plugins."   # → a DemoClip annotation (editable there)
     hold: 1200                                            # pause after the step (ms)
   - action: click
     selector: '[data-testid="plugin-launch-play-score"]'
@@ -82,6 +82,31 @@ Steps: `click`, `waitFor`, `waitForFunction`, `press`, `evaluate`, `goto`, and
 tap reads on video. `pressMs` keeps the pointer down before release, for controls
 that repeat while held — the tempo ± buttons step by 5 BPM after a second.
 
+Captions are **not** drawn into the recording: each `caption` becomes a DemoClip
+**text annotation** over its step's stretch (bottom-centre, white), so the author
+can move, reword or restyle it in DemoClip. The capture itself stays annotation-
+free; only the exported clip carries them.
+
+## Authoring a flow from a goal
+
+A flow can be drafted from a plain-language goal instead of by hand. The app's
+demo-relevant controls are annotated (a correct role + accessible name +
+`data-testid`); a **derived index** of them is generated and queried, so a step
+resolves to a real control or is flagged — never a guessed selector. Authoring
+is fast and records no video.
+
+```bash
+cd demos
+npm run catalog:build                       # scan the app's annotations → catalog/elements.json
+npm run catalog:find -- "raise the tempo"   # resolve one phrase (exit 0) or flag it (exit 1)
+npm run flow:author -- ../plan.json         # goal + steps → flows/<id>.yaml + a generation report
+```
+
+`catalog/elements.json` is generated and git-ignored; rebuild it after the app's
+annotations change. See the **`graditone-demo-authoring`** skill for the full
+workflow — the plan format, the `--screen` filter, and how unresolved steps
+become gaps to close.
+
 ## Pieces
 
 | File | What it is |
@@ -89,7 +114,7 @@ that repeat while held — the tempo ± buttons step by 5 BPM after a second.
 | `src/types.ts` | the flow / capture / path types, and the page globals |
 | `src/run.ts` | CLI: pick flows, ensure the app is served, orchestrate |
 | `src/runner.ts` | the generic Playwright driver (no flow-specific code) |
-| `src/pageChrome.ts` | injected pointer + click ripple + caption bar |
+| `src/pageChrome.ts` | injected pointer + click ripple (captions are DemoClip annotations, not drawn here) |
 | `src/audioCapture.ts` | injects an AudioContext tap recorded with `MediaRecorder` |
 | `src/postprocess.ts` | ffmpeg: align the audio, mux, normalise loudness |
 | `src/democlip.ts` | drives DemoClip headlessly over its `window.democlip` surface |

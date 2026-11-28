@@ -23,7 +23,8 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import type { Flow, FlowPaths } from './types.ts';
+import { probeDurationSec } from './postprocess.ts';
+import type { Flow, FlowPaths, StepMark } from './types.ts';
 
 declare global {
   interface Window {
@@ -104,13 +105,15 @@ async function serveDirectory(root: string): Promise<AppServer> {
 
 export interface DemoClipOptions {
   out: string;
+  /** The recorded step marks — their captions become DemoClip text annotations. */
+  marks?: StepMark[];
 }
 
 /** Run the flow's post-processing in DemoClip. Returns the exported file, or null. */
 export async function postProcessWithDemoClip(
   flow: Flow,
   paths: FlowPaths,
-  { out }: DemoClipOptions,
+  { out, marks = [] }: DemoClipOptions,
 ): Promise<string | null> {
   if (!existsSync(paths.muxed)) {
     console.warn('  ! DemoClip: no muxed recording to post-process');
@@ -162,12 +165,16 @@ export async function postProcessWithDemoClip(
       await call('edit.setClipProperty', 'addToExport', 'true');
     }
 
-    // 3. Any annotations the flow declares.
+    // 3. Captions — placed as DemoClip text annotations, never burned into the
+    //    recording, so the author can adjust them in DemoClip.
+    await addCaptions(call, paths.muxed, marks);
+
+    // 4. Any other annotations the flow declares (arrows, sounds, …).
     for (const annotation of flow.democlip?.annotations ?? []) {
       await call('edit.annotate', annotation.kind, annotation);
     }
 
-    // 4. Export the finished file and catch the download.
+    // 5. Export the finished file and catch the download.
     const target = path.join(out, `${flow.id}.mp4`);
     const download = page.waitForEvent('download', { timeout: 300_000 });
     const result = (await call('out.export', 'mp4')) as { ok?: boolean; reason?: string } | undefined;
@@ -183,5 +190,43 @@ export async function postProcessWithDemoClip(
   } finally {
     if (browser) await browser.close().catch(() => {});
     await app.close();
+  }
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+/**
+ * Place each caption as a DemoClip text annotation over the stretch its step
+ * owns, derived from the recorded marks. The annotation colour is set to white
+ * first so captions do not inherit the app's default (red) colour. The position
+ * is bottom-ish and horizontally centred (DemoClip centres text by default).
+ */
+async function addCaptions(
+  call: (surfacePath: string, ...args: unknown[]) => Promise<unknown>,
+  muxed: string,
+  marks: StepMark[],
+): Promise<void> {
+  const captions = marks.filter((mark) => mark.caption && mark.caption.trim());
+  if (captions.length === 0) return;
+
+  const durationSec = await probeDurationSec(muxed).catch(() => 0);
+  if (!(durationSec > 0)) {
+    console.warn('  ! DemoClip: could not read the clip duration; captions not placed');
+    return;
+  }
+
+  await call('edit.setClipProperty', 'annotationColour', '#ffffff');
+  for (let i = 0; i < captions.length; i += 1) {
+    const start = captions[i].at / 1000;
+    const end = i + 1 < captions.length ? captions[i + 1].at / 1000 : durationSec;
+    const span = { s: clamp01(start / durationSec), e: clamp01(Math.max(end / durationSec, start / durationSec + 0.01)) };
+    await call('edit.annotate', 'text', {
+      span,
+      text: captions[i].caption,
+      y: 0.82,
+      height: 0.05,
+    });
   }
 }

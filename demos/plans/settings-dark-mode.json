@@ -1,0 +1,25 @@
+{
+  "goal": {
+    "text": "Open Play Score and open the display settings to enable dark mode",
+    "id": "settings-dark-mode"
+  },
+  "steps": [
+    {
+      "phrase": "open play score",
+      "action": "click",
+      "caption": "Open the Play Score plugin.",
+      "hold": 700
+    },
+    {
+      "phrase": "open the display settings",
+      "action": "click",
+      "caption": "Open the display settings."
+    },
+    {
+      "phrase": "enable dark mode",
+      "action": "click",
+      "caption": "Enable dark mode."
+    }
+  ],
+  "expect": { "resolved": 1, "unresolved": 2, "steps": 1 }
+}

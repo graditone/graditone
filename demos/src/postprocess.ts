@@ -122,6 +122,18 @@ export async function muxWithAudio({ video, audio, delayMs = 0 }: MuxInput, out:
   return { out, delayMs, hasAudio: true, normalised: Boolean(measured) };
 }
 
+/** The media file's duration in seconds (via ffprobe); 0 when it cannot be read. */
+export async function probeDurationSec(file: string): Promise<number> {
+  const { stdout } = await runCommand('ffprobe', [
+    '-v', 'error',
+    '-show_entries', 'format=duration',
+    '-of', 'default=noprint_wrappers=1:nokey=1',
+    file,
+  ]);
+  const seconds = Number.parseFloat(stdout.trim());
+  return Number.isFinite(seconds) ? seconds : 0;
+}
+
 export function defaultPaths(outDir: string, flowId: string): FlowPaths {
   const raw = path.join(outDir, 'raw', flowId);
   return {

@@ -308,8 +308,10 @@ export function LandingScreen({ onShowInstruments, corePlugins, onLaunchPlugin, 
         {corePlugins && corePlugins.length > 0 && onLaunchPlugin && corePlugins.map(p => (
           <button
             key={p.id}
+            type="button"
             data-testid={`plugin-launch-${p.id}`}
             className="landing-plugin-btn"
+            aria-label={tDynamic(`plugin.name.${p.id}`, p.name)}
             onClick={() => {
               trackEvent('cta_click', { action: 'launch_plugin', plugin_id: p.id });
               onLaunchPlugin(p.id);
@@ -319,8 +321,9 @@ export function LandingScreen({ onShowInstruments, corePlugins, onLaunchPlugin, 
           </button>
         ))}
         {onShowInstruments && (
-          <button 
-            className="landing-instruments-btn" 
+          <button
+            type="button"
+            className="landing-instruments-btn"
             onClick={() => {
               trackEvent('cta_click', { action: 'show_instruments' });
               onShowInstruments();

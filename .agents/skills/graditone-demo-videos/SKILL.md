@@ -1,6 +1,6 @@
 ---
 name: graditone-demo-videos
-description: Use whenever creating, editing, running or reviewing a Graditone demo video (the Playwright capture pipeline under demos/). Covers environment setup, the flow YAML DSL, finding UI selectors, the dev-server port trap, running without a screen, and verifying the captured clip. Triggers on: demo video, demos/, flows/*.yaml, demo flow, Playwright capture, DemoClip, play-a-score, tempo demo, record a demo, add a demo, graditone demo.
+description: Use whenever creating, editing, running or reviewing a Graditone demo video (the Playwright capture pipeline under demos/). Covers environment setup, the flow YAML DSL, finding UI selectors, the dev-server port trap, running without a screen, and verifying the captured clip. To draft the flow quickly from a plain-language goal, use the derived-index authoring workflow (see the graditone-demo-authoring skill). Triggers on: demo video, demos/, flows/*.yaml, demo flow, Playwright capture, DemoClip, play-a-score, tempo demo, record a demo, add a demo, graditone demo, generate a demo flow.
 ---
 
 # Making Graditone demo videos
@@ -17,9 +17,14 @@ the full flow DSL — this skill is the runbook and the traps.
 2. **Install**: `npm ci` in `demos/` **and** in `frontend/`. Both are needed
    (the harness is TypeScript run directly by Node; the app must be served).
    Node **22.18+**; need `ffmpeg` on `PATH`; Playwright browsers installed.
-3. **Pick a flow** or copy `demos/flows/01-play-a-score.yaml` as a template.
-   Keep the `NN-` filename prefix for ordering; the flow's `id` is what
-   `node src/run.ts <id>` takes.
+3. **Get the flow.** The fast path is to **draft it from a goal** with the
+   authoring workflow — see the **`graditone-demo-authoring`** skill
+   (`npm run catalog:build` → `npm run catalog:find` → `npm run flow:author`),
+   which writes `demos/flows/<id>.yaml` from a described journey, grounded on the
+   app's own annotations. To write one by hand, copy
+   `demos/flows/01-play-a-score.yaml` as a template. Either way, keep the `NN-`
+   filename prefix for ordering; the flow's `id` is what `node src/run.ts <id>`
+   takes.
 4. **Run**: `cd demos && node src/run.ts <id>` (or `--all`, `--list`).
 5. **Verify** the clip before you call it done (see *Verifying*).
 6. **Commit** the flow (and any harness/doc change). `demos/out/` is ignored.
@@ -28,7 +33,7 @@ the full flow DSL — this skill is the runbook and the traps.
 ## Flow DSL, in one screen
 
 `click` · `waitFor` · `waitForFunction` · `press` · `evaluate` · `goto`, plus
-`caption` (caption bar) and `hold` (ms pause after the step). `click` extras:
+`caption` (→ a DemoClip text annotation) and `hold` (ms pause after the step). `click` extras:
 `steps` (glide steps), `settle` (pre-press pause), **`pressMs`** (keep the
 pointer down — for hold-to-repeat controls). See `demos/README.md` for the
 canonical list; it is the source of truth for the DSL.
@@ -37,9 +42,27 @@ Timing that reads well: caption + `hold` at the start, let each action land,
 then hold the final state long enough to be seen (~1.5–3 s). When changing
 state (tempo, mode), hold **after** the change so the viewer sees the result.
 
-## Finding UI selectors (do this before writing steps)
+## Resolving controls (do this before writing steps)
 
-Do **not** guess. Grep the frontend for the real hooks:
+**Fast path — the derived index.** The app's demo-relevant controls are
+annotated (correct role + accessible name + `data-testid`) and indexed, so query
+that instead of grepping. This is the whole point of feature 102.
+
+```bash
+cd demos
+npm run catalog:build                          # rebuild the index from the app's annotations
+npm run catalog:find -- "raise the tempo"      # resolves (exit 0) or flags it (exit 1)
+```
+
+A phrase resolves **only** to a unique match; build the flow from those handles
+(the `graditone-demo-authoring` skill shows the plan JSON + `flow:author` step,
+which writes the YAML and prints a generation report). If a phrase comes back
+**unresolved, the control needs annotating** — add role + accessible name +
+`data-testid`, extend `annotation-contract.md` §2 and the coverage guard, and
+rebuild — do **not** invent a selector.
+
+**Manual fallback** (a control the index does not have yet). Do **not** guess;
+grep the frontend for the real hooks:
 
 - `[data-testid="…"]` — the most stable hook (e.g. `plugin-launch-play-score`,
   `tempo-plus`, `tempo-minus`, `tempo-display`).
@@ -113,6 +136,14 @@ from the flow (`title`, `description`, `logo`, `titleCard`) and exports the MP4.
 If no build is found the step is skipped with a note (capture still succeeds).
 Brand a clip entirely from the flow — do not edit the video by hand.
 
+**Captions live in DemoClip.** The runner does not draw captions into the page
+(they would be burned in and uneditable); instead each step's `caption` becomes a
+DemoClip **text annotation** over that step's stretch, derived from the recorded
+step marks. So the raw `.webm` has no captions and the exported `.mp4` does — and
+the author can move/reword/restyle them in DemoClip afterwards. The pipeline
+places them bottom-centre in white; `flow.democlip.annotations` still carries any
+extra arrows/sounds/text the flow declares.
+
 ## Flow review checklist
 
 - Reads as a tutorial: caption per step, no dead air, final state held.
@@ -121,3 +152,6 @@ Brand a clip entirely from the flow — do not edit the video by hand.
 - The `title`/`description` match what the video shows.
 - Ran clean (no page errors, audio present) and the frames confirm the change.
 - `demos/README.md` still matches the DSL if you added an attribute or action.
+- If the flow was generated: its report showed no unresolved steps (or each was
+  closed), and `demos/plans/<id>.json` captures the goal for exact regeneration
+  (`npm run flow:author -- plans/<id>.json`).

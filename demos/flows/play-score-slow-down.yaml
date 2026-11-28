@@ -1,0 +1,32 @@
+id: play-score-slow-down
+title: Open Play Score, choose Für Elise and slow the music down
+description: Open Play Score, choose Für Elise and slow the music down
+viewport:
+  width: 1440
+  height: 900
+steps:
+  - action: click
+    selector: '[data-testid="plugin-launch-play-score"]'
+    caption: Graditone opens on a shelf of plugins. Let's hear a piece.
+    hold: 1200
+  - action: waitFor
+    selector: '[data-testid="score-selector-dialog"]'
+    caption: Tap Play Score, then choose a piece.
+  - action: click
+    selector: '[data-testid="score-selector-item-beethoven-fur-elise"]'
+    caption: Choose Beethoven's Für Elise.
+  - action: waitFor
+    selector: '[role="toolbar"]'
+  - action: waitForFunction
+    script: document.querySelectorAll('svg line, svg path').length > 40
+    timeout: 30000
+  - action: click
+    selector: '[data-testid="play-score-play"]'
+    caption: Press ▶ Play.
+    hold: 3500
+  - action: click
+    selector: '[data-testid="tempo-minus"]'
+    caption: Hold − to slow the playback down.
+    hold: 3000
+    pressMs: 2500
+audience: first-time user

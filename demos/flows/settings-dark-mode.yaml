@@ -1,0 +1,11 @@
+id: settings-dark-mode
+title: Open Play Score and open the display settings to enable dark…
+description: Open Play Score and open the display settings to enable dark mode
+viewport:
+  width: 1440
+  height: 900
+steps:
+  - action: click
+    selector: '[data-testid="plugin-launch-play-score"]'
+    caption: Open the Play Score plugin.
+    hold: 700

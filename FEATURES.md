@@ -270,3 +270,23 @@ Prevents a single goal from monopolising all practice time when multiple active 
 
 **Spec**: `specs/087-one-goal-40pct-cap/`  
 **Updated**: July 2025
+
+---
+
+## Demo Flow Authoring from a Goal — Feature 102
+
+Draft a demo video's flow file from a plain-language goal in seconds, grounded on
+the application's own accessibility annotations instead of a hand-maintained
+selector catalogue. The task also annotates the demo-relevant controls, which
+improves their screen-reader semantics.
+
+### Capabilities
+
+- **Derived element index**: a generated index of the demo-relevant controls, built from the app's `role` + accessible name + `data-testid` (plus the e2e specs and existing flows); never hand-edited, git-ignored under `demos/catalog/`
+- **Fast lookup** (`npm run catalog:find`): resolves one phrase to a real control, or flags it as missing/ambiguous with candidate controls — a step is never given a guessed selector
+- **Flow authoring** (`npm run flow:author`): assembles a runnable `demos/flows/<id>.yaml` (existing step vocabulary) from a goal + ordered steps, and prints a generation report (time, resolved/unresolved steps, targets, gaps)
+- **No capture during authoring**: the video pipeline is unchanged and runs only when the author invokes it as a separate command
+- **Annotated controls**: plugin launcher, score rows, the play-score toolbar and the shared tempo widget expose correct ARIA roles, accessible names and stable test handles, guarded by an automated coverage check
+
+**Spec**: `specs/102-demo-flow-generation/`  
+**Updated**: November 2026
