@@ -1,0 +1,28 @@
+{
+  // Project settings for the Graditone repo.
+  //
+  // The DemoClip MCP opens a browser window the person can see and drives the
+  // DemoClip app on it (`?agent=1`). Demos finish their clips in that window —
+  // see demos/README.md, *DemoClip* — so its exports should land beside the rest
+  // of a demo's artefacts rather than in ~/Downloads.
+  //
+  // `DEMOCLIP_DOWNLOAD_DIR` is read by the MCP when it saves an export; a relative
+  // path resolves from its working directory, which is this checkout. So the
+  // finished clip lands in demos/out/ without naming any machine's absolute path.
+  //
+  // This entry replaces the global `democlip` server for this repo, so it repeats
+  // the command. A running OpenCode picks it up on the next start/MCP restart.
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "democlip": {
+        "type": "local",
+        "command": ["npx", "-y", "democlip-mcp@latest"],
+        "environment": {
+          "DEMOCLIP_DOWNLOAD_DIR": "demos/out"
+        },
+        "disabled": false
+      }
+    }
+  }
+}

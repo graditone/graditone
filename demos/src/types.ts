@@ -50,6 +50,12 @@ export interface FlowDemoClip {
   titleCard?: boolean;
   /** The colour the captions are made in — Graditone's orange when a flow names none. */
   annotationColour?: string;
+  /**
+   * Mark every action (a `click`, or a `press` that has a control) with an **arrow** at the
+   * control it lands on, and a **sound** the moment it lands — so a tap on a button reads on
+   * the video. Off unless a flow asks for it.
+   */
+  actionCues?: boolean;
   annotations?: FlowAnnotation[];
 }
 
@@ -77,6 +83,13 @@ export interface CaptureTimeline {
 export interface StepMark {
   label: string;
   at: number;
+  /** When the step's action finished (its control pressed), if it was an action. */
+  doneAt?: number;
+  /**
+   * Where the action's control sits, as a fraction of the picture — what an action cue's
+   * arrow points at. Absent when the step names no control (a key press, a wait).
+   */
+  target?: { x: number; y: number };
   /** The caption shown from this step onwards, if the step has one. */
   caption?: string;
 }

@@ -25,8 +25,19 @@ the full flow DSL — this skill is the runbook and the traps.
    `demos/flows/01-play-a-score.yaml` as a template. Either way, keep the `NN-`
    filename prefix for ordering; the flow's `id` is what `node src/run.ts <id>`
    takes.
-4. **Run**: `cd demos && node src/run.ts <id>` (or `--all`, `--list`).
-5. **Verify** the clip before you call it done (see *Verifying*).
+4. **Run.** For interactive work — the default — **hand off to the DemoClip
+   MCP** so the clip ends up in the window the person can see and stays there for
+   them to evolve by hand:
+
+   ```bash
+   cd demos && node src/run.ts --handoff <id>
+   ```
+
+   Then finish the clip in that window (see *Finishing in the MCP window*). For a
+   build artifact nobody watches (CI, `--all`), use the automated path instead:
+   `node src/run.ts <id>` (or `--all`, `--list`).
+5. **Verify** the clip (see *Verifying*) — and, on the MCP path, that the window
+   still holds it.
 6. **Commit** the flow (and any harness/doc change). `demos/out/` is ignored.
    New flows get a PR; open it and link the session.
 
@@ -35,8 +46,10 @@ the full flow DSL — this skill is the runbook and the traps.
 `click` · `waitFor` · `waitForFunction` · `press` · `evaluate` · `goto`, plus
 `caption` (→ a DemoClip text annotation) and `hold` (ms pause after the step). `click` extras:
 `steps` (glide steps), `settle` (pre-press pause), **`pressMs`** (keep the
-pointer down — for hold-to-repeat controls). See `demos/README.md` for the
-canonical list; it is the source of truth for the DSL.
+pointer down — for hold-to-repeat controls). A flow's `democlip.actionCues: true`
+marks every action with an **arrow** at its control and a **`thud`** as it lands,
+taken from the recorded marks. See `demos/README.md` for the canonical list; it is
+the source of truth for the DSL.
 
 Timing that reads well: caption + `hold` at the start, let each action land,
 then hold the final state long enough to be seen (~1.5–3 s). When changing
@@ -102,13 +115,15 @@ with a timeout (looks like a bad selector; it is a wrong server).
 |-----|--------|
 | `DEMO_BASE_URL` | App URL the runner drives (default `http://localhost:5174`). |
 | `DEMO_HEADFUL=1` | Watch the capture in a real window. |
-| `DEMO_SKIP_DEMOCLIP=1` | Capture only — skip the title card/MP4 export. |
+| `DEMO_HANDOFF=1` | Capture only and write `<id>.democlip-plan.json` for the DemoClip MCP (`--handoff`). |
+| `DEMO_SKIP_DEMOCLIP=1` | Capture only — skip the title card/MP4 export (writes no plan). |
 | `DEMO_NO_EDITABLE=1` | Write only the finished MP4, not the `out/edit/` editable pair. |
 | `DEMO_DEBUG=1` | Print step timings and the audio timeline. |
 | `DEMOCLIP_APP` | Path to a built DemoClip `dist/` (else `~/devel/democlip/dist`). |
 | `DEMOCLIP_PORT` | Port DemoClip is served on (default `57364`), so its origin is stable. |
 | `DEMOCLIP_PROFILE` | Where the persistent browser profile lives (default `~/.democlip/browser`). |
 | `DEMOCLIP_HEADLESS=1` | Hide the DemoClip window (headful by default, so edits can be watched). |
+| `DEMOCLIP_DOWNLOAD_DIR` | Where the DemoClip MCP saves an export (default `~/Downloads`); this repo sets `demos/out`. |
 
 ## Verifying a capture
 
@@ -149,21 +164,63 @@ MCP's server, most often), and drives a **persistent** browser profile kept per
 **host name** (`~/.democlip/browser/127.0.0.1`, override with `DEMOCLIP_PROFILE`).
 So all the demo work on a host is one tenant and past demos stay openable; each run
 still starts a fresh clip (export clears the open pointer), so takes do not stack.
-The window is **headful by default**; `DEMOCLIP_HEADLESS=1` hides it.
+The profile is **kept** when the browser closes — only Playwright's *download*
+artifacts (behind the download dialog) are temporary — so the clip is there to
+evolve later. The window is **headful by default**; `DEMOCLIP_HEADLESS=1` hides it.
 
 **Captions live in DemoClip.** The runner does not draw captions into the page
 (they would be burned in and uneditable); instead each step's `caption` becomes a
 DemoClip **text annotation** over that step's stretch, derived from the recorded
 step marks. So the raw `.webm` has no captions and the exported `.mp4` does — and
 the author can move/reword/restyle them in DemoClip afterwards. The pipeline
-places them bottom-centre in white; `flow.democlip.annotations` still carries any
-extra arrows/sounds/text the flow declares.
+places them bottom-centre in **Graditone's orange** (the clip's `annotationColour`,
+`#ff6c23` by default, from `src/handoff.ts`); `flow.democlip.annotations` still
+carries any extra arrows/sounds/text the flow declares.
 
 The run also writes an **editable pair** in `out/edit/`: the clip with its
 annotations **carried** in a `.democlip.json` sidecar beside a caption-free video.
 Bring that video back into DemoClip (its `import_take` reads the sidecar) to
 reopen the captions and the watermark over the stretches they belong to. Set
 `DEMO_NO_EDITABLE=1` to skip it.
+
+### Finishing in the MCP window
+
+This is the **interactive** path: the DemoClip **MCP** owns the browser (a window
+the person can see, on the fixed origin, on the persistent per-host profile), and
+it **leaves that window open** — so the clip is there to evolve by hand, and the
+harness must not also own it. So do **not** run `<id>` (the automated path) and
+the MCP at the same time: two browsers cannot hold the same profile.
+
+Capture only, with the plan:
+
+```bash
+cd demos && node src/run.ts --handoff <id>
+```
+
+That writes `out/<id>.webm` (muxed) and `out/<id>.democlip-plan.json` — read the
+plan, then drive the MCP (its tools are `democlip_*`):
+
+1. `import_take` the muxed `.webm`, an **absolute** path.
+2. `set_clip_property` `title`, `description`, `logo` and `addToExport` from the
+   plan — and `annotationColour` **before** `annotate`, so the captions inherit it
+   (changing it recolours nothing already placed).
+3. `annotate` a `"text"` per `plan.captions` entry — `{ span, text, y: 0.82,
+   height: 0.05 }` — then any `plan.annotations` (arrows, sounds, …).
+4. `export_clip` `"mp4"`. The file lands in `demos/out/` (this repo's
+   `.opencode/opencode.jsonc` sets `DEMOCLIP_DOWNLOAD_DIR` there) named
+   `democlip-<timestamp>.mp4`; **rename it to `<id>.mp4`**. Open it from there —
+   the DemoClip browser's own *download history* lists Playwright's no-extension
+   GUID temp files, which do not open (`demo-mcp-download-artifacts` in `DEBT.md`).
+
+**Start from a clean clip.** The MCP keeps **one clip per session** and
+`import_take` **appends** to whatever is open — there is no fresh-clip tool. So
+call `describe_clip` first; if a previous demo is still in front, the import
+would mix the two. Restarting this project's MCP server clears it (tracked as
+`demo-mcp-clip-session` in `DEBT.md`).
+
+Then **leave the window as it is** — that is the point: the person picks the clip
+up and moves, rewords or restyles it. Do not close it or start a fresh clip.
+`describe_clip` reads back what is in front if you need to check.
 
 ## Flow review checklist
 
@@ -172,6 +229,9 @@ reopen the captions and the watermark over the stretches they belong to. Set
 - Uses real UI gestures, including `pressMs` where the control repeats on hold.
 - The `title`/`description` match what the video shows.
 - Ran clean (no page errors, audio present) and the frames confirm the change.
+- On the MCP path: the clip was imported, branded and captioned from the plan,
+  exported as `demos/out/<id>.mp4`, and the window is **left holding the clip**
+  for the person to evolve.
 - `demos/README.md` still matches the DSL if you added an attribute or action.
 - If the flow was generated: its report showed no unresolved steps (or each was
   closed), and `demos/plans/<id>.json` captures the goal for exact regeneration

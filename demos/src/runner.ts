@@ -18,12 +18,12 @@ interface GlideOptions {
   pressMs?: number;
 }
 
-/** Glide the (hidden) mouse to an element's centre, then click it. */
+/** Glide the (hidden) mouse to an element's centre, then click it; returns that centre. */
 async function glideClick(
   page: Page,
   selector: string,
   { steps = 22, settle = 140, pressMs = 70 }: GlideOptions = {},
-): Promise<void> {
+): Promise<{ x: number; y: number }> {
   const locator = page.locator(selector).first();
   await locator.waitFor({ state: 'visible', timeout: 30_000 });
   const box = await locator.boundingBox();
@@ -35,6 +35,7 @@ async function glideClick(
   await page.mouse.down();
   await page.waitForTimeout(pressMs);
   await page.mouse.up();
+  return { x, y };
 }
 
 /** The selector a step needs, or a clear error naming the step that lacks one. */
@@ -43,7 +44,8 @@ function requireSelector(step: FlowStep): string {
   return step.selector;
 }
 
-async function runStep(page: Page, step: FlowStep): Promise<void> {
+/** Run one step's action; answers where a click landed, so its cue can point at it. */
+async function runStep(page: Page, step: FlowStep): Promise<{ x: number; y: number } | undefined> {
   switch (step.action) {
     case undefined:
     case 'hold':
@@ -52,8 +54,7 @@ async function runStep(page: Page, step: FlowStep): Promise<void> {
       await page.goto(step.url ?? '/', { waitUntil: 'domcontentloaded' });
       break;
     case 'click':
-      await glideClick(page, requireSelector(step), step);
-      break;
+      return glideClick(page, requireSelector(step), step);
     case 'waitFor':
       await page
         .locator(requireSelector(step))
@@ -72,8 +73,12 @@ async function runStep(page: Page, step: FlowStep): Promise<void> {
     default:
       throw new Error(`unknown action: ${String(step.action)}`);
   }
+  return undefined;
+}
 
-  if (step.hold) await page.waitForTimeout(step.hold);
+/** Keep a fraction inside [0, 1]. */
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 export interface RunOptions {
@@ -127,12 +132,20 @@ export async function runFlow(
 
     const marks: StepMark[] = [];
     for (const step of flow.steps) {
-      marks.push({
+      const mark: StepMark = {
         label: step.caption ?? step.action ?? 'hold',
         at: Date.now() - videoStartMs,
         caption: step.caption,
-      });
-      await runStep(page, step);
+      };
+      marks.push(mark);
+      const target = await runStep(page, step);
+      if (target) {
+        mark.target = { x: clamp01(target.x / viewport.width), y: clamp01(target.y / viewport.height) };
+      }
+      // The moment an action lands — the marker a cue's sound plays on. Taken before the
+      // step's own `hold`, so the sound is heard at the press and not after the pause.
+      if (step.action === 'click' || step.action === 'press') mark.doneAt = Date.now() - videoStartMs;
+      if (step.hold) await page.waitForTimeout(step.hold);
     }
 
     // Stop the in-page recorder and collect the audio the app produced.
