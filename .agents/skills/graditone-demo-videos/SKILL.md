@@ -144,6 +144,12 @@ the author can move/reword/restyle them in DemoClip afterwards. The pipeline
 places them bottom-centre in white; `flow.democlip.annotations` still carries any
 extra arrows/sounds/text the flow declares.
 
+The run also writes an **editable pair** in `out/edit/`: the clip with its
+annotations **carried** in a `.democlip.json` sidecar beside a caption-free video.
+Bring that video back into DemoClip (its `import_take` reads the sidecar) to
+reopen the captions and the watermark over the stretches they belong to. Set
+`DEMO_NO_EDITABLE=1` to skip it.
+
 ## Flow review checklist
 
 - Reads as a tutorial: caption per step, no dead air, final state held.

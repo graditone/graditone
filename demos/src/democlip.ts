@@ -16,9 +16,9 @@
  * capture-only run still works.
  */
 
-import { chromium, type Browser } from 'playwright';
+import { chromium, type Browser, type Download, type Page } from 'playwright';
 import { createServer } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
@@ -174,14 +174,25 @@ export async function postProcessWithDemoClip(
       await call('edit.annotate', annotation.kind, annotation);
     }
 
-    // 5. Export the finished file and catch the download.
+    // 5. Export the finished MP4 with its annotations drawn in — that is the
+    //    clip to send out.
     const target = path.join(out, `${flow.id}.mp4`);
-    const download = page.waitForEvent('download', { timeout: 300_000 });
-    const result = (await call('out.export', 'mp4')) as { ok?: boolean; reason?: string } | undefined;
-    if (result?.ok === false) throw new Error(`export refused: ${result.reason}`);
-    await (await download).saveAs(target);
-
+    await exportClip(page, call, 'mp4', 'drawn', [target]);
     console.log(`  ✓ DemoClip → ${path.basename(target)}`);
+
+    // 6. Also export the editable pair: the same clip with the annotations *carried*
+    //    in a `.democlip.json` sidecar beside a caption-free video. `import_take`
+    //    reads the sidecar back, so the author can reopen the demo in DemoClip and
+    //    move, reword or restyle the captions the flow declared. Set
+    //    DEMO_NO_EDITABLE=1 to skip it.
+    if (!process.env.DEMO_NO_EDITABLE) {
+      const editDir = path.join(out, 'edit');
+      await mkdir(editDir, { recursive: true });
+      const editVideo = path.join(editDir, `${flow.id}.mp4`);
+      await exportClip(page, call, 'mp4', 'carried', [editVideo, sidecarPathFor(editVideo)]);
+      console.log(`  ✓ DemoClip editable → ${path.relative(process.cwd(), editVideo)}`);
+    }
+
     await context.close();
     return target;
   } catch (error) {
@@ -191,6 +202,68 @@ export async function postProcessWithDemoClip(
     if (browser) await browser.close().catch(() => {});
     await app.close();
   }
+}
+
+/** The sidecar name for a video: its name with the extension replaced by `.democlip.json`. */
+function sidecarPathFor(video: string): string {
+  const dot = video.lastIndexOf('.');
+  return `${dot > 0 ? video.slice(0, dot) : video}.democlip.json`;
+}
+
+/**
+ * Ask DemoClip to export the clip and catch the file(s) it downloads.
+ *
+ * `annotations` is `drawn` — the picture carries them — or `carried`, which writes a
+ * caption-free video plus a `.democlip.json` sidecar beside it, the pair `import_take`
+ * brings back whole. `destinations` are the paths to save to; the sidecar is told
+ * apart by its name, so their order does not matter.
+ */
+async function exportClip(
+  page: Page,
+  call: (surfacePath: string, ...args: unknown[]) => Promise<unknown>,
+  target: 'mp4' | 'webm',
+  annotations: 'drawn' | 'carried',
+  destinations: string[],
+): Promise<void> {
+  const wanted = destinations.length;
+  const files: Download[] = [];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const collected = new Promise<Download[]>((resolve, reject) => {
+    const onDownload = (download: Download): void => {
+      files.push(download);
+      if (files.length >= wanted) {
+        if (timer) clearTimeout(timer);
+        page.off('download', onDownload);
+        resolve(files);
+      }
+    };
+    timer = setTimeout(() => {
+      page.off('download', onDownload);
+      reject(new Error(`export produced ${files.length} of ${wanted} file(s)`));
+    }, 300_000);
+    page.on('download', onDownload);
+  });
+
+  const result = (await call('out.export', target, annotations)) as
+    | { ok?: boolean; reason?: string }
+    | undefined;
+  if (result?.ok === false) throw new Error(`export refused: ${result.reason}`);
+  await saveDownloads(await collected, destinations);
+}
+
+/** Save the downloads, pairing a carried sidecar with the video it belongs to. */
+async function saveDownloads(downloads: Download[], destinations: string[]): Promise<void> {
+  if (downloads.length === 1) {
+    await downloads[0].saveAs(destinations[0]);
+    return;
+  }
+  const isSidecar = (file: Download): boolean => file.suggestedFilename().endsWith('.democlip.json');
+  const sidecar = downloads.find(isSidecar);
+  const video = downloads.find((file) => !isSidecar(file)) ?? downloads[0];
+  const videoDest = destinations.find((dest) => !dest.endsWith('.democlip.json')) ?? destinations[0];
+  const sidecarDest = destinations.find((dest) => dest.endsWith('.democlip.json'));
+  await video.saveAs(videoDest);
+  if (sidecar && sidecarDest) await sidecar.saveAs(sidecarDest);
 }
 
 function clamp01(value: number): number {

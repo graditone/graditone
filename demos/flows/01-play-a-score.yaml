@@ -6,52 +6,66 @@
 #
 # This is the shortest "hello world" path through Graditone: open the app, open
 # the Play Score plugin, choose a bundled piece and listen to it.
+#
+# Each `caption` is not drawn into the recording: it becomes a DemoClip text
+# annotation over that step's stretch, so it can be moved, reworded or restyled
+# in DemoClip afterwards.
 
 id: play-a-score
 title: Play a Score
 audience: first-time user
 description: >
   Open the Play Score plugin, pick a bundled piece from the catalogue and listen
-  to it while the notes light up and the page scrolls along — the shortest path
-  from "just opened Graditone" to hearing music.
+  to it while the current note lights up — the shortest path from "just opened
+  Graditone" to hearing music.
 
 # The demos are aimed at a tablet, since Graditone is tablet-native.
 viewport: { width: 1440, height: 900 }
 
 steps:
-  - caption: "Graditone opens on a shelf of plugins. Let's hear a piece."
-    hold: 1200
+  # 1. The app opens on the plugin launcher (the three modes).
+  - caption: "Graditone opens on its home screen — Play, Train and Practice."
+    hold: 1400
 
-  - caption: "Tap Play Score."
+  # 2. Open the Play Score plugin.
+  - caption: "Tap Play to open the Play Score plugin."
     action: click
     selector: '[data-testid="plugin-launch-play-score"]'
-    hold: 700
+    hold: 800
 
+  # 3. The piece catalogue opens.
   - action: waitFor
     selector: '[data-testid="score-selector-dialog"]'
 
-  - caption: "Choose a piece — Beethoven's Für Elise."
+  # 4. Choose a bundled piece from the catalogue.
+  - caption: "Pick a bundled piece — Beethoven's Für Elise."
     action: click
-    selector: '.score-selector-item__btn:has-text("Für Elise")'
+    selector: '[data-testid="score-selector-item-beethoven-fur-elise"]'
+    hold: 400
 
+  # 5. The score loads into the playback toolbar.
   - action: waitFor
     selector: '[role="toolbar"]'
 
-  # Wait for the WASM engine to parse and engrave the score.
+  # 6. Wait for the WASM engine to parse and engrave the score, then hold so the
+  #    viewer sees the notation before it starts moving.
   - action: waitForFunction
     script: "document.querySelectorAll('svg line, svg path').length > 40"
     timeout: 30000
-    hold: 1200
+    hold: 1600
 
-  - caption: "Press ▶ Play."
+  # 7. Start playback.
+  - caption: "Press Play to start the music."
     action: click
-    selector: '[role="toolbar"] [aria-label="Play"]'
+    selector: '[data-testid="play-score-play"]'
     hold: 1800
 
-  - caption: "Follow the music — the page scrolls and the current note is highlighted."
+  # 8. Let the music play; the current note is highlighted as it goes.
+  - caption: "Follow along — the current note lights up as the page scrolls."
     hold: 14000
 
-  - caption: "Press ■ Stop when you're done."
+  # 9. Stop when finished.
+  - caption: "Press Stop when you're done."
     action: click
-    selector: '[role="toolbar"] [aria-label="Stop"]'
+    selector: '[data-testid="play-score-stop"]'
     hold: 1500

@@ -34,8 +34,10 @@ DEMO_DEBUG=1 node src/run.ts play-a-score           # step + audio timings
 ```
 
 Outputs land in `demos/out/` (git-ignored): the muxed `<id>.webm`, the finished
-`<id>.mp4` from DemoClip, and the raw takes in `out/raw/<id>/`. The flow YAML is
-the artifact to commit — `out/` never is.
+`<id>.mp4` from DemoClip, the **editable pair** in `out/edit/` (the same clip,
+caption-free, with a `.democlip.json` sidecar holding its annotations), and the
+raw takes in `out/raw/<id>/`. The flow YAML is the artifact to commit — `out/`
+never is.
 
 ### Prerequisites
 
@@ -154,6 +156,14 @@ file input, sets the **Graditone** logo, the title card and the flow's
 title/description, then exports an MP4. A build is found via `DEMOCLIP_APP`, or
 at `~/devel/democlip/dist`. Importing needs no screen picker, so the whole step
 is scriptable in CI.
+
+The export runs twice. The first is the finished `<id>.mp4`, with the captions and
+watermark **drawn** into the picture — the clip to send out. The second writes the
+**editable pair** into `out/edit/`: the same clip with its annotations **carried**
+in a `<id>.democlip.json` sidecar beside a caption-free `<id>.mp4`. Bring the video
+back into DemoClip (its `import_take` reads the sidecar) and the captions are put
+back over the stretches they belong to, so you can move, reword or restyle them.
+Set `DEMO_NO_EDITABLE=1` to write only the finished clip.
 
 A flow may also carry DemoClip annotations:
 
