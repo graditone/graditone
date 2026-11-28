@@ -4,6 +4,12 @@ description: Open the third preloaded score (Burgmüller — Arabesque) and play
 viewport:
   width: 1440
   height: 900
+
+# Each tap is cued: an arrow pointing at the control the action lands on, and a `thud`
+# the moment it lands — so a press reads on the video. See demos/README.md.
+democlip:
+  actionCues: true
+
 steps:
   - action: click
     selector: '[data-testid="plugin-launch-play-score"]'
