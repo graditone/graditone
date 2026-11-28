@@ -48,6 +48,8 @@ export interface FlowAnnotation {
 export interface FlowDemoClip {
   logo?: string;
   titleCard?: boolean;
+  /** The colour the captions are made in — Graditone's orange when a flow names none. */
+  annotationColour?: string;
   annotations?: FlowAnnotation[];
 }
 

@@ -175,12 +175,15 @@ back into DemoClip (its `import_take` reads the sidecar) and the captions are pu
 back over the stretches they belong to, so you can move, reword or restyle them.
 Set `DEMO_NO_EDITABLE=1` to write only the finished clip.
 
-A flow may also carry DemoClip annotations:
+A flow may also say how the clip is branded, and carry DemoClip annotations. The
+mark is Graditone's and the **captions are made in Graditone's orange** unless a flow
+names another; `democlip.annotationColour` is the one that overrides it:
 
 ```yaml
 democlip:
-  logo: graditone
-  titleCard: true
+  logo: graditone                  # the mark the clip wears (Graditone by default)
+  titleCard: true                  # the card at the head of the file (on by default)
+  annotationColour: '#ff6c23'      # the captions' colour (this orange by default)
   annotations:
     - kind: arrow
       span: { s: 0.1, e: 0.3 }

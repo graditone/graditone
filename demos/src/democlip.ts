@@ -66,6 +66,9 @@ const MIME: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
+/** The colour captions are made in — Graditone's orange — unless a flow names another. */
+const DEFAULT_ANNOTATION_COLOUR = '#ff6c23';
+
 /** Where the built DemoClip app lives. */
 function findAppRoot(): string | null {
   if (process.env.DEMOCLIP_APP) return process.env.DEMOCLIP_APP;
@@ -256,6 +259,13 @@ export async function postProcessWithDemoClip(
     if (flow.democlip?.titleCard !== false) {
       await call('edit.setClipProperty', 'addToExport', 'true');
     }
+    // The captions are made in the Graditone orange — not the app's red, and not the white
+    // this used to force; a flow may name another with `democlip.annotationColour`.
+    await call(
+      'edit.setClipProperty',
+      'annotationColour',
+      flow.democlip?.annotationColour ?? DEFAULT_ANNOTATION_COLOUR,
+    );
 
     // 3. Captions — placed as DemoClip text annotations, never burned into the
     //    recording, so the author can adjust them in DemoClip.
@@ -364,10 +374,10 @@ function clamp01(value: number): number {
 }
 
 /**
- * Place each caption as a DemoClip text annotation over the stretch its step
- * owns, derived from the recorded marks. The annotation colour is set to white
- * first so captions do not inherit the app's default (red) colour. The position
- * is bottom-ish and horizontally centred (DemoClip centres text by default).
+ * Place each caption as a DemoClip text annotation over the stretch its step owns, derived
+ * from the recorded marks. The colour is the clip's own — set to the Graditone orange before
+ * this runs, so captions are not the app's default red. The position is bottom-ish and
+ * horizontally centred (DemoClip centres text by default).
  */
 async function addCaptions(
   call: (surfacePath: string, ...args: unknown[]) => Promise<unknown>,
@@ -383,7 +393,6 @@ async function addCaptions(
     return;
   }
 
-  await call('edit.setClipProperty', 'annotationColour', '#ffffff');
   for (let i = 0; i < captions.length; i += 1) {
     const start = captions[i].at / 1000;
     const end = i + 1 < captions.length ? captions[i + 1].at / 1000 : durationSec;
