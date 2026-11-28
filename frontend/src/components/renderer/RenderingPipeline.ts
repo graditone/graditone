@@ -242,8 +242,16 @@ export class RenderingPipeline {
     }
 
     // Staff groups
+    const firstMeasure = system.measure_number?.number ?? 1;
     for (const staffGroup of system.staff_groups) {
-      const staffGroupElement = this.renderStaffGroup(staffGroup, system.index, config, system.staff_groups.length, options);
+      const staffGroupElement = this.renderStaffGroup(
+        staffGroup,
+        system.index,
+        config,
+        system.staff_groups.length,
+        options,
+        firstMeasure,
+      );
       systemGroup.appendChild(staffGroupElement);
     }
 
@@ -274,13 +282,14 @@ export class RenderingPipeline {
     config: RenderConfig,
     systemGroupCount: number = 1,
     options?: RenderOptions,
+    firstMeasure: number = 1,
   ): SVGGElement {
     const staffGroupElement = createSVGGroup();
     staffGroupElement.setAttribute('data-staff-group', 'true');
     staffGroupElement.setAttribute('data-instrument-id', staffGroup.instrument_id);
 
     for (const staff of staffGroup.staves) {
-      const staffElement = this.renderStaff(staff, systemIndex, config, options);
+      const staffElement = this.renderStaff(staff, systemIndex, config, options, firstMeasure);
       staffGroupElement.appendChild(staffElement);
     }
 
@@ -397,9 +406,20 @@ export class RenderingPipeline {
     systemIndex: number,
     config: RenderConfig,
     options?: RenderOptions,
+    firstMeasure: number = 1,
   ): SVGGElement {
     const staffElement = createSVGGroup();
     staffElement.setAttribute('class', 'staff');
+
+    // Measure numbering: each bar line is a measure's right edge, so a glyph
+    // belongs to measure `firstMeasure + (bar lines at or before it)`. Purely
+    // descriptive — the glyphs keep their existing (and only) click behaviour.
+    const barlineXs = (staff.bar_lines ?? [])
+      .map((bl) => bl.segments[0]?.x_position)
+      .filter((x): x is number => typeof x === 'number')
+      .sort((a, b) => a - b);
+    const measureOf = (x: number): number =>
+      firstMeasure + barlineXs.filter((bx) => bx <= x).length;
 
     // 5 staff lines
     for (const staffLine of staff.staff_lines) {
@@ -442,7 +462,7 @@ export class RenderingPipeline {
 
     // Glyph runs
     for (const glyphRun of staff.glyph_runs) {
-      const glyphRunElement = this.renderGlyphRun(glyphRun, systemIndex, config, options);
+      const glyphRunElement = this.renderGlyphRun(glyphRun, systemIndex, config, options, measureOf);
       staffElement.appendChild(glyphRunElement);
     }
 
@@ -620,6 +640,7 @@ export class RenderingPipeline {
     systemIndex: number,
     _config: RenderConfig,
     options?: RenderOptions,
+    measureOf?: (x: number) => number,
   ): SVGGElement {
     const glyphRunGroup = createSVGGroup();
     glyphRunGroup.setAttribute('class', 'glyph-run');
@@ -652,6 +673,13 @@ export class RenderingPipeline {
       }
 
       const glyphElement = this.renderGlyph(glyph, fontFamily, fontSize, color, isSelected);
+      const measure = measureOf
+        ? measureOf(glyph.bounding_box.x + glyph.bounding_box.width / 2)
+        : undefined;
+      if (measure !== undefined) {
+        (glyphElement as SVGElement).dataset.measure = String(measure);
+        glyphElement.setAttribute('aria-label', `Measure ${measure}`);
+      }
       if (noteId) {
         (glyphElement as SVGElement).dataset.noteId = noteId;
         const isBeam = glyph.codepoint === '\u0001' || glyph.codepoint === '\x01';
@@ -681,6 +709,7 @@ export class RenderingPipeline {
         hitRect.setAttribute('pointer-events', 'all');
         hitRect.setAttribute('cursor', 'pointer');
         (hitRect as SVGElement).dataset.noteId = noteId;
+        if (measure !== undefined) (hitRect as SVGElement).dataset.measure = String(measure);
         glyphRunGroup.appendChild(hitRect);
       }
     }

@@ -1,0 +1,36 @@
+{
+  "goal": {
+    "text": "Open the third preloaded score (Burgmüller — Arabesque) and play its tenth measure",
+    "id": "play-third-score-tenth-measure",
+    "audience": "first-time user"
+  },
+  "steps": [
+    {
+      "phrase": "open play score",
+      "action": "click",
+      "caption": "Open the Play Score plugin.",
+      "hold": 900
+    },
+    {
+      "phrase": "score chooser",
+      "action": "waitFor",
+      "caption": "Choose the third preloaded score — Burgmüller's Arabesque."
+    },
+    {
+      "selector": "[data-testid=\"score-selector-item-burgmuller-arabesque\"]",
+      "action": "click"
+    },
+    { "selector": "[role=\"toolbar\"]", "action": "waitFor" },
+    {
+      "phrase": "play the 10th measure",
+      "action": "click",
+      "waitForContent": {
+        "script": "document.querySelectorAll('svg line, svg path').length > 40",
+        "timeout": 30000
+      },
+      "caption": "Tap the tenth measure — playback starts from there.",
+      "hold": 6000
+    }
+  ],
+  "expect": { "resolved": 5, "unresolved": 0, "steps": 6 }
+}

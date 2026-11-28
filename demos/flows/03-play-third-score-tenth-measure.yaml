@@ -1,0 +1,26 @@
+id: play-third-score-tenth-measure
+title: Open the third preloaded score (Burgmüller — Arabesque) and p…
+description: Open the third preloaded score (Burgmüller — Arabesque) and play its tenth measure
+viewport:
+  width: 1440
+  height: 900
+steps:
+  - action: click
+    selector: '[data-testid="plugin-launch-play-score"]'
+    caption: Open the Play Score plugin.
+    hold: 900
+  - action: waitFor
+    selector: '[data-testid="score-selector-dialog"]'
+    caption: Choose the third preloaded score — Burgmüller's Arabesque.
+  - action: click
+    selector: '[data-testid="score-selector-item-burgmuller-arabesque"]'
+  - action: waitFor
+    selector: '[role="toolbar"]'
+  - action: waitForFunction
+    script: document.querySelectorAll('svg line, svg path').length > 40
+    timeout: 30000
+  - action: click
+    selector: '[data-measure="10"]'
+    caption: Tap the tenth measure — playback starts from there.
+    hold: 6000
+audience: first-time user

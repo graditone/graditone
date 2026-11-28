@@ -37,6 +37,7 @@ This contract defines what the application MUST expose for the controls the demo
 | Phrases toggle | `ScoreRendererPlugin.tsx` | `data-testid="score-phrases-toggle"`, role `button`, accessible name `score.phrases.show_aria` / `hide_aria` ("Show phrases" / "Hide phrases"). |
 | Previous phrase | `ScoreRendererPlugin.tsx` | `data-testid="score-phrases-prev"`, role `button`, accessible name `score.phrases.prev_aria` ("Previous phrase"). |
 | Next phrase | `ScoreRendererPlugin.tsx` | `data-testid="score-phrases-next"`, role `button`, accessible name `score.phrases.next_aria` ("Next phrase"). |
+| Measure note glyphs | `RenderingPipeline.ts` (renderer) | each note glyph carries `data-measure="N"` and `aria-label="Measure N"` — purely descriptive, added in the SVG (no new handler, no `tabindex`); tapping a glyph keeps its existing seek+play behaviour. Numbering is per-system from the bar lines; the lookup templates it as the `measure-<n>` family. |
 
 > Additional surfaces may be added as the demo catalogue grows; each addition extends this table and the coverage guard.
 
